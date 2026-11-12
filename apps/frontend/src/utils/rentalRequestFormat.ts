@@ -57,7 +57,7 @@ export function formatListingDue(iso: string, locale: string): string {
   const day = iso.slice(0, 10);
   const time = clock(iso);
   if (!ISO_DATE.test(day) || !time) return iso;
-  return `${dayNum(day)} ${monthLabel(day, locale)} · ${time}`;
+  return `${dayNum(day)}\u00A0${monthLabel(day, locale)}\u00A0·\u00A0${time}`;
 }
 
 function addUtcDays(iso: string, offset: number): string {

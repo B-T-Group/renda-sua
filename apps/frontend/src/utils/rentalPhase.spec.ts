@@ -22,7 +22,14 @@ describe('booking detail status labels', () => {
       'rentals.phases.done',
     ]);
     expect(bookingDetailTimelineIndex(steps, 'awaiting_return')).toBe(3);
-    expect(bookingDetailTimeline('reserved')[1]).toBe('reserved');
+    expect(bookingDetailTimeline('reserved')).toEqual([
+      'proposed',
+      'confirmed',
+      'active',
+      'awaiting_return',
+      'completed',
+    ]);
+    expect(bookingDetailTimeline('reserved')).not.toContain('reserved');
     expect(bookingDetailTimelineIndex(steps, 'cancelled')).toBe(-1);
   });
 

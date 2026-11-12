@@ -10,6 +10,7 @@ import {
   pickupGate,
   reportReadyToSubmit,
   returnHasDamage,
+  showDidntReceiveLink,
   showLegacyReturnPicker,
   unitPhotosMeetMinimum,
   type InspectionUnit,
@@ -143,5 +144,15 @@ describe('client review and money copy', () => {
     expect(classifyInspectionError({ status: 400 })).toBe('other');
     expect(classifyInspectionError({ status: 503 })).toBe('unavailable');
     expect(classifyInspectionError({ code: 'ERR_NETWORK', message: 'Network Error' })).toBe('unavailable');
+  });
+
+  it('shows Didn\'t receive only for an inspected rental in the first 30 minutes', () => {
+    const start = '2026-11-12T14:20:00.000Z';
+    const soon = new Date('2026-11-12T14:40:00.000Z').getTime();
+    const late = new Date('2026-11-12T15:00:00.000Z').getTime();
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: soon })).toBe(true);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: late })).toBe(false);
+    expect(showDidntReceiveLink({ enrolled: false, startedAt: start, now: soon })).toBe(false);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: null, now: soon })).toBe(false);
   });
 });

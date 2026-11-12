@@ -8533,6 +8533,7 @@
     "updateReport": "Update report",
     "startedTitle": "Started, hand over the item",
     "startedBody": "{{name}} accepted the condition and the rental is in progress. Return is due by {{due}}.",
+    "startedBodyLead": "{{name}} accepted the condition and the rental is in progress. Return is due by",
     "paidAmount": "{{amount}} paid",
     "heldAmount": "{{amount}} held",
     "tryAgain": "Something went wrong. Try again.",

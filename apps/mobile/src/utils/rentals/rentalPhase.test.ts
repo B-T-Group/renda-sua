@@ -21,7 +21,13 @@ describe('booking detail status labels', () => {
     expect(labels).toContain('rentals.bookingStatus.awaiting_return');
     expect(bookingDetailTimelineIndex(steps, 'active')).toBe(steps.indexOf('active'));
     expect(bookingDetailTimelineIndex(steps, 'cancelled')).toBe(-1);
-    expect(bookingDetailTimeline('reserved')).toContain('reserved');
+    expect(bookingDetailTimeline('reserved')).toEqual([
+      'proposed',
+      'confirmed',
+      'active',
+      'awaiting_return',
+      'completed',
+    ]);
   });
 
   it('does not change the 6-phase grouping used by lists and hubs', () => {

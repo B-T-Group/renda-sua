@@ -18,7 +18,6 @@ import { ImageLightbox } from '../../components/common/ImageLightbox';
 import { StatusPill } from '../../components/common/StatusPill';
 import { OrderMessageComposer } from '../../components/messaging/OrderMessageComposer';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
-import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
 import { SendRentalStartPinButton } from '../../components/rentals/SendRentalStartPinButton';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalBookingDetail } from '../../hooks/useRentalBookingDetail';
@@ -45,7 +44,7 @@ import {
   formatRentalPeriod,
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
-import { clientInspectionAction, didntReceiveWindowOpen, pickupGate } from '../../utils/rentals/rentalInspection';
+import { clientInspectionAction, pickupGate, showDidntReceiveLink } from '../../utils/rentals/rentalInspection';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
@@ -304,7 +303,7 @@ export default function RentalBookingDetailScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           padding: spacing.md,
-          paddingBottom: insets.bottom + (canShowPin || paymentPending || reviewStage ? 100 : spacing.xl),
+          paddingBottom: insets.bottom + (paymentPending || reviewStage ? 100 : spacing.xl),
         }}
         refreshControl={
           <RefreshControl
@@ -427,12 +426,6 @@ export default function RentalBookingDetailScreen() {
                   : t('rentalInspection.returnReview', 'Review the return against pickup photos')}
               </Button>
             ) : null}
-            <InspectionTimeline
-              role="client"
-              booking={booking}
-              pickup={snapshot.pickup}
-              returnView={snapshot.returnView}
-            />
           </View>
         ) : null}
 
@@ -485,7 +478,10 @@ export default function RentalBookingDetailScreen() {
           </View>
         ) : null}
 
-        {didntReceiveWindowOpen(booking.actual_start_at) ? (
+        {showDidntReceiveLink({
+          enrolled: booking.inspection_policy_version != null,
+          startedAt: booking.actual_start_at,
+        }) ? (
           <Button
             mode="text"
             textColor={colors.primary.main}
@@ -726,7 +722,7 @@ export default function RentalBookingDetailScreen() {
         ) : null}
       </ScrollView>
 
-      {canShowPin || paymentPending || reviewStage ? (
+      {paymentPending || reviewStage ? (
         <View
           style={{
             borderTopWidth: 1,
@@ -746,7 +742,7 @@ export default function RentalBookingDetailScreen() {
             >
               {t('rentals.actions.completePayment', 'Complete payment')}
             </Button>
-          ) : reviewStage ? (
+          ) : (
             <Button
               mode="contained"
               buttonColor={colors.primary.main}
@@ -754,22 +750,16 @@ export default function RentalBookingDetailScreen() {
               onPress={() =>
                 navigation.navigate('ClientInspection', {
                   bookingId: booking.id,
-                  stage: reviewStage,
+                  stage: reviewStage ?? 'pickup',
                 })
               }
             >
-              {reviewStage === 'pickup'
-                ? snapshot.pickup?.yourDecision === 'accept'
+              {reviewStage === 'return'
+                ? t('rentalInspection.returnReview', 'Review the return against pickup photos')
+                : snapshot.pickup?.yourDecision === 'accept'
                   ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
-                  : t('rentalInspection.reviewTitle', 'Review item condition')
-                : t('rentalInspection.returnReview', 'Review the return against pickup photos')}
+                  : t('rentalInspection.reviewTitle', 'Review item condition')}
             </Button>
-          ) : (
-            <SendRentalStartPinButton
-              bookingId={booking.id}
-              onSent={() => void refetchMessages()}
-              onError={(msg) => setSnack(msg)}
-            />
           )}
         </View>
       ) : null}

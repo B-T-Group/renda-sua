@@ -835,9 +835,14 @@ function BusinessAcceptStartHero({
           : t('rentalInspection.waitingTitle', 'Waiting for the renter to accept')}
       </Text>
       <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
-        {started
-          ? t('rentalInspection.startedBody', '{{name}} accepted the condition and the rental is in progress. Return is due by {{due}}.', { name, due })
-          : t('rentalInspection.waitingBody', "{{name}} is reviewing the condition report. You'll see when the rental starts — then hand over the item.", { name })}
+        {started ? (
+          <>
+            {t('rentalInspection.startedBodyLead', '{{name}} accepted the condition and the rental is in progress. Return is due by', { name })}{' '}
+            <Text style={{ color: colors.text.secondary }}>{due}.</Text>
+          </>
+        ) : (
+          t('rentalInspection.waitingBody', "{{name}} is reviewing the condition report. You'll see when the rental starts — then hand over the item.", { name })
+        )}
       </Text>
       {started ? (
         <Text style={{ color: colors.success.main, textAlign: 'center', fontWeight: '700' }}>

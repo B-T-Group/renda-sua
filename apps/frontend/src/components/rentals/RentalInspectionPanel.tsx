@@ -332,10 +332,12 @@ export function RentalInspectionPanel({
           {t('rentalInspection.pickupBaselineMissing', 'Pickup baseline unavailable for this rental')}
         </Alert>
       ) : null}
-      <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
-        <Typography variant="overline">{t('rentalInspection.timelineTitle', 'Timeline')}</Typography>
-        <Timeline role={role} booking={booking} pickup={model.pickup} returnView={model.returnView} />
-      </Box>
+      {role === 'business' ? (
+        <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
+          <Typography variant="overline">{t('rentalInspection.timelineTitle', 'Timeline')}</Typography>
+          <Timeline role={role} booking={booking} pickup={model.pickup} returnView={model.returnView} />
+        </Box>
+      ) : null}
       {role === 'business' && stage === 'pickup' && view ? (
         <Stack spacing={1}>
           {view.units.map((row) => {
@@ -369,8 +371,20 @@ export function RentalInspectionPanel({
         <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
           <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
             {view.units.map((row, rowIndex) => (
-              <Button key={row.unitId} variant={rowIndex === index ? 'contained' : 'outlined'} sx={{ minHeight: 48 }} onClick={() => setIndex(rowIndex)}>
+              <Button
+                key={row.unitId}
+                variant={rowIndex === index ? 'contained' : 'outlined'}
+                color="primary"
+                sx={{
+                  minHeight: 48,
+                  color: rowIndex === index ? 'primary.contrastText' : 'text.primary',
+                  borderColor: rowIndex === index ? 'primary.main' : 'text.primary',
+                  bgcolor: rowIndex === index ? 'primary.main' : 'background.paper',
+                }}
+                onClick={() => setIndex(rowIndex)}
+              >
                 {row.displayLabel}
+                {seen.has(row.unitId) ? ' ✓' : ''}
               </Button>
             ))}
             {role === 'business' && view.versionNo != null ? <Chip label={t('rentalInspection.version', 'v{{version}}', { version: view.versionNo })} /> : null}
@@ -448,44 +462,7 @@ export function RentalInspectionPanel({
                   </Button>
                 ) : null}
               </>
-            ) : panel === 'review' ? (
-              <>
-                <Button
-                  variant="contained"
-                  sx={{ minHeight: 48 }}
-                  disabled={busy || !reviewed || !view.versionId}
-                  onClick={() => {
-                    if (stage === 'pickup' && !damaged) {
-                      setConfirmOpen(true);
-                      return;
-                    }
-                    void run(() => model.api.acknowledge(bookingId, stage, { versionId: view.versionId!, decision: 'accept' }).then(() => undefined), 'accepted');
-                  }}
-                >
-                  {damaged
-                    ? damageRail(booking) === 'card'
-                      ? t('rentalInspection.agreeCapture', 'I agree · capture {{amount}}', { amount: view.claimedDamageAmount ?? '' })
-                      : t('rentalInspection.agreeRecord', 'I agree · record claim')
-                    : stage === 'pickup'
-                      ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
-                      : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
-                </Button>
-                {(stage === 'pickup' && !damaged && (booking.accept_start_preview?.amount_due_at_pickup ?? 0) > 0) ? (
-                  <Typography>
-                    {t('rentalInspection.payNow', "You'll pay {{amount}} now", {
-                      amount: fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF'),
-                    })}
-                  </Typography>
-                ) : null}
-                <Button variant="outlined" color="error" sx={{ minHeight: 48 }} onClick={() => setPanel(damaged ? 'dispute' : 'correction')}>
-                  {damaged
-                    ? t('rentalInspection.disputeClaim', 'Dispute this claim')
-                    : stage === 'pickup'
-                      ? t('rentalInspection.reportProblem', 'Report a problem')
-                      : t('rentalInspection.requestCorrection', 'Request a correction')}
-                </Button>
-              </>
-            ) : (
+            ) : panel === 'review' ? null : (
               <Button
                 variant="contained"
                 sx={{ minHeight: 48 }}
@@ -513,6 +490,66 @@ export function RentalInspectionPanel({
             )}
           </Stack>
         </Box>
+      ) : null}
+      {role === 'client' && panel === 'review' && stage && view?.status === 'submitted' ? (
+        <>
+          <Box sx={{ height: 196 }} />
+          <Box
+            sx={{
+              position: 'fixed',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 20,
+              bgcolor: 'background.paper',
+              backgroundImage: 'none',
+              borderTop: 1,
+              borderColor: 'divider',
+              boxShadow: 3,
+              px: 2,
+              pt: 1.5,
+              pb: 2,
+            }}
+          >
+            <Stack spacing={1} sx={{ maxWidth: 720, mx: 'auto' }}>
+              <Button
+                fullWidth
+                variant="contained"
+                sx={{ minHeight: 48 }}
+                disabled={busy || !reviewed || !view.versionId}
+                onClick={() => {
+                  if (stage === 'pickup' && !damaged) {
+                    setConfirmOpen(true);
+                    return;
+                  }
+                  void run(() => model.api.acknowledge(bookingId, stage, { versionId: view.versionId!, decision: 'accept' }).then(() => undefined), 'accepted');
+                }}
+              >
+                {damaged
+                  ? damageRail(booking) === 'card'
+                    ? t('rentalInspection.agreeCapture', 'I agree · capture {{amount}}', { amount: view.claimedDamageAmount ?? '' })
+                    : t('rentalInspection.agreeRecord', 'I agree · record claim')
+                  : stage === 'pickup'
+                    ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
+                    : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
+              </Button>
+              {stage === 'pickup' && !damaged && (booking.accept_start_preview?.amount_due_at_pickup ?? 0) > 0 ? (
+                <Typography textAlign="center">
+                  {t('rentalInspection.payNow', "You'll pay {{amount}} now", {
+                    amount: fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF'),
+                  })}
+                </Typography>
+              ) : null}
+              <Button fullWidth variant="outlined" color="error" sx={{ minHeight: 48 }} onClick={() => setPanel(damaged ? 'dispute' : 'correction')}>
+                {damaged
+                  ? t('rentalInspection.disputeClaim', 'Dispute this claim')
+                  : stage === 'pickup'
+                    ? t('rentalInspection.reportProblem', 'Report a problem')
+                    : t('rentalInspection.requestCorrection', 'Request a correction')}
+              </Button>
+            </Stack>
+          </Box>
+        </>
       ) : null}
       <AcceptStartDialog
         open={confirmOpen}
@@ -553,7 +590,29 @@ function AcceptStartDialog({
   const amount = fcfaAmount(preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF');
   const showPay = (preview?.amount_due_at_pickup ?? 0) > 0;
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="xs"
+      transitionDuration={0}
+      slotProps={{
+        backdrop: { sx: { backgroundColor: 'rgba(15, 23, 42, 0.55)' } },
+        paper: {
+          sx: {
+            bgcolor: '#FFFFFF',
+            backgroundImage: 'none',
+            opacity: 1,
+            m: 0,
+            width: '100%',
+            maxWidth: 480,
+            position: 'fixed',
+            bottom: 0,
+            borderRadius: '20px 20px 0 0',
+          },
+        },
+      }}
+    >
       <DialogTitle>{t('rentalInspection.sheetTitle', 'Start this rental?')}</DialogTitle>
       <DialogContent>
         <Typography>
@@ -567,10 +626,12 @@ function AcceptStartDialog({
           </Alert>
         ) : null}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={busy}>{t('rentalInspection.sheetCancel', 'Cancel')}</Button>
-        <Button variant="contained" onClick={onConfirm} disabled={busy}>
+      <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 3, pb: 3 }}>
+        <Button fullWidth variant="contained" onClick={onConfirm} disabled={busy} sx={{ minHeight: 48 }}>
           {t('rentalInspection.acceptAndStart', 'Accept condition & start rental')}
+        </Button>
+        <Button fullWidth onClick={onClose} disabled={busy} sx={{ minHeight: 48 }}>
+          {t('rentalInspection.sheetCancel', 'Cancel')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -602,9 +663,15 @@ function BusinessAcceptHero({
           : t('rentalInspection.waitingTitle', 'Waiting for the renter to accept')}
       </Typography>
       <Typography color="text.secondary">
-        {started
-          ? t('rentalInspection.startedBody', '{{name}} accepted the condition and the rental is in progress. Return is due by {{due}}.', { name, due })
-          : t('rentalInspection.waitingBody', "{{name}} is reviewing the condition report. You'll see when the rental starts — then hand over the item.", { name })}
+        {started ? (
+          <>
+            {t('rentalInspection.startedBodyLead', '{{name}} accepted the condition and the rental is in progress. Return is due by', { name })}{' '}
+            <Box component="span" sx={{ whiteSpace: 'nowrap' }}>{due}</Box>
+            .
+          </>
+        ) : (
+          t('rentalInspection.waitingBody', "{{name}} is reviewing the condition report. You'll see when the rental starts — then hand over the item.", { name })
+        )}
       </Typography>
       {started ? (
         <Typography color="success.main" fontWeight={700}>
@@ -810,7 +877,8 @@ function Timeline({
   returnView: Model['returnView'];
 }) {
   const { t } = useTranslation();
-  const accepted = pickup?.yourDecision === 'accept';
+  const started = !!booking.actual_start_at || ['active', 'awaiting_return', 'completed'].includes(booking.status);
+  const accepted = pickup?.yourDecision === 'accept' || started;
   const openReview = booking.return_resolution === 'disputed' || booking.return_resolution === 'review' || booking.return_resolution === 'pending';
   const rows = [
     t('rentalInspection.timelineBooked', 'Booked'),

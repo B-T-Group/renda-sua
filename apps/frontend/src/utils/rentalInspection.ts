@@ -139,6 +139,15 @@ export function pickupGate(input: PickupGateInput): PickupGate {
   };
 }
 
+export function showDidntReceiveLink(input: {
+  enrolled: boolean;
+  startedAt: string | null | undefined;
+  now?: number;
+}): boolean {
+  if (!input.enrolled) return false;
+  return didntReceiveWindowOpen(input.startedAt, input.now ?? Date.now());
+}
+
 export function didntReceiveWindowOpen(
   startedAt: string | null | undefined,
   now = Date.now(),

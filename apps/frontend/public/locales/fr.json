@@ -9479,6 +9479,7 @@
     "updateReport": "Mettre à jour le rapport",
     "startedTitle": "Démarrée, remettez l’article",
     "startedBody": "{{name}} a accepté l’état des lieux et la location est en cours. Le retour est dû le {{due}}.",
+    "startedBodyLead": "{{name}} a accepté l’état des lieux et la location est en cours. Le retour est dû le",
     "paidAmount": "{{amount}} payés",
     "heldAmount": "{{amount}} retenus",
     "tryAgain": "Une erreur s’est produite. Réessayez.",

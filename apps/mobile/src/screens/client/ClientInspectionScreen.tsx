@@ -276,14 +276,7 @@ export default function ClientInspectionScreen() {
         ) : null}
         {model.notice ? <InspectionBanner tone="success">{noticeText(model.notice, t)}</InspectionBanner> : null}
       </ScrollView>
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm, gap: spacing.sm, backgroundColor: colors.pageBackground }]}>
-        {panel === 'review' && pickupStart && amountDue > 0 ? (
-          <View style={[styles.payLine, { backgroundColor: colors.infoTint, borderRadius: borderRadius.md }]}>
-            <Text style={{ color: colors.text.primary }}>
-              {t('rentalInspection.payNow', "You'll pay {{amount}} now", { amount: amountLabel })}
-            </Text>
-          </View>
-        ) : null}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm, gap: spacing.sm, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }]}>
         {panel === 'review' ? (
           <>
             <Button
@@ -301,6 +294,13 @@ export default function ClientInspectionScreen() {
                   ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
                   : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
             </Button>
+            {pickupStart && amountDue > 0 ? (
+              <View style={[styles.payLine, { backgroundColor: colors.infoTint, borderRadius: borderRadius.md }]}>
+                <Text style={{ color: colors.text.primary, textAlign: 'center' }}>
+                  {t('rentalInspection.payNow', "You'll pay {{amount}} now", { amount: amountLabel })}
+                </Text>
+              </View>
+            ) : null}
             <Button mode="outlined" textColor={colors.error.main} style={styles.action} onPress={() => setPanel(damaged ? 'dispute' : 'correction')}>
               {damaged
                 ? t('rentalInspection.disputeClaim', 'Dispute this claim')
@@ -323,9 +323,9 @@ export default function ClientInspectionScreen() {
           </Button>
         )}
       </View>
-      <Modal visible={confirmOpen} transparent animationType="slide" onRequestClose={() => setConfirmOpen(false)}>
+      <Modal visible={confirmOpen} transparent animationType="none" onRequestClose={() => setConfirmOpen(false)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => !starting && setConfirmOpen(false)}>
-          <Pressable style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]} onPress={() => undefined}>
+          <Pressable style={[styles.sheet, { backgroundColor: '#FFFFFF', width: '100%', paddingBottom: insets.bottom + 16 }]} onPress={() => undefined}>
             <Text style={[typography.h5, { color: colors.text.primary }]}>
               {t('rentalInspection.sheetTitle', 'Start this rental?')}
             </Text>
@@ -348,7 +348,7 @@ export default function ClientInspectionScreen() {
             <Button mode="contained" buttonColor={colors.primary.main} style={[styles.action, { marginTop: 16 }]} loading={starting} onPress={() => void confirmStart()}>
               {t('rentalInspection.acceptAndStart', 'Accept condition & start rental')}
             </Button>
-            <Button mode="text" textColor={colors.primary.main} onPress={() => setConfirmOpen(false)} disabled={starting}>
+            <Button mode="text" textColor={colors.primary.main} style={[styles.action, { marginTop: 4 }]} onPress={() => setConfirmOpen(false)} disabled={starting}>
               {t('rentalInspection.sheetCancel', 'Cancel')}
             </Button>
           </Pressable>
@@ -391,8 +391,8 @@ const styles = StyleSheet.create({
   image: { ...StyleSheet.absoluteFillObject },
   check: { minHeight: 48, justifyContent: 'center' },
   footer: { paddingHorizontal: 16, paddingTop: 8 },
-  action: { minHeight: 48, justifyContent: 'center' },
+  action: { minHeight: 48, justifyContent: 'center', width: '100%' },
   payLine: { padding: 12 },
-  sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17, 24, 39, 0.45)' },
-  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.55)' },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, width: '100%' },
 });

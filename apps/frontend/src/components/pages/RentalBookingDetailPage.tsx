@@ -44,7 +44,7 @@ import {
   bookingDetailTimelineIndex,
   messagesDefaultExpanded,
 } from '../../utils/rentalPhase';
-import { didntReceiveWindowOpen, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { showDidntReceiveLink, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
 
 const PAYMENT_POLL_MS = 4000;
 
@@ -674,7 +674,11 @@ const RentalBookingDetailPage: React.FC = () => {
             </Alert>
           ) : null}
 
-          {isClient && didntReceiveWindowOpen(booking.actual_start_at) ? (
+          {isClient &&
+          showDidntReceiveLink({
+            enrolled: booking.inspection_policy_version != null,
+            startedAt: booking.actual_start_at,
+          }) ? (
             <Button onClick={() => navigate('/support')} sx={{ alignSelf: 'flex-start' }}>
               {t('rentalInspection.didntReceive', "Didn't receive the item? Tell us")}
             </Button>
@@ -980,7 +984,7 @@ const RentalBookingDetailPage: React.FC = () => {
         </Container>
       </Box>
 
-      {(showPaymentPending || showClientPin || showCollect || showVerify || showReturnPicker) && (
+      {(showPaymentPending || showCollect || showVerify || showReturnPicker) && (
         <Box
           sx={{
             display: { xs: 'block', md: 'none' },
@@ -1005,31 +1009,6 @@ const RentalBookingDetailPage: React.FC = () => {
               onClick={() => void handleRetryPayment()}
             >
               {t('rentals.actions.completePayment', 'Complete payment')}
-            </Button>
-          ) : showClientPin ? (
-            <Button
-              fullWidth
-              variant="contained"
-              disabled={sharingPin}
-              onClick={async () => {
-                if (!bookingId) return;
-                setSharingPin(true);
-                try {
-                  await shareStartPin(bookingId);
-                  setInfo(
-                    t(
-                      'rentals.messaging.startPin.sentConfirmation',
-                      'PIN shared in booking chat. The business will be notified.'
-                    )
-                  );
-                } catch (e: unknown) {
-                  setError(e instanceof Error ? e.message : 'Error');
-                } finally {
-                  setSharingPin(false);
-                }
-              }}
-            >
-              {t('rentals.actions.sendStartPin', 'Send start PIN')}
             </Button>
           ) : showCollect ? (
             <Button
