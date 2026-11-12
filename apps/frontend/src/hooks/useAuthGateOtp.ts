@@ -7,6 +7,7 @@ import {
 } from '../utils/authGateErrors';
 import { msUntil } from '../utils/authGateTiming';
 import type { OtpChannelChoice } from '../components/auth/OtpChannelPicker';
+import { activePersonaAuthField } from '../utils/activePersonaStorage';
 
 export type AuthGateFlowState = {
   flowId: string;
@@ -103,7 +104,7 @@ export function useAuthGateOtp() {
       try {
         const { data } = await apiClient.post(
           '/auth/login/verify-otp',
-          { flowId: flow.flowId, otp, flow_version: 2 },
+          { flowId: flow.flowId, otp, flow_version: 2, ...activePersonaAuthField() },
           { headers: { 'X-Client-Platform': 'web' } }
         );
         if (data?.next === 'finish_account') {

@@ -1,0 +1,3 @@
+function:
+  name: rental_availability_scan
+  schema: public

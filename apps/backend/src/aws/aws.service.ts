@@ -106,21 +106,31 @@ export class AwsService {
     contentType: string;
     contentLength: number;
     expiresIn?: number;
+    /** Base64 SHA-256 of the body. Signed as `x-amz-checksum-sha256` when set. */
+    checksumSha256?: string;
   }): Promise<PresignedUrlResponse & { signedHeaders: string[] }> {
-    const { bucketName, key, contentType, contentLength, expiresIn = 600 } = options;
+    const { bucketName, key, contentType, contentLength, expiresIn = 600, checksumSha256 } = options;
     if (!bucketName || !key) throw new Error('Bucket name and key are required');
     if (!Number.isInteger(contentLength) || contentLength <= 0) {
       throw new Error('contentLength must be a positive integer');
+    }
+    const signableHeaders = new Set(['content-type', 'content-length']);
+    const unhoistableHeaders = new Set<string>();
+    if (checksumSha256) {
+      signableHeaders.add('x-amz-checksum-sha256');
+      unhoistableHeaders.add('x-amz-checksum-sha256');
     }
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
       ContentType: contentType,
       ContentLength: contentLength,
+      ChecksumSHA256: checksumSha256,
     });
     const url = await getSignedUrl(this.s3Client, command, {
       expiresIn,
-      signableHeaders: new Set(['content-type', 'content-length']),
+      signableHeaders,
+      unhoistableHeaders,
     });
     const signedHeaders = (new URL(url).searchParams.get('X-Amz-SignedHeaders') ?? '').split(';').filter(Boolean);
     return { url, expiresAt: new Date(Date.now() + expiresIn * 1000), signedHeaders };
@@ -258,9 +268,53 @@ export class AwsService {
     }
   }
 
-  /**
-   * Check whether an object exists in S3.
-   */
+  /** Head an object without downloading it. Returns null when it is missing. */
+  async headObjectMeta(
+    bucketName: string,
+    key: string
+  ): Promise<{ contentLength: number; contentType: string; versionId: string | null } | null> {
+    try {
+      const head = await this.s3Client.send(new HeadObjectCommand({ Bucket: bucketName, Key: key }));
+      return {
+        contentLength: Number(head.ContentLength ?? 0),
+        contentType: head.ContentType ?? '',
+        versionId: head.VersionId ?? null,
+      };
+    } catch (error: any) {
+      const status = error?.$metadata?.httpStatusCode;
+      if (status === 404 || error?.name === 'NotFound') return null;
+      throw new Error(`Failed to read S3 object: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  async readObjectBytes(bucketName: string, key: string): Promise<Buffer> {
+    const out = await this.s3Client.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
+    if (!out.Body) throw new Error('S3 object was empty');
+    return Buffer.from(await out.Body.transformToByteArray());
+  }
+
+  async putPrivateObject(
+    bucketName: string,
+    key: string,
+    body: Buffer,
+    contentType: string,
+    options?: { ifNoneMatch?: boolean }
+  ): Promise<string | null> {
+    const out = await this.s3Client.send(
+      new PutObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        // Conditional create. Any general-purpose bucket accepts this header.
+        // The prod evidence bucket denies a final-key PUT that omits it.
+        IfNoneMatch: options?.ifNoneMatch ? '*' : undefined,
+      })
+    );
+    return out.VersionId ?? null;
+  }
+
+  /** Check whether an object exists in S3. */
   async objectExists(bucketName: string, key: string): Promise<boolean> {
     if (!bucketName) throw new Error('Bucket name is required');
     if (!key) throw new Error('Object key is required');

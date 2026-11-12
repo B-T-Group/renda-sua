@@ -40,6 +40,7 @@ import BusinessRentalItemDetailScreen from '../screens/business/BusinessRentalIt
 import BusinessRentalItemEditScreen from '../screens/business/BusinessRentalItemEditScreen';
 import BusinessRentalAddListingScreen from '../screens/business/BusinessRentalAddListingScreen';
 import BusinessRentalBookingDetailScreen from '../screens/business/BusinessRentalBookingDetailScreen';
+import BusinessInspectionScreen from '../screens/business/BusinessInspectionScreen';
 import AdminRentalListingsModerationScreen from '../screens/business/AdminRentalListingsModerationScreen';
 import AdminRentalAiReviewsScreen from '../screens/business/AdminRentalAiReviewsScreen';
 import BusinessRentalAiProposalScreen from '../screens/business/BusinessRentalAiProposalScreen';
@@ -542,6 +543,14 @@ export function BusinessRootNavigator() {
           options={{
             title: t('business.rentals.bookingTitle', 'Booking'),
             headerBackTitle: t('business.rentals.studioTitle', 'Rentals'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessInspection"
+          component={BusinessInspectionScreen}
+          options={{
+            title: t('rentalInspection.pickupTitle', 'Pickup condition'),
+            headerBackTitle: t('business.rentals.bookingTitle', 'Booking'),
           }}
         />
         <RootStack.Screen

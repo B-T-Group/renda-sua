@@ -19,6 +19,14 @@ describe('rental start PIN security', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (svc as any).hasuraSystemService = hasura;
+    hasura.executeQuery.mockResolvedValue({
+      rental_bookings_by_pk: {
+        inspection_policy_version: null,
+        pickup_ack_current: false,
+        pickup_accepted_version_id: null,
+        pickup_current_version_id: null,
+      },
+    });
     (svc as any).deliveryPinService = pins;
     (svc as any).patchBooking = jest.fn().mockResolvedValue(undefined);
     (svc as any).logHistory = jest.fn().mockResolvedValue(undefined);
@@ -152,7 +160,8 @@ describe('rental start PIN security', () => {
     });
     const issued = await svc.issueStartOverwriteCodeForSupport(
       'booking-1',
-      'support-user'
+      'support-user',
+      'Client could not open the app at pickup'
     );
     expect(issued.overwriteCode).toMatch(/^[0-9A-F]{8}$/);
     const hash = (svc as any).patchBooking.mock.calls[0][1]
@@ -166,7 +175,16 @@ describe('rental start PIN security', () => {
       'confirmed',
       'support-user',
       'system',
-      'Support issued a rental start code'
+      'Support issued a rental start code. Client could not open the app at pickup'
     );
+  });
+
+  it('does not issue a support code without a written reason', async () => {
+    await expect(
+      svc.issueStartOverwriteCodeForSupport('booking-1', 'support-user', '   ')
+    ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    expect((svc as any).fetchBooking).not.toHaveBeenCalled();
+    expect((svc as any).patchBooking).not.toHaveBeenCalled();
+    expect((svc as any).logHistory).not.toHaveBeenCalled();
   });
 });

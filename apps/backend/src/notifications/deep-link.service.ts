@@ -67,6 +67,13 @@ export class DeepLinkService {
     );
   }
 
+  rentalListing(listingId: string): DeepLinkPair {
+    return this.build(
+      `rentals/listings/${listingId}`,
+      `/rentals/listings/${listingId}`
+    );
+  }
+
   rentalRequest(requestId: string): DeepLinkPair {
     return this.build(
       `rentals/requests/${requestId}`,

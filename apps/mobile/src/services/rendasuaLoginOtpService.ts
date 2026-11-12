@@ -5,6 +5,7 @@
  */
 
 import { getEnv } from '../config/auth0';
+import { readLoginActivePersona } from '../utils/activePersonaStorage';
 import Auth0DirectService, { type Auth0Response, type Auth0Tokens } from './auth0DirectService';
 import { CLIENT_PLATFORM_HEADERS } from './clientPlatformHeaders';
 
@@ -186,13 +187,19 @@ async function verifyLoginOtp(
   channel?: LoginOtpChannel
 ): Promise<Auth0Response> {
   try {
+    const activePersona = await readLoginActivePersona();
     const res = await fetch(`${apiBase()}${VERIFY_OTP_PATH}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...CLIENT_PLATFORM_HEADERS,
       },
-      body: JSON.stringify({ ...contact, otp, ...(channel ? { channel } : {}) }),
+      body: JSON.stringify({
+        ...contact,
+        otp,
+        ...(channel ? { channel } : {}),
+        ...(activePersona ? { active_persona: activePersona } : {}),
+      }),
     });
     const text = await res.text();
     let data: unknown = {};

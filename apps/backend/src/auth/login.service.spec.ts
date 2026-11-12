@@ -516,6 +516,29 @@ describe('LoginService start, lockout, and session gates', () => {
       expect(lockout.recordSuccess).not.toHaveBeenCalled();
     });
 
+    it('forwards active_persona onto the Auth0 token exchange', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [
+          {
+            id: 'user-1',
+            email: 'shop@example.com',
+            phone_number: null,
+            email_verified: true,
+            phone_number_verified: null,
+          },
+        ],
+      });
+      await service.verifyLoginOtp(
+        { email: 'shop@example.com', otp: '1234', active_persona: 'business' },
+        'mobile'
+      );
+      expect(auth0Service.verifyEmailOtp).toHaveBeenCalledWith(
+        'shop@example.com',
+        '1234',
+        'business'
+      );
+    });
+
     it('records identifier lockout for flow v2 verify when the user is missing', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
       auth0Service.verifyEmailOtp.mockRejectedValue(new Error('bad otp'));

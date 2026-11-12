@@ -126,8 +126,10 @@ import {
   buildRentalBookingCancelledPush,
   buildRentalBookingConfirmedPush,
   buildRentalBookingRequestPush,
+  buildRentalRequestUpdatedPush,
   buildRentalBookingReservedPush,
   buildRentalEndingSoonPush,
+  buildRentalInspectionNotice,
   buildRentalPeriodEndedPush,
   buildRentalRequestAcceptedPush,
   buildRentalRequestRejectedPush,
@@ -3388,6 +3390,134 @@ export class NotificationsService {
     }
   }
 
+  /** Push plus an in-app row. Never throws. WhatsApp stays on the original request template. */
+  async sendBusinessRentalRequestUpdated(payload: {
+    businessUserId: string;
+    requestId: string;
+    rentalItemName: string;
+    clientName: string;
+  }): Promise<void> {
+    try {
+      await this.writeRentalRequestUpdatedNotice(payload);
+    } catch (error: any) {
+      this.logger.error(
+        `sendBusinessRentalRequestUpdated: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async writeRentalRequestUpdatedNotice(payload: {
+    businessUserId: string;
+    requestId: string;
+    rentalItemName: string;
+    clientName: string;
+  }): Promise<void> {
+    const user = await this.getUserRowForEmail(payload.businessUserId);
+    const msg = buildRentalRequestUpdatedPush({
+      rentalItemName: payload.rentalItemName,
+      clientName: payload.clientName,
+      preferredLanguage: user?.preferred_language,
+    });
+    const links = this.deepLinkService.rentalRequest(payload.requestId);
+    await this.insertRentalRequestUpdatedMessage(payload.businessUserId, payload.requestId, msg.body, links.path);
+    await this.pushRentalRequestUpdated(payload.businessUserId, payload.requestId, msg, links.path);
+  }
+
+  private async insertRentalRequestUpdatedMessage(
+    userId: string,
+    requestId: string,
+    body: string,
+    path: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation InsertRentalRequestUpdated($object: user_messages_insert_input!) {
+        insert_user_messages_one(object: $object) { id }
+      }`,
+      {
+        object: {
+          user_id: userId,
+          entity_type: 'rental_request',
+          entity_id: requestId,
+          message_type: 'RENTAL_REQUEST_UPDATED',
+          message: body,
+          message_payload: { requestId, path },
+        },
+      }
+    );
+  }
+
+  private async pushRentalRequestUpdated(
+    userId: string,
+    requestId: string,
+    msg: { title: string; body: string },
+    path: string
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    await this.sendPushNotificationByUserId(userId, msg.title, msg.body, {
+      type: 'rental_request_updated',
+      rentalRequestId: requestId,
+      url: path,
+    });
+  }
+
+  /** In-app row plus push. WhatsApp is left for a later template. Never throws. */
+  async sendRentalAvailabilityNotice(params: {
+    userId: string;
+    listingId: string;
+    title: string;
+    body: string;
+  }): Promise<boolean> {
+    const userId = params.userId?.trim();
+    if (!userId) return false;
+    const inApp = await this.insertRentalAvailabilityMessage(userId, params);
+    await this.pushRentalAvailability(userId, params);
+    return inApp;
+  }
+
+  private async insertRentalAvailabilityMessage(
+    userId: string,
+    params: { listingId: string; body: string }
+  ): Promise<boolean> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation InsertRentalAvailable($object: user_messages_insert_input!) {
+          insert_user_messages_one(object: $object) { id }
+        }`,
+        {
+          object: {
+            user_id: userId,
+            entity_type: 'rental_availability_alert',
+            entity_id: params.listingId,
+            message_type: 'RENTAL_AVAILABLE',
+            message: params.body,
+            message_payload: { listingId: params.listingId, path: `rentals/listings/${params.listingId}` },
+          },
+        }
+      );
+      return true;
+    } catch (error: any) {
+      this.logger.warn(`rental availability in-app failed: ${error?.message ?? error}`);
+      return false;
+    }
+  }
+
+  private async pushRentalAvailability(
+    userId: string,
+    params: { listingId: string; title: string; body: string }
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      const links = this.deepLinkService.rentalListing(params.listingId);
+      await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+        type: 'rental_availability',
+        listingId: params.listingId,
+        url: links.path.replace(/^\//, ''),
+      });
+    } catch (error: any) {
+      this.logger.warn(`rental availability push failed: ${error?.message ?? error}`);
+    }
+  }
+
   async sendBusinessProductInterestNotification(
     payload: BusinessProductInterestNotificationPayload
   ): Promise<void> {
@@ -3602,6 +3732,32 @@ export class NotificationsService {
       this.logger.error(
         `sendClientRentalRequestRejectedEmail: ${error?.message ?? String(error)}`
       );
+    }
+  }
+
+  async sendRentalInspectionNotice(params: {
+    userId: string | null | undefined;
+    kind: Parameters<typeof buildRentalInspectionNotice>[0]['kind'];
+    rentalItemName: string;
+    bookingId: string;
+    preferredLanguage?: string | null;
+    persona?: 'client' | 'business';
+  }): Promise<void> {
+    if (!params.userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const msg = buildRentalInspectionNotice(params);
+    const persona = params.persona ? `?persona=${params.persona}` : '';
+    const url = `/rentals/bookings/${params.bookingId}${persona}`;
+    try {
+      await this.sendPushNotificationByUserId(params.userId, msg.title, msg.body, {
+        type: 'rental_inspection',
+        rentalBookingId: params.bookingId,
+        inspectionKind: params.kind,
+        persona: params.persona ?? '',
+        url,
+      });
+    } catch (error: any) {
+      this.logger.warn(`sendRentalInspectionNotice: ${error?.message ?? error}`);
     }
   }
 

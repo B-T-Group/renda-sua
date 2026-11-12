@@ -1,4 +1,5 @@
 import {
+  Alert,
   Accordion,
   AccordionDetails,
   AccordionSummary,
@@ -43,6 +44,7 @@ const BusinessRentalsRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<BusinessRentalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [queueFilter, setQueueFilter] = useState<BusinessActionQueue>('all');
+  const [staleBanner, setStaleBanner] = useState(false);
   const [respondTarget, setRespondTarget] = useState<{
     req: BusinessRentalRequestRow;
     mode: 'available' | 'unavailable';
@@ -117,6 +119,11 @@ const BusinessRentalsRequestsPage: React.FC = () => {
           'Review and respond to client booking requests.'
         )}
       >
+        {staleBanner ? (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {t('rentals.modify.staleBanner', 'This request was updated. Review the latest version.')}
+          </Alert>
+        ) : null}
         <Paper
           elevation={0}
           sx={{
@@ -230,6 +237,10 @@ const BusinessRentalsRequestsPage: React.FC = () => {
         request={respondTarget?.req ?? null}
         onClose={() => setRespondTarget(null)}
         onSuccess={() => void loadRequests()}
+        onStale={() => {
+          setStaleBanner(true);
+          void loadRequests();
+        }}
         respondRequest={respondRequest}
       />
     </>

@@ -183,6 +183,9 @@ function dispatchDeepLinkRest(
   if (target.type === 'rentalRequests') {
     return navigateNamedRoute('BusinessRentalsStudio');
   }
+  if (target.type === 'rentalListing') {
+    return navigateNamedRoute('RentalListingDetail', { listingId: target.id });
+  }
   if (target.type === 'rental') return navigateRentalBooking(target.id, persona);
   if (target.type === 'food' && target.id) {
     return navigateToInventoryItemFromPush(target.id);

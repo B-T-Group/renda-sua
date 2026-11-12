@@ -1,0 +1,13 @@
+table:
+  name: rental_inspection_items
+  schema: public
+object_relationships:
+  - name: inspection
+    using:
+      foreign_key_constraint_on: inspection_id
+  - name: unit
+    using:
+      foreign_key_constraint_on: unit_id
+  - name: version
+    using:
+      foreign_key_constraint_on: version_id

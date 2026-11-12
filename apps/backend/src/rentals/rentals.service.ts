@@ -25,6 +25,7 @@ import {
 } from './dto/update-business-rental-listing.dto';
 import { CreateRentalBookingDto } from './dto/create-rental-booking.dto';
 import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
+import { UpdateRentalRequestDto } from './dto/update-rental-request.dto';
 import { RentalWeeklyAvailabilityDto } from './dto/create-business-rental-listing.dto';
 import {
   RespondRentalRequestDto,
@@ -38,6 +39,33 @@ import {
 } from './dto/rental-pricing-snapshot.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
+import { peakConcurrentUnits as sweepPeakUnits } from './rental-capacity';
+import {
+  buildChangeSummary,
+  classifyRentalAccept,
+  classifyRentalEdit,
+  earliestWindowIso,
+  normalizeRequestNote,
+  quotePlanTotal,
+  type RentalEditBlock,
+  type RentalWindowSnapshot,
+} from './rental-request-edit';
+import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
+import {
+  inspectionRejected,
+  inspectionUnavailable,
+  inspectionUpdateRequired,
+} from './inspection/rental-inspection.errors';
+import {
+  damageCollectedOnAgree,
+  decideInspectionEnrolment,
+  DEFAULT_STRIPE_REVIEW_HOURS,
+  OVERTIME_PROMPT_BACKOFF_MS,
+  pickupStartAllowed,
+  priceEnrolledCapture,
+  settlementGate,
+  type SettlementGateBooking,
+} from './inspection/rental-inspection.policy';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import {
   fetchStripeEnabledCountries,
@@ -124,6 +152,8 @@ export interface ListPublicRentalListingsQuery {
   page?: number;
   limit?: number;
   q?: string;
+  /** Search-first only: also match `q` against the category name. Legacy browse leaves this unset. */
+  matchCategoryName?: boolean;
   category_id?: string;
   min_price?: number;
   max_price?: number;
@@ -369,48 +399,43 @@ export class RentalsService {
     private readonly stripeService: StripeService,
     private readonly stripeCaptureService: StripeCaptureService,
     private readonly rentalListingAiReviewService: RentalListingAiReviewService,
-    private readonly rentalStartPinShare: RentalStartPinShareService
+    private readonly rentalStartPinShare: RentalStartPinShareService,
+    private readonly inspectionFlags: RentalInspectionFlags
   ) {}
 
   async listPublicRentalListings(
     query: ListPublicRentalListingsQuery = {}
   ): Promise<PaginatedPublicRentalListings> {
-    const sort = normalizeRentalSort(query.sort);
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
+    const items = await this.collectPublicRentalListings(query);
+    const start = (page - 1) * limit;
+    return { items: items.slice(start, start + limit), total: items.length, page, limit };
+  }
+
+  /** Full filtered catalog, already sorted. Dated search reorders this by availability. */
+  async collectPublicRentalListings(
+    query: ListPublicRentalListingsQuery = {}
+  ): Promise<PublicRentalListingRow[]> {
+    const sort = normalizeRentalSort(query.sort);
     const geo = await this.resolveRentalCatalogGeo(query.country_code, query.state);
     if (geo.filterMode === 'specific' && (geo.country || geo.state)) {
       const ok = await this.inventoryItemsService.isCatalogLocationSupported(
         geo.country,
         geo.state
       );
-      if (!ok) {
-        return { items: [], total: 0, page, limit };
-      }
+      if (!ok) return [];
     }
-    const baseWhere = await this.buildRentalListingWhere(
-      geo.filterMode,
-      geo.country,
-      geo.state
-    );
-    const where = this.applyCatalogFilters(
-      this.whereExcludingActiveProposedContracts(baseWhere),
-      query
-    );
+    const baseWhere = await this.buildRentalListingWhere(geo.filterMode, geo.country, geo.state);
+    const where = this.applyCatalogFilters(this.whereExcludingActiveProposedContracts(baseWhere), query);
     const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings: PublicRentalListingRow[];
-    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, {
-      where,
-      order_by: [{ updated_at: 'desc' }],
-    });
+    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, { where, order_by: [{ updated_at: 'desc' }] });
     let rows = r.rental_location_listings ?? [];
     rows = await this.filterListingsByPaymentsEnabled(rows);
     rows = await this.enrichRentalListingsWithDistance(rows, query);
     rows = this.sortRentalListingRows(rows, sort);
-    rows = this.filterListingsByPrice(rows, query.min_price, query.max_price);
-    const total = rows.length;
-    const start = (page - 1) * limit;
-    return { items: rows.slice(start, start + limit), total, page, limit };
+    return this.filterListingsByPrice(rows, query.min_price, query.max_price);
   }
 
   async getTopRentalLocations(
@@ -680,6 +705,9 @@ export class RentalsService {
         _or: [
           { rental_item: { name: { _ilike: `%${q}%` } } },
           { rental_item: { description: { _ilike: `%${q}%` } } },
+          ...(query.matchCategoryName
+            ? [{ rental_item: { rental_category: { name: { _ilike: `%${q}%` } } } }]
+            : []),
         ],
       });
     }
@@ -835,6 +863,12 @@ export class RentalsService {
         status: 'pending',
         units_requested: unitsRequested,
         client_request_note: note || null,
+        quoted_total: quotePlanTotal(
+          plan.windows,
+          Number(listing.base_price_per_day),
+          Number(listing.base_price_per_hour),
+          unitsRequested
+        ),
       },
     });
     const requestId = row.insert_rental_requests_one.id;
@@ -846,6 +880,249 @@ export class RentalsService {
       user
     );
     return { success: true, requestId };
+  }
+
+  private assertModifyVersion(
+    req: { client_id: string; status: string; edit_version?: number },
+    clientId: string,
+    expectedVersion: number
+  ): void {
+    if (req.client_id !== clientId) {
+      throw new HttpException(
+        { message: 'Forbidden', code: 'RENTAL_REQUEST_FORBIDDEN' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (req.status !== 'pending') throw this.editHttpError('not_pending');
+    if (Number(req.edit_version ?? 1) !== expectedVersion) {
+      throw this.editHttpError('stale_version');
+    }
+  }
+
+  private editDtoWithStoredSchedule(
+    req: { rental_selection_windows?: unknown },
+    dto: UpdateRentalRequestDto
+  ): UpdateRentalRequestDto {
+    if (dto.windows?.length || (dto.requestedStartAt && dto.requestedEndAt)) return dto;
+    const windows = this.windowSnapshots(req).flatMap((row) => {
+      if (!row.start_at || !row.end_at) return [];
+      const billing = row.billing === 'all_day' ? ('all_day' as const) : undefined;
+      return [{
+        requestedStartAt: row.start_at,
+        requestedEndAt: row.end_at,
+        ...(billing ? { billing, calendarDate: row.calendar_date } : {}),
+      }];
+    });
+    if (!windows.length) return dto;
+    return { ...dto, windows };
+  }
+
+  async modifyRentalRequest(requestId: string, dto: UpdateRentalRequestDto) {
+    if (!(await this.isModifyRequestEnabled())) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+    const user = await this.requireModifyClient();
+    const req = await this.fetchRequest(requestId);
+    this.assertModifyVersion(req, user.clientId, dto.expectedVersion);
+    const edit = this.editDtoWithStoredSchedule(req, dto);
+    const plan = this.buildCreateRentalRequestPlan(edit as unknown as CreateRentalRequestDto);
+    const units = this.normalizeUnitsRequested(dto.unitsRequested ?? req.units_requested);
+    this.assertModifyStillOpen(req, user.clientId, dto.expectedVersion, plan.envelopeStartIso);
+    await this.validateRentalRequestWindowsPlan(plan, req.rental_location_listing, units);
+    return this.commitRentalRequestEdit(requestId, user, req, edit, plan, units);
+  }
+
+  private async applyRentalRequestEdit(
+    requestId: string,
+    user: { id: string; clientId: string },
+    expectedVersion: number,
+    windows: RentalWindowSnapshot[],
+    units: number,
+    note: string | undefined,
+    changeSummary: ReturnType<typeof buildChangeSummary>
+  ) {
+    try {
+      const saved = await this.hasuraSystemService.executeMutation<{
+        apply_rental_request_edit: Array<{ version: number; quoted_total: string | number | null }>;
+      }>(Q.APPLY_RENTAL_REQUEST_EDIT, {
+        requestId,
+        clientId: user.clientId,
+        actorId: user.id,
+        expectedVersion,
+        windows,
+        units,
+        note: normalizeRequestNote(note),
+        changeSummary,
+        now: new Date().toISOString(),
+      });
+      const row = saved.apply_rental_request_edit?.[0];
+      if (!row) throw new HttpException('Could not save changes', HttpStatus.CONFLICT);
+      return { version: Number(row.version), quoted_total: row.quoted_total == null ? null : Number(row.quoted_total) };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw this.mapEditSqlError(error);
+    }
+  }
+
+  private async notifyBusinessOfRentalEdit(
+    req: { rental_location_listing?: { rental_item?: { name?: string; business?: { user_id?: string } } } },
+    requestId: string,
+    clientName: string
+  ): Promise<void> {
+    const businessUserId = req.rental_location_listing?.rental_item?.business?.user_id;
+    if (!businessUserId) return;
+    await this.notificationsService.sendBusinessRentalRequestUpdated({
+      businessUserId,
+      requestId,
+      rentalItemName: req.rental_location_listing?.rental_item?.name ?? 'Rental',
+      clientName,
+    });
+  }
+
+  private windowSnapshots(req: { rental_selection_windows?: unknown }): RentalWindowSnapshot[] {
+    const rows = Array.isArray(req.rental_selection_windows) ? req.rental_selection_windows : [];
+    return rows.map((row: RentalWindowSnapshot) => ({
+      billing: row.billing,
+      calendar_date: row.calendar_date,
+      start_at: row.start_at,
+      end_at: row.end_at,
+    }));
+  }
+
+  private editHttpError(block: RentalEditBlock | 'forbidden' | 'missing_version'): HttpException {
+    const mapped: Record<string, { status: number; code: string; message: string }> = {
+      not_pending: { status: 409, code: 'RENTAL_REQUEST_ALREADY_ACCEPTED', message: 'The business already accepted this rental.' },
+      stale_version: { status: 409, code: 'RENTAL_REQUEST_STALE_VERSION', message: 'This request was updated. Review the latest version.' },
+      window_closed: { status: 409, code: 'RENTAL_REQUEST_WINDOW_CLOSED', message: 'Changes close 2 hours before the rental starts.' },
+      unavailable: { status: 409, code: 'RENTAL_REQUEST_UNAVAILABLE', message: 'Not available for these dates' },
+      forbidden: { status: 403, code: 'RENTAL_REQUEST_FORBIDDEN', message: 'Forbidden' },
+      missing_version: { status: 400, code: 'RENTAL_REQUEST_VERSION_REQUIRED', message: 'expectedVersion is required' },
+    };
+    const row = mapped[block] ?? mapped.unavailable;
+    return new HttpException({ message: row.message, code: row.code }, row.status);
+  }
+
+  private mapEditSqlError(error: unknown): HttpException {
+    const text = error instanceof Error ? error.message : String(error);
+    if (text.includes('rental_request_not_pending')) return this.editHttpError('not_pending');
+    if (text.includes('rental_request_forbidden')) return this.editHttpError('forbidden');
+    if (text.includes('rental_request_stale_version')) return this.editHttpError('stale_version');
+    if (text.includes('rental_request_window_closed')) return this.editHttpError('window_closed');
+    if (text.includes('rental_request_unavailable')) return this.editHttpError('unavailable');
+    return new HttpException('Could not save changes', HttpStatus.CONFLICT);
+  }
+
+  private async isModifyRequestEnabled(): Promise<boolean> {
+    const rows = await this.hasuraSystemService.executeQuery<{
+      application_configurations: Array<{ boolean_value: boolean | null; country_code: string | null }>;
+    }>(Q.GET_MODIFY_REQUEST_FLAG, {});
+    const global = (rows.application_configurations ?? []).find((row) => row.country_code == null);
+    return global?.boolean_value === true;
+  }
+
+  private assertRespondVersion(
+    req: { status: string; edit_version?: number },
+    dto: RespondRentalRequestDto,
+    requireVersion: boolean
+  ): void {
+    const decision = classifyRentalAccept({
+      status: req.status,
+      version: Number(req.edit_version ?? 1),
+      expectedVersion: dto.expectedVersion ?? null,
+      requireVersion,
+    });
+    if (decision === 'ok') return;
+    if (decision === 'not_pending') {
+      throw new HttpException('Request is not pending', HttpStatus.BAD_REQUEST);
+    }
+    throw this.editHttpError(decision);
+  }
+
+  private async persistRentalResponse(vars: {
+    id: string;
+    version?: number;
+    status: string;
+    snapshot: unknown;
+    note: string | null;
+    unavailableReasonCode: string | null;
+    requestExpiresAt: string | null;
+    respondedAt: string;
+    userId: string;
+  }): Promise<void> {
+    if (vars.version == null) {
+      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_RESPOND, vars);
+      return;
+    }
+    const saved = await this.hasuraSystemService.executeMutation<{
+      update_rental_requests: { affected_rows: number } | null;
+    }>(Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS, vars);
+    if ((saved.update_rental_requests?.affected_rows ?? 0) < 1) {
+      throw await this.rentalRespondConflict(vars.id);
+    }
+  }
+
+  private async rentalRespondConflict(id: string): Promise<HttpException> {
+    const fresh = await this.fetchRequest(id);
+    if (fresh.status !== 'pending') return this.editHttpError('not_pending');
+    return this.editHttpError('stale_version');
+  }
+
+  private async requireModifyClient(): Promise<{ id: string; clientId: string; name: string }> {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
+      throw new HttpException('Only clients can modify rental requests', HttpStatus.FORBIDDEN);
+    }
+    const name = [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || 'A client';
+    return { id: user.id, clientId: user.client.id, name };
+  }
+
+  private assertModifyStillOpen(
+    req: Awaited<ReturnType<RentalsService['fetchRequest']>>,
+    clientId: string,
+    expectedVersion: number,
+    nextStartIso: string
+  ): void {
+    if (req.client_id !== clientId) {
+      throw new HttpException({ message: 'Forbidden', code: 'RENTAL_REQUEST_FORBIDDEN' }, HttpStatus.FORBIDDEN);
+    }
+    const block = classifyRentalEdit({
+      status: req.status,
+      version: Number(req.edit_version ?? 1),
+      expectedVersion,
+      currentStartIso: earliestWindowIso(this.windowSnapshots(req)),
+      nextStartIso,
+      nowMs: Date.now(),
+      unitsFree: true,
+    });
+    if (block !== 'ok') throw this.editHttpError(block);
+  }
+
+  private async commitRentalRequestEdit(
+    requestId: string,
+    user: { id: string; clientId: string; name: string },
+    req: Awaited<ReturnType<RentalsService['fetchRequest']>>,
+    dto: UpdateRentalRequestDto,
+    plan: ReturnType<RentalsService['buildCreateRentalRequestPlan']>,
+    units: number
+  ) {
+    const previous = this.windowSnapshots(req);
+    const next = plan.windows.map((row) => ({
+      billing: row.billing,
+      calendar_date: row.calendarDate,
+      start_at: row.start.toISOString(),
+      end_at: row.end.toISOString(),
+    }));
+    const summary = buildChangeSummary(
+      {
+        windows: previous,
+        units: Number(req.units_requested) || 1,
+        note: req.client_request_note,
+      },
+      { windows: next, units, note: dto.clientRequestNote ?? null }
+    );
+    const saved = await this.applyRentalRequestEdit(requestId, user, dto.expectedVersion, next, units, dto.clientRequestNote, summary);
+    await this.notifyBusinessOfRentalEdit(req, requestId, user.name);
+    return { success: true, requestId, editVersion: saved.version, quotedTotal: saved.quoted_total };
   }
 
   private async emailBusinessNewRentalRequest(
@@ -918,12 +1195,10 @@ export class RentalsService {
       throw new HttpException('Only businesses can respond', HttpStatus.FORBIDDEN);
     }
     const req = await this.fetchRequest(requestId);
-    if (req.status !== 'pending') {
-      throw new HttpException('Request is not pending', HttpStatus.BAD_REQUEST);
-    }
     if (req.rental_location_listing.rental_item.business_id !== user.business.id) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
+    this.assertRespondVersion(req, dto, await this.isModifyRequestEnabled());
     const respondedAt = new Date().toISOString();
     if (dto.status === RespondRentalRequestStatusDto.available) {
       await this.respondRentalRequestAvailable(
@@ -964,8 +1239,9 @@ export class RentalsService {
         );
       }
     }
-    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_RESPOND, {
+    await this.persistRentalResponse({
       id: requestId,
+      version: dto.expectedVersion,
       status: dto.status,
       snapshot: null,
       note: dto.businessResponseNote?.trim() ?? null,
@@ -1019,8 +1295,9 @@ export class RentalsService {
     try {
       const ins = await this.insertProposedBookingRow(req, clientId, snap, total, contractExpiresAt);
       bookingId = ins.insert_rental_bookings_one.id;
-      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_RESPOND, {
+      await this.persistRentalResponse({
         id: requestId,
+        version: dto.expectedVersion,
         status: dto.status,
         snapshot: snap,
         note: dto.businessResponseNote?.trim() ?? null,
@@ -1209,6 +1486,11 @@ export class RentalsService {
       : await this.paymentRoutingService.resolveRailForUser(user.id);
     if (rail === 'stripe') {
       this.assertStripeRentalEndWithinAuthWindow(booking.end_at as string);
+      await this.assertEnrolledStripeReviewWindow(
+        bookingId,
+        booking.end_at as string,
+        listingCountry
+      );
       const deposit =
         Math.max(0, Number(booking.security_deposit_amount) || 0) ||
         this.snapshotSecurityDeposit(snap);
@@ -2003,9 +2285,9 @@ export class RentalsService {
         params.userId
       );
     }
-    this.assertStripeRentalEndWithinAuthWindow(
-      this.requestWindowEnvelope(params.req).endAt
-    );
+    const enrolledEnd = this.requestWindowEnvelope(params.req).endAt;
+    this.assertStripeRentalEndWithinAuthWindow(enrolledEnd);
+    await this.assertEnrolledStripeReviewWindow(params.bookingId, enrolledEnd, listingCountry);
     const total = Number(snap.total);
     const deposit = this.snapshotSecurityDeposit(snap);
     const clientAccount = await this.hasuraSystemService.getAccount(
@@ -2498,6 +2780,16 @@ export class RentalsService {
       return;
     }
     if (
+      (booking.status === 'active' || booking.status === 'awaiting_return') &&
+      Number(booking.overtime_amount) > 0
+    ) {
+      const policy = await this.readInspectionPolicy(booking.id);
+      if (policy != null) {
+        await this.settleEnrolledRental(booking.id);
+        return;
+      }
+    }
+    if (
       booking.status === 'awaiting_return' &&
       Number(booking.overtime_amount) > 0
     ) {
@@ -2852,6 +3144,10 @@ export class RentalsService {
     if (booking.status !== 'confirmed') {
       throw new HttpException('Invalid booking status', HttpStatus.BAD_REQUEST);
     }
+    const startGate = await this.readInspectionStart(bookingId);
+    if (startGate.inspectionPolicyVersion != null && !pickupStartAllowed(startGate)) {
+      throw inspectionUpdateRequired();
+    }
     const hasOw = !!body.overwriteCode?.trim();
     let pin = body.pin?.trim() || '';
     if (!hasOw && !pin && (body.useLatestSharedPin || body.pinMessageId)) {
@@ -2882,17 +3178,14 @@ export class RentalsService {
     }
     let won = false;
     try {
-      won = await this.casBooking(bookingId, ['confirmed'], {
-        status: 'active',
-        actual_start_at: new Date().toISOString(),
-      });
+      won = await this.markInspectionOrLegacyStart(bookingId);
     } catch (error) {
       if (!hasOw) await this.refundRentalPinAttempt(bookingId);
       throw error;
     }
     if (!won) {
       if (!hasOw) await this.refundRentalPinAttempt(bookingId);
-      return this.alreadyActiveOrConflict(bookingId);
+      return this.startBlockedOrConflict(bookingId);
     }
     await this.logHistory(bookingId, 'active', 'confirmed', user.id, 'business', 'Start PIN verified');
     return { success: true };
@@ -2908,8 +3201,13 @@ export class RentalsService {
   /** Support-only exception when the client cannot show the start PIN. */
   async issueStartOverwriteCodeForSupport(
     bookingId: string,
-    actorUserId: string
+    actorUserId: string,
+    reason: string
   ): Promise<{ overwriteCode: string }> {
+    const note = reason?.trim();
+    if (!note) {
+      throw new HttpException('A written reason is required', HttpStatus.BAD_REQUEST);
+    }
     const booking = await this.fetchBooking(bookingId);
     if (!booking) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
@@ -2926,7 +3224,7 @@ export class RentalsService {
       'confirmed',
       actorUserId || null,
       'system',
-      'Support issued a rental start code'
+      `Support issued a rental start code. ${note}`
     );
     return { overwriteCode: code };
   }
@@ -2954,6 +3252,8 @@ export class RentalsService {
         HttpStatus.BAD_REQUEST
       );
     }
+    const policy = await this.readInspectionPolicy(bookingId);
+    if (policy != null) throw inspectionUpdateRequired();
     const previousStatus = booking.status as 'active' | 'awaiting_return';
     const actualEndAt = await this.resolveActualReturnAt(
       booking,
@@ -3376,10 +3676,59 @@ export class RentalsService {
     return { success: true };
   }
 
-  private async alreadyActiveOrConflict(bookingId: string) {
+  private async startBlockedOrConflict(bookingId: string) {
     const fresh = await this.fetchBooking(bookingId);
     if (fresh?.status === 'active') return { success: true };
+    const gate = await this.readInspectionStart(bookingId);
+    if (gate.inspectionPolicyVersion != null && !pickupStartAllowed(gate)) {
+      throw inspectionUpdateRequired();
+    }
     throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+  }
+
+  /**
+   * The inspection start function is the atomic gate. The legacy status claim
+   * is only for a booking whose policy is known to be null while that function
+   * is not installed yet.
+   */
+  private async markInspectionOrLegacyStart(bookingId: string): Promise<boolean> {
+    const policy = await this.readInspectionPolicy(bookingId);
+    const at = new Date().toISOString();
+    try {
+      const result = await this.hasuraSystemService.executeMutation<{
+        rental_mark_started?: Array<{ id: string }>;
+      }>(
+        `mutation MarkStarted($id: uuid!, $at: timestamptz!) {
+          rental_mark_started(args: { p_booking_id: $id, p_at: $at }) { id }
+        }`,
+        { id: bookingId, at }
+      );
+      if (Object.prototype.hasOwnProperty.call(result ?? {}, 'rental_mark_started')) {
+        return (result.rental_mark_started?.length ?? 0) > 0;
+      }
+      return this.legacyStartIfUnenrolled(policy, bookingId, at);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      if (!this.missingInspectionFunction(error)) throw error;
+      return this.legacyStartIfUnenrolled(policy, bookingId, at);
+    }
+  }
+
+  private legacyStartIfUnenrolled(
+    policy: number | null,
+    bookingId: string,
+    at: string
+  ): Promise<boolean> {
+    if (policy !== null) throw inspectionUnavailable();
+    return this.casBooking(bookingId, ['confirmed'], {
+      status: 'active',
+      actual_start_at: at,
+    });
+  }
+
+  private missingInspectionFunction(error: any): boolean {
+    const text = JSON.stringify(error?.response ?? error?.message ?? error);
+    return text.includes('rental_mark_started') && text.toLowerCase().includes('not found');
   }
 
   private async reserveReplayResult(
@@ -3486,6 +3835,8 @@ export class RentalsService {
         HttpStatus.BAD_REQUEST
       );
     }
+    const startGate = await this.readInspectionStart(bookingId);
+    if (!pickupStartAllowed(startGate)) throw inspectionUpdateRequired();
     const total = Number(booking.total_amount);
     const clientUserId = booking.client.user_id as string;
     const clientAccount = await this.hasuraSystemService.getAccount(
@@ -3715,6 +4066,7 @@ export class RentalsService {
     );
     this.assertRentalRequestStartsInFuture(earliest);
     this.assertDurationHours(listing, plan.totalHours);
+    this.assertAllDayWindows(plan, listing);
     const weekly = listing.weekly_availability ?? [];
     for (const w of plan.windows) {
       this.assertRequestedWindowInAvailability(w.start, w.end, weekly);
@@ -3730,6 +4082,27 @@ export class RentalsService {
     }
   }
 
+  private assertAllDayWindows(plan: RentalRequestWindowPlan, listing: any) {
+    const allDay = plan.windows.filter((w) => w.billing === 'all_day');
+    if (!allDay.length) return;
+    if (!(Number(listing.base_price_per_day) > 0)) {
+      throw new HttpException('all_day billing requires a daily price', HttpStatus.BAD_REQUEST);
+    }
+    for (const w of allDay) this.assertAllDayStaysOnDate(w);
+  }
+
+  private assertAllDayStaysOnDate(
+    w: RentalRequestWindowEntry
+  ): asserts w is RentalRequestWindowEntry & { calendarDate: string } {
+    if (!w.calendarDate) {
+      throw new HttpException('calendarDate is required for all_day windows', HttpStatus.BAD_REQUEST);
+    }
+    const { start, end } = this.utcDayBoundsFromCalendarDate(w.calendarDate);
+    if (w.start < start || w.end > end) {
+      throw new HttpException('all_day window must stay on calendarDate', HttpStatus.BAD_REQUEST);
+    }
+  }
+
   private utcDayBoundsFromCalendarDate(calendarDate: string): { start: Date; end: Date } {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(calendarDate);
     if (!m) {
@@ -3739,6 +4112,9 @@ export class RentalsService {
     const mo = Number(m[2]) - 1;
     const d = Number(m[3]);
     const start = new Date(Date.UTC(y, mo, d, 0, 0, 0, 0));
+    if (start.toISOString().slice(0, 10) !== calendarDate) {
+      throw new HttpException('Invalid calendar_date', HttpStatus.BAD_REQUEST);
+    }
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 1);
     return { start, end };
@@ -3890,11 +4266,9 @@ export class RentalsService {
     let total = 0;
     for (const p of parts) {
       if (p.billing === 'all_day') {
-        if (!p.calendarDate) {
-          throw new HttpException(
-            'all_day window missing calendar_date',
-            HttpStatus.BAD_REQUEST
-          );
+        this.assertAllDayStaysOnDate(p);
+        if (!(ratePerDay > 0)) {
+          throw new HttpException('all_day billing requires a daily price', HttpStatus.BAD_REQUEST);
         }
         const subtotal = Number((ratePerDay * units).toFixed(2));
         total += subtotal;
@@ -4004,22 +4378,7 @@ export class RentalsService {
     rangeStartMs: number,
     rangeEndMs: number
   ): number {
-    const events: Array<{ t: number; delta: number }> = [];
-    for (const w of windows) {
-      const s = Math.max(w.startMs, rangeStartMs);
-      const e = Math.min(w.endMs, rangeEndMs);
-      if (e <= s) continue;
-      events.push({ t: s, delta: w.units });
-      events.push({ t: e, delta: -w.units });
-    }
-    events.sort((a, b) => a.t - b.t || a.delta - b.delta);
-    let cur = 0;
-    let peak = 0;
-    for (const e of events) {
-      cur += e.delta;
-      if (cur > peak) peak = cur;
-    }
-    return peak;
+    return sweepPeakUnits(windows, rangeStartMs, rangeEndMs);
   }
 
   private async assertUnitsAvailableNotBelowCommitted(
@@ -4197,27 +4556,456 @@ export class RentalsService {
   ) {
     const envelope = this.requestWindowEnvelope(req);
     const unitsBooked = this.normalizeUnitsRequested(req.units_requested);
+    const policyVersion = await this.inspectionPolicyForInsert(req);
+    const object = this.proposedBookingInsert(req, clientId, snap, total, contractExpiresAt, envelope, unitsBooked);
+    if (policyVersion != null) object.inspection_policy_version = policyVersion;
     return this.hasuraSystemService.executeMutation<{
       insert_rental_bookings_one: { id: string; booking_number: string };
-    }>(Q.INSERT_RENTAL_BOOKING, {
-      object: {
-        rental_request_id: req.id,
-        client_id: clientId,
-        business_id: req.rental_location_listing.rental_item.business_id,
-        rental_location_listing_id: req.rental_location_listing_id,
-        start_at: envelope.startAt,
-        end_at: envelope.endAt,
-        total_amount: total,
-        currency: snap.currency,
-        rental_pricing_snapshot: snap,
-        booking_number: this.createRentalBookingNumber(),
-        status: 'proposed',
-        contract_expires_at: contractExpiresAt,
-        units_booked: unitsBooked,
-        security_deposit_amount: this.snapshotSecurityDeposit(snap),
-        rental_booking_windows: this.bookingWindowsNestedInput(req),
-      },
+    }>(Q.INSERT_RENTAL_BOOKING, { object });
+  }
+
+  private proposedBookingInsert(
+    req: any,
+    clientId: string,
+    snap: RentalPricingSnapshotDto,
+    total: number,
+    contractExpiresAt: string,
+    envelope: { startAt: string; endAt: string },
+    unitsBooked: number
+  ): Record<string, unknown> {
+    return {
+      rental_request_id: req.id,
+      client_id: clientId,
+      business_id: req.rental_location_listing.rental_item.business_id,
+      rental_location_listing_id: req.rental_location_listing_id,
+      start_at: envelope.startAt,
+      end_at: envelope.endAt,
+      total_amount: total,
+      currency: snap.currency,
+      rental_pricing_snapshot: snap,
+      booking_number: this.createRentalBookingNumber(),
+      status: 'proposed',
+      contract_expires_at: contractExpiresAt,
+      units_booked: unitsBooked,
+      security_deposit_amount: this.snapshotSecurityDeposit(snap),
+      rental_booking_windows: this.bookingWindowsNestedInput(req),
+    };
+  }
+
+  private async inspectionPolicyForInsert(req: any): Promise<number | null> {
+    const country = resolveItemCountry(
+      req.rental_location_listing?.business_location?.address?.country
+    );
+    const enabled = await this.inspectionFlags.isEnabled(country);
+    if (!enabled) return null;
+    return this.enrolOrReject(req, country);
+  }
+
+  private async enrolOrReject(req: any, country: string | null): Promise<number | null> {
+    const windows = this.parseRentalSelectionWindows(req);
+    const rail = country
+      ? await this.paymentRoutingService.resolveRailForCountry(country)
+      : 'mobile_money';
+    const reviewHours = await this.inspectionFlags.numberConfig(
+      'rental_inspection_stripe_review_hours',
+      country,
+      DEFAULT_STRIPE_REVIEW_HOURS
+    );
+    const decision = decideInspectionEnrolment({
+      enabled: true,
+      windowCount: windows.length,
+      clientUserId: req.client?.user_id,
+      businessUserId: req.rental_location_listing?.rental_item?.business?.user_id,
+      rail,
+      endAt: new Date(Math.max(...windows.map((w) => w.end.getTime()))),
+      now: new Date(),
+      reviewHours,
     });
+    if (decision.outcome === 'reject') {
+      throw inspectionRejected(decision.code, decision.message);
+    }
+    return decision.outcome === 'enrol' ? decision.policyVersion : null;
+  }
+
+  private async assertEnrolledStripeReviewWindow(
+    bookingId: string,
+    endAtIso: string,
+    country: string | null
+  ): Promise<void> {
+    const policy = await this.readInspectionPolicy(bookingId);
+    if (policy == null) return;
+    const reviewHours = await this.inspectionFlags.numberConfig(
+      'rental_inspection_stripe_review_hours',
+      country,
+      DEFAULT_STRIPE_REVIEW_HOURS
+    );
+    const decision = decideInspectionEnrolment({
+      enabled: true,
+      windowCount: 1,
+      clientUserId: 'client',
+      businessUserId: 'business',
+      rail: 'stripe',
+      endAt: new Date(endAtIso),
+      now: new Date(),
+      reviewHours,
+    });
+    if (decision.outcome === 'reject') {
+      throw inspectionRejected(decision.code, decision.message);
+    }
+  }
+
+  /** null = legacy. A failed read throws 503 so callers retry instead of guessing. */
+  private async readInspectionPolicy(bookingId: string): Promise<number | null> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        rental_bookings_by_pk: { inspection_policy_version?: number | null } | null;
+      }>(
+        `query InspectionPolicy($id: uuid!) {
+          rental_bookings_by_pk(id: $id) { inspection_policy_version }
+        }`,
+        { id: bookingId }
+      );
+      return result.rental_bookings_by_pk?.inspection_policy_version ?? null;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      this.logger?.warn(`readInspectionPolicy ${bookingId}: ${error?.message ?? error}`);
+      throw inspectionUnavailable();
+    }
+  }
+
+  private async readInspectionStart(bookingId: string) {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        rental_bookings_by_pk: {
+          inspection_policy_version?: number | null;
+          pickup_ack_current?: boolean | null;
+          pickup_accepted_version_id?: string | null;
+          pickup_current_version_id?: string | null;
+        } | null;
+      }>(
+        `query InspectionStart($id: uuid!) {
+          rental_bookings_by_pk(id: $id) {
+            inspection_policy_version
+            pickup_ack_current
+            pickup_accepted_version_id
+            pickup_current_version_id
+          }
+        }`,
+        { id: bookingId }
+      );
+      const row = result.rental_bookings_by_pk;
+      if (!row) throw inspectionUnavailable();
+      return {
+        inspectionPolicyVersion: row.inspection_policy_version ?? null,
+        pickupAckCurrent: !!row.pickup_ack_current,
+        pickupAcceptedVersionId: row.pickup_accepted_version_id ?? null,
+        pickupCurrentVersionId: row.pickup_current_version_id ?? null,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      this.logger?.warn(`readInspectionStart ${bookingId}: ${error?.message ?? error}`);
+      throw inspectionUnavailable();
+    }
+  }
+
+  async noteInspectionHandback(
+    bookingId: string,
+    actorId: string,
+    notes = 'Physical handback recorded',
+    changedByType: 'business' | 'system' = 'business',
+    previous = 'active'
+  ): Promise<void> {
+    await this.logHistory(
+      bookingId,
+      'awaiting_return',
+      previous,
+      actorId,
+      changedByType,
+      notes
+    );
+  }
+
+  /** Claim, then settle once. A dispute or a pending acknowledgment settles nothing. */
+  async settleEnrolledRental(bookingId: string): Promise<void> {
+    const booking = await this.fetchBooking(bookingId);
+    const fields = booking ? await this.readEnrolledSettlement(bookingId) : null;
+    if (!booking || !fields || fields.inspectionPolicyVersion == null) return;
+    const gate = settlementGate({ ...fields, status: booking.status });
+    if (fields.settlementAttention) return;
+    if (gate.state === 'legacy' || gate.state === 'already' || gate.state === 'blocked') return;
+    if (gate.state === 'ready' && !(await this.claimEnrolledSettlement(bookingId))) return;
+    await this.finishEnrolledSettlement(booking, fields);
+  }
+
+  async sweepEnrolledSettlements(): Promise<number> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        rental_bookings: Array<{ id: string }>;
+      }>(
+        `query DueInspectionSettlements {
+          rental_bookings(where: {
+            inspection_policy_version: { _is_null: false }
+            return_handed_back_at: { _is_null: false }
+            settlement_completed_at: { _is_null: true }
+            settlement_attention: { _is_null: true }
+            return_resolution: { _in: ["accepted", "admin_cleared"] }
+            status: { _in: [active, awaiting_return, completed] }
+          }) { id }
+        }`,
+        {}
+      );
+      const rows = result.rental_bookings ?? [];
+      for (const row of rows) {
+        try {
+          await this.settleEnrolledRental(row.id);
+        } catch (error: any) {
+          this.logger?.warn(`enrolled settlement ${row.id}: ${error?.message ?? error}`);
+        }
+      }
+      return rows.length;
+    } catch (error: any) {
+      this.logger?.warn(`enrolled settlement sweep skipped: ${error?.message ?? error}`);
+      return 0;
+    }
+  }
+
+  private async readEnrolledSettlement(bookingId: string): Promise<SettlementGateBooking | null> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        rental_bookings_by_pk: {
+          inspection_policy_version?: number | null;
+          return_handed_back_at?: string | null;
+          return_resolution?: string | null;
+          settlement_claimed_at?: string | null;
+          settlement_completed_at?: string | null;
+          settlement_attention?: string | null;
+          overtime_prompted_at?: string | null;
+        } | null;
+        rental_inspection_disputes: Array<{ id: string }>;
+      }>(
+        `query EnrolledSettlement($id: uuid!) {
+          rental_bookings_by_pk(id: $id) {
+            inspection_policy_version
+            return_handed_back_at
+            return_resolution
+            settlement_claimed_at
+            settlement_completed_at
+            settlement_attention
+            overtime_prompted_at
+          }
+          rental_inspection_disputes(
+            where: { rental_booking_id: { _eq: $id }, status: { _in: ["open", "escalated"] } }
+            limit: 1
+          ) { id }
+        }`,
+        { id: bookingId }
+      );
+      const row = result.rental_bookings_by_pk;
+      if (!row) return null;
+      return {
+        inspectionPolicyVersion: row.inspection_policy_version ?? null,
+        returnHandedBackAt: row.return_handed_back_at ?? null,
+        returnResolution: row.return_resolution ?? null,
+        settlementClaimedAt: row.settlement_claimed_at ?? null,
+        settlementCompletedAt: row.settlement_completed_at ?? null,
+        openDispute: (result.rental_inspection_disputes?.length ?? 0) > 0,
+        status: '',
+        settlementAttention: row.settlement_attention ?? null,
+        overtimePromptedAt: row.overtime_prompted_at ?? null,
+      };
+    } catch (error: any) {
+      this.logger?.warn(`readEnrolledSettlement ${bookingId}: ${error?.message ?? error}`);
+      return null;
+    }
+  }
+
+  private async claimEnrolledSettlement(bookingId: string): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      rental_claim_inspection_settlement?: Array<{ id: string }>;
+    }>(
+      `mutation ClaimInspectionSettlement($id: uuid!) {
+        rental_claim_inspection_settlement(args: { p_booking_id: $id }) { id }
+      }`,
+      { id: bookingId }
+    );
+    return (result.rental_claim_inspection_settlement?.length ?? 0) > 0;
+  }
+
+  private async finishEnrolledSettlement(booking: any, fields: SettlementGateBooking): Promise<void> {
+    const fresh = await this.fetchBooking(booking.id);
+    if (!fresh) return;
+    if (fresh.status === 'completed') {
+      await this.stampSettlementCompleted(fresh.id);
+      return;
+    }
+    if (fresh.status !== 'active' && fresh.status !== 'awaiting_return') return;
+    const endedAt = (fresh.actual_end_at as string | null) || fields.returnHandedBackAt;
+    if (!endedAt) return;
+    const settlement = this.computeRentalSettlement(fresh, endedAt);
+    const override = fresh.overtime_amount_override;
+    if (override != null && override !== '' && Number.isFinite(Number(override))) {
+      settlement.overtimeAmount = Math.max(0, Number(override));
+    }
+    if (fresh.payment_status === 'authorized') {
+      await this.captureEnrolledStripe(fresh, settlement);
+      return;
+    }
+    if (await this.overtimeNeedsMobileMoney(fresh, settlement.overtimeAmount)) {
+      await this.pushEnrolledOvertimePrompt(fresh, settlement.overtimeAmount, fields.overtimePromptedAt);
+      return;
+    }
+    const won = await this.runCompletion(fresh.id, fresh.status, null, 'system', () =>
+      this.settleWalletHeldBooking(fresh, settlement)
+    );
+    if (won) await this.stampSettlementCompleted(fresh.id);
+  }
+
+  private async captureEnrolledStripe(booking: any, settlement: RentalReturnSettlement): Promise<void> {
+    const decided = await this.decidedDamage(booking.id);
+    const damage = damageCollectedOnAgree({
+      paymentStatus: booking.payment_status ?? null,
+      claimedAmount: booking.claimed_damage_amount ?? null,
+      upheldAmount: decided.amount,
+      decision: decided.decision,
+    });
+    const quote = priceEnrolledCapture({
+      contract: settlement.contract,
+      overtime: settlement.overtimeAmount,
+      deposit: settlement.deposit,
+      authorized: Number(booking.authorized_amount) || settlement.contract + settlement.deposit,
+      damage,
+      collectDamage: damage > 0,
+    });
+    const priced = { ...settlement, stripeCharge: quote.charge, overtimeAmount: quote.overtimeTaken };
+    try {
+      const won = await this.runCompletion(booking.id, booking.status, null, 'system', () =>
+        this.settleStripeAuthorizedBooking(booking, priced)
+      );
+      if (won) await this.stampSettlementCompleted(booking.id);
+    } catch (error: any) {
+      if (!this.stripeAuthUncollectable(error)) throw error;
+      await this.markSettlementAttention(booking.id, 'stripe_auth_expired');
+      await this.logHistory(
+        booking.id,
+        booking.status,
+        booking.status,
+        null,
+        'system',
+        'Stripe authorization expired before capture. Flagged for an admin. No further automatic capture.'
+      );
+    }
+  }
+
+  private stripeAuthUncollectable(error: any): boolean {
+    const text = `${error?.message ?? ''} ${JSON.stringify(error?.response ?? '')}`.toLowerCase();
+    return /expired|canceled|cancelled|could not be captured|unexpected_state|cannot capture transaction in status/.test(
+      text
+    );
+  }
+
+  private async markSettlementAttention(bookingId: string, reason: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation FlagInspectionSettlement($id: uuid!, $reason: String!) {
+        update_rental_bookings(
+          where: { id: { _eq: $id }, settlement_attention: { _is_null: true } }
+          _set: { settlement_attention: $reason }
+        ) { affected_rows }
+      }`,
+      { id: bookingId, reason }
+    );
+  }
+
+  /** Reuse a pending overtime prompt. Otherwise wait out the backoff before another push. */
+  private async pushEnrolledOvertimePrompt(
+    booking: any,
+    overtimeAmount: number,
+    promptedAt?: string | null
+  ): Promise<void> {
+    if (promptedAt && Date.now() - new Date(promptedAt).getTime() < OVERTIME_PROMPT_BACKOFF_MS) {
+      return;
+    }
+    const pending = await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
+      booking.booking_number
+    );
+    if (pending) return;
+    await this.patchBooking(booking.id, {
+      overtime_amount: overtimeAmount,
+      overtime_prompted_at: new Date().toISOString(),
+    });
+    await this.pushOvertimeCharge(booking, overtimeAmount);
+  }
+
+  private async decidedDamage(bookingId: string): Promise<{ decision: string | null; amount: number }> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      rental_inspection_disputes: Array<{ decision: string | null; damage_amount: number | null }>;
+    }>(
+      `query DecidedInspectionDamage($id: uuid!) {
+        rental_inspection_disputes(
+          where: { rental_booking_id: { _eq: $id }, status: { _eq: "decided" } }
+          order_by: { decided_at: desc }
+          limit: 1
+        ) { decision damage_amount }
+      }`,
+      { id: bookingId }
+    );
+    const row = result.rental_inspection_disputes?.[0];
+    return {
+      decision: row?.decision ?? null,
+      amount: Math.max(0, Number(row?.damage_amount) || 0),
+    };
+  }
+
+  async adjustEnrolledOvertime(
+    bookingId: string,
+    actorId: string,
+    overtimeAmount: number,
+    reason: string
+  ): Promise<{ overtimeAmount: number; adjusted: true }> {
+    if (!reason?.trim()) throw new HttpException('A reason is required', HttpStatus.BAD_REQUEST);
+    if (!Number.isFinite(Number(overtimeAmount)) || Number(overtimeAmount) < 0) {
+      throw new HttpException('Overtime amount must be zero or more', HttpStatus.BAD_REQUEST);
+    }
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking) throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
+    if (booking.inspection_policy_version == null) {
+      throw new HttpException('This booking does not use condition inspections', HttpStatus.CONFLICT);
+    }
+    const amount = Number(overtimeAmount);
+    const adjusted = await this.hasuraSystemService.executeMutation<{
+      update_rental_bookings?: { affected_rows: number };
+    }>(
+      `mutation AdjustEnrolledOvertime($id: uuid!, $amount: numeric!) {
+        update_rental_bookings(
+          where: { id: { _eq: $id }, settlement_claimed_at: { _is_null: true } }
+          _set: { overtime_amount_override: $amount, updated_at: "now()" }
+        ) { affected_rows }
+      }`,
+      { id: bookingId, amount }
+    );
+    if ((adjusted.update_rental_bookings?.affected_rows ?? 0) !== 1) {
+      throw new HttpException('This rental is already settled', HttpStatus.CONFLICT);
+    }
+    await this.logHistory(
+      bookingId,
+      booking.status,
+      booking.status,
+      actorId,
+      'system',
+      `Support adjusted overtime to ${amount}. ${reason.trim()}`
+    );
+    return { overtimeAmount: amount, adjusted: true };
+  }
+
+  private async stampSettlementCompleted(bookingId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation CompleteInspectionSettlement($id: uuid!, $at: timestamptz!) {
+        update_rental_bookings(
+          where: { id: { _eq: $id }, settlement_completed_at: { _is_null: true } }
+          _set: { settlement_completed_at: $at }
+        ) { affected_rows }
+      }`,
+      { id: bookingId, at: new Date().toISOString() }
+    );
   }
 
   private async placeHoldForBooking(

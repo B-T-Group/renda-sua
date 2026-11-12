@@ -15,19 +15,33 @@ const PUBLIC_ITEM_PATH = /^\/items\/([^/]+)(?:\/seo)?\/?$/;
 export function extractAppPath(url: string): string | null {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === 'rendasua:') return pathFromScheme(parsed);
-    if (parsed.pathname.startsWith('/app/')) {
-      return parsed.pathname.replace(/^\/app\//, '').replace(/\/$/, '');
-    }
-    if (/^\/store\/[^/]+\/?$/.test(parsed.pathname)) {
-      return parsed.pathname.replace(/^\//, '').replace(/\/$/, '');
-    }
-    const item = PUBLIC_ITEM_PATH.exec(parsed.pathname);
-    if (item) return `item/${item[1]}`;
-    return null;
+    const path = rawAppPath(parsed);
+    if (!path) return null;
+    return attachInspectionPersona(path, parsed);
   } catch {
     return null;
   }
+}
+
+function rawAppPath(parsed: URL): string | null {
+  if (parsed.protocol === 'rendasua:') return pathFromScheme(parsed);
+  if (parsed.pathname.startsWith('/app/')) {
+    return parsed.pathname.replace(/^\/app\//, '').replace(/\/$/, '');
+  }
+  if (/^\/store\/[^/]+\/?$/.test(parsed.pathname)) {
+    return parsed.pathname.replace(/^\//, '').replace(/\/$/, '');
+  }
+  const item = PUBLIC_ITEM_PATH.exec(parsed.pathname);
+  if (item) return `item/${item[1]}`;
+  return null;
+}
+
+/** Inspection pushes name the persona so the shell switches before the booking opens. */
+function attachInspectionPersona(path: string, parsed: URL): string {
+  if (!path.includes('rentals/bookings/')) return path;
+  const persona = parsed.searchParams.get('persona');
+  if (persona === 'client' || persona === 'business') return `${path}?persona=${persona}`;
+  return path;
 }
 
 function pathFromScheme(parsed: URL): string | null {
@@ -39,9 +53,19 @@ function pathFromScheme(parsed: URL): string | null {
 
 /** Persona the deep link belongs to, or null to keep the active shell. */
 export function targetPersonaForDeepLinkPath(path: string): PersonaSlug | null {
-  const segments = path.split('/').filter(Boolean);
+  const [clean, query = ''] = path.split('?');
+  const persona = new URLSearchParams(query).get('persona');
+  const segments = clean.split('/').filter(Boolean);
+  if (
+    (persona === 'client' || persona === 'business') &&
+    segments[0] === 'rentals' &&
+    segments[1] === 'bookings'
+  ) {
+    return persona;
+  }
   const head = segments[0];
   if (head === 'admin' || head === 'items') return 'business';
+  if (head === 'rentals' && segments[1] === 'listings' && segments[2]) return 'client';
   if (head === 'rentals' && segments[1] === 'requests') return 'business';
   if (head === 'deliveries') return 'agent';
   // Delivery-confirm links always open in the shopper (client) shell.
@@ -60,6 +84,7 @@ export type DeepLinkTarget =
   | { type: 'verification' }
   | { type: 'rentalRequests' }
   | { type: 'rental'; id: string }
+  | { type: 'rentalListing'; id: string }
   | { type: 'food'; id?: string }
   | { type: 'store'; id: string }
   | { type: 'inventoryItem'; id: string }
@@ -70,7 +95,7 @@ export type DeepLinkTarget =
   | { type: 'dashboard' };
 
 export function resolveDeepLinkTarget(path: string): DeepLinkTarget {
-  const segments = path.split('/').filter(Boolean);
+  const segments = path.split('?')[0].split('/').filter(Boolean);
   return matchDeepLinkHead(segments) ?? { type: 'dashboard' };
 }
 
@@ -110,6 +135,12 @@ function matchDeepLinkRest(
   if (head === 'verification') return { type: 'verification' };
   if (head === 'rentals' && segments[1] === 'requests') {
     return { type: 'rentalRequests' };
+  }
+  if (head === 'rentals' && segments[1] === 'listings' && segments[2]) {
+    return { type: 'rentalListing', id: segments[2] };
+  }
+  if (head === 'rentals' && segments[1] === 'bookings' && segments[2]) {
+    return { type: 'rental', id: segments[2] };
   }
   if (head === 'rentals' && id) return { type: 'rental', id };
   if (head === 'foods') return { type: 'food', id };

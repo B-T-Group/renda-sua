@@ -245,6 +245,10 @@ export const GET_RENTAL_REQUEST_FULL = `
       rental_pricing_snapshot
       rental_location_listing_id
       units_requested
+      edit_version
+      quoted_total
+      change_summary
+      client_request_note
       expires_at
       rental_location_listing {
         id
@@ -258,13 +262,13 @@ export const GET_RENTAL_REQUEST_FULL = `
           start_time
           end_time
         }
-        rental_item {
+          rental_item {
           id
           business_id
           currency
           is_active
           name
-          business { name }
+          business { name user_id }
         }
         business_location {
           address { country }
@@ -318,6 +322,78 @@ export const UPDATE_RENTAL_REQUEST_RESPOND = `
     ) {
       id
       status
+    }
+  }
+`;
+
+export const UPDATE_RENTAL_REQUEST_RESPOND_CAS = `
+  mutation UpdateRentalRequestRespondCas(
+    $id: uuid!
+    $version: Int!
+    $status: rental_request_status_enum!
+    $snapshot: jsonb
+    $note: String
+    $unavailableReasonCode: String
+    $requestExpiresAt: timestamptz
+    $respondedAt: timestamptz!
+    $userId: uuid!
+  ) {
+    update_rental_requests(
+      where: { id: { _eq: $id }, status: { _eq: pending }, edit_version: { _eq: $version } }
+      _set: {
+        status: $status
+        rental_pricing_snapshot: $snapshot
+        business_response_note: $note
+        unavailable_reason_code: $unavailableReasonCode
+        expires_at: $requestExpiresAt
+        responded_at: $respondedAt
+        responded_by_user_id: $userId
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+export const APPLY_RENTAL_REQUEST_EDIT = `
+  mutation ApplyRentalRequestEdit(
+    $requestId: uuid!
+    $clientId: uuid!
+    $actorId: uuid!
+    $expectedVersion: Int!
+    $windows: jsonb!
+    $units: Int!
+    $note: String
+    $changeSummary: jsonb!
+    $now: timestamptz!
+  ) {
+    apply_rental_request_edit(
+      args: {
+        p_request_id: $requestId
+        p_client_id: $clientId
+        p_actor: $actorId
+        p_expected_version: $expectedVersion
+        p_windows: $windows
+        p_units: $units
+        p_note: $note
+        p_change_summary: $changeSummary
+        p_now: $now
+      }
+    ) {
+      id
+      version
+      quoted_total
+    }
+  }
+`;
+
+export const GET_MODIFY_REQUEST_FLAG = `
+  query GetModifyRequestFlag {
+    application_configurations(
+      where: { config_key: { _eq: "rentals_modify_request_enabled" }, status: { _eq: "active" } }
+    ) {
+      boolean_value
+      country_code
     }
   }
 `;
@@ -486,6 +562,10 @@ export const GET_RENTAL_BOOKING_FULL = `
       authorized_amount
       captured_amount
       overtime_amount
+      overtime_amount_override
+      claimed_damage_amount
+      inspection_policy_version
+      reserved_cancel_after
       payment_timing
       payment_status
       actual_start_at
@@ -528,10 +608,17 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       authorized_amount
       captured_amount
       overtime_amount
+      overtime_amount_override
+      claimed_damage_amount
+      reserved_cancel_after
       payment_timing
       payment_status
       actual_start_at
       actual_end_at
+      units_booked
+      inspection_policy_version
+      return_handed_back_at
+      return_resolution
       rental_pricing_snapshot
       client_id
       business_id
@@ -961,6 +1048,9 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       business_response_note
       client_request_note
       units_requested
+      edit_version
+      quoted_total
+      change_summary
       unavailable_reason_code
       rental_pricing_snapshot
       responded_at
@@ -972,10 +1062,12 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
         security_deposit_amount
         business_location {
           name
+          address { city }
         }
         rental_item {
           name
           currency
+          business { name }
         }
       }
       rental_booking {
@@ -1049,6 +1141,9 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       business_response_note
       client_request_note
       units_requested
+      edit_version
+      quoted_total
+      change_summary
       unavailable_reason_code
       expires_at
       responded_at
@@ -1076,6 +1171,12 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         base_price_per_hour
         base_price_per_day
         security_deposit_amount
+        business_location {
+          name
+          address {
+            city
+          }
+        }
         weekly_availability(order_by: { weekday: asc }) {
           weekday
           is_available
@@ -1085,6 +1186,9 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         rental_item {
           name
           currency
+          business {
+            name
+          }
           rental_item_images(order_by: { display_order: asc }, limit: 1) {
             id
             display_url
@@ -1166,7 +1270,38 @@ export const LIST_EXPIRED_PROPOSED_RENTAL_BOOKINGS = `
 `;
 
 export const LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS = `
-  query ListExpiredReservedRentalBookings($cutoff: timestamptz!) {
+  query ListExpiredReservedRentalBookings($cutoff: timestamptz!, $now: timestamptz!) {
+    rental_bookings(
+      where: {
+        status: { _eq: reserved }
+        actual_start_at: { _is_null: true }
+        _or: [
+          {
+            inspection_policy_version: { _is_null: true }
+            start_at: { _lte: $cutoff }
+          }
+          {
+            inspection_policy_version: { _is_null: false }
+            pickup_inspection_pending: { _eq: false }
+            _or: [
+              { reserved_cancel_after: { _lte: $now } }
+              {
+                reserved_cancel_after: { _is_null: true }
+                start_at: { _lte: $cutoff }
+              }
+            ]
+          }
+        ]
+      }
+    ) {
+      id
+    }
+  }
+`;
+
+/** Used only when the inspection columns are not migrated yet. */
+export const LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS_LEGACY = `
+  query ListExpiredReservedRentalBookingsLegacy($cutoff: timestamptz!) {
     rental_bookings(
       where: {
         status: { _eq: reserved }

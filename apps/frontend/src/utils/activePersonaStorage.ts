@@ -122,3 +122,16 @@ export function readStoredActivePersonaSlug(): PersonaSlug | undefined {
   if (s?.kind === 'persona') return s.persona;
   return undefined;
 }
+
+/** Body/query field for Auth0. Omitted in delegation mode and when nothing is stored. */
+export function activePersonaAuthField(): { active_persona?: PersonaSlug } {
+  const persona = readStoredActivePersonaSlug();
+  return persona ? { active_persona: persona } : {};
+}
+
+/** Authorize query params. Extra keys (connection, login_hint) stay, and stored persona is added. */
+export function authorizationParamsWithActivePersona(
+  extra: Record<string, string> = {}
+): Record<string, string> {
+  return { ...extra, ...activePersonaAuthField() };
+}

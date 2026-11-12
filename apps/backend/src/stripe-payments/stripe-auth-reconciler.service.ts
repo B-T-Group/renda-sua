@@ -126,19 +126,34 @@ export class StripeAuthReconcilerService {
 
   /**
    * A lapsed card hold on a rental that has not started is cancelled.
+   * Card bookings leave `proposed` as soon as the authorization is recorded,
+   * so `confirmed` with no `actual_start_at` is still before handover.
    * Once the item is out, the booking stays open and support is told once.
+   * A lost cancel throws so the transaction stays eligible for the next run.
    */
   private async handleRentalAuthorizationLapsed(
     bookingNumber: string
   ): Promise<void> {
     const booking = await this.fetchAuthorizedRental(bookingNumber);
     if (!booking) return;
-    if (booking.status === 'proposed') {
-      await this.cancelProposedRentalAfterLapse(booking);
+    if (this.rentalUnstarted(booking)) {
+      await this.cancelUnstartedRentalAfterLapse(booking);
       return;
     }
     if (!this.rentalStillOut(booking.status)) return;
     await this.noteRentalAuthLapsed(booking);
+  }
+
+  private rentalUnstarted(booking: {
+    status: string;
+    actual_start_at?: string | null;
+  }): boolean {
+    if (booking.actual_start_at) return false;
+    return (
+      booking.status === 'proposed' ||
+      booking.status === 'reserved' ||
+      booking.status === 'confirmed'
+    );
   }
 
   private rentalStillOut(status: string): boolean {
@@ -156,13 +171,14 @@ export class StripeAuthReconcilerService {
         booking_number: string;
         status: string;
         payment_status: string;
+        actual_start_at?: string | null;
       }>;
     }>(
       `query AuthorizedRental($bookingNumber: String!) {
         rental_bookings(
           where: { booking_number: { _eq: $bookingNumber } }
           limit: 1
-        ) { id booking_number status payment_status }
+        ) { id booking_number status payment_status actual_start_at }
       }`,
       { bookingNumber }
     );
@@ -171,22 +187,32 @@ export class StripeAuthReconcilerService {
     return booking;
   }
 
-  private async cancelProposedRentalAfterLapse(booking: {
+  private async cancelUnstartedRentalAfterLapse(booking: {
     id: string;
+    booking_number: string;
     status: string;
   }): Promise<void> {
     const result = await this.hasuraSystemService.executeMutation<{
       update_rental_bookings: { affected_rows: number } | null;
     }>(
-      `mutation CancelProposedRental($id: uuid!) {
+      `mutation CancelUnstartedRental($id: uuid!, $status: rental_booking_status_enum!) {
         update_rental_bookings(
-          where: { id: { _eq: $id }, status: { _eq: proposed } }
+          where: {
+            id: { _eq: $id }
+            status: { _eq: $status }
+            actual_start_at: { _is_null: true }
+            payment_status: { _eq: authorized }
+          }
           _set: { status: cancelled, payment_status: cancelled, contract_expires_at: null }
         ) { affected_rows }
       }`,
-      { id: booking.id }
+      { id: booking.id, status: booking.status }
     );
-    if ((result.update_rental_bookings?.affected_rows ?? 0) !== 1) return;
+    if ((result.update_rental_bookings?.affected_rows ?? 0) !== 1) {
+      throw new Error(
+        `Could not cancel unstarted rental ${booking.booking_number} after the card authorization lapsed`
+      );
+    }
     await this.insertRentalLapseNote(booking.id, booking.status);
   }
 

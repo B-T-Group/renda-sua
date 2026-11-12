@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -21,18 +21,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageLightbox } from '../../components/common/ImageLightbox';
 import { StatusPill } from '../../components/common/StatusPill';
 import { TrustBadge } from '../../components/common/TrustBadge';
-import { RentalRequestSheet } from '../../components/rentals/RentalRequestSheet';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
-import { useStore } from '../../stores/RootStore';
-import type {
-  ClientRootStackParamList,
-  GuestRootStackParamList,
-} from '../../navigation/types';
+import type { ClientRootStackParamList } from '../../navigation/types';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
 import { formatRentalMoney } from '../../utils/rentals';
+import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
 
-type DetailParams = { RentalListingDetail: { listingId: string } };
+type DetailParams = {
+  RentalListingDetail: { listingId: string; startDate?: string; endDate?: string; openRequest?: boolean };
+};
 
 const WEEKDAY_KEYS = [
   'sunday',
@@ -95,15 +93,16 @@ export default function RentalListingDetailScreen() {
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { auth } = useStore();
   const route = useRoute<RouteProp<DetailParams, 'RentalListingDetail'>>();
   const navigation = useNavigation();
   const listingId = route.params?.listingId;
-  const { listing, bookedWindows, loading, error, refetch } = useRentalListingDetail(listingId);
+  const { listing, loading, error, refetch } = useRentalListingDetail(listingId);
   const [galleryIdx, setGalleryIdx] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [requestSheetOpen, setRequestSheetOpen] = useState(false);
+  const startDate = route.params?.startDate;
+  const endDate = route.params?.endDate;
+  const openRequest = route.params?.openRequest === true;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -133,24 +132,20 @@ export default function RentalListingDetailScreen() {
     [images.length, width]
   );
 
-  const onLoginRequired = useCallback(() => {
-    const parent = navigation.getParent() ?? navigation;
-    (parent as unknown as NativeStackNavigationProp<GuestRootStackParamList>).navigate(
-      'GuestTabs',
-      { screen: 'GuestAuth', params: { screen: 'Login' } }
-    );
-  }, [navigation]);
-
-  const onSubmitted = useCallback(
-    (requestId: string) => {
-      (navigation as unknown as NativeStackNavigationProp<ClientRootStackParamList>).navigate(
-        'RentalRequestSubmitted',
-        { requestId }
-      );
-    },
-    [navigation]
-  );
-
+  const openRequestScreen = useCallback(() => {
+    if (!listingId) return;
+    (navigation as NativeStackNavigationProp<ClientRootStackParamList>).navigate('RentalRequest', {
+      listingId,
+      startDate,
+      endDate,
+    });
+  }, [endDate, listingId, navigation, startDate]);
+  const openedRequest = useRef(false);
+  useEffect(() => {
+    if (!listing || !openRequest || openedRequest.current) return;
+    openedRequest.current = true;
+    openRequestScreen();
+  }, [listing, openRequest, openRequestScreen]);
   const currency = listing?.rental_item.currency || 'XAF';
   const weeklySorted = useMemo(() => {
     const rows = listing?.weekly_availability ?? [];
@@ -208,21 +203,6 @@ export default function RentalListingDetailScreen() {
       : null,
     t('rentals.detail.minHoursSnapshot', '{{h}}h minimum', { h: listing.min_rental_hours }),
   ].filter(Boolean);
-
-  const pickerProps = {
-    listingId: listing.id,
-    isAuthenticated: auth.isAuthenticated,
-    bookedWindows,
-    minRentalHours: listing.min_rental_hours,
-    maxRentalHours: listing.max_rental_hours,
-    unitsAvailable: Number(listing.units_available) || 1,
-    weeklyAvailability: listing.weekly_availability,
-    basePricePerHour: hourlyPrice,
-    basePricePerDay: dailyPrice,
-    currency,
-    onLoginRequired,
-    onSubmitted: auth.isAuthenticated ? onSubmitted : undefined,
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
@@ -343,7 +323,9 @@ export default function RentalListingDetailScreen() {
             {priceSnapshotParts.join(' · ')}
           </Text>
           <Text style={[typography.body2, { color: colors.text.secondary, marginTop: 4 }]}>
-            {item.rental_category?.name}
+            {item.rental_category?.name
+              ? rentalCategoryLabel(item.rental_category.name, (key, fallback) => t(key, fallback))
+              : null}
             {item.business?.name
               ? ` · ${t('rentals.detail.offeredBy', 'Offered by')} ${item.business.name}`
               : ''}
@@ -597,7 +579,7 @@ export default function RentalListingDetailScreen() {
           <Button
             mode="contained"
             style={{ marginTop: spacing.sm }}
-            onPress={() => setRequestSheetOpen(true)}
+            onPress={openRequestScreen}
             disabled={!acceptsOrders}
           >
             {acceptsOrders
@@ -647,7 +629,7 @@ export default function RentalListingDetailScreen() {
       </View>
       <Button
         mode="contained"
-        onPress={() => setRequestSheetOpen(true)}
+        onPress={openRequestScreen}
         disabled={!acceptsOrders}
         contentStyle={styles.ctaBtnContent}
         labelStyle={styles.ctaBtnLabel}
@@ -666,12 +648,6 @@ export default function RentalListingDetailScreen() {
       </Button>
     </View>
 
-    <RentalRequestSheet
-      visible={requestSheetOpen}
-      onDismiss={() => setRequestSheetOpen(false)}
-      listingName={item.name}
-      {...pickerProps}
-    />
     <ImageLightbox
       visible={lightboxOpen}
       images={images}

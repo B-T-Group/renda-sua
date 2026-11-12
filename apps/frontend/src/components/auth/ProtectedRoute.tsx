@@ -6,6 +6,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { isAdminPath } from '../../utils/adminPaths';
+import { authorizationParamsWithActivePersona } from '../../utils/activePersonaStorage';
 import LoadingPage from '../common/LoadingPage';
 import EmailVerificationPage from '../pages/EmailVerificationPage';
 
@@ -52,6 +53,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
             size="large"
             onClick={() =>
               void loginWithRedirect({
+                authorizationParams: authorizationParamsWithActivePersona(),
                 appState: {
                   returnTo: location.pathname + location.search,
                 },

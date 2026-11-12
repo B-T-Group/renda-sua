@@ -24,6 +24,28 @@ import {
 } from '../../utils/rentalPricingLines';
 import { resolveRentalPhase } from '../../utils/rentalPhase';
 
+function changeDetail(summary: BusinessRentalRequestRow['change_summary']): string {
+  if (!summary?.fields?.length) return '';
+  const bits: string[] = [];
+  if (summary.fields.includes('dates') && summary.dates) {
+    bits.push(`dates ${exclusiveRange(summary.dates.from)} → ${exclusiveRange(summary.dates.to)}`);
+  }
+  if (summary.fields.includes('quantity') && summary.quantity) {
+    bits.push(`quantity ${summary.quantity.from} → ${summary.quantity.to}`);
+  }
+  if (summary.fields.includes('notes')) bits.push('notes');
+  return bits.join(', ');
+}
+
+function exclusiveRange(windows: Array<{ calendar_date?: string }> | undefined): string {
+  const days = (windows ?? []).map((row) => row.calendar_date).filter((day): day is string => Boolean(day)).sort();
+  if (!days.length) return '';
+  const end = new Date(`${days[days.length - 1]}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  const month = end.toLocaleDateString('en', { month: 'short', timeZone: 'UTC' });
+  return `${Number(days[0].slice(8))}–${end.getUTCDate()} ${month}`;
+}
+
 function formatDateTimeWithoutTimezone(value?: string | null): string {
   if (!value) {
     return '-';
@@ -206,13 +228,25 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
                 {fullName || email || phone || '—'}
               </Typography>
             </Box>
-            <Chip
-              size="small"
-              color={statusChipColor}
-              label={t(phase.labelKey, request.status)}
-              sx={{ fontWeight: 800 }}
-            />
+            <Stack direction="row" spacing={0.5}>
+              <Chip
+                size="small"
+                color={statusChipColor}
+                label={request.status === 'pending' ? t('rentals.modify.requested', 'Requested') : t(phase.labelKey, request.status)}
+                sx={{ fontWeight: 800 }}
+              />
+              {(request.change_summary?.fields?.length ?? 0) > 0 ? (
+                <Chip size="small" color="primary" variant="outlined" label={t('rentals.modify.updated', 'Updated')} />
+              ) : null}
+            </Stack>
           </Stack>
+          {(request.change_summary?.fields?.length ?? 0) > 0 ? (
+            <Typography variant="body2" color="primary.main">
+              {t('rentals.modify.changed', 'Changed: {{detail}}', {
+                detail: changeDetail(request.change_summary),
+              })}
+            </Typography>
+          ) : null}
 
           {bookingIsActive && actualStartAt ? (
             <Alert severity="success" sx={{ py: 0.5 }}>

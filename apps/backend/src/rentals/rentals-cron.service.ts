@@ -2,7 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { RentalInspectionService } from './inspection/rental-inspection.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
+import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
 
 /** Grace after the scheduled start before an unpaid reservation is released. */
@@ -10,7 +12,7 @@ const RESERVED_UNPAID_GRACE_MINUTES = 60;
 
 /**
  * Singleton cron host for rental system jobs.
- * Must not inject request-scoped providers (e.g. HasuraUserService / RentalsService).
+ * HasuraUserService is CLS-backed, not request-scoped, so the rental services are singletons.
  */
 @Injectable()
 export class RentalsCronService {
@@ -18,7 +20,9 @@ export class RentalsCronService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly inspections: RentalInspectionService,
+    private readonly rentalsService: RentalsService
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -144,17 +148,30 @@ export class RentalsCronService {
     return rows.length;
   }
 
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleInspectionReviews(): Promise<void> {
+    try {
+      const reviewed = await this.inspections.remindAndEscalate();
+      const settled = await this.rentalsService.sweepEnrolledSettlements();
+      if (reviewed + settled > 0) {
+        this.logger.log(`Inspection reviews ${reviewed}, settlement sweep ${settled}`);
+      }
+    } catch (error: any) {
+      this.logger.error(error?.message ?? String(error));
+    }
+  }
+
   /**
    * Release reserved (pay-at-pickup) bookings that were never paid within the
    * grace window after their scheduled start, so the capacity frees up.
+   * An open pickup inspection pauses that clock until the client accepts.
    */
   async expireReservedRentalBookings(): Promise<number> {
     const cutoff = new Date(
       Date.now() - RESERVED_UNPAID_GRACE_MINUTES * 60 * 1000
     ).toISOString();
-    const res = await this.hasuraSystemService.executeQuery<{
-      rental_bookings: Array<{ id: string }>;
-    }>(Q.LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS, { cutoff });
+    const now = new Date().toISOString();
+    const res = await this.listExpiredReserved(cutoff, now);
     const rows = res.rental_bookings ?? [];
     for (const b of rows) {
       try {
@@ -164,6 +181,19 @@ export class RentalsCronService {
       }
     }
     return rows.length;
+  }
+
+  private async listExpiredReserved(cutoff: string, now: string) {
+    try {
+      return await this.hasuraSystemService.executeQuery<{
+        rental_bookings: Array<{ id: string }>;
+      }>(Q.LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS, { cutoff, now });
+    } catch (error: any) {
+      this.logger.warn(`reserved expiry using legacy predicate: ${error?.message ?? error}`);
+      return this.hasuraSystemService.executeQuery<{
+        rental_bookings: Array<{ id: string }>;
+      }>(Q.LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS_LEGACY, { cutoff });
+    }
   }
 
   private async expireOneReservedBooking(bookingId: string): Promise<void> {

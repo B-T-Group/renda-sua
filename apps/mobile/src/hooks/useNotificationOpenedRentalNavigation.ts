@@ -4,13 +4,15 @@ import { CommonActions } from '@react-navigation/native';
 import { loadExpoNotifications } from '../services/expoNotificationsLoader';
 import { rootNavigationRef } from '../navigation/rootNavigationRef';
 import { useStore } from '../stores/RootStore';
+import {
+  pendingRentalOpen,
+  personaForPendingReplay,
+  rentalPushRoute,
+  type PendingRentalOpen,
+  type RentalPushTarget,
+} from '../utils/rentals/rentalPushNavigation';
 
-type RentalPushTarget =
-  | { kind: 'booking'; bookingId: string }
-  | { kind: 'request'; requestId: string }
-  | { kind: 'myRentals' };
-
-let pendingRentalFromNotification: RentalPushTarget | null = null;
+let pendingRentalFromNotification: PendingRentalOpen | null = null;
 
 const RENTAL_PUSH_TYPES = new Set([
   'rental_request_new',
@@ -55,41 +57,20 @@ function parseRentalPushPayload(
 
 function navigateRentalTarget(
   target: RentalPushTarget,
-  persona: 'client' | 'business' | 'agent' | null
+  persona: 'client' | 'business' | 'agent' | null,
+  inspectionKind = ''
 ): boolean {
   if (!rootNavigationRef.isReady()) return false;
-  if (target.kind === 'booking') {
-    if (persona === 'business') {
-      rootNavigationRef.dispatch(
-        CommonActions.navigate({
-          name: 'BusinessRentalBookingDetail',
-          params: { bookingId: target.bookingId },
-        })
-      );
-      return true;
-    }
-    rootNavigationRef.dispatch(
-      CommonActions.navigate({
-        name: 'RentalBookingDetail',
-        params: { bookingId: target.bookingId },
-      })
-    );
-    return true;
-  }
-  if (persona === 'business') {
-    rootNavigationRef.dispatch(
-      CommonActions.navigate({
-        name: 'BusinessRentalsStudio',
-      })
-    );
-    return true;
-  }
-  rootNavigationRef.dispatch(
-    CommonActions.navigate({
-      name: 'ClientMyRentals',
-    })
-  );
+  rootNavigationRef.dispatch(CommonActions.navigate(rentalPushRoute(target, persona, inspectionKind)));
   return true;
+}
+
+function replayPendingRental(activePersona: 'client' | 'business' | 'agent' | null): void {
+  const pending = pendingRentalFromNotification;
+  if (!pending) return;
+  if (navigateRentalTarget(pending.target, personaForPendingReplay(pending.persona, activePersona), pending.kind)) {
+    pendingRentalFromNotification = null;
+  }
 }
 
 /**
@@ -124,15 +105,28 @@ export function useNotificationOpenedRentalNavigation(navReady: boolean): void {
     const openFromResponse = (data: Record<string, unknown> | undefined): void => {
       const parsed = parseRentalPushPayload(data);
       if (!parsed) return;
-      const opened =
-        canOpenApp &&
-        navigateRentalTarget(
-          parsed,
-          activePersona === 'client' || activePersona === 'business'
-            ? activePersona
-            : null
-        );
-      if (!opened) pendingRentalFromNotification = parsed;
+      const requested = data?.persona === 'client' || data?.persona === 'business' ? data.persona : null;
+      const kind = typeof data?.inspectionKind === 'string' ? data.inspectionKind : '';
+      const shell = personaForPendingReplay(
+        requested,
+        activePersona === 'client' || activePersona === 'business' ? activePersona : null
+      );
+      const open = () => navigateRentalTarget(parsed, shell, kind);
+      const queue = () => {
+        pendingRentalFromNotification = pendingRentalOpen(parsed, requested, kind);
+      };
+      if (
+        requested &&
+        requested !== activePersona &&
+        persona.personas.includes(requested) &&
+        !persona.pickingPersona
+      ) {
+        void persona.selectPersona(requested).then(() => {
+          if (!open()) queue();
+        });
+        return;
+      }
+      if (!canOpenApp || !open()) queue();
     };
 
     const sub = notificationsMod.addNotificationResponseReceivedListener((response) => {
@@ -162,35 +156,17 @@ export function useNotificationOpenedRentalNavigation(navReady: boolean): void {
 
   useEffect(() => {
     if (!navReady || !canOpenApp) return;
-    const pending = pendingRentalFromNotification;
-    if (!pending) return;
-    if (
-      navigateRentalTarget(
-        pending,
-        activePersona === 'client' || activePersona === 'business'
-          ? activePersona
-          : null
-      )
-    ) {
-      pendingRentalFromNotification = null;
-    }
+    replayPendingRental(
+      activePersona === 'client' || activePersona === 'business' ? activePersona : null
+    );
   }, [navReady, canOpenApp, activePersona]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active' || !canOpenApp) return;
-      const pending = pendingRentalFromNotification;
-      if (!pending) return;
-      if (
-        navigateRentalTarget(
-          pending,
-          activePersona === 'client' || activePersona === 'business'
-            ? activePersona
-            : null
-        )
-      ) {
-        pendingRentalFromNotification = null;
-      }
+      replayPendingRental(
+        activePersona === 'client' || activePersona === 'business' ? activePersona : null
+      );
     });
     return () => sub.remove();
   }, [canOpenApp, activePersona]);

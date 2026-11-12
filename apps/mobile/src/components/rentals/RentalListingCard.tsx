@@ -8,6 +8,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useImageFallback } from '../../hooks/useImageFallback';
 import type { RentalListingRow } from '../../types/rentals';
 import { formatRentalMoney } from '../../utils/rentals';
+import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
 
 function toNumber(v: string | number): number {
   const n = typeof v === 'string' ? parseFloat(v) : v;
@@ -100,7 +101,9 @@ function RentalListingCardInner({ listing, onPress }: RentalListingCardProps) {
             />
           </View>
           <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]} numberOfLines={1}>
-            {item.rental_category?.name ?? t('rentals.category', 'Category')}
+            {item.rental_category?.name
+              ? rentalCategoryLabel(item.rental_category.name, (key, fallback) => t(key, fallback))
+              : t('rentals.category', 'Category')}
             {item.business?.name ? ` · ${item.business.name}` : ''}
           </Text>
           <View style={[styles.priceRow, { marginTop: spacing.sm }]}>

@@ -64,6 +64,15 @@ export class LoginVerifyDto {
   channel?: 'email' | 'sms';
 
   @ApiPropertyOptional({
+    enum: ['client', 'agent', 'business'],
+    description:
+      'Stored persona forwarded to the Auth0 token request so the post-login Action can set Hasura claims.',
+  })
+  @IsOptional()
+  @IsIn(['client', 'agent', 'business'])
+  active_persona?: 'client' | 'agent' | 'business';
+
+  @ApiPropertyOptional({
     description:
       'Auth flow version. When set to 2, responses avoid account-enumeration oracles.',
     enum: [2],

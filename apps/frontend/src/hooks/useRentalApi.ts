@@ -166,6 +166,7 @@ export interface RespondRentalRequestBody {
   contractExpiryHours?: number;
   unavailableReasonCode?: UnavailableRentalReasonCode;
   businessResponseNote?: string;
+  expectedVersion?: number;
 }
 
 export interface RentalSelectionWindow {
@@ -184,6 +185,12 @@ export interface BusinessRentalRequestRow {
   business_response_note?: string | null;
   client_request_note?: string | null;
   units_requested?: number;
+  edit_version?: number | null;
+  change_summary?: {
+    fields?: string[];
+    dates?: { from: RentalSelectionWindow[]; to: RentalSelectionWindow[] };
+    quantity?: { from: number; to: number };
+  } | null;
   unavailable_reason_code?: string | null;
   expires_at?: string | null;
   responded_at?: string | null;
@@ -305,10 +312,17 @@ export interface RentalBookingDetail {
   authorized_amount?: number | string | null;
   captured_amount?: number | string | null;
   overtime_amount?: number | string | null;
+  overtime_amount_override?: number | string | null;
+  claimed_damage_amount?: number | string | null;
+  reserved_cancel_after?: string | null;
   payment_timing?: 'pay_now' | 'pay_at_pickup' | null;
   payment_status?: 'pending' | 'authorized' | 'paid' | 'cancelled' | null;
   actual_start_at?: string | null;
   actual_end_at?: string | null;
+  units_booked?: number | null;
+  inspection_policy_version?: number | null;
+  return_handed_back_at?: string | null;
+  return_resolution?: string | null;
   rental_pricing_snapshot?: unknown;
   client_id: string;
   business_id: string;

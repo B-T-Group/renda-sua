@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,13 +9,15 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Dialog, Portal, SegmentedButtons, Snackbar, Text } from 'react-native-paper';
+import { Button, Dialog, Portal, Snackbar, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ClientRentalRequestRow as ClientRentalRequestRowView } from '../../components/rentals/ClientRentalRequestRow';
+import { RentalHubTabs } from '../../components/rentals/RentalHubTabs';
 import { RentalBookConfirmSheet } from '../../components/rentals/RentalBookConfirmSheet';
 import { StatusPill } from '../../components/common/StatusPill';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useBookRental } from '../../hooks/useBookRental';
 import { useClientRentalBookings } from '../../hooks/useClientRentalBookings';
@@ -36,21 +38,58 @@ import {
   isProposedContractOpen,
   rentalPhaseColors,
   resolveRentalPhase,
+  parseRentalSelectionWindows,
   type RentalHubGroup,
 } from '../../utils/rentals';
+import { rentalEditWindowOpen } from '../../utils/rentals/rentalRequestFormat';
 
 type HubSegment = RentalHubGroup;
+
+function modifyStateFor(row: ClientRentalRequestRow, enabled: boolean): 'hidden' | 'open' | 'closed' {
+  if (!enabled || row.status !== 'pending') return 'hidden';
+  const windows = parseRentalSelectionWindows(row.rental_selection_windows);
+  const start = windows[0]?.start_at;
+  if (start && !rentalEditWindowOpen(start)) return 'closed';
+  return 'open';
+}
+
+function countHub(
+  requests: ClientRentalRequestRow[],
+  bookings: ClientRentalBookingRow[],
+  group: RentalHubGroup
+): number {
+  const linked = new Set(requests.map((row) => row.rental_booking?.id).filter(Boolean));
+  let count = 0;
+  for (const row of requests) {
+    if (resolveRentalPhase({ requestStatus: row.status, bookingStatus: row.rental_booking?.status ?? null }, 'client').hubGroup === group) {
+      count += 1;
+    }
+  }
+  for (const row of bookings) {
+    if (linked.has(row.id)) continue;
+    if (resolveRentalPhase({ bookingStatus: row.status }, 'client').hubGroup === group) count += 1;
+  }
+  return count;
+}
 
 export default function ClientMyRentalsScreen() {
   const { t } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
+  const route = useRoute<RouteProp<ClientRootStackParamList, 'ClientMyRentals'>>();
+  const { flags } = useClientFlags();
   const [hubSegment, setHubSegment] = useState<HubSegment>('action_needed');
   const [snack, setSnack] = useState<string | null>(null);
   const [bookRow, setBookRow] = useState<ClientRentalRequestRow | null>(null);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [pullRefreshing, setPullRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (route.params?.notice !== 'updated') return;
+    setSnack(t('rentals.modify.saved', 'Request updated'));
+    navigation.setParams({ notice: undefined });
+  }, [navigation, route.params?.notice, t]);
 
   const {
     requests,
@@ -107,6 +146,8 @@ export default function ClientMyRentalsScreen() {
     }
     return items.sort((a, b) => b.sortAt - a.sortAt);
   }, [bookings, hubSegment, requests]);
+
+  const toDoCount = useMemo(() => countHub(requests, bookings, 'action_needed'), [bookings, requests]);
 
   const onRefresh = useCallback(async () => {
     setPullRefreshing(true);
@@ -223,9 +264,12 @@ export default function ClientMyRentalsScreen() {
         onCancel={(id) => setCancelId(id)}
         onViewListing={(listingId) => navigation.navigate('RentalListingDetail', { listingId })}
         onViewBooking={(bookingId) => navigation.navigate('RentalBookingDetail', { bookingId })}
+        modifyState={modifyStateFor(item, flags.rentals_modify_request_enabled)}
+        onModify={(id) => navigation.navigate('ModifyRentalRequest', { requestId: id })}
+        onContact={(bookingId) => navigation.navigate('RentalBookingDetail', { bookingId })}
       />
     ),
-    [bookRow?.id, bookingLoading, cancellingId, navigation, requests]
+    [bookRow?.id, bookingLoading, cancellingId, flags.rentals_modify_request_enabled, navigation, requests]
   );
 
   const renderBooking = useCallback(
@@ -314,22 +358,13 @@ export default function ClientMyRentalsScreen() {
         <Text style={[typography.h6, { color: colors.text.primary, marginBottom: spacing.sm }]}>
           {t('rentals.hub.title', 'My rentals')}
         </Text>
-        <SegmentedButtons
+        <RentalHubTabs
           value={hubSegment}
-          onValueChange={(v) => setHubSegment(v as HubSegment)}
-          buttons={[
-            {
-              value: 'action_needed',
-              label: t('rentals.hub.actionNeeded', 'Action needed'),
-            },
-            {
-              value: 'upcoming',
-              label: t('rentals.hub.upcoming', 'Upcoming'),
-            },
-            {
-              value: 'past',
-              label: t('rentals.hub.past', 'Past'),
-            },
+          onChange={setHubSegment}
+          tabs={[
+            { value: 'action_needed', label: t('rentals.hub.toDo', 'To do'), count: toDoCount },
+            { value: 'upcoming', label: t('rentals.hub.upcoming', 'Upcoming') },
+            { value: 'past', label: t('rentals.hub.past', 'Past') },
           ]}
         />
         <View style={{ height: spacing.sm }} />

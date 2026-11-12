@@ -18,6 +18,14 @@ object_relationships:
   - name: responded_by_user
     using:
       foreign_key_constraint_on: responded_by_user_id
+array_relationships:
+  - name: rental_request_revisions
+    using:
+      foreign_key_constraint_on:
+        column: rental_request_id
+        table:
+          name: rental_request_revisions
+          schema: public
 select_permissions:
   - role: business
     permission:
@@ -32,6 +40,9 @@ select_permissions:
         - client_request_note
         - units_requested
         - unavailable_reason_code
+        - edit_version
+        - quoted_total
+        - change_summary
         - responded_at
         - responded_by_user_id
         - expires_at
@@ -58,6 +69,9 @@ select_permissions:
         - client_request_note
         - units_requested
         - unavailable_reason_code
+        - edit_version
+        - quoted_total
+        - change_summary
         - responded_at
         - responded_by_user_id
         - expires_at

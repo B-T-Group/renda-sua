@@ -13,6 +13,8 @@ export const CLIENT_FLAG_KEYS = [
   'restock_alerts_v1',
   'discovery_sort_v1',
   'agent_contract_required',
+  'rentals_search_first_enabled',
+  'rentals_modify_request_enabled',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -47,4 +49,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   discovery_sort_v1: false,
   /** Agents must sign a BoldSign agreement before they can claim orders. */
   agent_contract_required: true,
+  /** Search-first client rentals. Off until a country row turns it on. */
+  rentals_search_first_enabled: false,
+  /** Renter edits of a Requested rental. Off until a row turns it on. */
+  rentals_modify_request_enabled: false,
 };

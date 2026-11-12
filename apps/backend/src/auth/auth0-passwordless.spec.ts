@@ -124,6 +124,36 @@ describe('Auth0Service passwordless error mapping', () => {
     );
   });
 
+  it('includes active_persona on the passwordless token request', async () => {
+    axiosPost.mockResolvedValue({
+      data: { access_token: 'tok', token_type: 'Bearer', expires_in: 60 },
+    });
+
+    await createService().verifyEmailOtp('user@example.com', '123456', 'agent');
+
+    expect(axiosPost).toHaveBeenCalledWith(
+      'https://example.auth0.com/oauth/token',
+      expect.objectContaining({
+        grant_type: 'http://auth0.com/oauth/grant-type/passwordless/otp',
+        username: 'user@example.com',
+        active_persona: 'agent',
+      })
+    );
+  });
+
+  it('omits active_persona on passwordless verify when it is not provided', async () => {
+    axiosPost.mockResolvedValue({
+      data: { access_token: 'tok', token_type: 'Bearer', expires_in: 60 },
+    });
+
+    await createService().verifyEmailOtp('user@example.com', '123456');
+
+    expect(axiosPost).toHaveBeenCalledWith(
+      'https://example.auth0.com/oauth/token',
+      expect.not.objectContaining({ active_persona: expect.anything() })
+    );
+  });
+
   it('returns tokens when passwordless verify succeeds', async () => {
     axiosPost.mockResolvedValue({
       data: { access_token: 'tok', token_type: 'Bearer', expires_in: 60 },

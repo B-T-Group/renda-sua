@@ -61,6 +61,26 @@ describe('Auth0Service test-user OTP bypass hardening', () => {
     process.env = originalEnv;
   });
 
+  it('includes active_persona on the password-realm token request', async () => {
+    await createService().verifyTestUserEmail('oru@rendasua-test.com', '0000', 'client');
+    expect(mockedPost).toHaveBeenCalledWith(
+      'https://example.auth0.com/oauth/token',
+      expect.objectContaining({
+        grant_type: 'http://auth0.com/oauth/grant-type/password-realm',
+        username: 'oru@rendasua-test.com',
+        active_persona: 'client',
+      })
+    );
+  });
+
+  it('omits active_persona on the password-realm token request when it is not provided', async () => {
+    await createService().verifyTestUserEmail('oru@rendasua-test.com', '0000');
+    expect(mockedPost).toHaveBeenCalledWith(
+      'https://example.auth0.com/oauth/token',
+      expect.not.objectContaining({ active_persona: expect.anything() })
+    );
+  });
+
   it('logs in a test-domain email with code 0000', async () => {
     await expect(
       createService().verifyTestUserEmail('qa460@rendasua-test.com', '0000')

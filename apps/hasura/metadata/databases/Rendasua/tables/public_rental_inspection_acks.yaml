@@ -1,0 +1,7 @@
+table:
+  name: rental_inspection_acks
+  schema: public
+object_relationships:
+  - name: version
+    using:
+      foreign_key_constraint_on: version_id

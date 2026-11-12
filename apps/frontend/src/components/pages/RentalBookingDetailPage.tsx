@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
@@ -25,9 +25,11 @@ import {
   useRentalApi,
 } from '../../hooks/useRentalApi';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useRentalInspection } from '../../hooks/useRentalInspection';
 import LoadingPage from '../common/LoadingPage';
 import { UserMessagesComponent } from '../common/UserMessagesComponent';
 import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
+import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import SEOHead from '../seo/SEOHead';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
@@ -36,13 +38,32 @@ import {
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
 import { messagesDefaultExpanded } from '../../utils/rentalPhase';
+import { unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
 
 const PAYMENT_POLL_MS = 4000;
 
-function apiErrorMessage(err: unknown, fallback: string): string {
-  const m = (err as { response?: { data?: { message?: string } } })?.response?.data
-    ?.message;
-  return typeof m === 'string' && m.trim() ? m : fallback;
+function apiErrorMessage(
+  err: unknown,
+  fallback: string,
+  translate?: (key: string, text: string) => string
+): string {
+  const data = (err as { response?: { status?: number; data?: { message?: string; code?: string } } })
+    ?.response;
+  const message = typeof data?.data?.message === 'string' ? data.data.message : '';
+  if (data?.status === 426 || data?.data?.code === 'RENTAL_INSPECTION_UPDATE_REQUIRED') {
+    return translate
+      ? translate(
+          'rentalInspection.updateRequired',
+          'This rental uses condition inspections. Review the report here, or update the app if this screen is missing.'
+        )
+      : 'This rental uses condition inspections. Review the report here, or update the app if this screen is missing.';
+  }
+  if (data?.status === 409 && /that report changed/i.test(message)) {
+    return translate
+      ? translate('rentalInspection.reportChanged', 'That report changed. Review it again.')
+      : message;
+  }
+  return message.trim() ? message : fallback;
 }
 
 /** Local `datetime-local` value (YYYY-MM-DDTHH:mm) from a Date. */
@@ -57,7 +78,13 @@ const RentalBookingDetailPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { isAuthenticated } = useSessionAuth();
-  const { profile } = useUserProfileContext();
+  const { profile, userType, personas, setActivePersona, loading: profileLoading } =
+    useUserProfileContext();
+  const [searchParams] = useSearchParams();
+  const requestedPersona = searchParams.get('persona');
+  const [personaReady, setPersonaReady] = useState(
+    requestedPersona !== 'client' && requestedPersona !== 'business'
+  );
   const { isStripeRail } = useIsStripeRail();
   const {
     fetchBookingDetail,
@@ -92,6 +119,21 @@ const RentalBookingDetailPage: React.FC = () => {
   const [sharedPinMessageId, setSharedPinMessageId] = useState<string | null>(
     null
   );
+  const inspection = useRentalInspection(bookingId, booking);
+
+  useEffect(() => {
+    if (profileLoading) return;
+    if (requestedPersona !== 'client' && requestedPersona !== 'business') {
+      setPersonaReady(true);
+      return;
+    }
+    if (userType === requestedPersona || !personas.includes(requestedPersona)) {
+      setPersonaReady(true);
+      return;
+    }
+    setPersonaReady(false);
+    void setActivePersona(requestedPersona).finally(() => setPersonaReady(true));
+  }, [profileLoading, requestedPersona, userType, personas, setActivePersona]);
 
   const load = useCallback(async () => {
     if (!bookingId) return;
@@ -117,8 +159,8 @@ const RentalBookingDetailPage: React.FC = () => {
   }, [bookingId, fetchBookingDetail, getBookingPaymentStatus, t]);
 
   useEffect(() => {
-    if (isAuthenticated) void load();
-  }, [load, isAuthenticated]);
+    if (isAuthenticated && personaReady) void load();
+  }, [load, isAuthenticated, personaReady]);
 
   useEffect(() => {
     if (!bookingId || !isAuthenticated || booking?.status !== 'confirmed') {
@@ -198,7 +240,8 @@ const RentalBookingDetailPage: React.FC = () => {
       setError(
         apiErrorMessage(
           e,
-          t('rentals.bookingDetail.retryPaymentError', 'Could not retry payment')
+          t('rentals.bookingDetail.retryPaymentError', 'Could not retry payment'),
+          t
         )
       );
     } finally {
@@ -208,6 +251,10 @@ const RentalBookingDetailPage: React.FC = () => {
 
   const isClient = profile?.client?.id === booking?.client_id;
   const isBusiness = profile?.business?.id === booking?.business_id;
+  const showClientPin = isClient && inspection.gate.showStart && !inspection.loading;
+  const showCollect = isBusiness && inspection.gate.showCollectPayment && !inspection.loading;
+  const showVerify = isBusiness && inspection.gate.showStart && !inspection.loading;
+  const showReturnPicker = isBusiness && inspection.showLegacyReturn;
   const paymentRail = paymentStatus?.payment_rail;
   const isStripePending =
     paymentRail === 'stripe' || (paymentRail == null && isStripeRail);
@@ -300,7 +347,7 @@ const RentalBookingDetailPage: React.FC = () => {
       void load();
     } catch (e: unknown) {
       setError(
-        apiErrorMessage(e, t('rentals.cancelError', 'Could not cancel booking'))
+        apiErrorMessage(e, t('rentals.cancelError', 'Could not cancel booking'), t)
       );
     }
   };
@@ -321,7 +368,8 @@ const RentalBookingDetailPage: React.FC = () => {
       setError(
         apiErrorMessage(
           e,
-          t('rentals.bookingDetail.pickupPaymentError', 'Could not collect payment')
+          t('rentals.bookingDetail.pickupPaymentError', 'Could not collect payment'),
+          t
         )
       );
     }
@@ -410,7 +458,7 @@ const RentalBookingDetailPage: React.FC = () => {
                       {t('rentals.actions.completePayment', 'Complete payment')}
                     </Button>
                   </Stack>
-                ) : isClient && booking.status === 'confirmed' ? (
+                ) : showClientPin ? (
                   <Stack spacing={1}>
                     <Button
                       variant="contained"
@@ -459,14 +507,23 @@ const RentalBookingDetailPage: React.FC = () => {
                       {t('rentals.actions.showStartPin', 'Show PIN on screen')}
                     </Button>
                   </Stack>
-                ) : isBusiness && booking.status === 'reserved' ? (
-                  <Button
-                    variant="contained"
-                    onClick={() => void handlePickupPayment()}
-                  >
-                    {t('rentals.actions.collectPayment', 'Collect payment')}
-                  </Button>
-                ) : isBusiness && booking.status === 'confirmed' ? (
+                ) : showCollect ? (
+                  <Stack spacing={1}>
+                    {inspection.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (
+                      <Alert severity="warning">
+                        {t('rentalInspection.autoCancel', 'Auto-cancel if unpaid: {{minutes}} min left. The clock started when Collect payment opened. Inspection time is not included.', {
+                          minutes: unpaidCancelMinutesLeft(booking.reserved_cancel_after),
+                        })}
+                      </Alert>
+                    ) : null}
+                    <Button
+                      variant="contained"
+                      onClick={() => void handlePickupPayment()}
+                    >
+                      {t('rentals.actions.collectPayment', 'Collect payment')}
+                    </Button>
+                  </Stack>
+                ) : showVerify ? (
                   <Button
                     variant="contained"
                     onClick={() => {
@@ -476,9 +533,7 @@ const RentalBookingDetailPage: React.FC = () => {
                   >
                     {t('rentals.actions.verifyStartPin', 'Verify start PIN')}
                   </Button>
-                ) : isBusiness &&
-                  (booking.status === 'active' ||
-                    booking.status === 'awaiting_return') ? (
+                ) : showReturnPicker ? (
                   <Button
                     variant="contained"
                     color="success"
@@ -493,6 +548,18 @@ const RentalBookingDetailPage: React.FC = () => {
               }
             />
           </Box>
+
+          {bookingId && inspection.enrolled ? (
+            <Box id="rental-inspection">
+              <RentalInspectionPanel
+                bookingId={bookingId}
+                role={isBusiness ? 'business' : 'client'}
+                booking={booking}
+                model={inspection}
+                onChanged={() => void load()}
+              />
+            </Box>
+          ) : null}
 
           {isClient &&
           (booking.status === 'active' ||
@@ -741,7 +808,7 @@ const RentalBookingDetailPage: React.FC = () => {
                   </Button>
                 ) : null}
 
-                {isBusiness && booking.status === 'confirmed' ? (
+                {showVerify ? (
                   <Box id="rental-verify-start" sx={{ mt: isClient ? 2 : 0 }}>
                     <Stack spacing={1.25}>
                       {sharedPin ? (
@@ -765,6 +832,11 @@ const RentalBookingDetailPage: React.FC = () => {
                           value={pin}
                           onChange={(e) => setPin(e.target.value)}
                         />
+                        {inspection.enrolled ? (
+                          <Typography color="text.secondary">
+                            {t('rentalInspection.overwriteSupportOnly', 'Overwrite codes are issued by Rendasua support only — not shown here.')}
+                          </Typography>
+                        ) : (
                         <TextField
                           fullWidth
                           label={t('rentals.overwriteCode', 'Overwrite code')}
@@ -775,6 +847,7 @@ const RentalBookingDetailPage: React.FC = () => {
                             'Ask the client for their start PIN. A support code is only for when the client cannot share it, and only support can issue one.'
                           )}
                         />
+                        )}
                       </Stack>
                       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                         <Button
@@ -789,13 +862,13 @@ const RentalBookingDetailPage: React.FC = () => {
                               } else {
                                 await verifyStartPin(bookingId, {
                                   pin: pin || undefined,
-                                  overwriteCode: ow || undefined,
+                                  overwriteCode: inspection.enrolled ? undefined : ow || undefined,
                                 });
                               }
                               setInfo(t('rentals.started', 'Rental started'));
                               void load();
                             } catch (e: unknown) {
-                              setError(e instanceof Error ? e.message : 'Error');
+                              setError(apiErrorMessage(e, e instanceof Error ? e.message : 'Error', t));
                             }
                           }}
                         >
@@ -831,13 +904,7 @@ const RentalBookingDetailPage: React.FC = () => {
         </Container>
       </Box>
 
-      {(showPaymentPending ||
-        (isClient && booking.status === 'confirmed') ||
-        (isBusiness &&
-          (booking.status === 'reserved' ||
-            booking.status === 'confirmed' ||
-            booking.status === 'active' ||
-            booking.status === 'awaiting_return'))) && (
+      {(showPaymentPending || showClientPin || showCollect || showVerify || showReturnPicker) && (
         <Box
           sx={{
             display: { xs: 'block', md: 'none' },
@@ -863,7 +930,7 @@ const RentalBookingDetailPage: React.FC = () => {
             >
               {t('rentals.actions.completePayment', 'Complete payment')}
             </Button>
-          ) : isClient && booking.status === 'confirmed' ? (
+          ) : showClientPin ? (
             <Button
               fullWidth
               variant="contained"
@@ -888,7 +955,7 @@ const RentalBookingDetailPage: React.FC = () => {
             >
               {t('rentals.actions.sendStartPin', 'Send start PIN')}
             </Button>
-          ) : isBusiness && booking.status === 'reserved' ? (
+          ) : showCollect ? (
             <Button
               fullWidth
               variant="contained"
@@ -896,7 +963,7 @@ const RentalBookingDetailPage: React.FC = () => {
             >
               {t('rentals.actions.collectPayment', 'Collect payment')}
             </Button>
-          ) : isBusiness && booking.status === 'confirmed' ? (
+          ) : showVerify ? (
             <Button
               fullWidth
               variant="contained"
@@ -907,7 +974,7 @@ const RentalBookingDetailPage: React.FC = () => {
             >
               {t('rentals.actions.verifyStartPin', 'Verify start PIN')}
             </Button>
-          ) : isBusiness ? (
+          ) : showReturnPicker ? (
             <Button
               fullWidth
               variant="contained"
@@ -1017,7 +1084,8 @@ const RentalBookingDetailPage: React.FC = () => {
                 setError(
                   apiErrorMessage(
                     e,
-                    e instanceof Error ? e.message : 'Error'
+                    e instanceof Error ? e.message : 'Error',
+                    t
                   )
                 );
               } finally {

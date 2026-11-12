@@ -1,5 +1,5 @@
 import { Auth0ContextInterface } from '@auth0/auth0-react';
-import { readStoredActivePersonaSlug } from '../utils/activePersonaStorage';
+import { authorizationParamsWithActivePersona } from '../utils/activePersonaStorage';
 
 /**
  * Silent refreshes must re-send the stored persona, otherwise the Auth0
@@ -9,8 +9,10 @@ import { readStoredActivePersonaSlug } from '../utils/activePersonaStorage';
 export function personaAuthorizationParams(): {
   authorizationParams?: { active_persona: string };
 } {
-  const persona = readStoredActivePersonaSlug();
-  return persona ? { authorizationParams: { active_persona: persona } } : {};
+  const params = authorizationParamsWithActivePersona();
+  return params.active_persona
+    ? { authorizationParams: { active_persona: params.active_persona } }
+    : {};
 }
 
 export interface TokenRefreshService {
@@ -54,7 +56,9 @@ class TokenService implements TokenRefreshService {
       
       // If refresh fails, redirect to login
       if (this.auth0?.loginWithRedirect) {
-        await this.auth0.loginWithRedirect();
+        await this.auth0.loginWithRedirect({
+          authorizationParams: authorizationParamsWithActivePersona(),
+        });
       }
       
       throw error;
@@ -169,7 +173,9 @@ export const createTokenRefreshInterceptor = (
         }
       } catch (refreshError) {
         console.error('Token refresh failed, redirecting to login:', refreshError);
-        await loginWithRedirect();
+        await loginWithRedirect({
+          authorizationParams: authorizationParamsWithActivePersona(),
+        });
       }
     }
     

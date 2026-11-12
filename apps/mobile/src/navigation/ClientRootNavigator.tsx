@@ -57,9 +57,12 @@ import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScre
 import UserPurchaseCreditsScreen from '../screens/shared/UserPurchaseCreditsScreen';
 import CashAdvanceDrawSuccessScreen from '../screens/shared/CashAdvanceDrawSuccessScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
+import RentalRequestScreen from '../screens/shared/RentalRequestScreen';
+import ModifyRentalRequestScreen from '../screens/client/ModifyRentalRequestScreen';
 import RentalRequestSubmittedScreen from '../screens/client/RentalRequestSubmittedScreen';
 import ClientMyRentalsScreen from '../screens/client/ClientMyRentalsScreen';
 import RentalBookingDetailScreen from '../screens/client/RentalBookingDetailScreen';
+import ClientInspectionScreen from '../screens/client/ClientInspectionScreen';
 import RentalRateBookingScreen from '../screens/client/RentalRateBookingScreen';
 import { EnrollPersonaExplainScreen } from '../screens/shared/enroll/EnrollPersonaExplainScreen';
 import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersonaSetupScreen';
@@ -390,6 +393,16 @@ export function ClientRootNavigator() {
           }}
         />
         <ClientRootStack.Screen
+          name="RentalRequest"
+          component={RentalRequestScreen}
+          options={{ headerShown: false, title: t('rentals.requestRental', 'Request this rental') }}
+        />
+        <ClientRootStack.Screen
+          name="ModifyRentalRequest"
+          component={ModifyRentalRequestScreen}
+          options={{ headerShown: false, title: t('rentals.modify.title', 'Modify request') }}
+        />
+        <ClientRootStack.Screen
           name="RentalRequestSubmitted"
           component={RentalRequestSubmittedScreen}
           options={{
@@ -412,6 +425,14 @@ export function ClientRootNavigator() {
           options={{
             title: t('rentals.title', 'Rentals'),
             headerBackTitle: t('client.rentals.tabMyRentals', 'My rentals'),
+          }}
+        />
+        <ClientRootStack.Screen
+          name="ClientInspection"
+          component={ClientInspectionScreen}
+          options={{
+            title: t('rentalInspection.reviewTitle', 'Review item condition'),
+            headerBackTitle: t('rentals.title', 'Rentals'),
           }}
         />
         <ClientRootStack.Screen

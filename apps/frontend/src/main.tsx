@@ -15,6 +15,7 @@ import { AnalyticsInit } from './components/analytics/AnalyticsInit';
 import AuthSessionObservedTracker from './components/analytics/AuthSessionObservedTracker';
 import { completeAuthIntentFromPendingStorage } from './utils/authFunnelTracking';
 import { environment } from './config/environment';
+import { authorizationParamsWithActivePersona } from './utils/activePersonaStorage';
 import { CartProvider } from './contexts/CartContext';
 import { LoadingProvider } from './contexts/LoadingContext';
 import { MarketProvider } from './contexts/MarketContext';
@@ -45,11 +46,11 @@ registerServiceWorker({
 const auth0Config = {
   domain: environment.auth0.domain,
   clientId: environment.auth0.clientId,
-  authorizationParams: {
+  authorizationParams: authorizationParamsWithActivePersona({
     redirect_uri: `${window.location.origin}/app`,
     audience: environment.auth0.audience,
     scope: 'openid profile email',
-  },
+  }),
   cacheLocation: 'localstorage' as const,
   useRefreshTokens: true,
   skipRedirectCallback: window.location.pathname === '/loading-demo',

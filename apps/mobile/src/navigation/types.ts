@@ -158,6 +158,12 @@ export type StoresListParams = {
   businessId?: string;
 };
 
+export type RentalRequestParams = {
+  listingId: string;
+  startDate?: string;
+  endDate?: string;
+};
+
 export type GuestRootStackParamList = {
   GuestTabs: NavigatorScreenParams<GuestTabParamList> | undefined;
   InventoryItemDetail: InventoryItemDetailParams;
@@ -169,7 +175,13 @@ export type GuestRootStackParamList = {
         reorderBanner?: 'business_closed' | 'address_invalid';
       }
     | undefined;
-  RentalListingDetail: { listingId: string };
+  RentalListingDetail: {
+    listingId: string;
+    startDate?: string;
+    endDate?: string;
+    openRequest?: boolean;
+  };
+  RentalRequest: RentalRequestParams;
   CategoriesBrowse: undefined;
   AssistantChat: { context?: AssistantContext; prefill?: string } | undefined;
 };
@@ -252,10 +264,18 @@ export type ClientRootStackParamList = {
   UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
   CashAdvanceDrawSuccess: CashAdvanceDrawSuccessParams;
-  RentalListingDetail: { listingId: string };
+  RentalListingDetail: {
+    listingId: string;
+    startDate?: string;
+    endDate?: string;
+    openRequest?: boolean;
+  };
+  RentalRequest: RentalRequestParams;
   RentalRequestSubmitted: { requestId?: string };
-  ClientMyRentals: undefined;
+  ModifyRentalRequest: { requestId: string };
+  ClientMyRentals: { notice?: 'updated' } | undefined;
   RentalBookingDetail: { bookingId: string };
+  ClientInspection: { bookingId: string; stage: 'pickup' | 'return' };
   RentalRateBooking: { bookingId: string };
   NotificationPermission: undefined;
   EnrollPersonaExplain: EnrollPersonaParams;
@@ -335,6 +355,7 @@ export type BusinessRootStackParamList = {
   BusinessRentalAddListing: { itemId: string };
   BusinessRentalAiProposal: { listingId: string };
   BusinessRentalBookingDetail: { bookingId: string };
+  BusinessInspection: { bookingId: string; stage: 'pickup' | 'return' };
   AdminRentalListingsModeration: undefined;
   AdminRentalAiReviews: undefined;
   AdminItemModeration: undefined;

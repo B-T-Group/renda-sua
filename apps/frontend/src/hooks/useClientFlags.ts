@@ -15,7 +15,8 @@ export type ClientFlagKey =
   | 'assistant_shopping_v1'
   | 'restock_alerts_v1'
   | 'discovery_sort_v1'
-  | 'agent_contract_required';
+  | 'agent_contract_required'
+  | 'rentals_search_first_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -34,6 +35,7 @@ const DEFAULT_FLAGS: ClientFlags = {
   restock_alerts_v1: false,
   discovery_sort_v1: false,
   agent_contract_required: true,
+  rentals_search_first_enabled: false,
 };
 
 /**
