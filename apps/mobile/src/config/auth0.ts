@@ -8,7 +8,7 @@
  * API locale : env runtime `local` (écran connexion) ou `EXPO_PUBLIC_API_URL` (voir `getEnv()`).
  */
 
-import { getRuntimeEnv, type EnvName } from './envSwitch';
+import { getRuntimeEnv, MANUAL_ENV, type EnvName } from './envSwitch';
 
 export interface Auth0Config {
   domain: string;
@@ -90,28 +90,52 @@ function normalizeApiUrlOverride(raw: string): string {
 }
 
 /**
- * Surcharges build-time (Expo) : même Auth0 que l’env choisi, API (et optionnellement Hasura) ailleurs.
+ * Champs Auth0 lus depuis `EXPO_PUBLIC_AUTH0_*` (accès statique, inliné par Metro).
+ * Variable absente : on garde l'Auth0 de l'env choisi.
+ */
+function auth0FromPublicEnv(base: Auth0Config): Auth0Config {
+  const domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN?.trim();
+  const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID?.trim();
+  const audience = process.env.EXPO_PUBLIC_AUTH0_AUDIENCE?.trim();
+  if (!domain && !clientId && !audience) return base;
+  return {
+    ...base,
+    ...(domain ? { domain } : {}),
+    ...(clientId ? { clientId } : {}),
+    ...(audience ? { audience } : {}),
+  };
+}
+
+/**
+ * Surcharges build-time (Expo), au-dessus de l’env choisi.
  * Redémarrer le bundler après modification des variables.
  */
 function mergeExpoPublicOverrides(base: RendasuaEnv): RendasuaEnv {
   const apiRaw = process.env.EXPO_PUBLIC_API_URL?.trim();
   const hasuraRaw = process.env.EXPO_PUBLIC_HASURA_URL?.trim();
-  if (!apiRaw && !hasuraRaw) return base;
+  const auth0Config = auth0FromPublicEnv(base.auth0Config);
+  if (!apiRaw && !hasuraRaw && auth0Config === base.auth0Config) return base;
   return {
     ...base,
     ...(apiRaw ? { apiUrl: normalizeApiUrlOverride(apiRaw) } : {}),
     ...(hasuraRaw ? { hasuraUrl: hasuraRaw.replace(/\/+$/, '') } : {}),
+    auth0Config,
   };
+}
+
+/** `EXPO_PUBLIC_ENV` choisit dev/prod/local sans modifier `MANUAL_ENV`. */
+function readBuildEnv(): EnvName | null {
+  const raw = process.env.EXPO_PUBLIC_ENV?.trim();
+  if (raw === 'dev' || raw === 'prod' || raw === 'local') return raw;
+  return null;
 }
 
 /**
  * Détermine l’environnement (dev / prod / local).
- * Par défaut : prod. Dev/local uniquement si choix persisté (Developer Options) ou MANUAL_ENV.
+ * Par défaut : prod. Puis choix persisté, puis `EXPO_PUBLIC_ENV`, puis `MANUAL_ENV`.
  */
-function getEnvName(): string {
-  const runtime = getRuntimeEnv();
-  if (runtime) return runtime;
-  return 'prod';
+function getEnvName(): EnvName {
+  return getRuntimeEnv() ?? readBuildEnv() ?? MANUAL_ENV ?? 'prod';
 }
 
 export function getEnv(): RendasuaEnv {
