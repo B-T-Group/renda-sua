@@ -448,10 +448,13 @@ export interface BusinessRentalRequestRow {
   unavailable_reason_code?: string | null;
   expires_at?: string | null;
   responded_at?: string | null;
+  payment_rail?: string | null;
+  dates_available?: boolean | null;
   rental_location_listing: {
     id: string;
     base_price_per_hour: number;
     base_price_per_day: number;
+    security_deposit_amount?: number | string | null;
     weekly_availability?: RentalWeeklyAvailabilityRow[];
     business_location?: { name?: string | null; address?: { city?: string | null } | null } | null;
     rental_item: {

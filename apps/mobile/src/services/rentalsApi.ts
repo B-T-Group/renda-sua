@@ -444,10 +444,11 @@ export async function deleteBusinessListing(
 }
 
 export async function getBusinessRequests(
-  init?: Init & { status?: string }
+  init?: Init & { status?: string; id?: string }
 ): Promise<BusinessRentalRequestRow[]> {
   const search = new URLSearchParams();
   if (init?.status) search.set('status', init.status);
+  if (init?.id) search.set('id', init.id);
   const q = search.toString();
   const path = q
     ? `/rentals/business/requests?${q}`

@@ -355,6 +355,7 @@ export type BusinessRootStackParamList = {
   BusinessRentalAddListing: { itemId: string };
   BusinessRentalAiProposal: { listingId: string };
   BusinessRentalBookingDetail: { bookingId: string };
+  BusinessRentalRequestDetail: { requestId: string };
   BusinessInspection: { bookingId: string; stage: 'pickup' | 'return' };
   AdminRentalListingsModeration: undefined;
   AdminRentalAiReviews: undefined;
