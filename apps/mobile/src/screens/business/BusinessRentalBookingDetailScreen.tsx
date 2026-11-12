@@ -28,10 +28,11 @@ import type { BusinessRootStackParamList } from '../../navigation/types';
 import type { RentalBookingDetail } from '../../types/rentals';
 import {
   formatRentalMoney,
-  formatRentalRequestLocalDateTime,
+  parseRentalSelectionWindows,
   rentalBookingStatusColors,
   resolveBookingPhase,
 } from '../../utils/rentals';
+import { bookingRequestedPeriodLines } from '../../utils/rentals/rentalRequestFormat';
 import {
   classifyInspectionError,
   pickupGate,
@@ -42,7 +43,7 @@ import {
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalBookingDetail'>;
 
 export default function BusinessRentalBookingDetailScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, typography, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const route = useRoute<Route>();
@@ -279,6 +280,12 @@ export default function BusinessRentalBookingDetailScreen() {
 
   const sc = rentalBookingStatusColors(booking.status, colors);
   const phaseInfo = resolveBookingPhase(booking.status, 'business');
+  const periodLines = bookingRequestedPeriodLines(
+    parseRentalSelectionWindows(booking.rental_request?.rental_selection_windows),
+    booking,
+    i18n.language,
+    (count) => t('rentals.requestForm.dayCount', '{{count}} day', { count })
+  );
   const client = booking.client?.user;
   const clientName = [client?.first_name, client?.last_name].filter(Boolean).join(' ');
   const gate = pickupGate({
@@ -343,10 +350,16 @@ export default function BusinessRentalBookingDetailScreen() {
             #{booking.booking_number}
           </Text>
         ) : null}
-        <Text style={{ color: colors.text.secondary, marginTop: 8 }}>
-          {formatRentalRequestLocalDateTime(booking.start_at)} →{' '}
-          {formatRentalRequestLocalDateTime(booking.end_at)}
-        </Text>
+        <View style={{ marginTop: 8 }}>
+          {(periodLines.length ? periodLines : ['—']).map((line, index) => (
+            <Text
+              key={`${index}-${line}`}
+              style={{ color: colors.text.secondary, marginTop: index === 0 ? 0 : 2 }}
+            >
+              {line}
+            </Text>
+          ))}
+        </View>
         <Text style={{ color: colors.text.primary, marginTop: 8, fontWeight: '600' }}>
           {formatRentalMoney(booking.total_amount, booking.currency)}
         </Text>

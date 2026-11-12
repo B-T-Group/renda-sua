@@ -1,3 +1,4 @@
+import { CheckCircle, RadioButtonUnchecked } from '@mui/icons-material';
 import {
   Alert,
   Avatar,
@@ -34,10 +35,15 @@ import SEOHead from '../seo/SEOHead';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   formatRentalRequestLocalDateTime,
-  parseRentalPricingSnapshot,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
-import { messagesDefaultExpanded } from '../../utils/rentalPhase';
+import { bookingRequestedPeriodLines } from '../../utils/rentalRequestFormat';
+import {
+  bookingDetailStatusLabelKey,
+  bookingDetailTimeline,
+  bookingDetailTimelineIndex,
+  messagesDefaultExpanded,
+} from '../../utils/rentalPhase';
 import { unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
 
 const PAYMENT_POLL_MS = 4000;
@@ -72,9 +78,73 @@ function toDateTimeLocalValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const DETAIL_STATUS_DEFAULTS: Record<string, string> = {
+  'rentals.phases.offerReady': 'Offer ready',
+  'rentals.phases.reserved': 'Reserved',
+  'rentals.phases.readyForPickup': 'Ready for pickup',
+  'rentals.phases.inProgress': 'In progress',
+  'rentals.phases.done': 'Done',
+  'rentals.bookingStatus.awaiting_return': 'Return due',
+};
+
+function BookingStatusStep({
+  step,
+  done,
+  current,
+}: {
+  step: string;
+  done: boolean;
+  current: boolean;
+}) {
+  const { t } = useTranslation();
+  const labelKey = bookingDetailStatusLabelKey(step);
+  const color = done ? 'text.primary' : 'text.disabled';
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      {done ? (
+        <CheckCircle sx={{ fontSize: 18, color: 'success.main' }} />
+      ) : (
+        <RadioButtonUnchecked sx={{ fontSize: 18, color: 'text.disabled' }} />
+      )}
+      <Typography variant="body2" fontWeight={current ? 700 : 400} color={color}>
+        {t(labelKey, DETAIL_STATUS_DEFAULTS[labelKey] ?? step)}
+      </Typography>
+    </Stack>
+  );
+}
+
+function BookingStatusSteps({ status }: { status: string }) {
+  const { t } = useTranslation();
+  const steps = bookingDetailTimeline(status);
+  const current = bookingDetailTimelineIndex(steps, status);
+  if (status === 'cancelled') {
+    return (
+      <Typography color="error" variant="body2" sx={{ mt: 0.5 }}>
+        {t('rentals.cancelled', 'Booking cancelled')}
+      </Typography>
+    );
+  }
+  return (
+    <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+      {steps.map((step, idx) => (
+        <BookingStatusStep
+          key={step}
+          step={step}
+          done={current >= idx}
+          current={doneCurrent(current, idx)}
+        />
+      ))}
+    </Stack>
+  );
+}
+
+function doneCurrent(current: number, idx: number): boolean {
+  return current === idx && current >= 0;
+}
+
 const RentalBookingDetailPage: React.FC = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
   const { isAuthenticated } = useSessionAuth();
@@ -300,24 +370,21 @@ const RentalBookingDetailPage: React.FC = () => {
   const bookingImage = booking.rental_location_listing?.rental_item?.rental_item_images?.[0];
   const imageUrl = bookingImage?.image_url?.trim() || '';
   const imageAlt = bookingImage?.alt_text?.trim() || title;
-  const pricing = parseRentalPricingSnapshot(booking.rental_pricing_snapshot);
-  const isAllDay =
-    (pricing?.lines?.length ?? 0) > 0 &&
-    pricing?.lines?.every((l) => l.kind === 'all_day') === true;
-  const startLocal = formatRentalRequestLocalDateTime(booking.start_at);
   const endLocal = formatRentalRequestLocalDateTime(booking.end_at);
   const selectionWindows = parseRentalSelectionWindows(
     booking.rental_request?.rental_selection_windows
   );
-  const bookingWindows = selectionWindows.length
-    ? selectionWindows
-    : [
-        {
-          start_at: booking.start_at,
-          end_at: booking.end_at,
-          billing: isAllDay ? 'all_day' : 'hourly',
-        },
-      ];
+  const periodLines = bookingRequestedPeriodLines(
+    selectionWindows,
+    booking,
+    i18n.language,
+    (count) =>
+      t('rentals.clientRequests.periodDayCount', {
+        count,
+        defaultValue: count === 1 ? '{{count}} day' : '{{count}} days',
+      })
+  );
+  const detailStatusKey = bookingDetailStatusLabelKey(status);
 
   const statusChipColor =
     status === 'confirmed'
@@ -413,7 +480,9 @@ const RentalBookingDetailPage: React.FC = () => {
               label={
                 t('rentals.status', 'Status') +
                 ': ' +
-                t(`rentals.bookingStatus.${status}`, status)
+                (status === 'awaiting_return'
+                  ? t(detailStatusKey, 'Return due')
+                  : t(`rentals.bookingStatus.${status}`, status))
               }
               color={statusChipColor}
               sx={{ fontWeight: 800 }}
@@ -584,6 +653,12 @@ const RentalBookingDetailPage: React.FC = () => {
 
           <Stack spacing={2}>
             <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, border: 1, borderColor: 'divider' }}>
+              <Typography variant="h6" fontWeight={900}>
+                {t('rentals.status', 'Status')}
+              </Typography>
+              <BookingStatusSteps status={status} />
+            </Paper>
+            <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, border: 1, borderColor: 'divider' }}>
               <Stack spacing={1.25}>
                 <Typography variant="h6" fontWeight={900}>
                   {t('rentals.clientRequests.bookConfirmSummaryHeading', 'Booking summary')}
@@ -643,41 +718,13 @@ const RentalBookingDetailPage: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">
                       {t('rentals.clientRequests.bookConfirmLabelPeriod', 'Rental period')}
                     </Typography>
-                    <Box
-                      sx={{
-                        mt: 0.5,
-                        p: 1,
-                        borderRadius: 1.5,
-                        border: 1,
-                        borderColor: 'divider',
-                        bgcolor: alpha(theme.palette.primary.main, 0.04),
-                      }}
-                    >
-                      <Typography variant="body2" fontWeight={800} sx={{ mb: 0.6 }}>
-                        {`${startLocal} → ${endLocal}`}
-                      </Typography>
-                      <Stack spacing={0.6}>
-                        {bookingWindows.map((window, idx) => (
-                          <Box
-                            key={`${window.start_at}-${window.end_at}-${idx}`}
-                            sx={{
-                              px: 1,
-                              py: 0.75,
-                              borderRadius: 1,
-                              border: 1,
-                              borderColor: alpha(theme.palette.divider, 0.8),
-                              bgcolor: 'background.paper',
-                            }}
-                          >
-                            <Typography variant="body2" fontWeight={700}>
-                              {window.billing === 'all_day'
-                                ? `${formatRentalRequestLocalDateTime(window.start_at)} — ${t('rentals.allDay', 'All day')}`
-                                : `${formatRentalRequestLocalDateTime(window.start_at)} → ${formatRentalRequestLocalDateTime(window.end_at)}`}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Stack>
-                    </Box>
+                    <Stack spacing={0.35} sx={{ mt: 0.5 }}>
+                      {(periodLines.length ? periodLines : ['—']).map((line, idx) => (
+                        <Typography key={`${idx}-${line}`} variant="body1" fontWeight={700}>
+                          {line}
+                        </Typography>
+                      ))}
+                    </Stack>
                   </Box>
                 </Stack>
 

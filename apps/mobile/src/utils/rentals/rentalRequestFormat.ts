@@ -270,6 +270,63 @@ export function formatRentalPeriod(
   return windows.map((row) => hourlyLine(row, locale)).join(', ');
 }
 
+function isContiguous(days: string[]): boolean {
+  if (days.length <= 1) return true;
+  return days.every((day, index) => index === 0 || day === addUtcDays(days[index - 1], 1));
+}
+
+/** One stay: a single window, or contiguous daily days that read as one range. */
+export function isSingleRequestedPeriod(windows: PeriodWindow[]): boolean {
+  if (windows.length <= 1) return true;
+  const booked = bookedCalendarDates(windows);
+  return Boolean(booked && isContiguous(booked));
+}
+
+/**
+ * One line when the request is a single period.
+ * Numbered lines only when the request has several separate periods.
+ * Keep in sync with apps/frontend/src/utils/rentalRequestFormat.ts
+ */
+export function clientRequestPeriodLines(
+  windows: PeriodWindow[],
+  locale: string,
+  dayCountLabel: (count: number) => string
+): string[] {
+  if (!windows.length) return [];
+  if (isSingleRequestedPeriod(windows)) {
+    return [formatRentalPeriod(windows, locale, dayCountLabel)];
+  }
+  return windows.map((window, index) => numberedPeriodLine(window, index, locale, dayCountLabel));
+}
+
+function numberedPeriodLine(
+  window: PeriodWindow,
+  index: number,
+  locale: string,
+  dayCountLabel: (count: number) => string
+): string {
+  return `${index + 1}. ${formatRentalPeriod([window], locale, dayCountLabel)}`;
+}
+
+/** Selection windows when the booking has them; otherwise the booked start–end span. */
+export function bookingPeriodWindows(
+  windows: PeriodWindow[],
+  span?: { start_at?: string | null; end_at?: string | null } | null
+): PeriodWindow[] {
+  if (windows.length) return windows;
+  if (!span?.start_at || !span.end_at) return [];
+  return [{ start_at: span.start_at, end_at: span.end_at }];
+}
+
+export function bookingRequestedPeriodLines(
+  windows: PeriodWindow[],
+  span: { start_at?: string | null; end_at?: string | null } | null | undefined,
+  locale: string,
+  dayCountLabel: (count: number) => string
+): string[] {
+  return clientRequestPeriodLines(bookingPeriodWindows(windows, span), locale, dayCountLabel);
+}
+
 /** `Fri 20 Nov, 10:00` / `ven. 20 nov., 10:00`. Clock is the listing wall time stored on the Z timestamp. */
 export function formatListingDeadline(iso: string, locale: string): string {
   const day = iso.slice(0, 10);
