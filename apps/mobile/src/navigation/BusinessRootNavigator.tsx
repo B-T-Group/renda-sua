@@ -40,6 +40,7 @@ import BusinessRentalItemDetailScreen from '../screens/business/BusinessRentalIt
 import BusinessRentalItemEditScreen from '../screens/business/BusinessRentalItemEditScreen';
 import BusinessRentalAddListingScreen from '../screens/business/BusinessRentalAddListingScreen';
 import BusinessRentalBookingDetailScreen from '../screens/business/BusinessRentalBookingDetailScreen';
+import BusinessRentalRequestDetailScreen from '../screens/business/BusinessRentalRequestDetailScreen';
 import BusinessInspectionScreen from '../screens/business/BusinessInspectionScreen';
 import AdminRentalListingsModerationScreen from '../screens/business/AdminRentalListingsModerationScreen';
 import AdminRentalAiReviewsScreen from '../screens/business/AdminRentalAiReviewsScreen';
@@ -536,6 +537,11 @@ export function BusinessRootNavigator() {
             title: t('business.rentals.aiProposal.title', 'Review AI suggestions'),
             headerBackTitle: t('business.rentals.studioTitle', 'Rentals'),
           }}
+        />
+        <RootStack.Screen
+          name="BusinessRentalRequestDetail"
+          component={BusinessRentalRequestDetailScreen}
+          options={{ headerShown: false }}
         />
         <RootStack.Screen
           name="BusinessRentalBookingDetail"

@@ -21,10 +21,12 @@ import {
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BusinessRentalCatalogCard } from '../../components/business/rentals/BusinessRentalCatalogCard';
+import { BusinessRentalRequestCard } from '../../components/business/rentals/BusinessRentalRequestCard';
 import { BusinessRentalRespondDialog } from '../../components/business/rentals/BusinessRentalRespondDialog';
 import { ModerationFilterBanner } from '../../components/common/ModerationFilterBanner';
 import { StatusPill } from '../../components/common/StatusPill';
 import { RentalPhaseStatusPill } from '../../components/common/RentalPhaseStatusPill';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
@@ -74,6 +76,7 @@ const QUEUE_FILTERS: BusinessActionQueue[] = [
 
 export default function BusinessRentalsStudioScreen() {
   const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
   const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const listBottomPadding = useMainTabContentBottomPadding(88);
@@ -178,7 +181,8 @@ export default function BusinessRentalsStudioScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadCatalog();
-    }, [loadCatalog])
+      void loadRequests();
+    }, [loadCatalog, loadRequests])
   );
 
   const onRefresh = useCallback(async () => {
@@ -450,6 +454,24 @@ export default function BusinessRentalsStudioScreen() {
             </View>
           }
           renderItem={({ item }) => {
+            if (flags.rentals_request_card_enabled && item.status === 'pending') {
+              return (
+                <BusinessRentalRequestCard
+                  request={item}
+                  onOpen={() =>
+                    navigation.navigate('BusinessRentalRequestDetail', { requestId: item.id })
+                  }
+                  onAccept={() => {
+                    setRespondReq(item);
+                    setRespondMode('available');
+                  }}
+                  onDecline={() => {
+                    setRespondReq(item);
+                    setRespondMode('unavailable');
+                  }}
+                />
+              );
+            }
             const phase = resolveRentalPhase(
               {
                 requestStatus: item.status,

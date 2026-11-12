@@ -15,6 +15,7 @@ export const CLIENT_FLAG_KEYS = [
   'agent_contract_required',
   'rentals_search_first_enabled',
   'rentals_modify_request_enabled',
+  'rentals_request_card_enabled',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -53,4 +54,6 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_search_first_enabled: false,
   /** Renter edits of a Requested rental. Off until a row turns it on. */
   rentals_modify_request_enabled: false,
+  /** Business request card. Off until an application_configurations row turns it on. */
+  rentals_request_card_enabled: false,
 };

@@ -50,4 +50,33 @@ describe('AppConfigService', () => {
     const flags = await service.getClientFlags();
     expect(flags.reorder_v1).toBe(true);
   });
+
+  it('reads the request card from the country row, then the global row', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      application_configurations: [
+        {
+          config_key: 'rentals_request_card_enabled',
+          boolean_value: false,
+          country_code: null,
+          status: 'active',
+        },
+        {
+          config_key: 'rentals_request_card_enabled',
+          boolean_value: true,
+          country_code: 'CM',
+          status: 'active',
+        },
+      ],
+    });
+    const previous = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'development';
+      const globalFlags = await new AppConfigService(hasura as any).getClientFlags();
+      expect(globalFlags.rentals_request_card_enabled).toBe(false);
+      const countryFlags = await new AppConfigService(hasura as any).getClientFlags('CM');
+      expect(countryFlags.rentals_request_card_enabled).toBe(true);
+    } finally {
+      process.env.NODE_ENV = previous;
+    }
+  });
 });
