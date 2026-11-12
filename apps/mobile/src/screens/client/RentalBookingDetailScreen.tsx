@@ -30,55 +30,33 @@ import {
   useRentalStripePayment,
 } from '../../hooks/useRentalStripePayment';
 import type { ClientRootStackParamList } from '../../navigation/types';
-import type { RentalBookingStatus } from '../../types/rentals';
 import {
+  bookingDetailStatusLabelKey,
+  bookingDetailTimeline,
+  bookingDetailTimelineIndex,
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
   parseRentalPricingSnapshot,
   parseRentalSelectionWindows,
   rentalBookingStatusColors,
-  resolveBookingPhase,
 } from '../../utils/rentals';
-import { formatListingDeadline } from '../../utils/rentals/rentalRequestFormat';
+import {
+  bookingRequestedPeriodLines,
+  formatListingDeadline,
+} from '../../utils/rentals/rentalRequestFormat';
 import { clientInspectionAction, pickupGate } from '../../utils/rentals/rentalInspection';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
-const PHASE_DEFAULTS: Record<string, string> = {
+const DETAIL_STATUS_DEFAULTS: Record<string, string> = {
   'rentals.phases.requested': 'Requested',
   'rentals.phases.offerReady': 'Offer ready',
   'rentals.phases.reserved': 'Reserved',
   'rentals.phases.readyForPickup': 'Ready for pickup',
   'rentals.phases.inProgress': 'In progress',
   'rentals.phases.done': 'Done',
+  'rentals.bookingStatus.awaiting_return': 'Return due',
 };
-
-const TIMELINE: RentalBookingStatus[] = [
-  'proposed',
-  'confirmed',
-  'active',
-  'awaiting_return',
-  'completed',
-];
-
-/** Reserved (pay-at-pickup) bookings get their own step between proposed and confirmed. */
-function timelineFor(status: string): RentalBookingStatus[] {
-  if (status !== 'reserved') return TIMELINE;
-  return [
-    'proposed',
-    'reserved',
-    'confirmed',
-    'active',
-    'awaiting_return',
-    'completed',
-  ];
-}
-
-function statusIndex(steps: RentalBookingStatus[], status: string): number {
-  if (status === 'cancelled') return -1;
-  const i = steps.indexOf(status as RentalBookingStatus);
-  return i >= 0 ? i : 0;
-}
 
 function toAmount(value: number | string | null | undefined): number {
   const n = Number(value);
@@ -145,13 +123,16 @@ export default function RentalBookingDetailScreen() {
   }, []);
 
   const statusColors = rentalBookingStatusColors(booking?.status ?? '', colors);
-  const phaseInfo = resolveBookingPhase(booking?.status ?? '', 'client');
+  const statusLabelKey = bookingDetailStatusLabelKey(booking?.status ?? '');
   const pricing = parseRentalPricingSnapshot(booking?.rental_pricing_snapshot);
   const windows = parseRentalSelectionWindows(
     booking?.rental_request?.rental_selection_windows
   );
-  const timelineSteps = timelineFor(booking?.status ?? '');
-  const currentIdx = statusIndex(timelineSteps, booking?.status ?? '');
+  const periodLines = bookingRequestedPeriodLines(windows, booking, i18n.language, (count) =>
+    t('rentals.requestForm.dayCount', '{{count}} day', { count })
+  );
+  const timelineSteps = bookingDetailTimeline(booking?.status ?? '');
+  const currentIdx = bookingDetailTimelineIndex(timelineSteps, booking?.status ?? '');
   const canCancel =
     (booking?.status === 'confirmed' || booking?.status === 'reserved') &&
     !booking?.actual_start_at;
@@ -352,7 +333,7 @@ export default function RentalBookingDetailScreen() {
             </Text>
           </View>
           <StatusPill
-            label={t(phaseInfo.labelKey, booking.status)}
+            label={t(statusLabelKey, DETAIL_STATUS_DEFAULTS[statusLabelKey] ?? booking.status)}
             backgroundColor={statusColors.backgroundColor}
             textColor={statusColors.textColor}
             borderColor={statusColors.borderColor}
@@ -503,6 +484,7 @@ export default function RentalBookingDetailScreen() {
           ) : (
             timelineSteps.map((step, idx) => {
               const done = currentIdx >= idx;
+              const labelKey = bookingDetailStatusLabelKey(step);
               return (
                 <View key={step} style={[styles.timelineRow, { marginTop: spacing.xs }]}>
                   <MaterialCommunityIcons
@@ -520,10 +502,7 @@ export default function RentalBookingDetailScreen() {
                       },
                     ]}
                   >
-                    {t(
-                      resolveBookingPhase(step, 'client').labelKey,
-                      PHASE_DEFAULTS[resolveBookingPhase(step, 'client').labelKey] ?? step
-                    )}
+                    {t(labelKey, DETAIL_STATUS_DEFAULTS[labelKey] ?? step)}
                   </Text>
                 </View>
               );
@@ -578,16 +557,12 @@ export default function RentalBookingDetailScreen() {
           <Text style={[typography.subtitle2, { color: colors.text.primary }]}>
             {t('rentals.clientRequests.requestedPeriod', 'Requested period')}
           </Text>
-          <Text style={[typography.body2, { color: colors.text.primary, marginTop: 4 }]}>
-            {formatRentalRequestLocalDateTime(booking.start_at)} —{' '}
-            {formatRentalRequestLocalDateTime(booking.end_at)}
-          </Text>
-          {windows.map((w, i) => (
+          {(periodLines.length ? periodLines : ['—']).map((line, index) => (
             <Text
-              key={`${w.start_at}-${i}`}
-              style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}
+              key={`${index}-${line}`}
+              style={[typography.body2, { color: colors.text.primary, marginTop: index === 0 ? 4 : 2 }]}
             >
-              {`${i + 1}. ${formatRentalRequestLocalDateTime(w.start_at)} — ${formatRentalRequestLocalDateTime(w.end_at)}`}
+              {line}
             </Text>
           ))}
           <Text style={[typography.subtitle2, { color: colors.text.primary, marginTop: spacing.md }]}>

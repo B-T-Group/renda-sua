@@ -182,3 +182,22 @@ function numberedPeriod(
 ): string {
   return `${index + 1}. ${formatRentalPeriod([window], locale, dayCountLabel)}`;
 }
+
+/** Selection windows when the booking has them; otherwise the booked start–end span. */
+export function bookingPeriodWindows(
+  windows: PeriodWindow[],
+  span?: { start_at?: string | null; end_at?: string | null } | null
+): PeriodWindow[] {
+  if (windows.length) return windows;
+  if (!span?.start_at || !span.end_at) return [];
+  return [{ start_at: span.start_at, end_at: span.end_at }];
+}
+
+export function bookingRequestedPeriodLines(
+  windows: PeriodWindow[],
+  span: { start_at?: string | null; end_at?: string | null } | null | undefined,
+  locale: string,
+  dayCountLabel: DayCountLabel
+): string[] {
+  return clientRequestPeriodLines(bookingPeriodWindows(windows, span), locale, dayCountLabel);
+}

@@ -10,10 +10,15 @@ import {
   requestSelectionLabel,
   requestUsesDayWording,
   selectedRequestDateKeys,
+  bookingPeriodWindows,
+  bookingRequestedPeriodLines,
+  clientRequestPeriodLines,
   formatChangeDetail,
   formatListingDeadline,
   formatRentalDateRange,
   formatRentalPeriod,
+  isSingleRequestedPeriod,
+  LISTING_TIME_ZONE,
   modifySaveNeedsConfirm,
   rentalEditWindowOpen,
   rentalSelectionFingerprint,
@@ -361,5 +366,87 @@ describe('rental edit confirmation', () => {
     );
     expect(rentalSelectionFingerprint([day], 1, 'hello')).not.toBe(rentalSelectionFingerprint([day], 2, 'hello'));
     expect(rentalSelectionFingerprint([day], 1, '   ')).toBe(rentalSelectionFingerprint([day], 1, ''));
+  });
+});
+
+const bookedDay = (date: string) => ({
+  billing: 'all_day' as const,
+  calendar_date: date,
+  start_at: `${date}T08:00:00.000Z`,
+  end_at: `${date}T18:00:00.000Z`,
+});
+
+const bookedHour = (start: string, end: string) => ({
+  billing: 'hourly' as const,
+  start_at: start,
+  end_at: end,
+});
+
+describe('clientRequestPeriodLines', () => {
+  it('shows a single day once, in English and French, with no times and no number', () => {
+    const lines = clientRequestPeriodLines([bookedDay('2026-11-12')], 'en', days);
+    expect(lines).toEqual(['12 Nov · 1 day']);
+    expect(clientRequestPeriodLines([bookedDay('2026-11-12')], 'fr', jours)).toEqual(['12 nov. · 1 jour']);
+    expect(lines.join(' ')).not.toMatch(/^1\.|08:00|18:00/);
+    expect(isSingleRequestedPeriod([bookedDay('2026-11-12')])).toBe(true);
+  });
+
+  it('shows a contiguous stay once, including a cross-month stay', () => {
+    const stay = [bookedDay('2026-11-12'), bookedDay('2026-11-13'), bookedDay('2026-11-14')];
+    expect(clientRequestPeriodLines(stay, 'en', days)).toEqual(['12\u201314 Nov · 3 days']);
+    expect(clientRequestPeriodLines(stay, 'fr', jours)).toEqual(['12\u201314 nov. · 3 jours']);
+    const cross = [bookedDay('2026-11-30'), bookedDay('2026-12-01'), bookedDay('2026-12-02')];
+    expect(clientRequestPeriodLines(cross, 'en', days)).toEqual(['30 Nov \u2013 2 Dec · 3 days']);
+    expect(clientRequestPeriodLines(cross, 'fr', jours)).toEqual(['30 nov. \u2013 2 d\u00e9c. · 3 jours']);
+  });
+
+  it('shows one hourly window with listing wall-clock times and no number', () => {
+    const slot = [bookedHour('2026-11-12T09:00:00.000Z', '2026-11-12T13:00:00.000Z')];
+    expect(LISTING_TIME_ZONE).toBe('Africa/Douala');
+    expect(clientRequestPeriodLines(slot, 'en', days)).toEqual(['12 Nov · 09:00\u201313:00']);
+    expect(clientRequestPeriodLines(slot, 'fr', jours)).toEqual(['12 nov. · 09:00\u201313:00']);
+    expect(clientRequestPeriodLines(slot, 'en', days)[0]).not.toMatch(/04:00|10:00|AM|PM/);
+  });
+
+  it('numbers only when there are two or more separate windows', () => {
+    const slots = [
+      bookedHour('2026-11-12T09:00:00.000Z', '2026-11-12T13:00:00.000Z'),
+      bookedHour('2026-11-14T15:00:00.000Z', '2026-11-14T18:00:00.000Z'),
+    ];
+    expect(isSingleRequestedPeriod(slots)).toBe(false);
+    expect(clientRequestPeriodLines(slots, 'en', days)).toEqual([
+      '1. 12 Nov · 09:00\u201313:00',
+      '2. 14 Nov · 15:00\u201318:00',
+    ]);
+    expect(clientRequestPeriodLines(slots, 'fr', jours)).toEqual([
+      '1. 12 nov. · 09:00\u201313:00',
+      '2. 14 nov. · 15:00\u201318:00',
+    ]);
+    const gaps = [bookedDay('2026-11-12'), bookedDay('2026-11-20')];
+    expect(clientRequestPeriodLines(gaps, 'en', days)).toEqual(['1. 12 Nov · 1 day', '2. 20 Nov · 1 day']);
+    expect(clientRequestPeriodLines([], 'en', days)).toEqual([]);
+  });
+});
+
+describe('bookingRequestedPeriodLines', () => {
+  it('shows one booking span once instead of repeating it as line 1', () => {
+    const span = { start_at: '2026-11-12T08:00:00.000Z', end_at: '2026-11-13T08:00:00.000Z' };
+    expect(bookingPeriodWindows([], span)).toEqual([
+      { start_at: span.start_at, end_at: span.end_at },
+    ]);
+    expect(bookingRequestedPeriodLines([], span, 'en', days)).toEqual(['12 Nov · 1 day']);
+    expect(bookingRequestedPeriodLines([], span, 'fr', jours)).toEqual(['12 nov. · 1 jour']);
+  });
+
+  it('keeps selection windows and does not add the overall span', () => {
+    const windows = [bookedDay('2026-11-12'), bookedDay('2026-11-13'), bookedDay('2026-11-14')];
+    const span = { start_at: '2026-11-12T08:00:00.000Z', end_at: '2026-11-15T08:00:00.000Z' };
+    expect(bookingPeriodWindows(windows, span)).toBe(windows);
+    expect(bookingRequestedPeriodLines(windows, span, 'en', days)).toEqual(['12\u201314 Nov · 3 days']);
+  });
+
+  it('returns nothing when the booking has neither windows nor a span', () => {
+    expect(bookingPeriodWindows([], null)).toEqual([]);
+    expect(bookingRequestedPeriodLines([], { start_at: '', end_at: '' }, 'en', days)).toEqual([]);
   });
 });

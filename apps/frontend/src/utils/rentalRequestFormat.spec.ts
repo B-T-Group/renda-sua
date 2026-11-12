@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import {
   LISTING_TIME_ZONE,
+  bookingPeriodWindows,
+  bookingRequestedPeriodLines,
   clientRequestPeriodLines,
   formatRentalDateRange,
   formatRentalPeriod,
@@ -141,6 +143,37 @@ describe('clientRequestPeriodLines', () => {
 
   it('returns nothing when the request has no windows', () => {
     expect(clientRequestPeriodLines([], 'en', days)).toEqual([]);
+  });
+});
+
+describe('bookingRequestedPeriodLines', () => {
+  it('shows one booking span once instead of repeating it as line 1', () => {
+    const span = { start_at: '2026-11-12T08:00:00.000Z', end_at: '2026-11-13T08:00:00.000Z' };
+    expect(bookingPeriodWindows([], span)).toEqual([{ start_at: span.start_at, end_at: span.end_at }]);
+    expect(bookingRequestedPeriodLines([], span, 'en', days)).toEqual(['12 Nov · 1 day']);
+    expect(bookingRequestedPeriodLines([], span, 'fr', jours)).toEqual(['12 nov. · 1 jour']);
+  });
+
+  it('keeps separate windows numbered and does not add the overall span', () => {
+    const slots = [
+      hourly('2026-11-12T09:00:00.000Z', '2026-11-12T13:00:00.000Z'),
+      hourly('2026-11-14T15:00:00.000Z', '2026-11-14T18:00:00.000Z'),
+    ];
+    const span = { start_at: slots[0].start_at, end_at: slots[1].end_at };
+    expect(bookingPeriodWindows(slots, span)).toBe(slots);
+    expect(bookingRequestedPeriodLines(slots, span, 'en', days)).toEqual([
+      '1. 12 Nov · 09:00\u201313:00',
+      '2. 14 Nov · 15:00\u201318:00',
+    ]);
+    expect(bookingRequestedPeriodLines(slots, span, 'fr', jours)).toEqual([
+      '1. 12 nov. · 09:00\u201313:00',
+      '2. 14 nov. · 15:00\u201318:00',
+    ]);
+  });
+
+  it('returns nothing when the booking has neither windows nor a span', () => {
+    expect(bookingPeriodWindows([], null)).toEqual([]);
+    expect(bookingRequestedPeriodLines([], { start_at: null, end_at: null }, 'en', days)).toEqual([]);
   });
 });
 

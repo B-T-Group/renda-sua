@@ -197,6 +197,46 @@ export function resolveBookingPhase(
   return resolveRentalPhase({ bookingStatus }, role);
 }
 
+/**
+ * Label for the booking-detail stepper and status pill.
+ * Active stays "In progress". Awaiting return uses the booking-status label
+ * so those two steps are not both "In progress".
+ * Lists and hubs keep resolveBookingPhase (both statuses remain in_progress).
+ */
+export function bookingDetailStatusLabelKey(status: string): string {
+  if (status === 'awaiting_return') return 'rentals.bookingStatus.awaiting_return';
+  return resolveBookingPhase(status).labelKey;
+}
+
+const OPEN_BOOKING_STEPS = [
+  'proposed',
+  'confirmed',
+  'active',
+  'awaiting_return',
+  'completed',
+] as const;
+
+const RESERVED_BOOKING_STEPS = [
+  'proposed',
+  'reserved',
+  'confirmed',
+  'active',
+  'awaiting_return',
+  'completed',
+] as const;
+
+/** Steps shown on the booking-detail stepper. Reserved inserts its own step. */
+export function bookingDetailTimeline(status: string): string[] {
+  if (status === 'reserved') return [...RESERVED_BOOKING_STEPS];
+  return [...OPEN_BOOKING_STEPS];
+}
+
+export function bookingDetailTimelineIndex(steps: readonly string[], status: string): number {
+  if (status === 'cancelled') return -1;
+  const index = steps.indexOf(status);
+  return index >= 0 ? index : 0;
+}
+
 /** @deprecated Prefer resolveBookingPhase / resolveRentalPhase nextStepKey */
 export function rentalBookingNextStepKey(
   status: string,
