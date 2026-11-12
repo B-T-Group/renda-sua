@@ -5273,7 +5273,10 @@
     "downloadApp": "Télécharger l'appli",
     "clientTabs": {
       "home": "Accueil",
-      "search": "Recherche"
+      "search": "Recherche",
+      "reels": "Reels",
+      "rentals": "Locations",
+      "orders": "Commandes"
     },
     "tabs": {
       "account": "Compte"

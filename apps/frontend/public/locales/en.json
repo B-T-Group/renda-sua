@@ -5550,7 +5550,10 @@
     "downloadApp": "Download App",
     "clientTabs": {
       "home": "Home",
-      "search": "Search"
+      "search": "Search",
+      "reels": "Reels",
+      "rentals": "Rentals",
+      "orders": "Orders"
     },
     "tabs": {
       "account": "Account"
