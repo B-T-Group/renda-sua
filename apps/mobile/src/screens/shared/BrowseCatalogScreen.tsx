@@ -223,6 +223,8 @@ export interface BrowseCatalogScreenProps {
   categoryRequestId?: number;
   /** Extra discovery content above the product grid (rails, buy again). */
   discoveryExtra?: React.ReactNode;
+  /** Shop and Food open the full search screen. Omitted on the in-place catalog search. */
+  onSearchBarPress?: () => void;
 }
 
 function BrowseCatalogScreenInner({
@@ -251,6 +253,7 @@ function BrowseCatalogScreenInner({
   requestedCategory,
   categoryRequestId,
   discoveryExtra,
+  onSearchBarPress,
 }: BrowseCatalogScreenProps) {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -1336,6 +1339,7 @@ function BrowseCatalogScreenInner({
               value={searchDraft}
               onChangeText={setSearchDraft}
               loading={isSearchFetching}
+              onPress={onSearchBarPress}
               placeholder={
                 foodOnly
                   ? showAllRestaurants

@@ -203,12 +203,15 @@ export type ClientMainTabParamList = {
     | undefined;
   ClientSearch: undefined;
   ClientReels: undefined;
+  ClientRentals: { segment?: 'action_needed' | 'upcoming' | 'past' } | undefined;
   ClientOrders: undefined;
   ClientMenu: undefined;
 };
 
 export type ClientRootStackParamList = {
   ClientMainTabs: NavigatorScreenParams<ClientMainTabParamList> | undefined;
+  /** Shop or Food lane opens the unified search screen. Rentals search stays on its lane. */
+  ClientCatalogSearch: { foodOnly?: boolean } | undefined;
   NotificationsCenter: undefined;
   DeliveryConfirm: { orderId: string; source?: 'push' | 'wa' | 'sms' | 'in_app' };
   InventoryItemDetail: InventoryItemDetailParams;

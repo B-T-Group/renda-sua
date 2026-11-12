@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,8 @@ export interface CatalogBrowseSearchBarProps {
   /** True while waiting for debounce or catalog fetch for the current query. */
   loading?: boolean;
   placeholder?: string;
+  /** When set, the bar opens full search instead of filtering the catalog in place. */
+  onPress?: () => void;
 }
 
 export const CatalogBrowseSearchBar = memo(function CatalogBrowseSearchBar({
@@ -20,10 +22,37 @@ export const CatalogBrowseSearchBar = memo(function CatalogBrowseSearchBar({
   onChangeText,
   loading = false,
   placeholder,
+  onPress,
 }: CatalogBrowseSearchBarProps) {
   const { t } = useTranslation();
   const { colors, typography, borderRadius } = theme;
   const hasValue = value.length > 0;
+  const placeholderText =
+    placeholder ?? t('public.items.searchPlaceholder', 'Search products, stores...');
+
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={placeholderText}
+        testID="catalog-search-open"
+        style={[
+          styles.search,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.divider,
+            borderRadius: borderRadius.full,
+          },
+        ]}
+      >
+        <MaterialCommunityIcons name="magnify" size={22} color={colors.text.secondary} style={styles.leading} />
+        <Text numberOfLines={1} style={[typography.body1, styles.input, { color: colors.text.secondary }]}>
+          {placeholderText}
+        </Text>
+      </Pressable>
+    );
+  }
 
   return (
     <View
@@ -45,10 +74,7 @@ export const CatalogBrowseSearchBar = memo(function CatalogBrowseSearchBar({
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        placeholder={
-          placeholder ??
-          t('public.items.searchPlaceholder', 'Search products, stores...')
-        }
+        placeholder={placeholderText}
         placeholderTextColor={colors.text.secondary}
         style={[typography.body1, styles.input, { color: colors.text.primary }]}
         autoCorrect={false}

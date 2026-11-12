@@ -532,6 +532,26 @@ describe('search-first rentals', () => {
     expect(withBadge.getByText('9+')).toBeTruthy();
   });
 
+  it('keeps the next card when the header entry is hidden', async () => {
+    const view = await renderSearch({
+      myRentals: {
+        label: 'My rentals',
+        badge: null,
+        accessibilityLabel: 'My rentals',
+        next: {
+          name: 'Canon EOS R50 kit',
+          period: 'Thu 12 Nov · 1 day',
+          statusLabel: 'Accepted',
+          imageUrl: null,
+          onOpen: jest.fn(),
+          onDismiss: jest.fn(),
+        },
+      },
+    });
+    expect(view.queryByTestId('rental-my-rentals-entry')).toBeNull();
+    expect(view.getByTestId('rental-next-card')).toBeTruthy();
+  });
+
   it('hides the badge at zero', async () => {
     const clear = await renderSearch({
       myRentals: {

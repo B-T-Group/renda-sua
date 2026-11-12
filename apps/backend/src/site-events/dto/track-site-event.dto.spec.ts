@@ -63,6 +63,16 @@ describe('TrackSiteEventDto', () => {
     expect(errors[0].constraints?.isIn).toBeDefined();
   });
 
+  it('accepts the client Rentals tab events', async () => {
+    for (const eventType of ['rentals_client_tab_tap', 'rentals_client_tab_browse_tap']) {
+      const dto = new TrackSiteEventDto();
+      dto.eventType = eventType as any;
+      dto.metadata = { source: 'tab', segment: 'action_needed', todo_count: 2 };
+      expect(await validate(dto)).toHaveLength(0);
+      expect(SITE_EVENT_TYPES_V1 as readonly string[]).toContain(eventType);
+    }
+  });
+
   it('accepts the rentals My rentals entry events', async () => {
     for (const eventType of ['rentals_my_rentals_entry_tap', 'next_rental_card_impression']) {
       const dto = new TrackSiteEventDto();

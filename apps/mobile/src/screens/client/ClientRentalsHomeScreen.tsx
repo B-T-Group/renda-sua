@@ -37,9 +37,11 @@ function ClientRentalsHomeScreenBase() {
       applyTopSafeArea={false}
       onOpenListing={onOpenListing}
       headerExtra={
-        <Button mode="contained-tonal" icon="clipboard-list-outline" onPress={onMyRentals}>
-          {t('client.rentals.tabMyRentals', 'My rentals')}
-        </Button>
+        flags.rentals_client_tab_enabled ? null : (
+          <Button mode="contained-tonal" icon="clipboard-list-outline" onPress={onMyRentals}>
+            {t('client.rentals.tabMyRentals', 'My rentals')}
+          </Button>
+        )
       }
     />
   );

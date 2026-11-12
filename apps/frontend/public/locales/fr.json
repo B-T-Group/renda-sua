@@ -5273,7 +5273,10 @@
     "downloadApp": "Télécharger l'appli",
     "clientTabs": {
       "home": "Accueil",
-      "search": "Recherche"
+      "search": "Recherche",
+      "reels": "Reels",
+      "rentals": "Locations",
+      "orders": "Commandes"
     },
     "tabs": {
       "account": "Compte"
@@ -7048,11 +7051,12 @@
     },
     "hub": {
       "title": "Mes locations",
+      "toDo": "À faire",
       "actionNeeded": "Action requise",
       "upcoming": "À venir",
       "past": "Passées",
       "emptyActionNeeded": "Rien ne nécessite votre attention pour le moment.",
-      "emptyUpcoming": "Aucune location à venir.",
+      "emptyUpcoming": "Aucune location à venir",
       "emptyPast": "Aucune location passée.",
       "emptyAll": "Vous n’avez encore aucune demande ni réservation."
     },

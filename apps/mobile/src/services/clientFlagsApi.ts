@@ -14,7 +14,8 @@ export type ClientFlagKey =
   | 'agent_contract_required'
   | 'rentals_search_first_enabled'
   | 'rentals_modify_request_enabled'
-  | 'rentals_my_rentals_entry_enabled';
+  | 'rentals_my_rentals_entry_enabled'
+  | 'rentals_client_tab_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -39,6 +40,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_modify_request_enabled: false,
   /** My rentals header and Next rental card. Off until a config row turns it on. */
   rentals_my_rentals_entry_enabled: false,
+  /** Client Rentals tab. Off until a config row turns it on. */
+  rentals_client_tab_enabled: false,
 };
 
 type ClientFlagsResponse = {

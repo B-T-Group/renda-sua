@@ -9,6 +9,7 @@ import {
   trackMyRentalsEntryTap,
   trackNextRentalCardImpression,
 } from '../utils/rentals/myRentalsEntryAnalytics';
+import { presentSearchFirstEntry } from '../utils/rentals/presentSearchFirstEntry';
 import {
   bookingDismissVersion,
   claimNextCardImpression,
@@ -145,32 +146,66 @@ function pickNext(
   return picked;
 }
 
-export function useSearchFirstMyRentals(enabled: boolean, signedIn: boolean) {
+export function useSearchFirstMyRentals(enabled: boolean, signedIn: boolean, hideHeader = false) {
   const { t, i18n } = useTranslation();
   const entry = useMyRentalsLandingEntry(enabled, signedIn);
   if (!enabled) return undefined;
   const next = entry.nextBooking;
   const label = t('rentals.searchFirst.myRentals', 'My rentals');
+  return presentSearchFirstEntry(
+    {
+      label,
+      badge: entry.badge,
+      accessibilityLabel:
+        entry.todoCount > 0
+          ? t('rentals.searchFirst.myRentalsCount', 'My rentals, {{count}} to do', { count: entry.todoCount })
+          : label,
+      onPress: entry.onHeaderPress,
+      next: next
+        ? {
+            name: next.rental_location_listing?.rental_item?.name ?? '',
+            period: formatNextRentalPeriod(next.start_at, next.end_at, i18n.language, (count) =>
+              dayLabel(count, t)
+            ),
+            statusLabel: statusLabel(next.status, t),
+            imageUrl: bookingThumb(next),
+            onOpen: entry.onOpenNext,
+            onDismiss: entry.onDismissNext,
+          }
+        : null,
+    },
+    hideHeader
+  );
+}
+
+/** Badge count for the client Rentals tab. Keeps the last rows when a refresh fails. */
+export function useMyRentalsTodoCount(enabled: boolean, signedIn: boolean) {
+  const [rows, setRows] = useState<CachedRows | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !signedIn) return;
+    let live = true;
+    void loadEntryCache(storage).then((cached) => {
+      if (live && cached) setRows((current) => current ?? (cached as CachedRows));
+    });
+    void pullEntryRows()
+      .then((next) => {
+        if (!live) return;
+        setRows(next);
+        void saveEntryCache(storage, next);
+      })
+      .catch(() => {
+        if (live) setRows((previous) => rowsAfterFetch(previous, { ok: false }));
+      });
+    return () => {
+      live = false;
+    };
+  }, [enabled, signedIn]);
+
+  const todoCount = signedIn && rows ? myRentalsTodoCount(rows.requests, rows.bookings, new Date()) : 0;
   return {
-    label,
-    badge: entry.badge,
-    accessibilityLabel:
-      entry.todoCount > 0
-        ? t('rentals.searchFirst.myRentalsCount', 'My rentals, {{count}} to do', { count: entry.todoCount })
-        : label,
-    onPress: entry.onHeaderPress,
-    next: next
-      ? {
-          name: next.rental_location_listing?.rental_item?.name ?? '',
-          period: formatNextRentalPeriod(next.start_at, next.end_at, i18n.language, (count) =>
-            dayLabel(count, t)
-          ),
-          statusLabel: statusLabel(next.status, t),
-          imageUrl: bookingThumb(next),
-          onOpen: entry.onOpenNext,
-          onDismiss: entry.onDismissNext,
-        }
-      : null,
+    todoCount: signedIn ? todoCount : 0,
+    badge: signedIn ? formatMyRentalsBadge(todoCount) : null,
   };
 }
 

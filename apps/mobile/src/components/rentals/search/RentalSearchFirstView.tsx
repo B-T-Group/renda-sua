@@ -73,7 +73,7 @@ export interface RentalSearchFirstViewProps {
     label: string;
     badge: string | null;
     accessibilityLabel: string;
-    onPress: () => void;
+    onPress?: () => void;
     next: {
       name: string;
       period: string;
@@ -116,7 +116,7 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
         }}
       >
         <View style={styles.header}>
-          <View style={[styles.headerSide, props.myRentals ? styles.headerSideEntry : null]}>
+          <View style={[styles.headerSide, props.myRentals?.onPress ? styles.headerSideEntry : null]}>
             {props.mode === 'landing' ? null : (
               <Pressable onPress={props.onBack} accessibilityRole="button" testID="rental-search-back" style={styles.backHit}>
                 <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
@@ -124,8 +124,8 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
             )}
           </View>
           <Text variant="titleLarge" style={[styles.headerTitle, { color: colors.text.primary }]}>{title}</Text>
-          <View style={[styles.headerSide, styles.headerSideEnd, props.myRentals ? styles.headerSideEntry : null]}>
-            {props.myRentals ? (
+          <View style={[styles.headerSide, styles.headerSideEnd, props.myRentals?.onPress ? styles.headerSideEntry : null]}>
+            {props.myRentals?.onPress ? (
               <MyRentalsHeaderButton
                 label={props.myRentals.label}
                 badge={props.myRentals.badge}

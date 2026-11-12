@@ -241,7 +241,9 @@ export type SiteEventTypeV1 =
   | 'dedicated_ui.applicant_accepted'
   | 'dedicated_ui.applicant_declined'
   | 'delivery_confirm_opened'
-  | 'delivery_confirm_action';
+  | 'delivery_confirm_action'
+  | 'rentals_client_tab_tap'
+  | 'rentals_client_tab_browse_tap';
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

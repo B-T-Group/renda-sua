@@ -64,7 +64,8 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   const { auth } = useStore();
   const myRentals = useSearchFirstMyRentals(
     flags.rentals_my_rentals_entry_enabled,
-    auth.isAuthenticated
+    auth.isAuthenticated,
+    flags.rentals_client_tab_enabled
   );
   const { selectedMarket } = useMarket();
   const geo = useRentalCatalogGeoParams();

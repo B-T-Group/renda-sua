@@ -115,6 +115,8 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
+    minWidth: 0,
     borderRadius: borderRadius.input,
     borderWidth: 1.5,
     paddingHorizontal: spacing.md,
@@ -125,12 +127,16 @@ const styles = StyleSheet.create({
     marginRight: spacing.xs,
   },
   input: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     ...typography.body,
     paddingVertical: 0,
     includeFontPadding: false,
   },
   clearButton: {
+    flexShrink: 0,
     marginLeft: spacing.xs,
     padding: 2,
   },
