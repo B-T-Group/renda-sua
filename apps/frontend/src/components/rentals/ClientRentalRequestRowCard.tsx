@@ -1,4 +1,4 @@
-import { CalendarMonth, LocationOn, OpenInNew } from '@mui/icons-material';
+import { CalendarMonth, LocationOn } from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -19,6 +19,7 @@ import {
   proposedContractDeadlineIso,
 } from '../../utils/rentalRequestDisplay';
 import { resolveRentalPhase } from '../../utils/rentalPhase';
+import { clientRequestPeriodLines } from '../../utils/rentalRequestFormat';
 
 function phaseChipColor(
   phase: string
@@ -36,6 +37,25 @@ function phaseChipColor(
     default:
       return 'default';
   }
+}
+
+function RequestedPeriodLines({ lines, emptyLabel }: { lines: string[]; emptyLabel: string }) {
+  if (!lines.length) {
+    return (
+      <Typography variant="body2" fontWeight={500}>
+        {emptyLabel}
+      </Typography>
+    );
+  }
+  return (
+    <>
+      {lines.map((line, index) => (
+        <Typography key={`${index}-${line}`} variant="body2" fontWeight={500} display="block">
+          {line}
+        </Typography>
+      ))}
+    </>
+  );
 }
 
 export function isProposedContractOpen(row: ClientRentalRequestRow): boolean {
@@ -65,7 +85,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   onViewListing,
   onViewBooking,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const listing = row.rental_location_listing;
   const itemName = listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental');
@@ -84,9 +104,14 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   const reasonCode = row.unavailable_reason_code?.trim();
   const bookingId = row.rental_booking?.id;
   const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
+  const periodLines = clientRequestPeriodLines(selectionWindows, i18n.language, (count) =>
+    t('rentals.clientRequests.periodDayCount', {
+      count,
+      defaultValue: count === 1 ? '{{count}} day' : '{{count}} days',
+    })
+  );
 
   return (
-    <>
       <Paper
         elevation={0}
         sx={{
@@ -137,20 +162,10 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             <Typography variant="caption" color="text.secondary" display="block">
               {t('rentals.clientRequests.requestedPeriod', 'Requested period')}
             </Typography>
-            <Typography variant="body2" fontWeight={500}>
-              {selectionWindows.length
-                ? `${formatRentalRequestLocalDateTime(selectionWindows[0].start_at)} — ${formatRentalRequestLocalDateTime(selectionWindows[selectionWindows.length - 1].end_at)}`
-                : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
-            </Typography>
-            {selectionWindows.length ? (
-              <Box sx={{ mt: 0.25 }}>
-                {selectionWindows.map((window, index) => (
-                  <Typography key={`${window.start_at}-${window.end_at}-${index}`} variant="caption" color="text.secondary" display="block">
-                    {`${index + 1}. ${formatRentalRequestLocalDateTime(window.start_at)} — ${formatRentalRequestLocalDateTime(window.end_at)}`}
-                  </Typography>
-                ))}
-              </Box>
-            ) : null}
+            <RequestedPeriodLines
+              lines={periodLines}
+              emptyLabel={t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
+            />
           </Box>
         </Stack>
 
@@ -213,7 +228,6 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             <Button
               size="small"
               variant="outlined"
-              endIcon={<OpenInNew sx={{ fontSize: 16 }} />}
               onClick={() => onViewListing(listing.id)}
             >
               {t('rentals.clientRequests.viewListing', 'View listing')}
@@ -262,6 +276,5 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
         </Stack>
         </Stack>
       </Paper>
-    </>
   );
 };
