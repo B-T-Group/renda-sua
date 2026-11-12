@@ -1,0 +1,130 @@
+name: Deploy Mobile OTA (Development)
+
+# Manual publish of a DEV EAS Update for test phones on the development channel.
+# Does not run on push. The production workflow (deploy-mobile-ota.yml) is separate
+# and still publishes only from the prod branch to the production branch.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to publish
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+        default: all
+      message:
+        description: Optional note appended to the update message
+        type: string
+        required: false
+
+concurrency:
+  group: mobile-ota-dev
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+          cache-dependency-path: apps/mobile/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Check native dependencies vs store-binary baseline
+        # Fails if a native dependency was added after the last store build
+        # and is not guarded (see apps/mobile/native-deps-baseline.json).
+        run: node scripts/check-native-deps.js
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          working-directory: apps/mobile
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # MANUAL_ENV stays null (prod). These EXPO_PUBLIC_* values are what the
+      # bundle and app.config extra read for a dev publish. They are applied
+      # only after tests, so the test step still sees the prod default.
+      # Channel "development" exists and does not serve branch "production".
+      # This job publishes to branch "development". See .github/workflows/README.md.
+      - name: Select DEV bundle environment
+        run: |
+          {
+            echo "EXPO_PUBLIC_ENV=dev"
+            echo "EXPO_PUBLIC_API_URL=https://dev.api.rendasua.com/api"
+            echo "EXPO_PUBLIC_HASURA_URL=https://hasura-dev.rendasua.com/v1/graphql"
+            echo "EXPO_PUBLIC_AUTH0_DOMAIN=rendasua.ca.auth0.com"
+            echo "EXPO_PUBLIC_AUTH0_CLIENT_ID=KkXPODOPy753EuBeaFttZk148wyMkvJ4"
+            echo "EXPO_PUBLIC_AUTH0_AUDIENCE=https://rendasua.ca.auth0.com/api/v2/"
+          } >> "$GITHUB_ENV"
+
+      - name: Fail if exported config still points at prod
+        run: |
+          set -euo pipefail
+          npx expo config --type public > expo-public-config.json
+          if grep -q 'prod.api.rendasua.com' expo-public-config.json; then
+            echo "::error::Exported Expo config still points at prod.api.rendasua.com"
+            exit 1
+          fi
+          if grep -q 'rendasua-prod.ca.auth0.com' expo-public-config.json; then
+            echo "::error::Exported Expo config still points at the prod Auth0 tenant"
+            exit 1
+          fi
+          if ! grep -q 'dev.api.rendasua.com' expo-public-config.json; then
+            echo "::error::Exported Expo config is missing dev.api.rendasua.com"
+            exit 1
+          fi
+          if ! grep -q 'rendasua.ca.auth0.com' expo-public-config.json; then
+            echo "::error::Exported Expo config is missing the dev Auth0 tenant"
+            exit 1
+          fi
+          case "${EXPO_PUBLIC_ENV}" in
+            dev) ;;
+            *) echo "::error::EXPO_PUBLIC_ENV must be dev so getEnv() selects the dev preset"; exit 1 ;;
+          esac
+          case "${EXPO_PUBLIC_HASURA_URL}" in
+            https://hasura-dev.rendasua.com/v1/graphql) ;;
+            *) echo "::error::EXPO_PUBLIC_HASURA_URL must be the dev Hasura endpoint"; exit 1 ;;
+          esac
+
+      - name: Publish EAS Update (development)
+        env:
+          OTA_MESSAGE: ${{ github.event.inputs.message }}
+          OTA_PLATFORM: ${{ github.event.inputs.platform }}
+        run: |
+          set -euo pipefail
+          case "$OTA_PLATFORM" in
+            all|ios|android) ;;
+            *) echo "::error::Unsupported platform: $OTA_PLATFORM"; exit 1 ;;
+          esac
+          message="dev ${GITHUB_SHA}"
+          if [ -n "${OTA_MESSAGE}" ]; then
+            message="${message} ${OTA_MESSAGE}"
+          fi
+          eas update \
+            --branch development \
+            --platform "$OTA_PLATFORM" \
+            --non-interactive \
+            --json \
+            --message "$message" \
+            > update-result.json
+          node "${GITHUB_WORKSPACE}/.github/scripts/summarize-eas-update.js" update-result.json

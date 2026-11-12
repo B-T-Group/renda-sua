@@ -108,6 +108,44 @@ This prevents "deployment already in progress" errors and ensures safe, sequenti
 - **Production:** Only one production Hasura apply runs at a time. New applies queue until current one finishes (`cancel-in-progress: false`).
 - Separate concurrency groups for dev/prod environments.
 
+### 5. Deploy Mobile OTA to development (`deploy-mobile-ota-dev.yml`)
+
+**Trigger:** `workflow_dispatch` only (no push). Runs on the ref you select, usually `main`.
+**Purpose:** Publish an EAS Update for test phones that use the development build, without touching production OTAs.
+
+**Inputs:**
+
+- `platform`: `all` (default), `ios`, or `android`
+- `message`: optional note appended to the update message
+
+**Channel → branch:** The `development` build profile in `apps/mobile/eas.json` sets channel `development`. That channel exists on the Expo project and does not serve the `production` branch (the production channel returns `branchname="production"`; `development` returns no update). EAS links a channel to the same-named branch unless it was edited, and `package.json` `update:publish:dev` already publishes to branch `development`. This workflow publishes with `eas update --branch development`.
+
+**Process:**
+
+1. Checkout the dispatched ref
+2. Node 22, `yarn install --frozen-lockfile`, native-deps check, `yarn test`
+3. `expo/expo-github-action@v8` with `secrets.EXPO_TOKEN`
+4. Export the DEV bundle environment (below) and fail if `npx expo config --type public` still contains prod API or prod Auth0 URLs
+5. `eas update --branch development --platform <platform> --non-interactive`
+6. Print the update group ID, runtime version, and branch in the job summary
+
+**Bundle environment** (`MANUAL_ENV` stays `null`, so prod OTAs stay prod):
+
+| Variable | Value | Why |
+| --- | --- | --- |
+| `EXPO_PUBLIC_ENV` | `dev` | `getEnv()` env switch. Selects the dev preset (API, Hasura, Auth0, Stripe test key) when Developer Options has no persisted choice. `yarn dev` / `yarn prod` already set this variable. |
+| `EXPO_PUBLIC_API_URL` | `https://dev.api.rendasua.com/api` | Overrides the API in `getEnv()` and in `app.config.ts` `extra.apiUrl`. |
+| `EXPO_PUBLIC_HASURA_URL` | `https://hasura-dev.rendasua.com/v1/graphql` | Overrides Hasura in `getEnv()`. Not part of the Expo public config. |
+| `EXPO_PUBLIC_AUTH0_DOMAIN` | `rendasua.ca.auth0.com` | Dev Auth0 tenant. Overrides `getEnv()` and `app.config.ts` `extra.auth0Domain`. |
+| `EXPO_PUBLIC_AUTH0_CLIENT_ID` | `KkXPODOPy753EuBeaFttZk148wyMkvJ4` | Dev Auth0 client. |
+| `EXPO_PUBLIC_AUTH0_AUDIENCE` | `https://rendasua.ca.auth0.com/api/v2/` | Dev Auth0 audience. |
+
+A persisted Developer Options choice still selects the env name. The three endpoint overrides above stay on DEV for this publish, so a phone left on prod does not keep the prod API, Hasura, or Auth0 tenant.
+
+**Concurrency:** `mobile-ota-dev`, `cancel-in-progress: true`. Separate from `mobile-ota-prod`.
+
+Production OTAs stay on `deploy-mobile-ota.yml` (push to `prod` only, branch `production`). This workflow does not modify that file.
+
 ## Required Secrets
 
 The following secrets must be configured in your GitHub repository:
@@ -122,6 +160,10 @@ The following secrets must be configured in your GitHub repository:
 - `HASURA_GRAPHQL_ADMIN_SECRET`: Hasura admin secret
 - `AWS_ACCESS_KEY_ID`: AWS access key for backend
 - `AWS_SECRET_ACCESS_KEY`: AWS secret key for backend
+
+### Mobile OTA
+
+- `EXPO_TOKEN`: Expo access token used by `deploy-mobile-ota.yml` and `deploy-mobile-ota-dev.yml`
 
 ## Environment Variables
 
