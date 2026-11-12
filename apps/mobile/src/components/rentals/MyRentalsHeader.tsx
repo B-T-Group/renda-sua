@@ -33,7 +33,15 @@ export function MyRentalsHeader({
       ) : null}
       <Text
         numberOfLines={1}
-        style={[typography.h6, { color: colors.text.primary, fontFamily: fontFamily.semibold, flex: 1 }]}
+        style={[
+          typography.h6,
+          {
+            color: colors.text.primary,
+            fontFamily: fontFamily.semibold,
+            fontWeight: 'normal',
+            flex: 1,
+          },
+        ]}
       >
         {title}
       </Text>

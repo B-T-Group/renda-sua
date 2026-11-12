@@ -499,15 +499,15 @@ export default function ClientMyRentalsScreen({
             <View style={styles.empty}>
               {asTab && hubSegment === 'upcoming' ? <UpcomingMark /> : null}
               <Text
-                style={[
-                  typography.body2,
-                  {
-                    color: asTab && hubSegment === 'upcoming' ? colors.text.primary : colors.text.secondary,
-                    textAlign: 'center',
-                    fontFamily: asTab && hubSegment === 'upcoming' ? fontFamily.bold : undefined,
-                    marginTop: asTab && hubSegment === 'upcoming' ? spacing.md : 0,
-                  },
-                ]}
+                style={{
+                  fontFamily:
+                    asTab && hubSegment === 'upcoming' ? fontFamily.bold : fontFamily.regular,
+                  fontSize: 14,
+                  lineHeight: 20,
+                  color: asTab && hubSegment === 'upcoming' ? colors.text.primary : colors.text.secondary,
+                  textAlign: 'center',
+                  marginTop: asTab && hubSegment === 'upcoming' ? spacing.md : 0,
+                }}
               >
                 {hubSegment === 'action_needed'
                   ? t(
@@ -515,15 +515,19 @@ export default function ClientMyRentalsScreen({
                       'Nothing needs your attention right now.'
                     )
                   : hubSegment === 'upcoming'
-                    ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals.')
+                    ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals')
                     : t('rentals.hub.emptyPast', 'No past rentals yet.')}
               </Text>
               {asTab && hubSegment === 'upcoming' ? (
                 <Text
-                  style={[
-                    typography.body2,
-                    { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.xs },
-                  ]}
+                  style={{
+                    fontFamily: fontFamily.regular,
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: colors.text.secondary,
+                    textAlign: 'center',
+                    marginTop: spacing.xs,
+                  }}
                 >
                   {t('rentals.hub.emptyUpcomingHint', 'Request a rental and it will show up here.')}
                 </Text>
@@ -531,6 +535,7 @@ export default function ClientMyRentalsScreen({
               <Button
                 mode={asTab ? 'contained' : 'contained-tonal'}
                 style={{ marginTop: spacing.md }}
+                labelStyle={{ fontFamily: fontFamily.semibold, fontWeight: 'normal' }}
                 onPress={() => openRentalsLane('empty_cta')}
               >
                 {t('rentals.clientRequests.browseRentals', 'Browse rentals')}

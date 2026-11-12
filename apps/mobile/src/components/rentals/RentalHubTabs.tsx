@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { fontFamily } from '../../theme/fonts';
 import type { RentalHubGroup } from '../../utils/rentals';
 
 export interface RentalHubTab {
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 4,
   },
-  label: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  label: { fontFamily: fontFamily.semibold, fontSize: 13, textAlign: 'center' },
   badge: { minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  badgeText: { color: '#fff', fontFamily: fontFamily.bold, fontSize: 11 },
 });
