@@ -26,7 +26,6 @@ import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import type { RentalBookingDetail } from '../../types/rentals';
 import {
-  formatRentalMoney,
   parseRentalSelectionWindows,
   rentalBookingStatusColors,
   resolveBookingPhase,
@@ -361,13 +360,13 @@ export default function BusinessRentalBookingDetailScreen() {
           ))}
         </View>
         <Text style={{ color: colors.text.primary, marginTop: 8, fontWeight: '600' }}>
-          {formatRentalMoney(booking.total_amount, booking.currency)}
+          {formatRequestAmount(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
         </Text>
         {depositAmount > 0 ? (
           <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
             {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
             {': '}
-            {formatRentalMoney(depositAmount, booking.currency)}
+            {formatRequestAmount(depositAmount, booking.currency, i18n.language)}
           </Text>
         ) : null}
         {authorizedAmount > 0 ? (
@@ -375,7 +374,7 @@ export default function BusinessRentalBookingDetailScreen() {
             {t(
               'business.rentals.authorizedAmount',
               'Held on client card: {{amount}}',
-              { amount: formatRentalMoney(authorizedAmount, booking.currency) }
+              { amount: formatRequestAmount(authorizedAmount, booking.currency, i18n.language) }
             )}
           </Text>
         ) : null}

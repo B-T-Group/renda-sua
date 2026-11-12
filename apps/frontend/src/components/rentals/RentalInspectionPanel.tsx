@@ -512,6 +512,13 @@ export function RentalInspectionPanel({
             }}
           >
             <Stack spacing={1} sx={{ maxWidth: 720, mx: 'auto' }}>
+              {stage === 'pickup' && !damaged && (booking.accept_start_preview?.amount_due_at_pickup ?? 0) > 0 ? (
+                <Typography textAlign="center">
+                  {t('rentalInspection.payNow', "You'll pay {{amount}} now", {
+                    amount: fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF'),
+                  })}
+                </Typography>
+              ) : null}
               <Button
                 fullWidth
                 variant="contained"
@@ -533,13 +540,6 @@ export function RentalInspectionPanel({
                     ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
                     : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
               </Button>
-              {stage === 'pickup' && !damaged && (booking.accept_start_preview?.amount_due_at_pickup ?? 0) > 0 ? (
-                <Typography textAlign="center">
-                  {t('rentalInspection.payNow', "You'll pay {{amount}} now", {
-                    amount: fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF'),
-                  })}
-                </Typography>
-              ) : null}
               <Button fullWidth variant="outlined" color="error" sx={{ minHeight: 48 }} onClick={() => setPanel(damaged ? 'dispute' : 'correction')}>
                 {damaged
                   ? t('rentalInspection.disputeClaim', 'Dispute this claim')

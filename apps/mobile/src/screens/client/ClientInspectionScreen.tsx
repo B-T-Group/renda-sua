@@ -279,6 +279,13 @@ export default function ClientInspectionScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm, gap: spacing.sm, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }]}>
         {panel === 'review' ? (
           <>
+            {pickupStart && amountDue > 0 ? (
+              <View style={[styles.payLine, { backgroundColor: colors.infoTint, borderRadius: borderRadius.md }]}>
+                <Text style={{ color: colors.text.primary, textAlign: 'center' }}>
+                  {t('rentalInspection.payNow', "You'll pay {{amount}} now", { amount: amountLabel })}
+                </Text>
+              </View>
+            ) : null}
             <Button
               mode="contained"
               buttonColor={colors.primary.main}
@@ -294,13 +301,6 @@ export default function ClientInspectionScreen() {
                   ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
                   : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
             </Button>
-            {pickupStart && amountDue > 0 ? (
-              <View style={[styles.payLine, { backgroundColor: colors.infoTint, borderRadius: borderRadius.md }]}>
-                <Text style={{ color: colors.text.primary, textAlign: 'center' }}>
-                  {t('rentalInspection.payNow', "You'll pay {{amount}} now", { amount: amountLabel })}
-                </Text>
-              </View>
-            ) : null}
             <Button mode="outlined" textColor={colors.error.main} style={styles.action} onPress={() => setPanel(damaged ? 'dispute' : 'correction')}>
               {damaged
                 ? t('rentalInspection.disputeClaim', 'Dispute this claim')

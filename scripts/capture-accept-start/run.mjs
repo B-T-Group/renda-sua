@@ -202,37 +202,57 @@ async function openSheet(page, text) {
   return true;
 }
 
+const only = process.argv.slice(2);
+function selected(file) {
+  if (only.length === 0) return true;
+  const stem = file.replace(/\.png$/, '');
+  return only.includes(stem);
+}
+
 for (const surface of ['web', 'mobile']) {
   for (const [lang, width, suffix] of variants) {
     const text = strings(surface, lang);
     const tag = `${surface}-${suffix}`;
     try {
+    if (selected(`01-review-${tag}.png`)) {
     const review = await open(surface, 'review', lang, width);
     const ready = await enableAccept(review, text);
     if (!ready) await review.screenshot({ path: path.join(artifacts, `debug-01-review-${tag}.png`), fullPage: true });
     await save(review, `01-review-${tag}.png`);
+    }
 
+    if (selected(`02-sheet-${tag}.png`)) {
     const sheet = await open(surface, 'review', lang, width);
     const opened = await openSheet(sheet, text);
     if (!opened) await sheet.screenshot({ path: path.join(artifacts, `debug-02-sheet-${tag}.png`), fullPage: true });
     await save(sheet, `02-sheet-${tag}.png`);
+    }
 
+    if (selected(`03-started-${tag}.png`)) {
     const started = await open(surface, 'started', lang, width);
     await started.getByText(text.started).first().waitFor({ timeout: 15000 });
     await save(started, `03-started-${tag}.png`);
+    }
 
+    if (selected(`04a-waiting-${tag}.png`)) {
     const waiting = await open(surface, 'waiting', lang, width);
     await waiting.getByText(text.waiting).first().waitFor({ timeout: 15000 });
     await save(waiting, `04a-waiting-${tag}.png`);
+    }
 
+    if (selected(`04b-started-${tag}.png`)) {
     const handed = await open(surface, 'handed', lang, width);
     await handed.getByText(text.handed).first().waitFor({ timeout: 15000 });
     await save(handed, `04b-started-${tag}.png`);
+    }
 
+    if (selected(`legacy-pin-${tag}.png`)) {
     const legacy = await open(surface, 'legacy', lang, width);
     await legacy.getByText(text.pin).first().waitFor({ timeout: 15000 });
     await save(legacy, `legacy-pin-${tag}.png`);
+    }
 
+    if (selected(`momo-fail-${tag}.png`)) {
     const momo = await open(surface, 'momo', lang, width);
     const momoReady = await openSheet(momo, text);
     if (momoReady) {
@@ -241,7 +261,9 @@ for (const surface of ['web', 'mobile']) {
       await momo.getByText(text.fail).first().waitFor({ timeout: 15000 });
     }
     await save(momo, `momo-fail-${tag}.png`);
+    }
 
+    if (selected(`momo-retry-${tag}.png`)) {
     const retry = await open(surface, 'momo', lang, width);
     const retryReady = await openSheet(retry, text);
     if (retryReady) {
@@ -251,6 +273,7 @@ for (const surface of ['web', 'mobile']) {
       await retry.getByText(text.waitingPhone).first().waitFor({ timeout: 15000 });
     }
     await save(retry, `momo-retry-${tag}.png`);
+    }
     console.log('done', tag);
     } catch (error) {
       console.log('FAIL', tag, error instanceof Error ? error.message.split('\n')[0] : error);
