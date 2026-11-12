@@ -123,12 +123,21 @@ export function ClientRentalRequestRow({
             {itemName}
           </Text>
           {subtitle ? (
-            <Text style={[typography.caption, { color: colors.text.secondary }]}>{subtitle}</Text>
+            <Text style={[typography.caption, { color: colors.text.secondary, fontFamily: fontFamily.medium }]}>
+              {subtitle}
+            </Text>
           ) : null}
           {place ? (
             <View style={styles.metaRow}>
               <MaterialCommunityIcons name="map-marker-outline" size={14} color={colors.text.secondary} />
-              <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 4, flex: 1 }]}>{place}</Text>
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.text.secondary, marginLeft: 4, flex: 1, fontFamily: fontFamily.medium },
+                ]}
+              >
+                {place}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -151,7 +160,14 @@ export function ClientRentalRequestRow({
         </Text>
       </View>
       {amount ? (
-        <Text style={[typography.body2, { color: colors.text.primary, marginTop: 2, marginLeft: 22 }]}>{amount}</Text>
+        <Text
+          style={[
+            typography.body2,
+            { color: colors.text.primary, marginTop: 2, marginLeft: 22, fontFamily: fontFamily.regular },
+          ]}
+        >
+          {amount}
+        </Text>
       ) : null}
 
       {row.status === 'available' && deadlineIso ? (
@@ -181,40 +197,59 @@ export function ClientRentalRequestRow({
             disabled={modifyState === 'closed'}
             onPress={() => onModify?.(row.id)}
             style={styles.modify}
+            labelStyle={styles.buttonLabel}
           >
             {t('rentals.modify.action', 'Modify')}
           </Button>
         ) : null}
         {row.status === 'pending' ? (
           <Pressable onPress={() => onCancel(row.id)} disabled={cancelling} style={styles.cancel}>
-            <Text style={{ color: colors.error.main, fontWeight: '700' }}>
+            <Text style={{ color: colors.error.main, fontFamily: fontFamily.bold, fontWeight: '700' }}>
               {t('rentals.clientRequests.cancelRequest', 'Cancel request')}
             </Text>
           </Pressable>
         ) : null}
         {row.status === 'available' ? (
           <Pressable onPress={() => onCancel(row.id)} disabled={cancelling} style={styles.cancel}>
-            <Text style={{ color: colors.error.main, fontWeight: '700' }}>{t('rentals.modify.cancel', 'Cancel')}</Text>
+            <Text style={{ color: colors.error.main, fontFamily: fontFamily.bold, fontWeight: '700' }}>
+              {t('rentals.modify.cancel', 'Cancel')}
+            </Text>
           </Pressable>
         ) : null}
         {row.status === 'available' && bookingId ? (
-          <Button mode="outlined" icon="message-outline" onPress={() => onContact?.(bookingId)}>
+          <Button
+            mode="outlined"
+            icon="message-outline"
+            onPress={() => onContact?.(bookingId)}
+            labelStyle={styles.buttonLabel}
+          >
             {t('rentals.modify.contact', 'Contact')}
           </Button>
         ) : null}
         {canBookNow ? (
-          <Button mode="contained" loading={bookingLoading} disabled={bookingLoading} onPress={() => onBookRequest(row.id)}>
+          <Button
+            mode="contained"
+            loading={bookingLoading}
+            disabled={bookingLoading}
+            onPress={() => onBookRequest(row.id)}
+            labelStyle={styles.buttonLabel}
+          >
             {t('rentals.bookNow', 'Book now')}
           </Button>
         ) : null}
         {row.status === 'booked' && bookingId ? (
-          <Button mode="contained" onPress={() => onViewBooking(bookingId)}>
+          <Button mode="contained" onPress={() => onViewBooking(bookingId)} labelStyle={styles.buttonLabel}>
             {t('rentals.actions.openBooking', 'Open booking')}
           </Button>
         ) : null}
       </View>
       {modifyState === 'closed' ? (
-        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
+        <Text
+          style={[
+            typography.caption,
+            { color: colors.text.secondary, marginTop: spacing.xs, fontFamily: fontFamily.medium },
+          ]}
+        >
           {t('rentals.modify.windowClosed', 'Changes close 2 hours before the rental starts.')}
         </Text>
       ) : null}
@@ -256,4 +291,5 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   modify: { flexGrow: 1 },
   cancel: { paddingHorizontal: 8, paddingVertical: 10 },
+  buttonLabel: { fontFamily: fontFamily.semibold, fontWeight: '600' },
 });

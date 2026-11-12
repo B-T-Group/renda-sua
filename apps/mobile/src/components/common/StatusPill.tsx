@@ -1,6 +1,7 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Text } from 'react-native-paper';
+import { fontFamily } from '../../theme/fonts';
 
 export interface StatusPillProps {
   label: string;
@@ -76,6 +77,7 @@ const styles = StyleSheet.create({
   compact: { paddingHorizontal: 10, paddingVertical: 3 },
   icon: { marginRight: 4 },
   label: {
+    fontFamily: fontFamily.semibold,
     fontWeight: '600',
     includeFontPadding: false,
     textAlignVertical: 'center',
