@@ -181,6 +181,8 @@ export const SITE_EVENT_TYPES_V1 = [
   // Rentals landing My rentals entry (mobile)
   'rentals_my_rentals_entry_tap',
   'next_rental_card_impression',
+  'rentals_client_tab_tap',
+  'rentals_client_tab_browse_tap',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event

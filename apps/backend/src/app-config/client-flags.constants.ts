@@ -16,6 +16,7 @@ export const CLIENT_FLAG_KEYS = [
   'rentals_search_first_enabled',
   'rentals_modify_request_enabled',
   'rentals_my_rentals_entry_enabled',
+  'rentals_client_tab_enabled',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -56,4 +57,6 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_modify_request_enabled: false,
   /** My rentals header and Next rental card on the search-first landing. Off until a row turns it on. */
   rentals_my_rentals_entry_enabled: false,
+  /** Client Rentals tab. Off until a country or global row turns it on. No NODE_ENV override. */
+  rentals_client_tab_enabled: false,
 };
