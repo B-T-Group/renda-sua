@@ -178,6 +178,9 @@ export const SITE_EVENT_TYPES_V1 = [
   // MoMo Delivered → client Complete deep link (P6) — web + mobile
   'delivery_confirm_opened',
   'delivery_confirm_action',
+  // Rentals landing My rentals entry (mobile)
+  'rentals_my_rentals_entry_tap',
+  'next_rental_card_impression',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event

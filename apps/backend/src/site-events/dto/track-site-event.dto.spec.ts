@@ -63,6 +63,16 @@ describe('TrackSiteEventDto', () => {
     expect(errors[0].constraints?.isIn).toBeDefined();
   });
 
+  it('accepts the rentals My rentals entry events', async () => {
+    for (const eventType of ['rentals_my_rentals_entry_tap', 'next_rental_card_impression']) {
+      const dto = new TrackSiteEventDto();
+      dto.eventType = eventType as any;
+      dto.metadata = { source: 'header_icon' };
+      expect(await validate(dto)).toHaveLength(0);
+      expect(SITE_EVENT_TYPES_V1 as readonly string[]).toContain(eventType);
+    }
+  });
+
   it('counts assistant public event types correctly', () => {
     const assistantEvents = [...SITE_EVENT_TYPES_V1].filter((type) =>
       type.startsWith('assistant.')

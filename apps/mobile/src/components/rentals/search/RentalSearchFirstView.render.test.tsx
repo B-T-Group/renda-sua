@@ -483,4 +483,88 @@ describe('search-first rentals', () => {
     });
     expect(view.getByText("2 résultats · les dates libres d'abord")).toBeTruthy();
   });
+
+  it('shows the My rentals caption, badge, and next card', async () => {
+    const onPress = jest.fn();
+    const onOpen = jest.fn();
+    const onDismiss = jest.fn();
+    const view = await renderSearch({
+      myRentals: {
+        label: 'My rentals',
+        badge: '3',
+        accessibilityLabel: 'My rentals, 3 to do',
+        onPress,
+        next: {
+          name: 'Echafaudage roulant 4 m',
+          period: 'Sat 14 Nov · 2 days',
+          statusLabel: 'Accepted',
+          imageUrl: null,
+          onOpen,
+          onDismiss,
+        },
+      },
+    });
+    const caption = view.getByText('My rentals');
+    expect(caption.props.numberOfLines).toBe(1);
+    expect(view.getByText('3')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-my-rentals-entry'));
+    });
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(view.getByTestId('rental-next-card')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-next-card-dismiss'));
+    });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('caps the badge at 9+', async () => {
+    const withBadge = await renderSearch({
+      myRentals: {
+        label: 'My rentals',
+        badge: '9+',
+        accessibilityLabel: 'My rentals, 12 to do',
+        onPress: jest.fn(),
+        next: null,
+      },
+    });
+    expect(withBadge.getByText('9+')).toBeTruthy();
+  });
+
+  it('hides the badge at zero', async () => {
+    const clear = await renderSearch({
+      myRentals: {
+        label: 'My rentals',
+        badge: null,
+        accessibilityLabel: 'My rentals',
+        onPress: jest.fn(),
+        next: null,
+      },
+    });
+    expect(clear.queryByTestId('rental-my-rentals-badge')).toBeNull();
+    expect(clear.getByText('My rentals').props.numberOfLines).toBe(1);
+  });
+
+  it('keeps the French caption on one line', async () => {
+    await i18n.changeLanguage('fr');
+    const view = await renderSearch({
+      myRentals: {
+        label: 'Mes locations',
+        badge: '2',
+        accessibilityLabel: 'Mes locations, 2 à faire',
+        onPress: jest.fn(),
+        next: {
+          name: 'Echafaudage roulant 4 m',
+          period: 'sam. 14 nov. · 2 jours',
+          statusLabel: 'Acceptée',
+          imageUrl: null,
+          onOpen: jest.fn(),
+          onDismiss: jest.fn(),
+        },
+      },
+    });
+    expect(view.getByText('Mes locations').props.numberOfLines).toBe(1);
+    expect(view.getByText('Prochaine location')).toBeTruthy();
+  });
 });

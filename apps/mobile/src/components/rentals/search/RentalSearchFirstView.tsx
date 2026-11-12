@@ -5,6 +5,8 @@ import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { rentalCategoryIcon, rentalCategoryLabel } from '../../../utils/rentals/rentalCategoryIcon';
 import { formatRangeDates, type RentalDateRange } from '../../../utils/rentals/rentalSearchDates';
+import { MyRentalsHeaderButton } from './MyRentalsHeaderButton';
+import { NextRentalCard } from './NextRentalCard';
 import { RentalSearchDateSheet } from './RentalSearchDateSheet';
 import { RentalSearchResultCard, type RentalSearchCardModel } from './RentalSearchResultCard';
 
@@ -67,6 +69,20 @@ export interface RentalSearchFirstViewProps {
   bottomInset: number;
   topInset?: number;
   timeZone?: string;
+  myRentals?: {
+    label: string;
+    badge: string | null;
+    accessibilityLabel: string;
+    onPress: () => void;
+    next: {
+      name: string;
+      period: string;
+      statusLabel: string;
+      imageUrl?: string | null;
+      onOpen: () => void;
+      onDismiss: () => void;
+    } | null;
+  };
 }
 
 export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
@@ -100,17 +116,29 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
         }}
       >
         <View style={styles.header}>
-          {props.mode === 'landing' ? <View style={styles.backSpacer} /> : (
-            <Pressable onPress={props.onBack} accessibilityRole="button" testID="rental-search-back">
-              <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
-            </Pressable>
-          )}
-          <Text variant="titleLarge" style={{ color: colors.text.primary, fontWeight: '700' }}>{title}</Text>
-          <View style={styles.backSpacer} />
+          <View style={[styles.headerSide, props.myRentals ? styles.headerSideEntry : null]}>
+            {props.mode === 'landing' ? null : (
+              <Pressable onPress={props.onBack} accessibilityRole="button" testID="rental-search-back" style={styles.backHit}>
+                <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
+              </Pressable>
+            )}
+          </View>
+          <Text variant="titleLarge" style={[styles.headerTitle, { color: colors.text.primary }]}>{title}</Text>
+          <View style={[styles.headerSide, styles.headerSideEnd, props.myRentals ? styles.headerSideEntry : null]}>
+            {props.myRentals ? (
+              <MyRentalsHeaderButton
+                label={props.myRentals.label}
+                badge={props.myRentals.badge}
+                accessibilityLabel={props.myRentals.accessibilityLabel}
+                onPress={props.myRentals.onPress}
+              />
+            ) : null}
+          </View>
         </View>
         {props.mode === 'landing' ? (
           <Text style={{ color: colors.text.secondary, marginBottom: spacing.sm }}>{marketLabel}</Text>
         ) : null}
+        {props.myRentals?.next ? <NextRentalCard {...props.myRentals.next} /> : null}
         <View style={[styles.search, { borderColor: props.mode === 'typing' ? colors.primary.main : colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.lg }]}>
           <MaterialCommunityIcons name="magnify" size={22} color={colors.text.secondary} />
           <TextInput
@@ -393,8 +421,12 @@ function ResultList(props: RentalSearchFirstViewProps) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  backSpacer: { width: 24 },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  headerSide: { width: 24, minHeight: 24, justifyContent: 'center' },
+  headerSideEntry: { width: 88 },
+  headerSideEnd: { alignItems: 'flex-end' },
+  headerTitle: { flex: 1, textAlign: 'center', fontWeight: '700' },
+  backHit: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
   search: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, paddingHorizontal: 12, minHeight: 48, gap: 8 },
   input: { flex: 1, fontSize: 16, paddingVertical: 10 },
   dateRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, padding: 12, gap: 10 },

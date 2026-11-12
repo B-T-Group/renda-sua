@@ -183,6 +183,7 @@ export interface ClientRentalBookingRow {
   currency: string;
   contract_expires_at?: string | null;
   created_at?: string;
+  updated_at?: string | null;
   rental_request_id?: string;
   rental_pricing_snapshot?: unknown;
   payment_timing?: RentalPaymentTiming | string | null;
@@ -193,7 +194,7 @@ export interface ClientRentalBookingRow {
     rental_item?: {
       name: string;
       currency?: string;
-      rental_item_images?: Array<{ id: string; image_url: string }>;
+      rental_item_images?: Array<{ id: string; image_url: string; display_url?: string | null }>;
     } | null;
   } | null;
 }

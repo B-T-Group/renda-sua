@@ -91,6 +91,12 @@ export default function ClientMyRentalsScreen() {
     navigation.setParams({ notice: undefined });
   }, [navigation, route.params?.notice, t]);
 
+  useEffect(() => {
+    const segment = route.params?.segment;
+    if (segment !== 'action_needed' && segment !== 'upcoming' && segment !== 'past') return;
+    setHubSegment(segment);
+  }, [route.params?.segment]);
+
   const {
     requests,
     loading: requestsLoading,

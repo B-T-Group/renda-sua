@@ -68,6 +68,7 @@ import { EnrollPersonaExplainScreen } from '../screens/shared/enroll/EnrollPerso
 import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersonaSetupScreen';
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
 import { useStore } from '../stores/RootStore';
+import { useResumePendingMyRentals } from '../hooks/useMyRentalsLandingEntry';
 import { usePersonaAttentionBadge } from '../hooks/usePersonaAttentionBadge';
 import { useAppIconBadge } from '../hooks/useAppIconBadge';
 import useCheckNotificationPermissionOnStart from '../hooks/useCheckNotificationPermissionOnStart';
@@ -121,6 +122,7 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
   );
   useAppIconBadge(appIconBadgeCount);
   useCheckNotificationPermissionOnStart();
+  useResumePendingMyRentals(persona.activePersona === 'client');
 
   useEffect(() => {
     if (persona.activePersona !== 'client') return;

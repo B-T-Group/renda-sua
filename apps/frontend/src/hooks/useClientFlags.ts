@@ -16,7 +16,8 @@ export type ClientFlagKey =
   | 'restock_alerts_v1'
   | 'discovery_sort_v1'
   | 'agent_contract_required'
-  | 'rentals_search_first_enabled';
+  | 'rentals_search_first_enabled'
+  | 'rentals_my_rentals_entry_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -36,6 +37,8 @@ const DEFAULT_FLAGS: ClientFlags = {
   discovery_sort_v1: false,
   agent_contract_required: true,
   rentals_search_first_enabled: false,
+  /** My rentals header on the mobile search-first landing. Off until a config row turns it on. */
+  rentals_my_rentals_entry_enabled: false,
 };
 
 /**
