@@ -1,7 +1,6 @@
 -- Renter report that an inspected item was not handed over.
 -- One row per booking. It does not change status, payment, or inspection resolution.
--- The flag inserts false. Dev Hasura apply turns that global row on.
--- Production apply does not.
+-- The flag inserts false. Dev is turned on by hand. Production stays off.
 
 CREATE TABLE IF NOT EXISTS public.rental_not_received_reports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

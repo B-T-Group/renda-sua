@@ -25,12 +25,8 @@ describe('rentals not-received report flag', () => {
     expect(down).toContain('DROP TABLE IF EXISTS public.rental_not_received_reports');
   });
 
-  it('turns the flag on only during the dev Hasura apply', () => {
-    const marker = 'if [[ "${ENV_TITLE}" == "dev" ]]; then';
-    const block = action.slice(action.indexOf(marker));
-    expect(block.startsWith(marker)).toBe(true);
-    expect(block).toContain('rentals_not_received_report_enabled');
-    expect(action.slice(0, action.indexOf(marker))).not.toContain('rentals_not_received_report_enabled');
+  it('does not turn the flag on from Hasura apply', () => {
+    expect(action).not.toContain('rentals_not_received_report_enabled');
   });
 
   it('defaults false with no environment override', () => {
