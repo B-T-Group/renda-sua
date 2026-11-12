@@ -5,14 +5,15 @@ import { authorizationParamsWithActivePersona } from '../utils/activePersonaStor
  * Silent refreshes must re-send the stored persona, otherwise the Auth0
  * action falls back to a default role and Hasura queries run with the
  * wrong permissions until the user logs out and back in.
+ * Delegation mode sends `active_persona: undefined` so it overwrites a
+ * persona captured on the Auth0 client at page load. Omitting the key
+ * leaves that persona on the refresh-token grant.
  */
 export function personaAuthorizationParams(): {
-  authorizationParams?: { active_persona: string };
+  authorizationParams: { active_persona?: string };
 } {
-  const params = authorizationParamsWithActivePersona();
-  return params.active_persona
-    ? { authorizationParams: { active_persona: params.active_persona } }
-    : {};
+  const { active_persona: activePersona } = authorizationParamsWithActivePersona();
+  return { authorizationParams: { active_persona: activePersona } };
 }
 
 export interface TokenRefreshService {

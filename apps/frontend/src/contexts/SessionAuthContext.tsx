@@ -253,9 +253,7 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
         if (options?.force || options?.persona !== undefined) {
           return await auth0.getAccessTokenSilently({
             cacheMode: 'off',
-            ...(persona
-              ? { authorizationParams: { active_persona: persona } }
-              : {}),
+            authorizationParams: { active_persona: persona },
           });
         }
         return await auth0.getAccessTokenSilently(personaAuthorizationParams());
