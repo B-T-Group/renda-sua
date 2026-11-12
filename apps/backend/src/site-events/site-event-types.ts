@@ -183,6 +183,7 @@ export const SITE_EVENT_TYPES_V1 = [
   'next_rental_card_impression',
   'rentals_client_tab_tap',
   'rentals_client_tab_browse_tap',
+  'rental_accept_and_start_tap',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event

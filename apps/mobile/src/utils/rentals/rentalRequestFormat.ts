@@ -229,6 +229,14 @@ function hourlyLine(row: PeriodWindow, locale: string): string {
   return `${dayNum(day)} ${month} · ${times}`;
 }
 
+/** Douala wall-clock components stored with a Z suffix: `12 Nov · 21:00`. */
+export function formatListingDue(iso: string, locale: string): string {
+  const day = iso.slice(0, 10);
+  const time = clock(iso);
+  if (!ISO_DATE.test(day) || !time) return iso;
+  return `${dayNum(day)} ${monthLabel(day, locale)} · ${time}`;
+}
+
 /** Booked calendar days. A same-clock end the next morning is the return, not another booked day. */
 function bookedDayKeys(row: PeriodWindow): string[] | null {
   if (row.billing === 'all_day' && row.calendar_date && ISO_DATE.test(row.calendar_date)) {

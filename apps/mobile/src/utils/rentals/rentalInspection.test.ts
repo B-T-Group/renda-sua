@@ -72,10 +72,13 @@ describe('enrolled pickup gate', () => {
     expect(waiting.showCollectPayment).toBe(false);
     expect(waiting.showOverwrite).toBe(false);
     const ready = pickupGate({ enrolled: true, status: 'reserved', submitted: true, accepted: true });
-    expect(ready.showCollectPayment).toBe(true);
-    expect(pickupGate({ enrolled: true, status: 'confirmed', submitted: true, accepted: true }).showOverwrite).toBe(
-      false
-    );
+    expect(ready.showCollectPayment).toBe(false);
+    expect(ready.showStart).toBe(false);
+    expect(pickupGate({ enrolled: true, status: 'confirmed', submitted: true, accepted: true })).toMatchObject({
+      showStart: false,
+      showOverwrite: false,
+      showCollectPayment: false,
+    });
   });
 
   it('asks the business to capture when nothing is submitted', () => {
@@ -113,6 +116,13 @@ describe('client review and money copy', () => {
       })
     ).toBe('review_return');
     expect(allUnitsReviewed(['a', 'b'], new Set(['a']))).toBe(false);
+    expect(
+      clientInspectionAction({
+        status: 'reserved',
+        pickup: view({ yourDecision: 'accept' }),
+        returnView: null,
+      })
+    ).toBe('review_pickup');
   });
 
   it('derives overtime from the server handback and keeps a support override read-only', () => {

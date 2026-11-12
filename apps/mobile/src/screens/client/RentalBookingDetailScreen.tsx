@@ -45,7 +45,7 @@ import {
   formatRentalPeriod,
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
-import { clientInspectionAction, pickupGate } from '../../utils/rentals/rentalInspection';
+import { clientInspectionAction, didntReceiveWindowOpen, pickupGate } from '../../utils/rentals/rentalInspection';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
@@ -415,7 +415,9 @@ export default function RentalBookingDetailScreen() {
                 }
               >
                 {reviewStage === 'pickup'
-                  ? t('rentalInspection.reviewTitle', 'Review item condition')
+                  ? snapshot.pickup?.yourDecision === 'accept'
+                    ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
+                    : t('rentalInspection.reviewTitle', 'Review item condition')
                   : t('rentalInspection.returnReview', 'Review the return against pickup photos')}
               </Button>
             ) : null}
@@ -475,6 +477,16 @@ export default function RentalBookingDetailScreen() {
               </Text>
             ) : null}
           </View>
+        ) : null}
+
+        {didntReceiveWindowOpen(booking.actual_start_at) ? (
+          <Button
+            mode="text"
+            textColor={colors.primary.main}
+            onPress={() => navigation.navigate('SupportTickets')}
+          >
+            {t('rentalInspection.didntReceive', "Didn't receive the item? Tell us")}
+          </Button>
         ) : null}
 
         <View
@@ -741,7 +753,9 @@ export default function RentalBookingDetailScreen() {
               }
             >
               {reviewStage === 'pickup'
-                ? t('rentalInspection.reviewTitle', 'Review item condition')
+                ? snapshot.pickup?.yourDecision === 'accept'
+                  ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
+                  : t('rentalInspection.reviewTitle', 'Review item condition')
                 : t('rentalInspection.returnReview', 'Review the return against pickup photos')}
             </Button>
           ) : (

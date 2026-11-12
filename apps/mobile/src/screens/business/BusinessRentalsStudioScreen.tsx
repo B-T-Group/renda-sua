@@ -565,7 +565,10 @@ export default function BusinessRentalsStudioScreen() {
                       })
                     }
                   >
-                    {primaryQueue === 'collect_pay'
+                    {item.rental_booking?.inspection_policy_version != null &&
+                    (primaryQueue === 'collect_pay' || primaryQueue === 'start')
+                      ? t('rentals.actions.openBooking', 'Open booking')
+                      : primaryQueue === 'collect_pay'
                       ? t('rentals.actions.collectPayment', 'Collect payment')
                       : primaryQueue === 'start'
                         ? t('rentals.actions.verifyStartPin', 'Verify start PIN')

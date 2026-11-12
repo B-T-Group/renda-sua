@@ -223,6 +223,7 @@ export interface BusinessRentalRequestRow {
     status: string;
     booking_number?: string | null;
     actual_start_at?: string | null;
+    inspection_policy_version?: number | null;
   } | null;
 }
 
@@ -321,6 +322,10 @@ export interface RentalBookingDetail {
   actual_end_at?: string | null;
   units_booked?: number | null;
   inspection_policy_version?: number | null;
+  accept_start_preview?: {
+    payment_rail: 'card' | 'wallet' | 'mobile_money';
+    amount_due_at_pickup: number;
+  } | null;
   return_handed_back_at?: string | null;
   return_resolution?: string | null;
   rental_pricing_snapshot?: unknown;
@@ -663,6 +668,24 @@ export function useRentalApi() {
     [api]
   );
 
+  const acceptAndStart = useCallback(
+    async (bookingId: string, versionId: string) => {
+      const { data } = await api.post(`/rentals/bookings/${bookingId}/accept-and-start`, {
+        versionId,
+      });
+      return data as {
+        success: true;
+        started: boolean;
+        alreadyStarted: boolean;
+        paymentPending: boolean;
+        payment_rail: 'card' | 'wallet' | 'mobile_money';
+        amount_due_at_pickup: number;
+        bookingId: string;
+      };
+    },
+    [api]
+  );
+
   const getStartPin = useCallback(
     async (bookingId: string) => {
       const { data } = await api.get(`/rentals/bookings/${bookingId}/start-pin`);
@@ -792,6 +815,7 @@ export function useRentalApi() {
     cancelClientRentalRequest,
     cancelBooking,
     initiatePickupPayment,
+    acceptAndStart,
     getStartPin,
     fetchBookingDetail,
     verifyStartPin,

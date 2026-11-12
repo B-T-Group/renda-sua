@@ -52,6 +52,14 @@ function clock(iso: string): string {
   return match ? `${match[1]}:${match[2]}` : '';
 }
 
+/** Douala wall-clock components stored with a Z suffix: `12 Nov · 21:00`. */
+export function formatListingDue(iso: string, locale: string): string {
+  const day = iso.slice(0, 10);
+  const time = clock(iso);
+  if (!ISO_DATE.test(day) || !time) return iso;
+  return `${dayNum(day)} ${monthLabel(day, locale)} · ${time}`;
+}
+
 function addUtcDays(iso: string, offset: number): string {
   const date = utcDate(iso);
   if (!date) return iso;

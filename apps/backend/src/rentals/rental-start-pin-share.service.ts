@@ -9,6 +9,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { isActivePersona } from '../users/persona.util';
+import { inspectionUpdateRequired } from './inspection/rental-inspection.errors';
 import type { DeliveryPinPayloadV1 } from '../messaging/structured/structured-message.types';
 import type { RentalBookingMessage } from './rental-booking-messaging.service';
 
@@ -23,6 +24,7 @@ type BookingRow = {
   status: string;
   client_id: string;
   business_id: string;
+  inspection_policy_version?: number | null;
   rental_start_pin_hash?: string | null;
   client?: { user_id?: string | null; user?: { first_name?: string | null; last_name?: string | null } | null } | null;
   business?: { user_id?: string | null; user?: { first_name?: string | null; last_name?: string | null } | null } | null;
@@ -49,6 +51,7 @@ export class RentalStartPinShareService {
     if (booking.client_id !== user.client.id) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
+    if (booking.inspection_policy_version != null) throw inspectionUpdateRequired();
     if (booking.status !== 'confirmed') {
       throw new HttpException(
         'Start PIN can only be shared for confirmed bookings',
@@ -92,6 +95,7 @@ export class RentalStartPinShareService {
     if (booking.business_id !== user.business.id) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
+    if (booking.inspection_policy_version != null) throw inspectionUpdateRequired();
     if (booking.status !== 'confirmed') return null;
     const message = await this.findLatestActive(bookingId);
     if (!message) return null;
@@ -186,7 +190,7 @@ export class RentalStartPinShareService {
     }>(
       `query BookingPinShare($id: uuid!) {
         rental_bookings_by_pk(id: $id) {
-          id booking_number status client_id business_id rental_start_pin_hash
+          id booking_number status client_id business_id inspection_policy_version rental_start_pin_hash
           client { user_id user { first_name last_name } }
           business { user_id user { first_name last_name } }
         }

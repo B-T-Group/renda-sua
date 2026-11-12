@@ -44,7 +44,7 @@ import {
   bookingDetailTimelineIndex,
   messagesDefaultExpanded,
 } from '../../utils/rentalPhase';
-import { unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { didntReceiveWindowOpen, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
 
 const PAYMENT_POLL_MS = 4000;
 
@@ -663,6 +663,12 @@ const RentalBookingDetailPage: React.FC = () => {
                   )}`
                 : ''}
             </Alert>
+          ) : null}
+
+          {isClient && didntReceiveWindowOpen(booking.actual_start_at) ? (
+            <Button onClick={() => navigate('/support')} sx={{ alignSelf: 'flex-start' }}>
+              {t('rentalInspection.didntReceive', "Didn't receive the item? Tell us")}
+            </Button>
           ) : null}
 
           <Stack spacing={2}>

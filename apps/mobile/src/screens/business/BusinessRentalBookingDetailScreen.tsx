@@ -16,7 +16,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusPill } from '../../components/common/StatusPill';
 import { OrderMessageComposer } from '../../components/messaging/OrderMessageComposer';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
-import { InspectionBanner } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
 import { unpaidCancelMinutesLeft } from '../../utils/rentals/rentalInspection';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -32,8 +31,9 @@ import {
   rentalBookingStatusColors,
   resolveBookingPhase,
 } from '../../utils/rentals';
-import { bookingRequestedPeriodLines } from '../../utils/rentals/rentalRequestFormat';
+import { bookingRequestedPeriodLines, formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
 import {
+  businessCanReplaceReport,
   classifyInspectionError,
   pickupGate,
   showEnrolledReturn,
@@ -428,7 +428,7 @@ export default function BusinessRentalBookingDetailScreen() {
         />
       </View>
 
-      {isReserved ? (
+      {isReserved && !snapshot.enrolled ? (
         <View
           style={[
             styles.card,
@@ -479,14 +479,13 @@ export default function BusinessRentalBookingDetailScreen() {
 
       {snapshot.enrolled ? (
         <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-          {gate.mode === 'waiting' ? (
-            <InspectionBanner tone="warning">
-              {booking.status === 'reserved'
-                ? t('rentalInspection.waitingBeforePayment', 'The client reviews the report before you collect payment.')
-                : t('rentalInspection.waitingBeforeCode', 'The client reviews the report before a support code can start the rental.')}
-            </InspectionBanner>
-          ) : null}
-          {(gate.mode === 'capture' || gate.mode === 'waiting') && (booking.status === 'reserved' || booking.status === 'confirmed') ? (
+          <BusinessAcceptStartHero
+            booking={booking}
+            submittedUnits={snapshot.pickup?.units.length ?? 0}
+            canUpdate={businessCanReplaceReport(snapshot.pickup)}
+            onUpdate={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
+          />
+          {gate.mode === 'capture' && (booking.status === 'reserved' || booking.status === 'confirmed') ? (
             <Button
               mode="contained"
               buttonColor={colors.cta.main}
@@ -796,6 +795,65 @@ function localDateTimeParts(d: Date): { date: string; time: string } {
     date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
     time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
   };
+}
+
+function BusinessAcceptStartHero({
+  booking,
+  submittedUnits,
+  canUpdate,
+  onUpdate,
+}: {
+  booking: RentalBookingDetail;
+  submittedUnits: number;
+  canUpdate: boolean;
+  onUpdate: () => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const { colors, spacing, borderRadius, typography } = useTheme();
+  const started = booking.status === 'active' || booking.status === 'awaiting_return';
+  const waiting =
+    !started &&
+    !booking.actual_start_at &&
+    submittedUnits > 0 &&
+    (booking.status === 'reserved' || booking.status === 'confirmed');
+  if (!started && !waiting) return null;
+  const name = booking.client?.user?.first_name || t('rentalInspection.renterFallback', 'The renter');
+  const due = formatListingDue(booking.end_at, i18n.language);
+  const paid = formatRequestAmount(Number(booking.total_amount) || 0, booking.currency, i18n.language);
+  const units = booking.units_booked || submittedUnits;
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center' }]}>
+        {started
+          ? t('rentalInspection.startedTitle', 'Started, hand over the item')
+          : t('rentalInspection.waitingTitle', 'Waiting for the renter to accept')}
+      </Text>
+      <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
+        {started
+          ? t('rentalInspection.startedBody', '{{name}} accepted the condition and the rental is in progress. Return is due by {{due}}.', { name, due })
+          : t('rentalInspection.waitingBody', "{{name}} is reviewing the condition report. You'll see when the rental starts — then hand over the item.", { name })}
+      </Text>
+      {started ? (
+        <Text style={{ color: colors.success.main, textAlign: 'center', fontWeight: '700' }}>
+          {t('rentalInspection.paidAmount', '{{amount}} paid', { amount: paid })}
+        </Text>
+      ) : (
+        <View style={{ backgroundColor: colors.infoTint, borderRadius: borderRadius.md, padding: spacing.md }}>
+          <Text style={{ color: colors.text.primary }}>
+            {t('rentalInspection.noPinNote', 'Pickup photos submitted · {{done}} of {{total}} units. No PIN is needed for this rental.', {
+              done: submittedUnits,
+              total: units,
+            })}
+          </Text>
+        </View>
+      )}
+      {!started && canUpdate ? (
+        <Button mode="outlined" textColor={colors.cta.main} style={{ minHeight: 48 }} onPress={onUpdate}>
+          {t('rentalInspection.updateReport', 'Update report')}
+        </Button>
+      ) : null}
+    </View>
+  );
 }
 
 /** Combine local YYYY-MM-DD + HH:mm into an ISO timestamp, or null if invalid. */
