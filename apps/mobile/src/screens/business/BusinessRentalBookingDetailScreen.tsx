@@ -841,7 +841,9 @@ function BusinessAcceptStartHero({
       </Text>
       {started ? (
         <Text style={{ color: colors.success.main, textAlign: 'center', fontWeight: '700' }}>
-          {t('rentalInspection.paidAmount', '{{amount}} paid', { amount: paid })}
+          {booking.payment_status === 'authorized'
+            ? t('rentalInspection.heldAmount', '{{amount}} held', { amount: paid })
+            : t('rentalInspection.paidAmount', '{{amount}} paid', { amount: paid })}
         </Text>
       ) : (
         <View style={{ backgroundColor: colors.infoTint, borderRadius: borderRadius.md, padding: spacing.md }}>

@@ -3142,7 +3142,14 @@ export class RentalsService {
     if (!booking) {
       throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
     }
-    await this.attachAcceptStartPreview(booking);
+    const user = await this.hasuraUserService.getUser();
+    if (
+      isActivePersona(user, 'client') &&
+      user.client?.id &&
+      user.client.id === booking.client_id
+    ) {
+      await this.attachAcceptStartPreview(booking);
+    }
     return booking;
   }
 
@@ -3202,12 +3209,19 @@ export class RentalsService {
       const result = await this.hasuraSystemService.executeMutation<{
         rental_accept_pickup_version?: Array<{ id: string }>;
       }>(ACCEPT_PICKUP_VERSION, { id: bookingId, version: versionId, actor: actorId });
-      if (!(result?.rental_accept_pickup_version?.length ?? 0)) throw acceptStartConflict();
+      if ((result?.rental_accept_pickup_version?.length ?? 0) > 0) return;
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
-      if (this.acceptConflictText(error)) throw acceptStartConflict();
-      throw error;
+      if (!this.acceptConflictText(error)) throw error;
     }
+    if (await this.versionAlreadyAccepted(bookingId, versionId)) return;
+    throw acceptStartConflict();
+  }
+
+  /** A racing accept of this same version is success, not a new 409. */
+  private async versionAlreadyAccepted(bookingId: string, versionId: string): Promise<boolean> {
+    const gate = await this.readInspectionStart(bookingId);
+    return gate.pickupAckCurrent && gate.pickupAcceptedVersionId === versionId;
   }
 
   private acceptConflictText(error: any): boolean {
@@ -3278,11 +3292,22 @@ export class RentalsService {
     return this.acceptStartBody(booking, rail, due, true, false);
   }
 
-  private replayAcceptStart(booking: any): AcceptAndStartResult {
+  private async replayAcceptStart(booking: any): Promise<AcceptAndStartResult> {
     const paid = booking.payment_status === 'authorized' || booking.payment_status === 'paid';
     const due = paid ? 0 : Number(booking.total_amount) || 0;
-    const rail = booking.payment_status === 'authorized' ? 'card' : 'wallet';
-    return this.acceptStartBody(booking, rail, due, true, false, true);
+    return this.acceptStartBody(booking, await this.replayPaymentRail(booking), due, true, false, true);
+  }
+
+  private async replayPaymentRail(booking: any): Promise<AcceptStartPaymentRail> {
+    if (booking.payment_status === 'authorized') return 'card';
+    const bookingNumber = booking.booking_number as string | undefined;
+    if (bookingNumber) {
+      const momo = await this.mobilePaymentsDatabaseService.hasSuccessfulRentalBookingPayment(
+        bookingNumber
+      );
+      if (momo) return 'mobile_money';
+    }
+    return 'wallet';
   }
 
   private acceptStartBody(
@@ -3919,10 +3944,12 @@ export class RentalsService {
 
   private async startBlockedOrConflict(bookingId: string) {
     const fresh = await this.fetchBooking(bookingId);
-    if (fresh?.status === 'active') return { success: true };
-    const gate = await this.readInspectionStart(bookingId);
-    if (gate.inspectionPolicyVersion != null && !pickupStartAllowed(gate)) {
-      throw inspectionUpdateRequired();
+    if (
+      fresh?.status === 'active' ||
+      fresh?.status === 'awaiting_return' ||
+      fresh?.status === 'completed'
+    ) {
+      return { success: true };
     }
     throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
   }

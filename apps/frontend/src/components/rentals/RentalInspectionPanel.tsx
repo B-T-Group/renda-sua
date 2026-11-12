@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
 import type { useRentalInspection } from '../../hooks/useRentalInspection';
 import { useRentalApi } from '../../hooks/useRentalApi';
@@ -25,6 +26,7 @@ import {
   REQUIRED_PHOTO_ROLES,
   allUnitsReviewed,
   businessCanReplaceReport,
+  classifyInspectionError,
   correctionReasonText,
   damageRail,
   derivedOvertime,
@@ -83,6 +85,7 @@ export function RentalInspectionPanel({
   onChanged: () => void;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { acceptAndStart, fetchBookingDetail, getBookingPaymentStatus } = useRentalApi();
   const { trackSiteEvent } = useTrackSiteEvent();
   const stage: InspectionStage | null =
@@ -104,7 +107,8 @@ export function RentalInspectionPanel({
   const [details, setDetails] = useState('');
   const [claim, setClaim] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [momoPhase, setMomoPhase] = useState<'waiting' | 'failed' | null>(null);
+  const [momoPhase, setMomoPhase] = useState<'waiting' | 'failed' | 'stalled' | null>(null);
+  const waitingSince = useRef<number | null>(null);
   const [offline, setOffline] = useState(!navigator.onLine);
   const draftOpened = useRef(false);
 
@@ -145,7 +149,11 @@ export function RentalInspectionPanel({
   );
 
   useEffect(() => {
-    if (momoPhase !== 'waiting') return undefined;
+    if (momoPhase !== 'waiting') {
+      waitingSince.current = null;
+      return undefined;
+    }
+    if (waitingSince.current == null) waitingSince.current = Date.now();
     let stop = false;
     const tick = async () => {
       const row = await fetchBookingDetail(bookingId);
@@ -156,7 +164,14 @@ export function RentalInspectionPanel({
         return;
       }
       const pay = await getBookingPaymentStatus(bookingId).catch(() => null);
-      if (pay && !pay.paymentPending && row.status === 'reserved') setMomoPhase('failed');
+      if (pay && !pay.paymentPending && row.status === 'reserved') {
+        setMomoPhase('failed');
+        return;
+      }
+      const waited = Date.now() - (waitingSince.current ?? Date.now());
+      if (pay && !pay.paymentPending && row.status === 'confirmed' && !row.actual_start_at && waited >= 60_000) {
+        setMomoPhase('stalled');
+      }
     };
     const timer = window.setInterval(() => void tick(), 4000);
     void tick();
@@ -223,8 +238,9 @@ export function RentalInspectionPanel({
       subjectType: 'rental_booking',
       subjectId: bookingId,
       metadata: {
-        payment_rail: preview?.payment_rail ?? 'card',
+        payment_rail: preview?.payment_rail ?? 'unknown',
         amount_due_at_pickup: preview?.amount_due_at_pickup ?? 0,
+        is_retry: momoPhase === 'failed' || momoPhase === 'stalled',
       },
     });
     setBusy(true);
@@ -235,10 +251,20 @@ export function RentalInspectionPanel({
         setMomoPhase('waiting');
         return;
       }
+      setMomoPhase(null);
       onChanged();
-    } catch {
+    } catch (error: unknown) {
       setConfirmOpen(false);
-      if (booking.accept_start_preview?.payment_rail === 'mobile_money') setMomoPhase('failed');
+      const kind = classifyInspectionError(error);
+      if (kind === 'conflict' || kind === 'update_required' || kind === 'unavailable') {
+        setMomoPhase(null);
+        setBanner(kind === 'unavailable' ? 'retry' : kind);
+      } else if (preview?.payment_rail === 'mobile_money') {
+        setMomoPhase('failed');
+      } else {
+        setMomoPhase(null);
+        setBanner('retry');
+      }
       await model.reload();
     } finally {
       setBusy(false);
@@ -268,18 +294,35 @@ export function RentalInspectionPanel({
         />
       ) : null}
       {momoPhase ? (
-        <Alert severity={momoPhase === 'failed' ? 'error' : 'info'}>
+        <Alert severity={momoPhase === 'waiting' ? 'info' : 'error'}>
           <Stack spacing={1}>
             {momoPhase === 'waiting' ? <MobileMoneyConfirmIllustration /> : null}
             <Typography>
               {momoPhase === 'waiting'
                 ? t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')
-                : t('orders.momoAwaiting.failedTitle', 'Payment failed')}
+                : momoPhase === 'failed'
+                  ? t('orders.momoAwaiting.failedTitle', 'Payment failed')
+                  : t('rentalInspection.startDelayedTitle', 'Payment succeeded, but the rental has not started.')}
             </Typography>
+            {momoPhase === 'stalled' ? (
+              <Typography>
+                {t('rentalInspection.startDelayedBody', 'You can retry the start, or contact support.')}
+              </Typography>
+            ) : null}
             {momoPhase === 'failed' ? (
               <Button variant="contained" onClick={() => void confirmStart()}>
                 {t('common.retry', 'Retry')}
               </Button>
+            ) : null}
+            {momoPhase === 'stalled' ? (
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" onClick={() => void confirmStart()}>
+                  {t('rentalInspection.retryStart', 'Retry start')}
+                </Button>
+                <Button variant="outlined" onClick={() => navigate('/support')}>
+                  {t('rentalInspection.contactSupport', 'Contact support')}
+                </Button>
+              </Stack>
             ) : null}
           </Stack>
         </Alert>
@@ -565,7 +608,9 @@ function BusinessAcceptHero({
       </Typography>
       {started ? (
         <Typography color="success.main" fontWeight={700}>
-          {t('rentalInspection.paidAmount', '{{amount}} paid', { amount: paid })}
+          {booking.payment_status === 'authorized'
+            ? t('rentalInspection.heldAmount', '{{amount}} held', { amount: paid })
+            : t('rentalInspection.paidAmount', '{{amount}} paid', { amount: paid })}
         </Typography>
       ) : (
         <Alert severity="info">
@@ -824,6 +869,7 @@ function bannerText(
   if (banner === 'correction') return t('rentalInspection.correctionSent', 'Correction sent. The business will update the report.');
   if (banner === 'disputed') return t('rentalInspection.returnRecorded', 'Return recorded. Financial review pending.');
   if (banner === 'incomplete') return t('rentalInspection.photoRequirementMissing', 'The photo minimum could not be loaded. Connect and try again.');
+  if (banner === 'retry') return t('rentalInspection.tryAgain', 'Something went wrong. Try again.');
   if (error) return t('rentalInspection.loadFailed', 'Could not load the inspection.');
   return null;
 }

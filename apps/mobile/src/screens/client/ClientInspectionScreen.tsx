@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text, TextInput } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,7 @@ import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { acceptAndStart, getBooking, getPaymentStatus } from '../../services/rentalsApi';
 import { formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
-import { CORRECTION_REASON_CODES, allUnitsReviewed, damageRail, returnHasDamage } from '../../utils/rentals/rentalInspection';
+import { CORRECTION_REASON_CODES, allUnitsReviewed, classifyInspectionError, damageRail, returnHasDamage } from '../../utils/rentals/rentalInspection';
 
 type Route = RouteProp<ClientRootStackParamList, 'ClientInspection'>;
 
@@ -28,7 +28,9 @@ export default function ClientInspectionScreen() {
   const [panel, setPanel] = useState<'review' | 'correction' | 'dispute'>('review');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [momoPhase, setMomoPhase] = useState<'waiting' | 'failed' | null>(null);
+  const [momoPhase, setMomoPhase] = useState<'waiting' | 'failed' | 'stalled' | null>(null);
+  const [notice, setNotice] = useState<'conflict' | 'update_required' | 'unavailable' | null>(null);
+  const waitingSince = useRef<number | null>(null);
   const [reasons, setReasons] = useState<string[]>([]);
   const [details, setDetails] = useState('');
   const ids = model.view?.units.map((unit) => unit.unitId) ?? [];
@@ -51,7 +53,11 @@ export default function ClientInspectionScreen() {
   const pickupStart = stage === 'pickup' && !damaged;
 
   useEffect(() => {
-    if (momoPhase !== 'waiting') return undefined;
+    if (momoPhase !== 'waiting') {
+      waitingSince.current = null;
+      return undefined;
+    }
+    if (waitingSince.current == null) waitingSince.current = Date.now();
     let stop = false;
     const tick = async () => {
       const row = await getBooking(bookingId);
@@ -61,7 +67,14 @@ export default function ClientInspectionScreen() {
         return;
       }
       const pay = await getPaymentStatus(bookingId).catch(() => null);
-      if (pay && !pay.paymentPending && row.status === 'reserved') setMomoPhase('failed');
+      if (pay && !pay.paymentPending && row.status === 'reserved') {
+        setMomoPhase('failed');
+        return;
+      }
+      const waited = Date.now() - (waitingSince.current ?? Date.now());
+      if (pay && !pay.paymentPending && row.status === 'confirmed' && !row.actual_start_at && waited >= 60_000) {
+        setMomoPhase('stalled');
+      }
     };
     const timer = setInterval(() => void tick(), 4000);
     void tick();
@@ -78,22 +91,34 @@ export default function ClientInspectionScreen() {
       subjectType: 'rental_booking',
       subjectId: bookingId,
       metadata: {
-        payment_rail: preview?.payment_rail ?? 'card',
+        payment_rail: preview?.payment_rail ?? 'unknown',
         amount_due_at_pickup: amountDue,
+        is_retry: momoPhase === 'failed' || momoPhase === 'stalled',
       },
     });
     setStarting(true);
     try {
       const result = await acceptAndStart(bookingId, model.view.versionId);
       setConfirmOpen(false);
+      setNotice(null);
       if (result.paymentPending) {
         setMomoPhase('waiting');
         return;
       }
       navigation.goBack();
-    } catch {
+    } catch (error: unknown) {
       setConfirmOpen(false);
-      if (preview?.payment_rail === 'mobile_money') setMomoPhase('failed');
+      const kind = classifyInspectionError(error);
+      if (kind === 'conflict' || kind === 'update_required' || kind === 'unavailable') {
+        setMomoPhase(null);
+        setNotice(kind);
+      } else if (preview?.payment_rail === 'mobile_money') {
+        setNotice(null);
+        setMomoPhase('failed');
+      } else {
+        setMomoPhase(null);
+        setNotice('unavailable');
+      }
       await model.reload();
     } finally {
       setStarting(false);
@@ -107,17 +132,31 @@ export default function ClientInspectionScreen() {
         <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center' }]}>
           {momoPhase === 'waiting'
             ? t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')
-            : t('orders.momoAwaiting.failedTitle', 'Payment failed')}
+            : momoPhase === 'failed'
+              ? t('orders.momoAwaiting.failedTitle', 'Payment failed')
+              : t('rentalInspection.startDelayedTitle', 'Payment succeeded, but the rental has not started.')}
         </Text>
         <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
           {momoPhase === 'waiting'
             ? t('orders.momoAwaiting.waitingBody', 'Approve the request on your phone. This page updates when payment succeeds.')
-            : t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again.')}
+            : momoPhase === 'failed'
+              ? t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again.')
+              : t('rentalInspection.startDelayedBody', 'You can retry the start, or contact support.')}
         </Text>
         {momoPhase === 'failed' ? (
           <Button mode="contained" buttonColor={colors.primary.main} loading={starting} onPress={() => void confirmStart()}>
             {t('common.retry', 'Retry')}
           </Button>
+        ) : null}
+        {momoPhase === 'stalled' ? (
+          <>
+            <Button mode="contained" buttonColor={colors.primary.main} loading={starting} onPress={() => void confirmStart()}>
+              {t('rentalInspection.retryStart', 'Retry start')}
+            </Button>
+            <Button mode="outlined" onPress={() => navigation.navigate('SupportTickets')}>
+              {t('rentalInspection.contactSupport', 'Contact support')}
+            </Button>
+          </>
         ) : null}
       </View>
     );
@@ -152,10 +191,13 @@ export default function ClientInspectionScreen() {
         <InspectionBanner tone="info">
           {t('rentalInspection.mustReviewAll', 'Review every unit before accepting. This locks the pickup baseline.')}
         </InspectionBanner>
-        {model.error === 'conflict' ? (
+        {notice === 'conflict' || model.error === 'conflict' ? (
           <InspectionBanner tone="warning">{t('rentalInspection.reportChanged', 'That report changed. Review it again.')}</InspectionBanner>
         ) : null}
-        {model.error === 'update_required' ? (
+        {notice === 'unavailable' ? (
+          <InspectionBanner tone="warning">{t('rentalInspection.tryAgain', 'Something went wrong. Try again.')}</InspectionBanner>
+        ) : null}
+        {notice === 'update_required' || model.error === 'update_required' ? (
           <InspectionBanner tone="warning">
             {t('rentalInspection.updateRequired', 'This rental uses condition inspections. Review the report here, or update the app if this screen is missing.')}
           </InspectionBanner>

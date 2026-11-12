@@ -56,6 +56,10 @@ describe('accept and start', () => {
         client: { id: 'client' },
       }),
     };
+    svc.mobilePaymentsDatabaseService = {
+      hasSuccessfulRentalBookingPayment: jest.fn().mockResolvedValue(false),
+      hasPendingRentalBookingPayment: jest.fn().mockResolvedValue(false),
+    };
     svc.hasuraSystemService = {
       executeQuery: jest.fn().mockResolvedValue(gate()),
       executeMutation: jest.fn().mockImplementation(async (query: string) => {
@@ -287,6 +291,166 @@ describe('accept and start', () => {
       response: { code: 'RENTAL_ACCEPT_START_CONFLICT' },
     });
     expect(acceptCalls()).toHaveLength(0);
+  });
+
+  it('does not attach accept_start_preview for a business viewer', async () => {
+    const row = enrolled({
+      status: 'reserved',
+      payment_status: 'pending',
+      payment_timing: 'pay_at_pickup',
+      client: { id: 'client', user_id: 'client-user' },
+    });
+    svc.hasuraUserService.executeQuery = jest.fn().mockResolvedValue({
+      rental_bookings_by_pk: row,
+    });
+    svc.hasuraUserService.getUser.mockResolvedValue({
+      id: 'biz-user',
+      active_persona: 'business',
+      business: { id: 'biz' },
+    });
+    const businessView = await svc.getBookingDetailForViewer('b1');
+    expect(businessView.accept_start_preview).toBeUndefined();
+    expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
+
+    svc.hasuraUserService.getUser.mockResolvedValue({
+      id: 'client-user',
+      active_persona: 'client',
+      client: { id: 'client' },
+    });
+    const renterView = await svc.getBookingDetailForViewer('b1');
+    expect(renterView.accept_start_preview).toEqual({
+      payment_rail: 'mobile_money',
+      amount_due_at_pickup: 760,
+    });
+    expect(svc.hasuraSystemService.getAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 409 when the start race is lost', async () => {
+    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
+      if (String(query).includes('rental_accept_pickup_version')) {
+        return { rental_accept_pickup_version: [{ id: 'b1' }] };
+      }
+      return { rental_mark_started: [] };
+    });
+    await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('reports Mobile Money when replaying a booking paid by Mobile Money', async () => {
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({
+        status: 'active',
+        payment_status: 'paid',
+        payment_timing: 'pay_at_pickup',
+        booking_number: 'RB-1',
+        actual_start_at: '2026-11-12T14:20:00.000Z',
+      })
+    );
+    svc.hasuraSystemService.executeQuery.mockResolvedValue(
+      gate({ pickup_ack_current: true, pickup_accepted_version_id: 'ver-1' })
+    );
+    svc.mobilePaymentsDatabaseService.hasSuccessfulRentalBookingPayment.mockResolvedValue(true);
+    const result = await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(result).toMatchObject({
+      alreadyStarted: true,
+      payment_rail: 'mobile_money',
+      paymentPending: false,
+    });
+    expect(svc.pushMomoPickupPayment).not.toHaveBeenCalled();
+  });
+
+  it('sends one payment request when two accepts race', async () => {
+    let accepted = false;
+    let requests = 0;
+    let pending = false;
+    let releaseSecond: () => void = () => undefined;
+    const secondMayLose = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    let entered = 0;
+    let releaseBoth: () => void = () => undefined;
+    const bothInside = new Promise<void>((resolve) => {
+      releaseBoth = resolve;
+    });
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({
+        status: 'reserved',
+        payment_status: 'pending',
+        payment_timing: 'pay_at_pickup',
+        booking_number: 'RB-1',
+      })
+    );
+    svc.hasuraSystemService.executeQuery.mockImplementation(async () =>
+      gate({
+        pickup_ack_current: accepted,
+        pickup_accepted_version_id: accepted ? 'ver-1' : null,
+      })
+    );
+    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
+      if (!String(query).includes('rental_accept_pickup_version')) {
+        return { rental_mark_started: [{ id: 'b1' }] };
+      }
+      entered += 1;
+      if (entered === 2) releaseBoth();
+      await bothInside;
+      if (!accepted) {
+        accepted = true;
+        return { rental_accept_pickup_version: [{ id: 'b1' }] };
+      }
+      await secondMayLose;
+      throw new Error('Uniqueness violation');
+    });
+    svc.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment.mockImplementation(
+      async () => pending
+    );
+    svc.fetchUserContact = jest.fn().mockResolvedValue({ phone_number: '+237600000000' });
+    svc.initiateRentalBookingPayment = jest.fn(async () => {
+      requests += 1;
+      pending = true;
+      releaseSecond();
+    });
+    svc.pushMomoPickupPayment = RentalsService.prototype.pushMomoPickupPayment.bind(svc);
+
+    const [first, second] = await Promise.all([
+      svc.acceptAndStartRental('b1', 'ver-1'),
+      svc.acceptAndStartRental('b1', 'ver-1'),
+    ]);
+
+    expect(requests).toBe(1);
+    for (const result of [first, second]) {
+      expect(result.paymentPending || result.alreadyStarted).toBe(true);
+      expect(result).not.toMatchObject({ success: false });
+    }
+    expect(first.paymentPending || second.paymentPending).toBe(true);
+  });
+
+  it('ignores a late webhook on a cancelled booking', async () => {
+    svc.fetchBookingByBookingNumber.mockResolvedValue(enrolled({ status: 'cancelled' }));
+    await svc.processRentalBookingPayment({ entity_id: 'RB-1' });
+    expect(svc.confirmWalletContract).not.toHaveBeenCalled();
+    expect(markCalls()).toHaveLength(0);
+  });
+
+  it('does not start when the webhook arrives before the report is accepted', async () => {
+    svc.fetchBookingByBookingNumber.mockResolvedValue(
+      enrolled({
+        status: 'reserved',
+        payment_status: 'pending',
+        payment_timing: 'pay_at_pickup',
+      })
+    );
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({
+        status: 'confirmed',
+        payment_status: 'paid',
+        payment_timing: 'pay_at_pickup',
+      })
+    );
+    svc.hasuraSystemService.executeQuery.mockResolvedValue(
+      gate({ pickup_ack_current: false, pickup_accepted_version_id: null })
+    );
+    await svc.processRentalBookingPayment({ entity_id: 'RB-1' });
+    expect(svc.confirmWalletContract).toHaveBeenCalled();
+    expect(markCalls()).toHaveLength(0);
   });
 
   it('classifies the payment rail and the thirty-minute window', () => {

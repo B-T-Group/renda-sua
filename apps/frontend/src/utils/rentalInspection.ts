@@ -197,18 +197,29 @@ export function clientInspectionAction(input: {
   return 'none';
 }
 
-export type InspectionErrorKind = 'update_required' | 'conflict' | 'other';
+export type InspectionErrorKind = 'update_required' | 'conflict' | 'unavailable' | 'other';
 
 export function classifyInspectionError(error: unknown): InspectionErrorKind {
   const err = error as {
     status?: number;
     code?: string;
+    message?: string;
     response?: { status?: number; data?: { code?: string } };
   };
   const status = err?.status ?? err?.response?.status;
   const code = err?.code ?? err?.response?.data?.code;
   if (status === 426 || code === 'RENTAL_INSPECTION_UPDATE_REQUIRED') return 'update_required';
-  if (status === 409) return 'conflict';
+  if (status === 409 || code === 'RENTAL_ACCEPT_START_CONFLICT') return 'conflict';
+  if (
+    status === 503 ||
+    status === 0 ||
+    code === 'ERR_NETWORK' ||
+    code === 'ECONNABORTED' ||
+    code === 'RENTAL_INSPECTION_UNAVAILABLE' ||
+    (status == null && /network/i.test(String(err?.message ?? '')))
+  ) {
+    return 'unavailable';
+  }
   return 'other';
 }
 

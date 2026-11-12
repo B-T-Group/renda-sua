@@ -141,5 +141,7 @@ describe('client review and money copy', () => {
     );
     expect(classifyInspectionError({ response: { status: 409, data: { code: 'CONFLICT' } } })).toBe('conflict');
     expect(classifyInspectionError({ status: 400 })).toBe('other');
+    expect(classifyInspectionError({ status: 503 })).toBe('unavailable');
+    expect(classifyInspectionError({ code: 'ERR_NETWORK', message: 'Network Error' })).toBe('unavailable');
   });
 });

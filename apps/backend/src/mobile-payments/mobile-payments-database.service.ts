@@ -822,6 +822,36 @@ export class MobilePaymentsDatabaseService {
     }
   }
 
+  /** A settled Mobile Money collect for this booking, as opposed to a wallet charge. */
+  async hasSuccessfulRentalBookingPayment(bookingNumber: string): Promise<boolean> {
+    try {
+      const query = `
+        query HasSuccessfulRentalBookingPayment($bookingNumber: String!) {
+          mobile_payment_transactions(
+            where: {
+              payment_entity: { _eq: rental_booking }
+              status: { _eq: "success" }
+              entity_id: { _eq: $bookingNumber }
+            }
+            limit: 1
+          ) {
+            id
+          }
+        }
+      `;
+      const response = await this.hasuraService.executeQuery<{
+        mobile_payment_transactions: Array<{ id: string }>;
+      }>(query, { bookingNumber });
+      return (response.mobile_payment_transactions ?? []).length > 0;
+    } catch (error) {
+      this.logger.error(
+        'Failed to check successful rental booking payment:',
+        safeErrorMessage(error)
+      );
+      throw error;
+    }
+  }
+
   /**
    * Get pending claim_order transactions for a specific customer email.
    * Used to include claim-in-progress orders in agent /orders responses.

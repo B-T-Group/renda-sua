@@ -239,6 +239,7 @@ const RentalBookingDetailPage: React.FC = () => {
       return;
     }
     if (profile?.business?.id && booking.business_id === profile.business.id) {
+      if (booking.inspection_policy_version != null) return;
       void getActiveStartPin(bookingId)
         .then((active) => {
           if (active?.pin) {
@@ -257,6 +258,7 @@ const RentalBookingDetailPage: React.FC = () => {
     }
   }, [
     booking?.business_id,
+    booking?.inspection_policy_version,
     booking?.status,
     bookingId,
     getActiveStartPin,
