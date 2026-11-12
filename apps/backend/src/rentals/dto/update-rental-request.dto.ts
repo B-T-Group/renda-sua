@@ -8,7 +8,6 @@ import {
   IsString,
   MaxLength,
   Min,
-  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { RentalRequestWindowDto } from './rental-request-window.dto';
@@ -20,13 +19,13 @@ export class UpdateRentalRequestDto {
   @Min(1)
   expectedVersion!: number;
 
-  @ApiProperty({ required: false })
-  @ValidateIf((row) => !row.windows?.length)
+  @ApiProperty({ required: false, description: 'Omit on a notes-only edit; the saved windows are kept' })
+  @IsOptional()
   @IsISO8601()
   requestedStartAt?: string;
 
-  @ApiProperty({ required: false })
-  @ValidateIf((row) => !row.windows?.length)
+  @ApiProperty({ required: false, description: 'Omit on a notes-only edit; the saved windows are kept' })
+  @IsOptional()
   @IsISO8601()
   requestedEndAt?: string;
 
