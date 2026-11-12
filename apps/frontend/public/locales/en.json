@@ -7209,6 +7209,8 @@
       "unknownItem": "Rental",
       "yourNote": "Your note",
       "requestedPeriod": "Requested period",
+      "periodDayCount_one": "{{count}} day",
+      "periodDayCount_other": "{{count}} days",
       "quotedTotal": "Quoted total",
       "contractCompleteBy": "Complete booking by {{date}}",
       "contractExpiredHint": "This offer has expired. You can send a new request from the listing.",
