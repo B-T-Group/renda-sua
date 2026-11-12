@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { View } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
+import { paperTheme } from '../../apps/mobile/src/theme/paperTheme';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -44,7 +45,7 @@ function CaptureApp() {
         }}
       >
         <ThemeProvider>
-          <PaperProvider>
+          <PaperProvider theme={paperTheme}>
             <CaptureScreen />
           </PaperProvider>
         </ThemeProvider>

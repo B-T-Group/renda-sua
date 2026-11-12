@@ -647,7 +647,18 @@ export class RentalsController {
   @ApiResponse({ status: 404, description: 'Booking not found (or not visible)' })
   async getBooking(@Param('id') bookingId: string) {
     const booking = await this.rentalsService.getBookingDetailForViewer(bookingId);
-    return { success: true, data: { booking } };
+    const report = await this.notReceived.findForBooking(bookingId);
+    return {
+      success: true,
+      data: {
+        booking: {
+          ...booking,
+          not_received_report: report
+            ? { id: report.id, reported_at: report.reported_at }
+            : null,
+        },
+      },
+    };
   }
 
   @Get('bookings/:id/start-pin')

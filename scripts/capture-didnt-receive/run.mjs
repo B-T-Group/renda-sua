@@ -200,7 +200,11 @@ for (const [lang, width, label] of [
   ['en', 360, '360'],
 ]) {
   const admin = await open(8771, `view=admin&lang=${lang}`, width);
-  await admin.getByText(businessBody[lang]).waitFor({ timeout: 15000 });
+  const adminHint = {
+    en: "Renters who say the item wasn't handed over after start.",
+    fr: "Clients indiquant ne pas avoir reçu l'article après le démarrage.",
+  };
+  await admin.getByText(adminHint[lang]).waitFor({ timeout: 15000 });
   await admin.getByText('RB-104218').waitFor();
   await shot(admin, `support-admin-${label}.png`);
 }

@@ -17,6 +17,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useApiClient } from '../../hooks/useApiClient';
 import { usePermission } from '../../hooks/usePermissions';
+import { bookingDetailStatusLabelKey } from '../../utils/rentalPhase';
+import { formatListingDue } from '../../utils/rentalRequestFormat';
 
 interface NotReceivedRow {
   id: string;
@@ -46,7 +48,7 @@ interface DisputeRow {
 }
 
 const AdminInspectionDisputesPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const allowed = usePermission(PlatformPermissions.MODERATE_RENTALS);
   const api = useApiClient();
   const [rows, setRows] = useState<DisputeRow[]>([]);
@@ -138,7 +140,7 @@ const AdminInspectionDisputesPage: React.FC = () => {
         <Typography sx={{ mt: 1, mb: 2 }}>
           {t(
             'rentalInspection.adminNotReceivedHint',
-            "The renter says they haven't received the item. Support will follow up."
+            "Renters who say the item wasn't handed over after start."
           )}
         </Typography>
         {loading ? null : (
@@ -158,9 +160,20 @@ const AdminInspectionDisputesPage: React.FC = () => {
                   <TableCell>{row.rental_booking?.booking_number || row.rental_booking_id}</TableCell>
                   <TableCell>{row.rental_booking?.rental_location_listing?.rental_item?.name || '—'}</TableCell>
                   <TableCell>
-                    <Chip label={row.rental_booking?.status || '—'} />
+                    <Chip
+                      label={
+                        row.rental_booking?.status
+                          ? t(
+                              bookingDetailStatusLabelKey(row.rental_booking.status),
+                              row.rental_booking.status
+                            )
+                          : '—'
+                      }
+                    />
                   </TableCell>
-                  <TableCell>{row.reported_at ? new Date(row.reported_at).toLocaleString() : '—'}</TableCell>
+                  <TableCell>
+                    {row.reported_at ? formatListingDue(row.reported_at, i18n.language) : '—'}
+                  </TableCell>
                   <TableCell>
                     <Button component={RouterLink} to={`/admin/rental-inspections/${row.rental_booking_id}`} sx={{ minHeight: 48 }}>
                       {t('rentalInspection.adminOpen', 'Open')}

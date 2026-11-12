@@ -105,6 +105,14 @@ export class RentalNotReceivedService {
     return this.present(created, false);
   }
 
+  async findForBooking(bookingId: string): Promise<ReportRow | null> {
+    try {
+      return await this.findReport(bookingId);
+    } catch {
+      return null;
+    }
+  }
+
   async listForAdmin(): Promise<Array<Record<string, unknown>>> {
     const result = await this.hasura.executeQuery<{
       rental_not_received_reports: Array<Record<string, unknown>>;

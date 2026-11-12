@@ -29,7 +29,10 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useRentalInspection } from '../../hooks/useRentalInspection';
 import LoadingPage from '../common/LoadingPage';
 import { UserMessagesComponent } from '../common/UserMessagesComponent';
-import { DidntReceiveReportButton } from '../rentals/DidntReceiveReportButton';
+import {
+  DidntReceiveReportButton,
+  useDidntReceiveWindow,
+} from '../rentals/DidntReceiveReportButton';
 import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
 import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import SEOHead from '../seo/SEOHead';
@@ -45,7 +48,7 @@ import {
   bookingDetailTimelineIndex,
   messagesDefaultExpanded,
 } from '../../utils/rentalPhase';
-import { showDidntReceiveLink, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
 
 const PAYMENT_POLL_MS = 4000;
 
@@ -170,6 +173,8 @@ const RentalBookingDetailPage: React.FC = () => {
     retryBookingPayment,
   } = useRentalApi();
   const [booking, setBooking] = useState<RentalBookingDetail | null>(null);
+  const [reportedNow, setReportedNow] = useState(false);
+  const [windowForcedClosed, setWindowForcedClosed] = useState(false);
   const [paymentStatus, setPaymentStatus] =
     useState<RentalBookingPaymentStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -321,6 +326,16 @@ const RentalBookingDetailPage: React.FC = () => {
       setRetryingPayment(false);
     }
   };
+
+  const didntWindowOpen = useDidntReceiveWindow(
+    booking?.inspection_policy_version != null,
+    booking?.actual_start_at
+  );
+  const reportedMissingItem = reportedNow || Boolean(booking?.not_received_report);
+  useEffect(() => {
+    setReportedNow(false);
+    setWindowForcedClosed(false);
+  }, [bookingId]);
 
   const isClient = profile?.client?.id === booking?.client_id;
   const isBusiness = profile?.business?.id === booking?.business_id;
@@ -677,11 +692,13 @@ const RentalBookingDetailPage: React.FC = () => {
 
           {isClient &&
           bookingId &&
-          showDidntReceiveLink({
-            enrolled: booking.inspection_policy_version != null,
-            startedAt: booking.actual_start_at,
-          }) ? (
-            <DidntReceiveReportButton bookingId={bookingId} />
+          (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
+            <DidntReceiveReportButton
+              bookingId={bookingId}
+              reported={reportedMissingItem}
+              onReported={() => setReportedNow(true)}
+              onWindowClosed={() => setWindowForcedClosed(true)}
+            />
           ) : null}
 
           <Stack spacing={2}>

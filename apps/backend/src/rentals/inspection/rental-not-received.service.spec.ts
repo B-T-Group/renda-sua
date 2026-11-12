@@ -152,6 +152,13 @@ describe('RentalNotReceivedService.report', () => {
     expect(duplicate.notifications.sendBusinessRentalNotReceived).not.toHaveBeenCalled();
   });
 
+  it('exposes an existing report for the booking read', async () => {
+    const found = setup({ existing: stored });
+    await expect(found.service.findForBooking('b1')).resolves.toEqual(stored);
+    const missing = setup();
+    await expect(missing.service.findForBooking('b1')).resolves.toBeNull();
+  });
+
   it('does not change booking status in this service', () => {
     const source = readFileSync(join(__dirname, 'rental-not-received.service.ts'), 'utf8');
     expect(source).not.toContain('update_rental_bookings');

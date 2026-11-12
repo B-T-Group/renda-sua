@@ -22,7 +22,8 @@ function bookingFor(current: Scene) {
     currency: 'XAF',
     payment_timing: current === 'review' || current === 'momo' || current === 'conflict' ? 'pay_at_pickup' : 'pay_now',
     payment_status: active || legacy ? 'authorized' : 'pending',
-    actual_start_at: active ? new Date(Date.now() - 5 * 60 * 1000).toISOString() : null,
+    actual_start_at: startedAt(active),
+    not_received_report: notReceivedReport(),
     units_booked: 2,
     inspection_policy_version: legacy ? null : 1,
     client_id: 'client',
@@ -178,20 +179,46 @@ export const rentalsApi = {
   reportNotReceived,
 };
 
+function captureParams() {
+  return new URLSearchParams(window.location.search);
+}
+
+function startedAt(active: boolean): string | null {
+  if (!active) return null;
+  if (captureParams().get('window') === 'closed') {
+    return new Date(Date.now() - 31 * 60 * 1000).toISOString();
+  }
+  return new Date(Date.now() - 5 * 60 * 1000).toISOString();
+}
+
+function notReceivedReport() {
+  if (captureParams().get('reported') !== '1') return null;
+  return { id: 'nr-1', reported_at: '2026-11-12T14:22:00.000Z' };
+}
+
 export async function reportNotReceived() {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('reportResult') === 'error') {
+  const params = captureParams();
+  const result = params.get('reportResult');
+  if (result === 'network') {
+    throw { code: 'ERR_NETWORK', message: 'Network Error' };
+  }
+  if (result === 'error' || result === 'window') {
     throw {
       response: {
+        status: 409,
         data: { code: params.get('reportCode') || 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED' },
       },
     };
   }
-  return { success: true, alreadyReported: false, report: { id: 'nr-1' } };
+  return {
+    success: true,
+    alreadyReported: false,
+    report: { id: 'nr-1', rentalBookingId: 'b1', reportedAt: '2026-11-12T14:22:00.000Z' },
+  };
 }
 
 function reportEnabled(): boolean {
-  return new URLSearchParams(window.location.search).get('report') === '1';
+  return captureParams().get('report') === '1';
 }
 
 export function useClientFlags() {

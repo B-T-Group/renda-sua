@@ -13,6 +13,7 @@ import {
   reportReadyToSubmit,
   returnHasDamage,
   notReceivedErrorKey,
+  notReceivedFailure,
   showDidntReceiveLink,
   showLegacyReturnPicker,
   unitPhotosMeetMinimum,
@@ -191,6 +192,11 @@ describe('client review and money copy', () => {
     expect(notReceivedErrorKey('RENTAL_NOT_RECEIVED_NOT_INSPECTED')).toBe(
       'rentalInspection.didntReceiveNotInspected'
     );
-    expect(notReceivedErrorKey('OTHER')).toBe('rentalInspection.didntReceiveFailed');
+    expect(notReceivedErrorKey('OTHER')).toBe('rentalInspection.didntReceiveStopped');
+    expect(notReceivedFailure({ code: 'ERR_NETWORK' })).toBe('retry');
+    expect(notReceivedFailure({ response: { status: 503 } })).toBe('retry');
+    expect(notReceivedFailure({ response: { status: 409, data: { code: 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED' } } })).toBe(
+      'terminal'
+    );
   });
 });
