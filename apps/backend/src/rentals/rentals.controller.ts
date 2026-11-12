@@ -37,6 +37,7 @@ import { AcceptAndStartRentalDto } from './dto/accept-and-start-rental.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
+import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { RentalsService } from './rentals.service';
 
@@ -48,7 +49,8 @@ export class RentalsController {
   constructor(
     private readonly rentalsService: RentalsService,
     private readonly rentalBookingMessaging: RentalBookingMessagingService,
-    private readonly rentalStartPinShare: RentalStartPinShareService
+    private readonly rentalStartPinShare: RentalStartPinShareService,
+    private readonly notReceived: RentalNotReceivedService
   ) {}
 
   @Public()
@@ -612,6 +614,24 @@ export class RentalsController {
     @Body() body: AcceptAndStartRentalDto
   ) {
     return this.rentalsService.acceptAndStartRental(bookingId, body.versionId);
+  }
+
+  @Post('bookings/:id/report-not-received')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Renter reports the item was not received. Notifies support and the business. Does not change the booking.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Report stored. alreadyReported on a repeat.' })
+  @ApiResponse({ status: 403, description: 'Only the renter' })
+  @ApiResponse({ status: 404, description: 'Not the renter of this booking' })
+  @ApiResponse({
+    status: 409,
+    description: 'RENTAL_NOT_RECEIVED_NOT_INSPECTED or RENTAL_NOT_RECEIVED_WINDOW_CLOSED',
+  })
+  reportNotReceived(@Param('id') bookingId: string) {
+    return this.notReceived.report(bookingId);
   }
 
   @Get('bookings/:id')

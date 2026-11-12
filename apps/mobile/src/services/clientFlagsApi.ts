@@ -15,7 +15,8 @@ export type ClientFlagKey =
   | 'rentals_search_first_enabled'
   | 'rentals_modify_request_enabled'
   | 'rentals_my_rentals_entry_enabled'
-  | 'rentals_client_tab_enabled';
+  | 'rentals_client_tab_enabled'
+  | 'rentals_not_received_report_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -42,6 +43,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_my_rentals_entry_enabled: false,
   /** Client Rentals tab. Off until a config row turns it on. */
   rentals_client_tab_enabled: false,
+  /** Renter report that the item was not received. Off until a config row turns it on. */
+  rentals_not_received_report_enabled: false,
 };
 
 type ClientFlagsResponse = {

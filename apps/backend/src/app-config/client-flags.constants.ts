@@ -17,6 +17,7 @@ export const CLIENT_FLAG_KEYS = [
   'rentals_modify_request_enabled',
   'rentals_my_rentals_entry_enabled',
   'rentals_client_tab_enabled',
+  'rentals_not_received_report_enabled',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -59,4 +60,6 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_my_rentals_entry_enabled: false,
   /** Client Rentals tab. Off until a country or global row turns it on. No NODE_ENV override. */
   rentals_client_tab_enabled: false,
+  /** Renter "didn't receive the item" report. Off until a row turns it on. No NODE_ENV override. */
+  rentals_not_received_report_enabled: false,
 };

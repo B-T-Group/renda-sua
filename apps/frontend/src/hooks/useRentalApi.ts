@@ -668,6 +668,18 @@ export function useRentalApi() {
     [api]
   );
 
+  const reportNotReceived = useCallback(
+    async (bookingId: string) => {
+      const { data } = await api.post(`/rentals/bookings/${bookingId}/report-not-received`);
+      return data as {
+        success: true;
+        alreadyReported: boolean;
+        report: { id: string; rentalBookingId: string; reportedAt: string };
+      };
+    },
+    [api]
+  );
+
   const acceptAndStart = useCallback(
     async (bookingId: string, versionId: string) => {
       const { data } = await api.post(`/rentals/bookings/${bookingId}/accept-and-start`, {
@@ -816,6 +828,7 @@ export function useRentalApi() {
     cancelBooking,
     initiatePickupPayment,
     acceptAndStart,
+    reportNotReceived,
     getStartPin,
     fetchBookingDetail,
     verifyStartPin,

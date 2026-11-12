@@ -139,6 +139,12 @@ export function pickupGate(input: PickupGateInput): PickupGate {
   };
 }
 
+export function notReceivedErrorKey(code: string | null | undefined): string {
+  if (code === 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED') return 'rentalInspection.didntReceiveWindow';
+  if (code === 'RENTAL_NOT_RECEIVED_NOT_INSPECTED') return 'rentalInspection.didntReceiveNotInspected';
+  return 'rentalInspection.didntReceiveFailed';
+}
+
 export function showDidntReceiveLink(input: {
   enrolled: boolean;
   startedAt: string | null | undefined;

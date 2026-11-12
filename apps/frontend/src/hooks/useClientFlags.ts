@@ -18,7 +18,8 @@ export type ClientFlagKey =
   | 'agent_contract_required'
   | 'rentals_search_first_enabled'
   | 'rentals_my_rentals_entry_enabled'
-  | 'rentals_client_tab_enabled';
+  | 'rentals_client_tab_enabled'
+  | 'rentals_not_received_report_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -42,6 +43,8 @@ const DEFAULT_FLAGS: ClientFlags = {
   rentals_my_rentals_entry_enabled: false,
   /** Client Rentals tab on the sticky nav. Off until a config row turns it on. */
   rentals_client_tab_enabled: false,
+  /** Renter report that the item was not received. Off until a config row turns it on. */
+  rentals_not_received_report_enabled: false,
 };
 
 /**

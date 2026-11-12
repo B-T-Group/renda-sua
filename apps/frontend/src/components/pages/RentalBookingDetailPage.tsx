@@ -29,6 +29,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useRentalInspection } from '../../hooks/useRentalInspection';
 import LoadingPage from '../common/LoadingPage';
 import { UserMessagesComponent } from '../common/UserMessagesComponent';
+import { DidntReceiveReportButton } from '../rentals/DidntReceiveReportButton';
 import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
 import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import SEOHead from '../seo/SEOHead';
@@ -675,13 +676,12 @@ const RentalBookingDetailPage: React.FC = () => {
           ) : null}
 
           {isClient &&
+          bookingId &&
           showDidntReceiveLink({
             enrolled: booking.inspection_policy_version != null,
             startedAt: booking.actual_start_at,
           }) ? (
-            <Button onClick={() => navigate('/support')} sx={{ alignSelf: 'flex-start' }}>
-              {t('rentalInspection.didntReceive', "Didn't receive the item? Tell us")}
-            </Button>
+            <DidntReceiveReportButton bookingId={bookingId} />
           ) : null}
 
           <Stack spacing={2}>

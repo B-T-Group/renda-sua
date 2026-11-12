@@ -87,3 +87,20 @@ runs:
 
         run_logged "hasura metadata inconsistency status" \
           hasura metadata inconsistency status --endpoint "${HASURA_ENDPOINT}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
+
+        # The migration inserts the flag false. Only the dev apply turns it on.
+        # Production (ENV_TITLE=production) never runs this update.
+        if [[ "${ENV_TITLE}" == "dev" ]]; then
+          response="$(curl -fsS -X POST "${HASURA_ENDPOINT}/v1/graphql" \
+            -H "Content-Type: application/json" \
+            -H "x-hasura-admin-secret: ${HASURA_GRAPHQL_ADMIN_SECRET}" \
+            -d '{"query":"mutation EnableNotReceived($key: String!) { update_application_configurations(where: {config_key: {_eq: $key}, country_code: {_is_null: true}}, _set: {boolean_value: true}) { affected_rows } }","variables":{"key":"rentals_not_received_report_enabled"}}')"
+          append_summary "### enable rentals_not_received_report_enabled on dev"
+          append_summary ""
+          printf '%s\n' "${response}" | tee -a "${GITHUB_STEP_SUMMARY}"
+          append_summary ""
+          if [[ "${response}" == *'"errors"'* ]]; then
+            echo "dev flag enable failed" >&2
+            exit 1
+          fi
+        fi

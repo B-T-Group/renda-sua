@@ -109,6 +109,51 @@ export function useUserProfileContext() {
   );
 }
 
+function reportEnabled(): boolean {
+  return new URLSearchParams(window.location.search).get('report') === '1';
+}
+
+export function useClientFlags() {
+  return useMemo(
+    () => ({
+      loaded: true,
+      flags: { rentals_not_received_report_enabled: reportEnabled() },
+    }),
+    []
+  );
+}
+
+export function useApiClient() {
+  return useMemo(
+    () => ({
+      get: async (url: string) => {
+        if (url.includes('not-received')) {
+          return {
+            data: [
+              {
+                id: 'nr-1',
+                rental_booking_id: 'b1',
+                reported_at: '2026-11-12T14:22:00.000Z',
+                rental_booking: {
+                  booking_number: 'RB-104218',
+                  status: 'active',
+                  rental_location_listing: { rental_item: { name: 'Canon EOS R50' } },
+                },
+              },
+            ],
+          };
+        }
+        return { data: [] };
+      },
+    }),
+    []
+  );
+}
+
+export function usePermission() {
+  return true;
+}
+
 export function useIsStripeRail() {
   return useMemo(() => ({ isStripeRail: false, loading: false, refetch: async () => false }), []);
 }
@@ -170,6 +215,17 @@ export function useRentalApi() {
     getActiveStartPin: async () => null,
     confirmReturn: async () => ({ success: true }),
     retryBookingPayment: async () => ({ success: true }),
+    reportNotReceived: async () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('reportResult') === 'error') {
+        throw {
+          response: {
+            data: { code: params.get('reportCode') || 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED' },
+          },
+        };
+      }
+      return { success: true, alreadyReported: false, report: { id: 'nr-1', rentalBookingId: 'b1' } };
+    },
   }), []);
 }
 

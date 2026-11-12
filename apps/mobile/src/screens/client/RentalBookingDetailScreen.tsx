@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageLightbox } from '../../components/common/ImageLightbox';
 import { StatusPill } from '../../components/common/StatusPill';
 import { OrderMessageComposer } from '../../components/messaging/OrderMessageComposer';
+import { DidntReceiveReportButton } from '../../components/rentals/DidntReceiveReportButton';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { SendRentalStartPinButton } from '../../components/rentals/SendRentalStartPinButton';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -482,13 +483,7 @@ export default function RentalBookingDetailScreen() {
           enrolled: booking.inspection_policy_version != null,
           startedAt: booking.actual_start_at,
         }) ? (
-          <Button
-            mode="text"
-            textColor={colors.primary.main}
-            onPress={() => navigation.navigate('SupportTickets')}
-          >
-            {t('rentalInspection.didntReceive', "Didn't receive the item? Tell us")}
-          </Button>
+          <DidntReceiveReportButton bookingId={booking.id} />
         ) : null}
 
         <View

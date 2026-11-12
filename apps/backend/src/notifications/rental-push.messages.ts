@@ -162,6 +162,38 @@ export function buildRentalBookingRequestPush(params: {
   };
 }
 
+/** Exact business copy. Do not paraphrase. */
+export const RENTAL_NOT_RECEIVED_BUSINESS_BODY = {
+  en: "The renter says they haven't received the item. Support will follow up.",
+  fr: "Le client indique ne pas avoir reçu l'article. Le support va vous contacter.",
+} as const;
+
+export function buildRentalNotReceivedNotice(params: {
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  return {
+    title: fr ? 'Article non reçu' : 'Item not received',
+    body: fr ? RENTAL_NOT_RECEIVED_BUSINESS_BODY.fr : RENTAL_NOT_RECEIVED_BUSINESS_BODY.en,
+  };
+}
+
+export function buildRentalNotReceivedSupportNotice(params: {
+  bookingNumber: string;
+  rentalItemName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const booking = params.bookingNumber || '—';
+  const item = params.rentalItemName || 'Rental';
+  return {
+    title: fr ? 'Article non remis au locataire' : 'Renter has not received the item',
+    body: fr
+      ? `${booking} · ${item}. Le locataire indique ne pas avoir reçu l'article. Aucun remboursement ni annulation.`
+      : `${booking} · ${item}. The renter says they have not received the item. No refund or cancellation.`,
+  };
+}
+
 export function buildRentalInspectionNotice(params: {
   kind:
     | 'review_pickup'

@@ -20,6 +20,7 @@ import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions
 import { IssueRentalStartOverwriteDto } from './dto/issue-rental-start-overwrite.dto';
 import { AdjustOvertimeDto, AdminHandbackDto, DecideInspectionDisputeDto } from './dto/rental-inspection.dto';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
+import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalsService } from './rentals.service';
 
 interface RequestWithUser extends Request {
@@ -44,7 +45,8 @@ interface RequestWithUser extends Request {
 export class AdminRentalBookingsController {
   constructor(
     private readonly rentalsService: RentalsService,
-    private readonly inspections: RentalInspectionService
+    private readonly inspections: RentalInspectionService,
+    private readonly notReceived: RentalNotReceivedService
   ) {}
 
   @Post('bookings/:id/start-overwrite-code')
@@ -96,6 +98,14 @@ export class AdminRentalBookingsController {
   @ApiOperation({ summary: 'Open and escalated rental inspection reviews' })
   listDisputes() {
     return this.inspections.listOpenDisputes();
+  }
+
+  @Get('not-received-reports')
+  @ApiOperation({
+    summary: 'Renter reports that the item was not handed over. The booking is unchanged.',
+  })
+  listNotReceived() {
+    return this.notReceived.listForAdmin();
   }
 
   @Get('bookings/:id/inspection-case')
