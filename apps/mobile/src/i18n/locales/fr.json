@@ -8456,7 +8456,7 @@
     "didntReceiveSuccessBody": "Ils feront le suivi. Cette location ne change pas.",
     "didntReceiveDone": "OK",
     "didntReceiveErrorTitle": "L’envoi n’a pas abouti",
-    "didntReceiveFailed": "Impossible d'envoyer le signalement. Vérifiez votre connexion et réessayez.",
+    "didntReceiveFailed": "Vérifiez votre connexion et réessayez.",
     "didntReceiveStopped": "Impossible d'envoyer le signalement.",
     "didntReceiveAlready": "C'est déjà signalé. Le support va vous contacter.",
     "didntReceiveReported": "Signalé · le support va vous contacter",

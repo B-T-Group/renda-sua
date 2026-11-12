@@ -131,7 +131,7 @@ export function DidntReceiveReportButton({
       : step === 'retry'
         ? t(
             'rentalInspection.didntReceiveFailed',
-            "Couldn't send the report. Check your connection and try again."
+            "Check your connection and try again."
           )
         : step === 'terminal'
           ? t(errorKey, "Couldn't send the report.")
