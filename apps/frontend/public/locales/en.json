@@ -7411,7 +7411,7 @@
       "retryPaymentError": "Could not retry payment",
       "paymentConfirmed": "Payment confirmed",
       "securityDeposit": "Security deposit",
-      "authorizedOnCard": "Held on your card (rental + deposit): {{amount}} {{currency}}. The final charge at return is at least the rental total; the deposit only covers extra hours.",
+      "authorizedOnCard": "Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.",
       "payAtPickup": "Nothing paid yet — the rental total is due at pickup.",
       "overtimeDue": "Extra hours: {{amount}} {{currency}}",
       "reservedClientHint": "Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.",

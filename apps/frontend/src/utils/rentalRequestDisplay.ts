@@ -82,6 +82,25 @@ export function parseRentalPricingSnapshot(snap: unknown): ParsedRentalPricingSn
   return { total, currency, securityDeposit, lines };
 }
 
+function groupedDigits(amount: number, separator: string): string {
+  const rounded = Math.round(amount);
+  const sign = rounded < 0 ? '-' : '';
+  const digits = String(Math.abs(rounded));
+  return `${sign}${digits.replace(/\B(?=(\d{3})+(?!\d))/g, separator)}`;
+}
+
+/**
+ * Number, then `FCFA` (`45 000 FCFA`) in EN and FR for XAF, XOF, and FCFA.
+ * Same shape as the mobile request formatter. Other currencies stay on `formatRentalMoney`.
+ */
+export function formatRequestAmount(amount: number, currency: string, _language: string): string {
+  const code = currency.toUpperCase();
+  if (code === 'XAF' || code === 'XOF' || code === 'FCFA') {
+    return `${groupedDigits(amount, ' ')} FCFA`;
+  }
+  return formatRentalMoney(amount, currency);
+}
+
 export function formatRentalMoney(amount: number, currency: string): string {
   try {
     return new Intl.NumberFormat(undefined, {

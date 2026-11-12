@@ -84,6 +84,13 @@ describe('Douala listing clock', () => {
     expect(formatRentalPeriod(slot, 'en', days)).not.toContain('10:00');
   });
 
+  it('formats a return instant as one listing clock', () => {
+    const at = (iso: string): PeriodWindow[] => [{ start_at: iso, end_at: iso }];
+    expect(formatRentalPeriod(at('2026-11-12T18:00:00.000Z'), 'en', days)).toBe('12 Nov · 18:00');
+    expect(formatRentalPeriod(at('2026-11-14T18:00:00.000Z'), 'fr', jours)).toBe('14 nov. · 18:00');
+    expect(formatRentalPeriod(at('2026-11-12T18:00:00.000Z'), 'en', days)).not.toMatch(/PM|AM|2026/);
+  });
+
   it('does not roll a late listing clock onto the next calendar day', () => {
     const late = [hourly('2026-11-12T23:30:00.000Z', '2026-11-12T23:45:00.000Z')];
     expect(formatRentalPeriod(late, 'en', days)).toBe('12 Nov · 23:30\u201323:45');
