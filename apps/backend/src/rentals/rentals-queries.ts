@@ -1171,10 +1171,12 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         base_price_per_hour
         base_price_per_day
         security_deposit_amount
+        units_available
         business_location {
           name
           address {
             city
+            country
           }
         }
         weekly_availability(order_by: { weekday: asc }) {

@@ -190,10 +190,17 @@ export function isReorderSiteEventType(eventType: string): boolean {
   return eventType.startsWith('orders.reorder.');
 }
 
+const RENTAL_REQUEST_CARD_EVENTS = new Set([
+  'rental_request_card_accept_tap',
+  'rental_request_card_decline_tap',
+]);
+const RENTAL_REQUEST_UUID_KEYS = new Set(['request_id']);
+
 /** Keys whose values are kept only if they are strict UUIDs (dropped otherwise). */
 export function uuidIdKeysForEventType(eventType: string): ReadonlySet<string> {
   if (isAssistantSiteEventType(eventType)) return ASSISTANT_UUID_ID_KEYS;
   if (isReorderSiteEventType(eventType)) return REORDER_UUID_ID_KEYS;
+  if (RENTAL_REQUEST_CARD_EVENTS.has(eventType)) return RENTAL_REQUEST_UUID_KEYS;
   return NO_UUID_ID_KEYS;
 }
 

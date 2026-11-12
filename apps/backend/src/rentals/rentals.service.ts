@@ -46,10 +46,10 @@ import {
   classifyRentalEdit,
   earliestWindowIso,
   normalizeRequestNote,
-  quotePlanTotal,
   type RentalEditBlock,
   type RentalWindowSnapshot,
 } from './rental-request-edit';
+import { buildRentalRequestQuote } from './rental-request-quote';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
   inspectionRejected,
@@ -174,6 +174,7 @@ export interface ListBusinessRentalRequestsQuery {
   page?: number;
   limit?: number;
   status?: string;
+  id?: string;
 }
 
 export interface PaginatedBusinessRentalRequests {
@@ -850,6 +851,15 @@ export class RentalsService {
     const plan = this.buildCreateRentalRequestPlan(dto);
     await this.validateRentalRequestWindowsPlan(plan, listing, unitsRequested);
     const note = dto.clientRequestNote?.trim();
+    const quote = buildRentalRequestQuote({
+      windows: plan.windows,
+      dayRate: Number(listing.base_price_per_day),
+      hourRate: Number(listing.base_price_per_hour),
+      units: unitsRequested,
+      currency: listing.rental_item?.currency || 'XAF',
+      securityDepositPerUnit: Number(listing.security_deposit_amount) || 0,
+      computedAt: new Date().toISOString(),
+    });
     const row = await this.hasuraSystemService.executeMutation<{
       insert_rental_requests_one: { id: string };
     }>(Q.INSERT_RENTAL_REQUEST, {
@@ -863,12 +873,8 @@ export class RentalsService {
         status: 'pending',
         units_requested: unitsRequested,
         client_request_note: note || null,
-        quoted_total: quotePlanTotal(
-          plan.windows,
-          Number(listing.base_price_per_day),
-          Number(listing.base_price_per_hour),
-          unitsRequested
-        ),
+        quoted_total: quote?.quotedTotal ?? null,
+        rental_pricing_snapshot: quote?.snapshot ?? null,
       },
     });
     const requestId = row.insert_rental_requests_one.id;
@@ -1298,22 +1304,64 @@ export class RentalsService {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 50));
     const offset = (page - 1) * limit;
-    const where = this.buildBusinessRequestsWhere(businessId, query.status);
+    const where = this.buildBusinessRequestsWhere(businessId, query.status, query.id);
     const r = await this.hasuraSystemService.executeQuery<{
       rental_requests: any[];
       rental_requests_aggregate: { aggregate: { count: number } | null } | null;
     }>(Q.GET_BUSINESS_RENTAL_REQUESTS, { where, limit, offset });
+    const requests = await this.attachRequestCardFacts(r.rental_requests ?? []);
     return {
-      requests: r.rental_requests ?? [],
+      requests,
       total: r.rental_requests_aggregate?.aggregate?.count ?? 0,
       page,
       limit,
     };
   }
 
+  private async attachRequestCardFacts(rows: any[]): Promise<any[]> {
+    const annotated: any[] = [];
+    for (const row of rows) annotated.push(await this.annotateRequestCard(row));
+    return annotated;
+  }
+
+  private async annotateRequestCard(row: any): Promise<any> {
+    const country = row.rental_location_listing?.business_location?.address?.country;
+    const paymentRail = await this.paymentRailForCountry(country);
+    const datesAvailable = row.status === 'pending' ? await this.datesAvailableForRequest(row) : null;
+    return { ...row, payment_rail: paymentRail, dates_available: datesAvailable };
+  }
+
+  private async paymentRailForCountry(country: unknown): Promise<'stripe' | 'mobile_money' | null> {
+    const code = typeof country === 'string' ? country.trim() : '';
+    if (!code) return null;
+    try {
+      return await this.paymentRoutingService.resolveRailForCountry(code);
+    } catch {
+      return null;
+    }
+  }
+
+  private async datesAvailableForRequest(row: any): Promise<boolean | null> {
+    const listing = row.rental_location_listing;
+    if (!listing?.id) return null;
+    try {
+      await this.assertCapacityForRequestWindows(
+        listing.id,
+        listing.units_available,
+        row,
+        row.units_requested
+      );
+      return true;
+    } catch (error) {
+      if (error instanceof HttpException && error.getStatus() === HttpStatus.CONFLICT) return false;
+      return null;
+    }
+  }
+
   private buildBusinessRequestsWhere(
     businessId: string,
-    status?: string
+    status?: string,
+    id?: string
   ): Record<string, unknown> {
     const where: Record<string, unknown> = {
       rental_location_listing: {
@@ -1332,6 +1380,8 @@ export class RentalsService {
     if (trimmed && allowed.includes(trimmed)) {
       where.status = { _eq: trimmed };
     }
+    const requestId = id?.trim();
+    if (requestId) where.id = { _eq: requestId };
     return where;
   }
 

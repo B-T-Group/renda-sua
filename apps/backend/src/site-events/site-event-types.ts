@@ -147,6 +147,8 @@ export const SITE_EVENT_TYPES_V1 = [
   'orders.reorder.impression',
   'orders.reorder.tap',
   'orders.reorder.result',
+  'rental_request_card_accept_tap',
+  'rental_request_card_decline_tap',
   // Assistant (#451) - client-emitted events
   'assistant.launcher.impression',
   'assistant.launcher.tap',

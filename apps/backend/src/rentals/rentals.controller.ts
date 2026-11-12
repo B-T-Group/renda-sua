@@ -299,15 +299,18 @@ export class RentalsController {
   })
   @ApiResponse({ status: 200, description: 'Requests returned' })
   @ApiResponse({ status: 403, description: 'Not a business user' })
+  @ApiQuery({ name: 'id', required: false, description: 'One request id' })
   async getBusinessRequests(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('id') id?: string
   ) {
     const result = await this.rentalsService.getBusinessRentalRequests({
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
       status,
+      id,
     });
     return {
       success: true,

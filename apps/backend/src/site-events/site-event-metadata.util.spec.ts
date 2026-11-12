@@ -287,6 +287,19 @@ describe('site-event-metadata.util', () => {
       }
     });
 
+    it('keeps a strict-UUID request_id on rental request card taps', () => {
+      const out = normalizeSiteEventMetadata(
+        'rental_request_card_accept_tap',
+        { request_id: uuid },
+        'client'
+      );
+      expect(out).toEqual({ request_id: uuid });
+      expect(
+        normalizeSiteEventMetadata('rental_request_card_decline_tap', { request_id: '670000000' }, 'client')
+      ).toEqual({});
+      expect(normalizeSiteEventMetadata('catalog.module.click', { request_id: uuid }, 'client')).toEqual({});
+    });
+
     it('does not extend the UUID exemption to other keys or other event types', () => {
       expect(
         normalizeSiteEventMetadata('orders.reorder.tap', { order_id: uuid, thread_id: uuid }, 'client')
