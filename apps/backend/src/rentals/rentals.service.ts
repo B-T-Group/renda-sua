@@ -882,17 +882,54 @@ export class RentalsService {
     return { success: true, requestId };
   }
 
+  private assertModifyVersion(
+    req: { client_id: string; status: string; edit_version?: number },
+    clientId: string,
+    expectedVersion: number
+  ): void {
+    if (req.client_id !== clientId) {
+      throw new HttpException(
+        { message: 'Forbidden', code: 'RENTAL_REQUEST_FORBIDDEN' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (req.status !== 'pending') throw this.editHttpError('not_pending');
+    if (Number(req.edit_version ?? 1) !== expectedVersion) {
+      throw this.editHttpError('stale_version');
+    }
+  }
+
+  private editDtoWithStoredSchedule(
+    req: { rental_selection_windows?: unknown },
+    dto: UpdateRentalRequestDto
+  ): UpdateRentalRequestDto {
+    if (dto.windows?.length || (dto.requestedStartAt && dto.requestedEndAt)) return dto;
+    const windows = this.windowSnapshots(req).flatMap((row) => {
+      if (!row.start_at || !row.end_at) return [];
+      const billing = row.billing === 'all_day' ? ('all_day' as const) : undefined;
+      return [{
+        requestedStartAt: row.start_at,
+        requestedEndAt: row.end_at,
+        ...(billing ? { billing, calendarDate: row.calendar_date } : {}),
+      }];
+    });
+    if (!windows.length) return dto;
+    return { ...dto, windows };
+  }
+
   async modifyRentalRequest(requestId: string, dto: UpdateRentalRequestDto) {
     if (!(await this.isModifyRequestEnabled())) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     }
     const user = await this.requireModifyClient();
     const req = await this.fetchRequest(requestId);
-    const plan = this.buildCreateRentalRequestPlan(dto as unknown as CreateRentalRequestDto);
+    this.assertModifyVersion(req, user.clientId, dto.expectedVersion);
+    const edit = this.editDtoWithStoredSchedule(req, dto);
+    const plan = this.buildCreateRentalRequestPlan(edit as unknown as CreateRentalRequestDto);
     const units = this.normalizeUnitsRequested(dto.unitsRequested ?? req.units_requested);
     this.assertModifyStillOpen(req, user.clientId, dto.expectedVersion, plan.envelopeStartIso);
     await this.validateRentalRequestWindowsPlan(plan, req.rental_location_listing, units);
-    return this.commitRentalRequestEdit(requestId, user, req, dto, plan, units);
+    return this.commitRentalRequestEdit(requestId, user, req, edit, plan, units);
   }
 
   private async applyRentalRequestEdit(

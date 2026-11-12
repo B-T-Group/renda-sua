@@ -2,6 +2,14 @@
 
 Personas (client / agent / business) live in **Hasura**, not in Auth0 `app_metadata`. The SPA sends a **custom authorization parameter** on silent refresh so each access token’s Hasura claims match the UI’s active mode.
 
+## First login token
+
+The post-login Action reads `event.request.query.active_persona ?? event.request.body.active_persona`. The first token has to carry the stored persona, or a multi-persona user falls back to agent, then business, then client.
+
+- `/authorize` (Universal Login, including the mobile AuthSession `extraParams` / `additionalParameters`) puts `active_persona` on the query.
+- Password, password-realm, and passwordless OTP grants put `active_persona` on the `/oauth/token` body. Nest `POST /auth/login/verify-otp` forwards the client's `active_persona` onto that body.
+- Delegation mode sends no `active_persona`. Refresh keeps the same rule.
+
 ## SPA contract
 
 - After login or when the user switches persona, call:

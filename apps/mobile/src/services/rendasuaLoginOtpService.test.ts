@@ -14,6 +14,7 @@ vi.mock('./auth0DirectService', () => ({
   },
 }));
 
+import { clearActivePersonaStorage, writeStoredContext } from '../utils/activePersonaStorage';
 import {
   extractAuth0TokensFromLoginResponse,
   fetchLoginOtpOptions,
@@ -109,5 +110,34 @@ describe('login OTP requests send X-Client-Platform', () => {
         refresh_token: 'rt-from-nest',
       })
     );
+    const verifyCall = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(JSON.parse(String(verifyCall[1].body))).not.toHaveProperty('active_persona');
+  });
+
+  it('sends the stored active_persona on verify-otp', async () => {
+    await writeStoredContext({
+      userId: 'user-1',
+      kind: 'persona',
+      persona: 'agent',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockJsonResponse({
+        access_token: 'at',
+        refresh_token: 'rt-from-nest',
+        expires_in: 3600,
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    finalizeAuthWithTokens.mockResolvedValue({ type: 'success' });
+
+    await verifyLoginOtpEmail('oru@rendasua-test.com', '0000', 'email');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      email: 'oru@rendasua-test.com',
+      otp: '0000',
+      active_persona: 'agent',
+    });
+    await clearActivePersonaStorage();
   });
 });

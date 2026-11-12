@@ -18,6 +18,7 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { validateReturnTo } from '../../utils/returnToValidator';
+import { activePersonaAuthField } from '../../utils/activePersonaStorage';
 import LaunchPromoCongrats, {
   LaunchPromoCongratsData,
 } from '../business/LaunchPromoCongrats';
@@ -362,8 +363,8 @@ const OtpAuthPage: React.FC = () => {
         return;
       }
       const payload = loginEmail
-        ? { email: loginEmail, otp, channel }
-        : { phone_number: loginPhone, otp, channel };
+        ? { email: loginEmail, otp, channel, ...activePersonaAuthField() }
+        : { phone_number: loginPhone, otp, channel, ...activePersonaAuthField() };
       const res = await apiClient.post('/auth/login/verify-otp', payload);
       completeLoginVerify(res.data);
     } catch (err: any) {

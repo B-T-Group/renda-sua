@@ -70,6 +70,13 @@ export async function readStoredContext(): Promise<StoredActiveContext | null> {
   }
 }
 
+/** Persona to send on login. Delegation mode sends nothing so Auth0 defaults to `user`. */
+export async function readLoginActivePersona(): Promise<string | undefined> {
+  const stored = await readStoredContext();
+  if (stored?.kind === 'persona' && stored.persona) return stored.persona;
+  return undefined;
+}
+
 export async function clearActivePersonaStorage(): Promise<void> {
   await AsyncStorage.multiRemove([PERSONA_KEY, CONTEXT_KEY, HASURA_USER_ID_KEY]);
 }
