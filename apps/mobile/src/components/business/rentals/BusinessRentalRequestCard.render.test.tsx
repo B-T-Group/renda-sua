@@ -65,6 +65,12 @@ describe('BusinessRentalRequestCard', () => {
     expect(screen.queryByText(/Deposit:/)).toBeNull();
     expect(screen.queryByText(/Respond by/i)).toBeNull();
     expect(screen.queryByText(/fee/i)).toBeNull();
+    expect(screen.getByTestId('request-card-date-icon')).toBeTruthy();
+    expect(screen.getByTestId('request-card-wallet-icon')).toBeTruthy();
+    expect(screen.getByTestId('request-card-place-icon')).toBeTruthy();
+    expect(screen.queryByText('📅')).toBeNull();
+    expect(screen.queryByText('💳')).toBeNull();
+    expect(screen.queryByText('📍')).toBeNull();
   });
 
   it('shows a deposit only for a card rail', async () => {

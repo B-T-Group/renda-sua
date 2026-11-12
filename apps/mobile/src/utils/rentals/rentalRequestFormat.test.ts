@@ -242,5 +242,17 @@ describe('formatRentalPeriod', () => {
       },
     }, 'en');
     expect(detail).toBe('dates 15\u201317 → 15\u201318 Nov');
+    const french = formatChangeDetail({
+      fields: ['dates'],
+      dates: {
+        from: daily,
+        to: [
+          ...daily,
+          { billing: 'all_day', calendar_date: '2026-11-17', start_at: '2026-11-17T00:00:00.000Z', end_at: '2026-11-18T00:00:00.000Z' },
+        ],
+      },
+    }, 'fr');
+    expect(french).toContain('→');
+    expect(french).toMatch(/nov/i);
   });
 });

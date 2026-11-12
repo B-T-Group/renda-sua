@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Button, Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { StatusPill } from '../../common/StatusPill';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { trackSiteEvent } from '../../../services/analytics/AppEventsService';
@@ -229,7 +230,7 @@ function ItemRow({ model, imageUri }: { model: RequestCardModel; imageUri?: stri
         </Text>
         {model.place ? (
           <View style={styles.place}>
-            <MaterialCommunityIcons name="map-marker" size={14} color={colors.primary.main} />
+            <MaterialIcons name="place" size={14} color={colors.primary.main} testID="request-card-place-icon" />
             <Text numberOfLines={1} style={[styles.flex, { color: colors.text.secondary, marginLeft: 4, fontSize: 12 }]}>
               {model.place}
             </Text>
@@ -279,7 +280,7 @@ function ScheduleBlock({
     <View>
       <View style={[styles.block, { paddingHorizontal: spacing.sm }]}>
         <View style={[styles.ico, { backgroundColor: colors.surfaceSelected, borderRadius: borderRadius.icon }]}>
-          <MaterialCommunityIcons name="calendar-month-outline" size={16} color={colors.primary.main} />
+          <MaterialIcons name="event" size={16} color={colors.primary.main} testID="request-card-date-icon" />
         </View>
         <Text style={[styles.flex, { color: colors.text.primary, fontWeight: '800' }]}>{model.schedule.summary}</Text>
         {model.schedule.expandable && onToggleTimes ? (
@@ -318,7 +319,7 @@ function MoneyBlock({ model }: { model: RequestCardModel }) {
   return (
     <View style={[styles.block, { paddingHorizontal: spacing.sm }]}>
       <View style={[styles.ico, { backgroundColor: colors.cta.soft, borderRadius: borderRadius.icon }]}>
-        <MaterialCommunityIcons name="wallet-outline" size={16} color={colors.cta.dark} />
+        <MaterialIcons name="account-balance-wallet" size={16} color={colors.cta.dark} testID="request-card-wallet-icon" />
       </View>
       <View style={styles.flex}>
         {model.quoteMissing ? (
