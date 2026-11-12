@@ -54,22 +54,6 @@ jobs:
           hasura_admin_secret_arn: arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-dev-admin-lvXQN9
           environment_title: dev
 
-      - name: Enable rentals_my_rentals_entry_enabled on DEV
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          HASURA_ADMIN_SECRET_ARN: arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-dev-admin-lvXQN9
-        run: |
-          set -euo pipefail
-          SECRET="$(aws secretsmanager get-secret-value --region "${AWS_REGION}" --secret-id "${HASURA_ADMIN_SECRET_ARN}" --query SecretString --output text)"
-          SQL="$(cat apps/hasura/seeds/dev/rentals_my_rentals_entry_on.sql)"
-          BODY="$(jq -n --arg sql "$SQL" '{type:"run_sql", args:{source:"Rendasua", sql:$sql, cascade:false, read_only:false}}')"
-          curl -fsS -X POST https://hasura-dev.rendasua.com/v2/query \
-            -H "Content-Type: application/json" \
-            -H "x-hasura-admin-secret: ${SECRET}" \
-            --data "$BODY" \
-            -o /tmp/hasura-dev-my-rentals-entry.json
-          jq -e '.result_type == "CommandOk"' /tmp/hasura-dev-my-rentals-entry.json >/dev/null
-
   apply-hasura-production:
     name: Apply Hasura (production)
     if: |
