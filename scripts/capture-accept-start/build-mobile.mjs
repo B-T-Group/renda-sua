@@ -22,9 +22,20 @@ function stubFor(importPath, importer) {
   ) {
     return api;
   }
+  if (base.startsWith('ClientFlagsContext')) return api;
+  const inboxImporter = importer.includes('MessagesScreen');
+  if (
+    inboxImporter &&
+    (base.startsWith('agentApi') ||
+      base.startsWith('useThreads') ||
+      base.startsWith('useProfileMe') ||
+      base.startsWith('useNotificationNavigation'))
+  ) {
+    return api;
+  }
   if (
     (importPath === '@react-navigation/native' || importPath.startsWith('@react-navigation/native/')) &&
-    importer.includes('/screens/')
+    (importer.includes('/screens/') || importer.includes('/components/rentals/'))
   ) {
     return nav;
   }
@@ -36,10 +47,10 @@ globalThis.ExpoDomWebView = {};
 var __expoMod = new Proxy(function(){ return Promise.resolve(null); }, { get: function(){ return __expoMod; }, apply: function(){ return Promise.resolve(null); } });
 globalThis.expo = { modules: new Proxy({}, { get: function(){ return __expoMod; } }) };`;
 
-export async function buildMobile(outfile) {
+export async function buildMobile(outfile, entry = 'scripts/capture-accept-start/mobile-app.tsx') {
   await esbuild.build({
     absWorkingDir: root,
-    entryPoints: ['scripts/capture-accept-start/mobile-app.tsx'],
+    entryPoints: [entry],
     bundle: true,
     outfile,
     format: 'iife',

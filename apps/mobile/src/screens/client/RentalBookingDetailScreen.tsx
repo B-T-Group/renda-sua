@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -17,6 +17,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageLightbox } from '../../components/common/ImageLightbox';
 import { StatusPill } from '../../components/common/StatusPill';
 import { OrderMessageComposer } from '../../components/messaging/OrderMessageComposer';
+import {
+  DidntReceiveReportButton,
+  useDidntReceiveWindow,
+} from '../../components/rentals/DidntReceiveReportButton';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { SendRentalStartPinButton } from '../../components/rentals/SendRentalStartPinButton';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -44,7 +48,7 @@ import {
   formatRentalPeriod,
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
-import { clientInspectionAction, pickupGate, showDidntReceiveLink } from '../../utils/rentals/rentalInspection';
+import { clientInspectionAction, pickupGate } from '../../utils/rentals/rentalInspection';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
@@ -96,6 +100,18 @@ export default function RentalBookingDetailScreen() {
     mentionableParticipants,
     markMessagesRead,
   } = useRentalBookingMessages(bookingId ?? '');
+
+  const [reportedNow, setReportedNow] = useState(false);
+  const [windowForcedClosed, setWindowForcedClosed] = useState(false);
+  const didntWindowOpen = useDidntReceiveWindow(
+    booking?.inspection_policy_version != null,
+    booking?.actual_start_at
+  );
+  const reportedMissingItem = reportedNow || Boolean(booking?.not_received_report);
+  useEffect(() => {
+    setReportedNow(false);
+    setWindowForcedClosed(false);
+  }, [bookingId]);
 
   const [pinOpen, setPinOpen] = useState(false);
   const [pinValue, setPinValue] = useState<string | null>(null);
@@ -478,17 +494,13 @@ export default function RentalBookingDetailScreen() {
           </View>
         ) : null}
 
-        {showDidntReceiveLink({
-          enrolled: booking.inspection_policy_version != null,
-          startedAt: booking.actual_start_at,
-        }) ? (
-          <Button
-            mode="text"
-            textColor={colors.primary.main}
-            onPress={() => navigation.navigate('SupportTickets')}
-          >
-            {t('rentalInspection.didntReceive', "Didn't receive the item? Tell us")}
-          </Button>
+        {reportedMissingItem || (didntWindowOpen && !windowForcedClosed) ? (
+          <DidntReceiveReportButton
+            bookingId={booking.id}
+            reported={reportedMissingItem}
+            onReported={() => setReportedNow(true)}
+            onWindowClosed={() => setWindowForcedClosed(true)}
+          />
         ) : null}
 
         <View

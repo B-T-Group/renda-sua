@@ -221,6 +221,7 @@ export interface RentalBookingDetail {
   actual_end_at?: string | null;
   units_booked?: number | null;
   inspection_policy_version?: number | null;
+  not_received_report?: { id: string; reported_at: string } | null;
   accept_start_preview?: {
     payment_rail: 'card' | 'wallet' | 'mobile_money';
     amount_due_at_pickup: number;

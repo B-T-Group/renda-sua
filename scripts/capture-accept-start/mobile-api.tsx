@@ -22,7 +22,8 @@ function bookingFor(current: Scene) {
     currency: 'XAF',
     payment_timing: current === 'review' || current === 'momo' || current === 'conflict' ? 'pay_at_pickup' : 'pay_now',
     payment_status: active || legacy ? 'authorized' : 'pending',
-    actual_start_at: active ? new Date(Date.now() - 5 * 60 * 1000).toISOString() : null,
+    actual_start_at: startedAt(active),
+    not_received_report: notReceivedReport(),
     units_booked: 2,
     inspection_policy_version: legacy ? null : 1,
     client_id: 'client',
@@ -175,7 +176,100 @@ export const rentalsApi = {
   sendBookingMessage: async () => ({ success: true }),
   markBookingMessagesRead: async () => undefined,
   getActiveStartPin: async () => null,
+  reportNotReceived,
 };
+
+function captureParams() {
+  return new URLSearchParams(window.location.search);
+}
+
+function startedAt(active: boolean): string | null {
+  if (!active) return null;
+  if (captureParams().get('window') === 'closed') {
+    return new Date(Date.now() - 31 * 60 * 1000).toISOString();
+  }
+  return new Date(Date.now() - 5 * 60 * 1000).toISOString();
+}
+
+function notReceivedReport() {
+  if (captureParams().get('reported') !== '1') return null;
+  return { id: 'nr-1', reported_at: '2026-11-12T14:22:00.000Z' };
+}
+
+export async function reportNotReceived() {
+  const params = captureParams();
+  const result = params.get('reportResult');
+  if (result === 'network') {
+    throw { code: 'ERR_NETWORK', message: 'Network Error' };
+  }
+  if (result === 'error' || result === 'window') {
+    throw {
+      response: {
+        status: 409,
+        data: { code: params.get('reportCode') || 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED' },
+      },
+    };
+  }
+  return {
+    success: true,
+    alreadyReported: false,
+    report: { id: 'nr-1', rentalBookingId: 'b1', reportedAt: '2026-11-12T14:22:00.000Z' },
+  };
+}
+
+function reportEnabled(): boolean {
+  return captureParams().get('report') === '1';
+}
+
+export function useClientFlags() {
+  return useMemo(
+    () => ({
+      loaded: true,
+      flags: { rentals_not_received_report_enabled: reportEnabled() },
+    }),
+    []
+  );
+}
+
+const BUSINESS_BODY = {
+  en: "The renter says they haven't received the item. Support will follow up.",
+  fr: "Le client indique ne pas avoir reçu l'article. Le support va vous contacter.",
+};
+
+export const agentApi = {
+  messages: {
+    getMyMessages: async () => {
+      const french = document.documentElement.lang === 'fr';
+      return {
+        messages: [
+          {
+            id: 'm1',
+            user_id: 'biz-user',
+            entity_type: 'rental_booking',
+            entity_id: 'b1',
+            message: french ? BUSINESS_BODY.fr : BUSINESS_BODY.en,
+            message_type: 'RENTAL_NOT_RECEIVED',
+            created_at: '2026-11-12T14:22:00.000Z',
+            updated_at: '2026-11-12T14:22:00.000Z',
+            entity_type_info: { id: 'rental_booking', comment: french ? 'Location' : 'Rental' },
+          },
+        ],
+      };
+    },
+  },
+};
+
+export function useThreads() {
+  return { threads: [], loading: false, refreshing: false, error: null, refresh() {} };
+}
+
+export function useProfileMe() {
+  return { me: { id: 'biz-user' } };
+}
+
+export function useNotificationNavigation() {
+  return () => ({ navigate() {}, label: 'rentalBookingDetail' });
+}
 
 export function launchImageLibraryAsync() {
   return Promise.resolve({ canceled: true, assets: [] });

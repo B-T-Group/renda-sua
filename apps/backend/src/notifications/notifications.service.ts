@@ -130,6 +130,8 @@ import {
   buildRentalBookingReservedPush,
   buildRentalEndingSoonPush,
   buildRentalInspectionNotice,
+  buildRentalNotReceivedNotice,
+  buildRentalNotReceivedSupportNotice,
   buildRentalPeriodEndedPush,
   buildRentalRequestAcceptedPush,
   buildRentalRequestRejectedPush,
@@ -3733,6 +3735,136 @@ export class NotificationsService {
         `sendClientRentalRequestRejectedEmail: ${error?.message ?? String(error)}`
       );
     }
+  }
+
+  /** In-app row, push, and email. The body is the fixed neutral sentence. Never throws. */
+  async sendBusinessRentalNotReceived(payload: {
+    businessUserId: string;
+    bookingId: string;
+  }): Promise<void> {
+    const userId = payload.businessUserId?.trim();
+    if (!userId) return;
+    try {
+      await this.deliverBusinessNotReceived(userId, payload.bookingId);
+    } catch (error: any) {
+      this.logger.error(`sendBusinessRentalNotReceived: ${error?.message ?? error}`);
+    }
+  }
+
+  /** Shared support inbox plus a push to rental moderators. Never throws. */
+  async notifySupportRentalNotReceived(payload: {
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    try {
+      await this.emailSupportNotReceived(payload);
+      await this.pushSupportNotReceived(payload);
+    } catch (error: any) {
+      this.logger.error(`notifySupportRentalNotReceived: ${error?.message ?? error}`);
+    }
+  }
+
+  private async deliverBusinessNotReceived(userId: string, bookingId: string): Promise<void> {
+    const user = await this.getUserRowForEmail(userId);
+    const msg = buildRentalNotReceivedNotice({ preferredLanguage: user?.preferred_language });
+    const path = `/rentals/bookings/${bookingId}?persona=business`;
+    await this.insertNotReceivedMessage(userId, bookingId, msg.body, path);
+    await this.pushNotReceived(userId, bookingId, msg, path);
+    await this.emailNotReceived(user?.email ?? null, msg);
+  }
+
+  private async insertNotReceivedMessage(
+    userId: string,
+    bookingId: string,
+    body: string,
+    path: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation InsertRentalNotReceived($object: user_messages_insert_input!) {
+        insert_user_messages_one(object: $object) { id }
+      }`,
+      {
+        object: {
+          user_id: userId,
+          entity_type: 'rental_booking',
+          entity_id: bookingId,
+          message_type: 'RENTAL_NOT_RECEIVED',
+          message: body,
+          message_payload: { bookingId, path },
+        },
+      }
+    );
+  }
+
+  private async pushNotReceived(
+    userId: string,
+    bookingId: string,
+    msg: { title: string; body: string },
+    path: string
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    await this.sendPushNotificationByUserId(userId, msg.title, msg.body, {
+      type: 'rental_not_received',
+      rentalBookingId: bookingId,
+      persona: 'business',
+      url: path,
+    });
+  }
+
+  private async emailNotReceived(
+    email: string | null,
+    msg: { title: string; body: string }
+  ): Promise<void> {
+    if (!email) return;
+    await this.sendSimpleLifecycleEmail({
+      to: email,
+      subject: msg.title,
+      html: `<p>${escapeHtmlForEmail(msg.body)}</p>`,
+    });
+  }
+
+  private async emailSupportNotReceived(payload: {
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    const adminTo = process.env.ADMIN_NOTIFICATION_EMAIL || 'support@rendasua.com';
+    const msg = buildRentalNotReceivedSupportNotice({ ...payload, preferredLanguage: 'en' });
+    await this.sendSimpleLifecycleEmail({
+      to: adminTo,
+      subject: msg.title,
+      html: `<p>${escapeHtmlForEmail(msg.body)}</p><p>Review it at /admin/rental-inspections.</p>`,
+    });
+  }
+
+  private async pushSupportNotReceived(payload: {
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const recipients = buildOrderRiskRecipients({
+      staff: await this.rbacService.listUsersWithRoles(),
+      roleKeys: [PlatformRoles.SUPERUSER, PlatformRoles.SUPPORT, PlatformRoles.ORDER_MANAGER],
+    });
+    for (const recipient of recipients) {
+      await this.pushOneSupportNotReceived(recipient, payload);
+    }
+  }
+
+  private async pushOneSupportNotReceived(
+    recipient: { userId: string; preferredLanguage: string | null },
+    payload: { bookingId: string; bookingNumber: string; rentalItemName: string }
+  ): Promise<void> {
+    const msg = buildRentalNotReceivedSupportNotice({
+      ...payload,
+      preferredLanguage: recipient.preferredLanguage,
+    });
+    await this.sendPushNotificationByUserId(recipient.userId, msg.title, msg.body, {
+      type: 'rental_not_received_support',
+      rentalBookingId: payload.bookingId,
+      url: '/admin/rental-inspections',
+    });
   }
 
   async sendRentalInspectionNotice(params: {

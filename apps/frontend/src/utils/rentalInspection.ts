@@ -139,6 +139,28 @@ export function pickupGate(input: PickupGateInput): PickupGate {
   };
 }
 
+export function notReceivedErrorKey(code: string | null | undefined): string {
+  if (code === 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED') return 'rentalInspection.didntReceiveWindow';
+  if (code === 'RENTAL_NOT_RECEIVED_NOT_INSPECTED') return 'rentalInspection.didntReceiveNotInspected';
+  if (code === 'RENTAL_NOT_RECEIVED_ALREADY') return 'rentalInspection.didntReceiveAlready';
+  return 'rentalInspection.didntReceiveStopped';
+}
+
+/** Retry only when the request never reached a definite rejection. */
+export function notReceivedFailure(error: unknown): 'retry' | 'terminal' {
+  const status = httpStatus(error);
+  if (status == null || status >= 500) return 'retry';
+  return 'terminal';
+}
+
+function httpStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') return null;
+  const response = (error as { response?: { status?: number } }).response;
+  if (typeof response?.status === 'number') return response.status;
+  const direct = (error as { status?: number }).status;
+  return typeof direct === 'number' ? direct : null;
+}
+
 export function showDidntReceiveLink(input: {
   enrolled: boolean;
   startedAt: string | null | undefined;

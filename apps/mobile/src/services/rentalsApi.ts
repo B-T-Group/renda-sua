@@ -359,6 +359,17 @@ export interface AcceptAndStartResult {
   bookingId: string;
 }
 
+export async function reportNotReceived(bookingId: string): Promise<{
+  success: true;
+  alreadyReported: boolean;
+  report: { id: string; rentalBookingId: string; reportedAt: string };
+}> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/report-not-received`,
+    { method: 'POST' }
+  );
+}
+
 export async function acceptAndStart(
   bookingId: string,
   versionId: string
@@ -650,6 +661,7 @@ export const rentalsApi = {
   cancelBooking,
   initiatePickupPayment,
   acceptAndStart,
+  reportNotReceived,
   getBusinessItems,
   getBusinessItem,
   createBusinessItem,

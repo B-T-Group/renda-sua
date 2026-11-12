@@ -29,6 +29,7 @@ const aliases = [
   'UserProfileContext',
   'useIsStripeRail',
   'useRentalApi',
+  'useClientFlags',
   'useRentalInspection',
   'useTrackSiteEvent',
   'UserMessagesComponent',

@@ -16,6 +16,7 @@ import { RentalsCronService } from './rentals-cron.service';
 import { RentalInspectionEvidenceService } from './inspection/rental-inspection-evidence.service';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
+import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalsService } from './rentals.service';
 import { RentalSearchService } from './rental-search.service';
 import { RentalAvailabilityService } from './rental-availability.service';
@@ -40,6 +41,7 @@ import { RentalAvailabilityService } from './rental-availability.service';
     RentalBookingMessagingService,
     RentalInspectionFlags,
     RentalInspectionService,
+    RentalNotReceivedService,
     RentalInspectionEvidenceService,
   ],
   exports: [RentalsService, RentalPaymentCallbackHandler],
