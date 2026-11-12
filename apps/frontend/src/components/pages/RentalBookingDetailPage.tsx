@@ -518,6 +518,13 @@ const RentalBookingDetailPage: React.FC = () => {
               bookingStatus={status}
               chipLabel={detailStatusLabel}
               role={isBusiness ? 'business' : 'client'}
+              nextStepKey={
+                inspection.enrolled && (status === 'reserved' || status === 'confirmed')
+                  ? isBusiness
+                    ? 'rentalInspection.bannerWaiting'
+                    : 'rentalInspection.bannerReview'
+                  : undefined
+              }
               action={
                 showPaymentPending ? (
                   <Stack spacing={1}>

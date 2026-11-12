@@ -44,6 +44,10 @@ const NEXT_STEP_DEFAULTS: Record<string, string> = {
   'rentals.nextStep.awaitingReturnBusiness':
     'Confirm return when the item is back to settle the booking.',
   'rentals.nextStep.completed': 'This rental is complete.',
+  'rentalInspection.bannerReview':
+    'Review the condition report, then accept it to start the rental.',
+  'rentalInspection.bannerWaiting':
+    'Waiting for the renter to accept the condition. No PIN is needed.',
 };
 
 interface Props {
@@ -52,6 +56,8 @@ interface Props {
   role: RentalPhaseRole;
   /** Detail screens pass the pill label so awaiting return is not the phase name. */
   chipLabel?: string;
+  /** Replaces the status next-step when an inspected rental does not use a PIN. */
+  nextStepKey?: string;
   /** Optional primary action rendered under the banner */
   action?: React.ReactNode;
 }
@@ -61,6 +67,7 @@ export const RentalPhaseBanner: React.FC<Props> = ({
   requestStatus,
   role,
   chipLabel,
+  nextStepKey,
   action,
 }) => {
   const { t } = useTranslation();
@@ -70,7 +77,8 @@ export const RentalPhaseBanner: React.FC<Props> = ({
       ? resolveBookingPhase(bookingStatus, role)
       : resolveRentalPhase({ requestStatus, bookingStatus }, role);
 
-  if (!info.nextStepKey && info.phase === 'done' && !bookingStatus) {
+  const stepKey = nextStepKey ?? info.nextStepKey;
+  if (!stepKey && info.phase === 'done' && !bookingStatus) {
     return null;
   }
 
@@ -97,9 +105,9 @@ export const RentalPhaseBanner: React.FC<Props> = ({
           {t('rentals.nextStep.label', 'Next step')}
         </Typography>
       </Stack>
-      {info.nextStepKey ? (
+      {stepKey ? (
         <Typography variant="body2" color="text.primary">
-          {t(info.nextStepKey, NEXT_STEP_DEFAULTS[info.nextStepKey] ?? '')}
+          {t(stepKey, NEXT_STEP_DEFAULTS[stepKey] ?? '')}
         </Typography>
       ) : null}
       {action}

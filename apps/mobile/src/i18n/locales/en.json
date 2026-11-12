@@ -8527,6 +8527,8 @@
     "didntReceive": "Didn't receive the item? Tell us",
     "waitingTitle": "Waiting for the renter to accept",
     "waitingBody": "{{name}} is reviewing the condition report. You'll see when the rental starts — then hand over the item.",
+    "bannerReview": "Review the condition report, then accept it to start the rental.",
+    "bannerWaiting": "Waiting for the renter to accept the condition. No PIN is needed.",
     "noPinNote": "Pickup photos submitted · {{done}} of {{total}} units. No PIN is needed for this rental.",
     "updateReport": "Update report",
     "startedTitle": "Started, hand over the item",

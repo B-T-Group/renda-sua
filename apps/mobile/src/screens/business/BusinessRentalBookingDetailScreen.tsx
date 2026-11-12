@@ -385,6 +385,12 @@ export default function BusinessRentalBookingDetailScreen() {
         <RentalPhaseBanner
           bookingStatus={booking.status}
           role="business"
+          nextStepKey={
+            snapshot.enrolled &&
+            (booking.status === 'reserved' || booking.status === 'confirmed')
+              ? 'rentalInspection.bannerWaiting'
+              : undefined
+          }
           action={
             showCollectPayment ? (
               <>

@@ -343,7 +343,7 @@ export function RentalInspectionPanel({
             readOnly={role === 'client' || view.status === 'submitted'}
             onFile={(photoRole, file) => void upload(photoRole, file)}
           />
-          {role === 'business' ? (
+          {role === 'business' && !(stage === 'pickup' && view.status === 'submitted') ? (
             <BusinessFields stage={stage} draft={draft} setDraft={setDraft} />
           ) : (
             <ClientFacts unit={unit} />
@@ -389,7 +389,7 @@ export function RentalInspectionPanel({
             <TextField sx={{ mt: 1 }} label={t('rentalInspection.claimedAmount', 'Amount you are claiming')} value={claim} onChange={(event) => setClaim(event.target.value)} helperText={booking.currency ?? ''} />
           ) : null}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
-            {role === 'business' ? (
+            {role === 'business' && stage === 'pickup' && view.status === 'submitted' ? null : role === 'business' ? (
               <>
                 <Button variant="contained" color="success" sx={{ minHeight: 48 }} disabled={busy || view.status === 'submitted'} onClick={() => void saveUnit()}>
                   {t('rentalInspection.saveUnitNext', 'Save unit · next')}

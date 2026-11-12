@@ -8450,6 +8450,8 @@
     "didntReceive": "Vous n’avez pas reçu l’article ? Prévenez-nous",
     "waitingTitle": "En attente de l’acceptation du locataire",
     "waitingBody": "{{name}} vérifie l’état des lieux. Vous verrez quand la location démarre — remettez alors l’article.",
+    "bannerReview": "Vérifiez l’état des lieux, puis acceptez-le pour démarrer la location.",
+    "bannerWaiting": "En attente que le locataire accepte l’état. Aucun code PIN n’est nécessaire.",
     "noPinNote": "Photos de départ envoyées · {{done}} unités sur {{total}}. Aucun code PIN n’est nécessaire pour cette location.",
     "updateReport": "Mettre à jour le rapport",
     "startedTitle": "Démarrée, remettez l’article",

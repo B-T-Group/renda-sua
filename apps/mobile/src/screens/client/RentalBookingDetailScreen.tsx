@@ -360,6 +360,12 @@ export default function RentalBookingDetailScreen() {
             bookingStatus={booking.status}
             chipLabel={statusLabel}
             role="client"
+            nextStepKey={
+              snapshot.enrolled &&
+              (booking.status === 'reserved' || booking.status === 'confirmed')
+                ? 'rentalInspection.bannerReview'
+                : undefined
+            }
             action={
               paymentPending ? (
                 <Button
