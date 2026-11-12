@@ -1,6 +1,5 @@
--- Business request card. The row stays false so production stays off.
--- The DEV API (NODE_ENV=development) forces the flag on in AppConfigService.
--- Do not flip this row to true in a migration: the same SQL runs in production.
+-- Business request card. The row stays false. Turn DEV on by hand after apply.
+-- The same SQL runs in production, so this migration must not set the flag true.
 
 INSERT INTO public.application_configurations (
   config_key, config_name, description, data_type, boolean_value,
@@ -9,7 +8,7 @@ INSERT INTO public.application_configurations (
 SELECT
   'rentals_request_card_enabled',
   'Business rental request card',
-  'Business incoming rental requests show dates, You receive, and a conflict check. Default false. Development runtimes force it on.',
+  'Business incoming rental requests show dates, You receive, and a conflict check. Off until a row is turned on.',
   'boolean', false, NULL, 'active', 1,
   ARRAY['rentals', 'feature-flag']
 WHERE NOT EXISTS (
@@ -17,8 +16,10 @@ WHERE NOT EXISTS (
   WHERE config_key = 'rentals_request_card_enabled' AND country_code IS NULL
 );
 
--- Backfill a quote only for pending requests we can price from current listing
--- rates. A missing rate for that window's billing mode leaves quoted_total null.
+-- Backfill a quote only for pending requests that still have no quoted_total
+-- and that we can price from current listing rates. A second run matches no
+-- rows. A non-null quoted_total is never replaced. A missing rate for that
+-- window's billing mode leaves quoted_total null.
 WITH elems AS (
   SELECT
     r.id,
@@ -114,7 +115,10 @@ rolled AS (
 )
 UPDATE public.rental_requests r
 SET
-  quoted_total = rolled.total,
+  quoted_total = CASE
+    WHEN r.quoted_total IS NULL THEN rolled.total
+    ELSE r.quoted_total
+  END,
   rental_pricing_snapshot = CASE
     WHEN r.rental_pricing_snapshot IS NULL THEN jsonb_build_object(
       'version', 4,

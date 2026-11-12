@@ -1,5 +1,5 @@
 import { AppConfigService } from './app-config.service';
-import { DEFAULT_CLIENT_FLAGS, rentalsRequestCardEnabled } from './client-flags.constants';
+import { DEFAULT_CLIENT_FLAGS } from './client-flags.constants';
 
 describe('AppConfigService', () => {
   const hasura = {
@@ -14,15 +14,9 @@ describe('AppConfigService', () => {
   });
 
   it('returns defaults when query fails', async () => {
-    const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'test';
     hasura.executeQuery.mockRejectedValue(new Error('db down'));
-    try {
-      const flags = await service.getClientFlags();
-      expect(flags).toEqual(DEFAULT_CLIENT_FLAGS);
-    } finally {
-      process.env.NODE_ENV = previous;
-    }
+    const flags = await service.getClientFlags();
+    expect(flags).toEqual(DEFAULT_CLIENT_FLAGS);
   });
 
   it('resolves global boolean flags', async () => {
@@ -57,10 +51,7 @@ describe('AppConfigService', () => {
     expect(flags.reorder_v1).toBe(true);
   });
 
-  it('forces the request card on in development and keeps a false row otherwise', async () => {
-    expect(rentalsRequestCardEnabled(false, 'development')).toBe(true);
-    expect(rentalsRequestCardEnabled(false, 'production')).toBe(false);
-    expect(rentalsRequestCardEnabled(false, 'test')).toBe(false);
+  it('reads the request card from the country row, then the global row', async () => {
     hasura.executeQuery.mockResolvedValue({
       application_configurations: [
         {
@@ -69,16 +60,21 @@ describe('AppConfigService', () => {
           country_code: null,
           status: 'active',
         },
+        {
+          config_key: 'rentals_request_card_enabled',
+          boolean_value: true,
+          country_code: 'CM',
+          status: 'active',
+        },
       ],
     });
     const previous = process.env.NODE_ENV;
     try {
       process.env.NODE_ENV = 'development';
-      const dev = await new AppConfigService(hasura as any).getClientFlags();
-      expect(dev.rentals_request_card_enabled).toBe(true);
-      process.env.NODE_ENV = 'production';
-      const prod = await new AppConfigService(hasura as any).getClientFlags();
-      expect(prod.rentals_request_card_enabled).toBe(false);
+      const globalFlags = await new AppConfigService(hasura as any).getClientFlags();
+      expect(globalFlags.rentals_request_card_enabled).toBe(false);
+      const countryFlags = await new AppConfigService(hasura as any).getClientFlags('CM');
+      expect(countryFlags.rentals_request_card_enabled).toBe(true);
     } finally {
       process.env.NODE_ENV = previous;
     }

@@ -4,7 +4,6 @@ import {
   CLIENT_FLAG_KEYS,
   ClientFlags,
   DEFAULT_CLIENT_FLAGS,
-  rentalsRequestCardEnabled,
   type ClientFlagKey,
 } from './client-flags.constants';
 
@@ -46,7 +45,6 @@ export class AppConfigService {
         `Failed to load client flags; using defaults: ${error?.message ?? error}`
       );
     }
-    flags.rentals_request_card_enabled = rentalsRequestCardEnabled(flags.rentals_request_card_enabled);
 
     this.cache = {
       flags,

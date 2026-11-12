@@ -18,11 +18,6 @@ export const CLIENT_FLAG_KEYS = [
   'rentals_request_card_enabled',
 ] as const;
 
-/** Development forces the business request card on. The stored row stays false for production. */
-export function rentalsRequestCardEnabled(stored: boolean, nodeEnv = process.env.NODE_ENV): boolean {
-  return nodeEnv === 'development' ? true : stored;
-}
-
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
@@ -59,6 +54,6 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_search_first_enabled: false,
   /** Renter edits of a Requested rental. Off until a row turns it on. */
   rentals_modify_request_enabled: false,
-  /** Business request card. Off until development, which forces it on. */
+  /** Business request card. Off until an application_configurations row turns it on. */
   rentals_request_card_enabled: false,
 };

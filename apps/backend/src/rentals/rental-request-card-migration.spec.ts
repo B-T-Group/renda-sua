@@ -11,15 +11,23 @@ const down = readFileSync(
 );
 
 describe('rental request card migration', () => {
-  it('seeds the flag false and only backfills pending rows that can be priced', () => {
+  it('seeds the flag false and only backfills pending rows with a null quote', () => {
     expect(up).toContain("'rentals_request_card_enabled'");
     expect(up).toMatch(/boolean_value,[\s\S]*false/);
     expect(up).not.toMatch(/boolean_value,\s*true/);
-    expect(up).toContain("r.status::text = 'pending'");
-    expect(up).toContain('r.quoted_total IS NULL');
+    expect(up).not.toMatch(/NODE_ENV/);
+    const source = up.slice(0, up.indexOf('UPDATE public.rental_requests'));
+    const update = up.slice(up.indexOf('UPDATE public.rental_requests'));
+    for (const part of [source, update]) {
+      expect(part).toContain("r.status::text = 'pending'");
+      expect(part).toContain('r.quoted_total IS NULL');
+    }
+    expect(update).toContain('WHEN r.quoted_total IS NULL THEN rolled.total');
+    expect(update).toContain('ELSE r.quoted_total');
     expect(up).toContain('BOOL_AND(subtotal IS NOT NULL)');
     expect(up).toContain("!~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'");
     expect(up).toContain('WHEN r.rental_pricing_snapshot IS NULL');
+    expect(up).not.toMatch(/quoted_total\s*=\s*rolled\.total/);
   });
 
   it('removes only the flag row on the way down', () => {
