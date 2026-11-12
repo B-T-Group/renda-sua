@@ -7331,11 +7331,12 @@
     },
     "hub": {
       "title": "My rentals",
+      "toDo": "To do",
       "actionNeeded": "Action needed",
       "upcoming": "Upcoming",
       "past": "Past",
       "emptyActionNeeded": "Nothing needs your attention right now.",
-      "emptyUpcoming": "No upcoming rentals.",
+      "emptyUpcoming": "No upcoming rentals",
       "emptyPast": "No past rentals yet.",
       "emptyAll": "You have no rental requests or bookings yet."
     },

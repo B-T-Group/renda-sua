@@ -48,6 +48,13 @@ const statusFilterFormSx = {
   width: '100%',
 } as const;
 
+const hubSegmentSx = {
+  whiteSpace: 'nowrap',
+  textTransform: 'none',
+  px: 0.75,
+  lineHeight: 1.2,
+} as const;
+
 const ClientRentalRequestsPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -277,14 +284,17 @@ const ClientRentalRequestsPage: React.FC = () => {
               onChange={(_e, value: RentalHubGroup | null) => {
                 if (value) setHubSegment(value);
               }}
+              sx={{ flexWrap: 'nowrap' }}
             >
-              <ToggleButton value="action_needed">
-                {t('rentals.hub.actionNeeded', 'Action needed')}
+              <ToggleButton value="action_needed" sx={hubSegmentSx}>
+                {t('rentals.hub.toDo', 'To do')}
               </ToggleButton>
-              <ToggleButton value="upcoming">
+              <ToggleButton value="upcoming" sx={hubSegmentSx}>
                 {t('rentals.hub.upcoming', 'Upcoming')}
               </ToggleButton>
-              <ToggleButton value="past">{t('rentals.hub.past', 'Past')}</ToggleButton>
+              <ToggleButton value="past" sx={hubSegmentSx}>
+                {t('rentals.hub.past', 'Past')}
+              </ToggleButton>
             </ToggleButtonGroup>
             {rows.length > 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
@@ -331,7 +341,7 @@ const ClientRentalRequestsPage: React.FC = () => {
                       'Nothing needs your attention right now.'
                     )
                   : hubSegment === 'upcoming'
-                    ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals.')
+                    ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals')
                     : t('rentals.hub.emptyPast', 'No past rentals yet.')}
               </Typography>
             </Box>
