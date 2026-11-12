@@ -25,6 +25,7 @@ import type {
   AuthGateStep,
 } from '../../types/authGate';
 import { getAuthGateContextCopy } from '../../utils/authGateContextCopy';
+import { authorizationParamsWithActivePersona } from '../../utils/activePersonaStorage';
 import {
   buildAuthGateIdentifierKey,
   clearAuthGateLockout,
@@ -193,6 +194,7 @@ const AuthGate: React.FC<AuthGateProps> = ({
   const handleUniversalLoginFallback = useCallback(async () => {
     funnel.trackUlFallbackUsed(intent?.entry ?? 'auth_gate');
     await loginWithRedirect({
+      authorizationParams: authorizationParamsWithActivePersona(),
       appState: {
         returnTo: window.location.pathname + window.location.search,
       },

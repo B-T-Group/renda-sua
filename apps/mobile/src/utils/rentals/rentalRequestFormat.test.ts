@@ -12,7 +12,12 @@ import {
   selectedRequestDateKeys,
   formatChangeDetail,
   formatListingDeadline,
+  formatRentalDateRange,
   formatRentalPeriod,
+  modifySaveNeedsConfirm,
+  rentalEditWindowOpen,
+  rentalSelectionFingerprint,
+  RENTAL_EDIT_LEAD_MS,
 } from './rentalRequestFormat';
 
 describe('formatRequestAmount', () => {
@@ -280,5 +285,81 @@ describe('formatListingDeadline', () => {
     expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).toBe('Fri 20 Nov, 10:00');
     expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'fr')).toBe('ven. 20 nov., 10:00');
     expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).not.toMatch(/AM|PM|2026/);
+  });
+});
+
+describe('formatRentalPeriod edges', () => {
+  const daily = [
+    { billing: 'all_day', calendar_date: '2026-11-15', start_at: '2026-11-15T00:00:00.000Z', end_at: '2026-11-16T00:00:00.000Z' },
+    { billing: 'all_day', calendar_date: '2026-11-16', start_at: '2026-11-16T00:00:00.000Z', end_at: '2026-11-17T00:00:00.000Z' },
+  ];
+
+  it('keeps both months when the stay crosses a month and falls back to clocks for a mixed stay', () => {
+    const cross = [
+      { billing: 'all_day', calendar_date: '2026-11-30', start_at: '2026-11-30T00:00:00.000Z', end_at: '2026-12-01T00:00:00.000Z' },
+      { billing: 'all_day', calendar_date: '2026-12-01', start_at: '2026-12-01T00:00:00.000Z', end_at: '2026-12-02T00:00:00.000Z' },
+    ];
+    expect(formatRentalPeriod(cross, 'en', days)).toBe('30 Nov \u2013 1 Dec · 2 days');
+    expect(formatRentalPeriod(cross, 'fr', jours)).toBe('30 nov. \u2013 1 déc. · 2 jours');
+    expect(formatRentalPeriod([], 'en', days)).toBe('\u2014');
+
+    const mixed = [
+      { billing: 'all_day', calendar_date: '2026-11-15', start_at: '2026-11-15T10:00:00.000Z', end_at: '2026-11-15T18:00:00.000Z' },
+      { billing: 'hourly', start_at: '2026-11-16T09:00:00.000Z', end_at: '2026-11-16T11:00:00.000Z' },
+    ];
+    expect(formatRentalPeriod(mixed, 'en', days)).toBe('15 Nov · 10:00\u201318:00, 16 Nov · 09:00\u201311:00');
+  });
+
+  it('lists quantity and notes, and keeps the old month when the new dates are in another month', () => {
+    expect(
+      formatChangeDetail(
+        { fields: ['quantity', 'notes'], quantity: { from: 1, to: 3 } },
+        'en'
+      )
+    ).toBe('quantity 1 → 3, notes');
+    expect(formatChangeDetail(null, 'en')).toBe('');
+    expect(formatChangeDetail({ fields: [] }, 'en')).toBe('');
+    expect(
+      formatChangeDetail(
+        {
+          fields: ['dates'],
+          dates: {
+            from: [daily[0]],
+            to: [{ billing: 'all_day', calendar_date: '2026-12-01', start_at: '2026-12-01T00:00:00.000Z', end_at: '2026-12-02T00:00:00.000Z' }],
+          },
+        },
+        'en'
+      )
+    ).toBe('dates 15 Nov → 1 Dec');
+    expect(formatRentalDateRange([daily[0]], 'en')).toBe('15 Nov');
+  });
+});
+
+describe('rental edit confirmation', () => {
+  const now = Date.parse('2026-11-12T10:00:00.000Z');
+
+  it('closes the edit at exactly 2 hours and for an unusable start', () => {
+    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS).toISOString(), now)).toBe(false);
+    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS + 1).toISOString(), now)).toBe(true);
+    expect(rentalEditWindowOpen('not-a-date', now)).toBe(false);
+    expect(rentalEditWindowOpen('', now)).toBe(false);
+  });
+
+  it('asks for confirmation only when the new total is higher by more than one centime', () => {
+    expect(modifySaveNeedsConfirm(10, 10)).toBe(false);
+    expect(modifySaveNeedsConfirm(10.009, 10)).toBe(false);
+    expect(modifySaveNeedsConfirm(10.01, 10)).toBe(true);
+    expect(modifySaveNeedsConfirm(9, 10)).toBe(false);
+    expect(modifySaveNeedsConfirm(Number.NaN, 10)).toBe(false);
+  });
+
+  it('treats reordered windows and trimmed notes as the same draft', () => {
+    const day = { billing: 'all_day', calendarDate: '2026-11-15', startMs: 1, endMs: 2 };
+    const hour = { billing: 'hourly', startMs: 3, endMs: 4 };
+    expect(rentalSelectionFingerprint([hour, day], 2, '  hello ')).toBe(
+      rentalSelectionFingerprint([day, hour], 2, 'hello')
+    );
+    expect(rentalSelectionFingerprint([day], 1, 'hello')).not.toBe(rentalSelectionFingerprint([day], 2, 'hello'));
+    expect(rentalSelectionFingerprint([day], 1, '   ')).toBe(rentalSelectionFingerprint([day], 1, ''));
   });
 });

@@ -122,3 +122,22 @@ export function readStoredActivePersonaSlug(): PersonaSlug | undefined {
   if (s?.kind === 'persona') return s.persona;
   return undefined;
 }
+
+/** Body/query field for Auth0. Omitted in delegation mode and when nothing is stored. */
+export function activePersonaAuthField(): { active_persona?: PersonaSlug } {
+  const persona = readStoredActivePersonaSlug();
+  return persona ? { active_persona: persona } : {};
+}
+
+/**
+ * Authorize params for the Auth0 SPA client.
+ * `active_persona` is always present so a provider default captured at page
+ * load can be cleared. Auth0 drops `undefined` (JSON.stringify / stripUndefined).
+ * Omitting the key instead leaves the baked-in persona on refresh, so a
+ * delegation switch keeps the previous owner role in the cached token.
+ */
+export function authorizationParamsWithActivePersona(
+  extra: Record<string, string> = {}
+): Record<string, string | undefined> {
+  return { ...extra, active_persona: readStoredActivePersonaSlug() };
+}

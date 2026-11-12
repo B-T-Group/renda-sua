@@ -179,6 +179,28 @@ describe('SessionAuthContext', () => {
     );
   });
 
+  it('clears active_persona on a forced Auth0 refresh in delegation mode', async () => {
+    readStoredActivePersonaSlugMock.mockReturnValue(undefined);
+    const getAccessTokenSilently = jest.fn().mockResolvedValue('token');
+    mockUseAuth0.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      user: { sub: 'auth0|spa' },
+      getAccessTokenSilently,
+      logout: jest.fn(),
+    });
+
+    const { result } = renderHook(() => useSessionAuth(), { wrapper });
+    await act(async () => {
+      await result.current.getAccessToken({ force: true });
+    });
+
+    expect(getAccessTokenSilently).toHaveBeenCalledWith({
+      cacheMode: 'off',
+      authorizationParams: { active_persona: undefined },
+    });
+  });
+
   it('logout clears the assistant chat keys from sessionStorage (QA N4)', async () => {
     const keys = [
       'rendasua.assistant.chat.v1',

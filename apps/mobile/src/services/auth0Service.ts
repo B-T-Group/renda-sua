@@ -8,6 +8,8 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { env } from '../config/auth0';
+import { readLoginActivePersona } from '../utils/activePersonaStorage';
+import { authorizeAdditionalParameters, tokenRequestBody } from './authPersonaParams';
 
 // Configuration Auth0
 const AUTH0_DOMAIN = env.auth0Config.domain;
@@ -98,6 +100,7 @@ export class Auth0Service {
       const codeChallengeUrl = codeChallenge.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
       // Configuration de la requête d'autorisation
+      const activePersona = await readLoginActivePersona();
       const authRequest = new AuthSession.AuthRequest({
         clientId: AUTH0_CLIENT_ID,
         scopes: ['openid', 'profile', 'email', 'read:current_user', 'update:current_user_metadata'],
@@ -109,9 +112,7 @@ export class Auth0Service {
         state,
         codeChallenge: codeChallengeUrl,
         codeChallengeMethod: AuthSession.CodeChallengeMethod.S256,
-        extraParams: {
-          audience: AUTH0_AUDIENCE,
-        },
+        extraParams: authorizeAdditionalParameters(AUTH0_AUDIENCE, activePersona),
       });
 
       // Lancer l'authentification
@@ -127,9 +128,10 @@ export class Auth0Service {
               scheme: 'btgroupe',
               path: 'callback',
             }),
-            extraParams: {
-              code_verifier: codeVerifier,
-            },
+            extraParams: tokenRequestBody(
+              { code_verifier: codeVerifier },
+              activePersona
+            ),
           },
           discovery
         );
@@ -207,11 +209,16 @@ export class Auth0Service {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          grant_type: 'refresh_token',
-          client_id: AUTH0_CLIENT_ID,
-          refresh_token: refreshToken,
-        }),
+        body: JSON.stringify(
+          tokenRequestBody(
+            {
+              grant_type: 'refresh_token',
+              client_id: AUTH0_CLIENT_ID,
+              refresh_token: refreshToken,
+            },
+            await readLoginActivePersona()
+          )
+        ),
       });
 
       if (!response.ok) {

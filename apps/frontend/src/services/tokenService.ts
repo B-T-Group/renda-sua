@@ -1,16 +1,19 @@
 import { Auth0ContextInterface } from '@auth0/auth0-react';
-import { readStoredActivePersonaSlug } from '../utils/activePersonaStorage';
+import { authorizationParamsWithActivePersona } from '../utils/activePersonaStorage';
 
 /**
  * Silent refreshes must re-send the stored persona, otherwise the Auth0
  * action falls back to a default role and Hasura queries run with the
  * wrong permissions until the user logs out and back in.
+ * Delegation mode sends `active_persona: undefined` so it overwrites a
+ * persona captured on the Auth0 client at page load. Omitting the key
+ * leaves that persona on the refresh-token grant.
  */
 export function personaAuthorizationParams(): {
-  authorizationParams?: { active_persona: string };
+  authorizationParams: { active_persona?: string };
 } {
-  const persona = readStoredActivePersonaSlug();
-  return persona ? { authorizationParams: { active_persona: persona } } : {};
+  const { active_persona: activePersona } = authorizationParamsWithActivePersona();
+  return { authorizationParams: { active_persona: activePersona } };
 }
 
 export interface TokenRefreshService {
@@ -54,7 +57,9 @@ class TokenService implements TokenRefreshService {
       
       // If refresh fails, redirect to login
       if (this.auth0?.loginWithRedirect) {
-        await this.auth0.loginWithRedirect();
+        await this.auth0.loginWithRedirect({
+          authorizationParams: authorizationParamsWithActivePersona(),
+        });
       }
       
       throw error;
@@ -169,7 +174,9 @@ export const createTokenRefreshInterceptor = (
         }
       } catch (refreshError) {
         console.error('Token refresh failed, redirecting to login:', refreshError);
-        await loginWithRedirect();
+        await loginWithRedirect({
+          authorizationParams: authorizationParamsWithActivePersona(),
+        });
       }
     }
     
