@@ -95,7 +95,7 @@ export function SearchScreen({
             <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
           </Pressable>
         ) : null}
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
         <SearchInput
           value={query}
           onChangeText={setQuery}
