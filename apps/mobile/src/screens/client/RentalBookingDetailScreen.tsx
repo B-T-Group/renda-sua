@@ -35,7 +35,6 @@ import {
   bookingDetailTimeline,
   bookingDetailTimelineIndex,
   formatRentalMoney,
-  formatRentalRequestLocalDateTime,
   parseRentalPricingSnapshot,
   parseRentalSelectionWindows,
   rentalBookingStatusColors,
@@ -43,6 +42,8 @@ import {
 import {
   bookingRequestedPeriodLines,
   formatListingDeadline,
+  formatRentalPeriod,
+  formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
 import { clientInspectionAction, pickupGate } from '../../utils/rentals/rentalInspection';
 
@@ -124,13 +125,27 @@ export default function RentalBookingDetailScreen() {
 
   const statusColors = rentalBookingStatusColors(booking?.status ?? '', colors);
   const statusLabelKey = bookingDetailStatusLabelKey(booking?.status ?? '');
+  const statusLabel = t(
+    statusLabelKey,
+    DETAIL_STATUS_DEFAULTS[statusLabelKey] ?? booking?.status ?? ''
+  );
   const pricing = parseRentalPricingSnapshot(booking?.rental_pricing_snapshot);
+  const moneyCurrency = pricing?.currency ?? booking?.currency ?? 'XAF';
+  const formatDetailMoney = (amount: number) =>
+    formatRequestAmount(amount, moneyCurrency, i18n.language);
   const windows = parseRentalSelectionWindows(
     booking?.rental_request?.rental_selection_windows
   );
-  const periodLines = bookingRequestedPeriodLines(windows, booking, i18n.language, (count) =>
-    t('rentals.requestForm.dayCount', '{{count}} day', { count })
-  );
+  const dayCountLabel = (count: number) =>
+    t('rentals.requestForm.dayCount', '{{count}} day', { count });
+  const periodLines = bookingRequestedPeriodLines(windows, booking, i18n.language, dayCountLabel);
+  const returnByLabel = booking?.end_at
+    ? formatRentalPeriod(
+        [{ start_at: booking.end_at, end_at: booking.end_at }],
+        i18n.language,
+        dayCountLabel
+      )
+    : '—';
   const timelineSteps = bookingDetailTimeline(booking?.status ?? '');
   const currentIdx = bookingDetailTimelineIndex(timelineSteps, booking?.status ?? '');
   const canCancel =
@@ -333,7 +348,7 @@ export default function RentalBookingDetailScreen() {
             </Text>
           </View>
           <StatusPill
-            label={t(statusLabelKey, DETAIL_STATUS_DEFAULTS[statusLabelKey] ?? booking.status)}
+            label={statusLabel}
             backgroundColor={statusColors.backgroundColor}
             textColor={statusColors.textColor}
             borderColor={statusColors.borderColor}
@@ -343,6 +358,7 @@ export default function RentalBookingDetailScreen() {
         <View style={{ marginTop: spacing.md }}>
           <RentalPhaseBanner
             bookingStatus={booking.status}
+            chipLabel={statusLabel}
             role="client"
             action={
               paymentPending ? (
@@ -430,7 +446,7 @@ export default function RentalBookingDetailScreen() {
                 'rentals.nextStep.returnReminder',
                 'Return by {{time}} at {{location}}. The business will confirm when the item is back.',
                 {
-                  time: formatRentalRequestLocalDateTime(booking.end_at),
+                  time: returnByLabel,
                   location:
                     booking.rental_location_listing?.business_location?.name ?? '—',
                 }
@@ -569,16 +585,13 @@ export default function RentalBookingDetailScreen() {
             {t('rentals.clientRequests.quotedTotal', 'Quoted total')}
           </Text>
           <Text style={[typography.h6, { color: colors.text.primary }]}>
-            {formatRentalMoney(
-              pricing?.total ?? booking.total_amount,
-              pricing?.currency ?? booking.currency
-            )}
+            {formatDetailMoney(pricing?.total ?? toAmount(booking.total_amount))}
           </Text>
           {depositAmount > 0 ? (
             <Text style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}>
               {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
               {': '}
-              {formatRentalMoney(depositAmount, pricing?.currency ?? booking.currency)}
+              {formatDetailMoney(depositAmount)}
             </Text>
           ) : null}
           {authorizedAmount > 0 ? (
@@ -587,10 +600,7 @@ export default function RentalBookingDetailScreen() {
                 'rentals.bookingDetail.authorizedOnCard',
                 'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
                 {
-                  amount: formatRentalMoney(
-                    authorizedAmount,
-                    pricing?.currency ?? booking.currency
-                  ),
+                  amount: formatDetailMoney(authorizedAmount),
                 }
               )}
             </Text>

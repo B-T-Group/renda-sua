@@ -43,6 +43,13 @@ describe('formatRequestAmount', () => {
     expect(formatRequestAmount(-2500, 'XAF', 'en')).toBe('-2 500 FCFA');
     expect(formatRequestAmount(-2500, 'xaf', 'fr-CM')).toBe('-2 500 FCFA');
   });
+
+  it('groups XAF and XOF with a space and an FCFA suffix, and leaves USD alone', () => {
+    expect(formatRequestAmount(45000, 'XAF', 'en')).toBe('45 000 FCFA');
+    expect(formatRequestAmount(55000, 'XOF', 'fr')).toBe('55 000 FCFA');
+    expect(formatRequestAmount(260, 'USD', 'en')).not.toMatch(/FCFA/);
+    expect(formatRequestAmount(260, 'USD', 'fr')).not.toMatch(/FCFA/);
+  });
 });
 
 describe('formatRequestDay', () => {
@@ -268,6 +275,13 @@ describe('formatRentalPeriod', () => {
       end_at: '2026-11-15T14:00:00.000Z',
     }];
     expect(formatRentalPeriod(hourly, 'en', days)).toBe('15 Nov · 10:00\u201314:00');
+  });
+
+  it('formats a return instant as one listing clock', () => {
+    const at = (iso: string) => [{ start_at: iso, end_at: iso }];
+    expect(formatRentalPeriod(at('2026-11-12T18:00:00.000Z'), 'en', days)).toBe('12 Nov · 18:00');
+    expect(formatRentalPeriod(at('2026-11-14T18:00:00.000Z'), 'fr', jours)).toBe('14 nov. · 18:00');
+    expect(formatRentalPeriod(at('2026-11-12T18:00:00.000Z'), 'en', days)).not.toMatch(/PM|AM|2026/);
   });
 
   it('lists only the fields that changed', () => {

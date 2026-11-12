@@ -50,6 +50,8 @@ interface Props {
   bookingStatus?: string | null;
   requestStatus?: string | null;
   role: RentalPhaseRole;
+  /** Detail screens pass the pill label so awaiting return is not the phase name. */
+  chipLabel?: string;
   /** Optional primary action rendered under the banner */
   action?: React.ReactNode;
 }
@@ -58,6 +60,7 @@ export const RentalPhaseBanner: React.FC<Props> = ({
   bookingStatus,
   requestStatus,
   role,
+  chipLabel,
   action,
 }) => {
   const { t } = useTranslation();
@@ -85,7 +88,7 @@ export const RentalPhaseBanner: React.FC<Props> = ({
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
         <Chip
           size="small"
-          label={t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
+          label={chipLabel || t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
           color="info"
           variant="outlined"
           sx={{ fontWeight: 700 }}

@@ -53,6 +53,8 @@ interface Props {
   bookingStatus?: string | null;
   requestStatus?: string | null;
   role: RentalPhaseRole;
+  /** Detail screens pass the pill label so awaiting return is not the phase name. */
+  chipLabel?: string;
   action?: React.ReactNode;
 }
 
@@ -60,6 +62,7 @@ export function RentalPhaseBanner({
   bookingStatus,
   requestStatus,
   role,
+  chipLabel,
   action,
 }: Props) {
   const { t } = useTranslation();
@@ -91,7 +94,7 @@ export function RentalPhaseBanner({
     >
       <View style={styles.row}>
         <StatusPill
-          label={t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
+          label={chipLabel || t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
           backgroundColor={phaseColors.backgroundColor}
           textColor={phaseColors.textColor}
           borderColor={phaseColors.borderColor}

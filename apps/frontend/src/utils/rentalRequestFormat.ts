@@ -84,7 +84,10 @@ function rangeLabel(start: string, end: string, locale: string): string {
 function hourlyLine(row: PeriodWindow, locale: string): string {
   const day = row.start_at.slice(0, 10);
   const month = monthLabel(day, locale);
-  return `${dayNum(day)} ${month} · ${clock(row.start_at)}${EN_DASH}${clock(row.end_at)}`;
+  const start = clock(row.start_at);
+  const end = clock(row.end_at);
+  const times = start && end && start !== end ? `${start}${EN_DASH}${end}` : start || end;
+  return `${dayNum(day)} ${month} · ${times}`;
 }
 
 /** Booked calendar days. A same-clock end the next morning is the return, not another day. */

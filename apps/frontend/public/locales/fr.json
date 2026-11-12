@@ -7131,7 +7131,7 @@
       "retryPaymentError": "Impossible de relancer le paiement",
       "paymentConfirmed": "Paiement confirmé",
       "securityDeposit": "Caution",
-      "authorizedOnCard": "Réservé sur votre carte (location + caution) : {{amount}} {{currency}}. Le montant final au retour est au minimum le total de la location ; la caution ne couvre que les heures supplémentaires.",
+      "authorizedOnCard": "Réservé sur votre carte (location + caution) : {{amount}}. Le montant final au retour est au minimum le total de la location ; la caution ne couvre que les heures supplémentaires.",
       "payAtPickup": "Rien n’est payé pour le moment — le total de la location est dû au retrait.",
       "overtimeDue": "Heures supplémentaires : {{amount}} {{currency}}",
       "reservedClientHint": "Votre réservation est conservée gratuitement. Payez le total de la location au retrait pour recevoir votre code PIN de démarrage.",

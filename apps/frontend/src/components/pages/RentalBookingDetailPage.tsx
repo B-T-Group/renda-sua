@@ -34,10 +34,10 @@ import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import SEOHead from '../seo/SEOHead';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
-  formatRentalRequestLocalDateTime,
+  formatRequestAmount,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
-import { bookingRequestedPeriodLines } from '../../utils/rentalRequestFormat';
+import { bookingRequestedPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
 import {
   bookingDetailStatusLabelKey,
   bookingDetailTimeline,
@@ -370,21 +370,34 @@ const RentalBookingDetailPage: React.FC = () => {
   const bookingImage = booking.rental_location_listing?.rental_item?.rental_item_images?.[0];
   const imageUrl = bookingImage?.image_url?.trim() || '';
   const imageAlt = bookingImage?.alt_text?.trim() || title;
-  const endLocal = formatRentalRequestLocalDateTime(booking.end_at);
   const selectionWindows = parseRentalSelectionWindows(
     booking.rental_request?.rental_selection_windows
   );
+  const dayCountLabel = (count: number) =>
+    t('rentals.clientRequests.periodDayCount', {
+      count,
+      defaultValue: count === 1 ? '{{count}} day' : '{{count}} days',
+    });
   const periodLines = bookingRequestedPeriodLines(
     selectionWindows,
     booking,
     i18n.language,
-    (count) =>
-      t('rentals.clientRequests.periodDayCount', {
-        count,
-        defaultValue: count === 1 ? '{{count}} day' : '{{count}} days',
-      })
+    dayCountLabel
   );
+  const returnByLabel = booking.end_at
+    ? formatRentalPeriod(
+        [{ start_at: booking.end_at, end_at: booking.end_at }],
+        i18n.language,
+        dayCountLabel
+      )
+    : '—';
   const detailStatusKey = bookingDetailStatusLabelKey(status);
+  const detailStatusLabel = t(
+    detailStatusKey,
+    DETAIL_STATUS_DEFAULTS[detailStatusKey] ?? status
+  );
+  const formatDetailMoney = (amount: number) =>
+    formatRequestAmount(amount, booking.currency || 'XAF', i18n.language);
 
   const statusChipColor =
     status === 'confirmed'
@@ -503,6 +516,7 @@ const RentalBookingDetailPage: React.FC = () => {
           <Box sx={{ mb: 2 }}>
             <RentalPhaseBanner
               bookingStatus={status}
+              chipLabel={detailStatusLabel}
               role={isBusiness ? 'business' : 'client'}
               action={
                 showPaymentPending ? (
@@ -637,7 +651,7 @@ const RentalBookingDetailPage: React.FC = () => {
               {t(
                 'rentals.nextStep.returnReminder',
                 'Return by {{time}} at {{location}}. The business will confirm when the item is back.',
-                { time: endLocal, location: locationName }
+                { time: returnByLabel, location: locationName }
               )}
               {overtimeAmount > 0
                 ? ` ${t(
@@ -742,14 +756,14 @@ const RentalBookingDetailPage: React.FC = () => {
                     {t('rentals.clientRequests.bookConfirmLabelTotal', 'Quoted total')}
                   </Typography>
                   <Typography variant="h5" fontWeight={900} color="success.dark">
-                    {booking.total_amount} {booking.currency}
+                    {formatDetailMoney(Number(booking.total_amount) || 0)}
                   </Typography>
                   <Stack spacing={0.5} sx={{ mt: 1 }}>
                     {depositAmount > 0 ? (
                       <Typography variant="body2" color="text.secondary">
                         {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}:{' '}
                         <strong>
-                          {depositAmount} {booking.currency}
+                          {formatDetailMoney(depositAmount)}
                         </strong>
                       </Typography>
                     ) : null}
@@ -757,8 +771,8 @@ const RentalBookingDetailPage: React.FC = () => {
                       <Typography variant="body2" color="text.secondary">
                         {t(
                           'rentals.bookingDetail.authorizedOnCard',
-                          'Held on your card (rental + deposit): {{amount}} {{currency}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
-                          { amount: authorizedAmount, currency: booking.currency }
+                          'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
+                          { amount: formatDetailMoney(authorizedAmount) }
                         )}
                       </Typography>
                     ) : null}

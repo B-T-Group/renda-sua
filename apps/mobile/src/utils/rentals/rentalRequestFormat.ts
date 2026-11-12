@@ -21,13 +21,14 @@ function utcDate(iso: string): Date | null {
   return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
 }
 
-/** Request screen only: number, then currency (`760 FCFA`) in EN and FR. */
-export function formatRequestAmount(amount: number, currency: string, language: string): string {
+/**
+ * Number, then `FCFA` (`45 000 FCFA`) in EN and FR for XAF, XOF, and FCFA.
+ * Other currencies stay on `formatRentalMoney`.
+ */
+export function formatRequestAmount(amount: number, currency: string, _language: string): string {
   const code = currency.toUpperCase();
-  if (code === 'XAF' || code === 'FCFA') {
-    const french = language.toLowerCase().startsWith('fr');
-    const grouped = groupedDigits(amount, ' ');
-    return `${grouped} FCFA`;
+  if (code === 'XAF' || code === 'XOF' || code === 'FCFA') {
+    return `${groupedDigits(amount, ' ')} FCFA`;
   }
   return formatRentalMoney(amount, currency);
 }
@@ -222,7 +223,10 @@ function clock(iso: string): string {
 function hourlyLine(row: PeriodWindow, locale: string): string {
   const day = row.start_at.slice(0, 10);
   const month = monthLabel(day, locale);
-  return `${dayNum(day)} ${month} · ${clock(row.start_at)}${EN_DASH}${clock(row.end_at)}`;
+  const start = clock(row.start_at);
+  const end = clock(row.end_at);
+  const times = start && end && start !== end ? `${start}${EN_DASH}${end}` : start || end;
+  return `${dayNum(day)} ${month} · ${times}`;
 }
 
 /** Booked calendar days. A same-clock end the next morning is the return, not another booked day. */
