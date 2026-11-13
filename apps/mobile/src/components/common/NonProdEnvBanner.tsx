@@ -35,13 +35,14 @@ export const NonProdEnvBanner = observer(function NonProdEnvBanner() {
     auth.isAuthenticated &&
     persona.showMainApp &&
     persona.activePersona === 'agent';
-  const top =
-    insets.top + 8 + (agentChromeVisible ? AGENT_STATUS_BAR_CLEARANCE : 0);
+  const top = agentChromeVisible
+    ? insets.top + 8 + AGENT_STATUS_BAR_CLEARANCE
+    : Math.max(4, insets.top - 18);
 
   return (
     <View
       pointerEvents="none"
-      style={[styles.wrap, { top, left: 0, right: 0 }]}
+      style={[styles.wrap, { top, right: 64 }]}
       accessibilityRole="text"
       accessibilityLabel={accessibilityLabel}
     >
@@ -65,7 +66,7 @@ const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
     zIndex: 100,
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
   pill: {
     paddingHorizontal: 6,

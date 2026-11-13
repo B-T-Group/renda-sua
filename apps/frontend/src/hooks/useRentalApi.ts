@@ -221,9 +221,12 @@ export interface BusinessRentalRequestRow {
   rental_booking?: {
     id: string;
     status: string;
+    end_at?: string | null;
     booking_number?: string | null;
     actual_start_at?: string | null;
     inspection_policy_version?: number | null;
+    renter_reported_returned_at?: string | null;
+    renter_return_escalated_at?: string | null;
   } | null;
 }
 
@@ -249,7 +252,10 @@ export interface ClientRentalRequestRow {
   rental_booking?: {
     id: string;
     status: string;
+    end_at?: string | null;
     contract_expires_at?: string | null;
+    renter_reported_returned_at?: string | null;
+    renter_return_escalated_at?: string | null;
   } | null;
 }
 
@@ -323,6 +329,9 @@ export interface RentalBookingDetail {
   units_booked?: number | null;
   inspection_policy_version?: number | null;
   not_received_report?: { id: string; reported_at: string } | null;
+  renter_reported_returned_at?: string | null;
+  renter_return_escalated_at?: string | null;
+  return_place?: { name: string; address: string | null; phone: string | null } | null;
   accept_start_preview?: {
     payment_rail: 'card' | 'wallet' | 'mobile_money';
     amount_due_at_pickup: number;
@@ -669,6 +678,19 @@ export function useRentalApi() {
     [api]
   );
 
+  const reportReturned = useCallback(
+    async (bookingId: string) => {
+      const { data } = await api.post(`/rentals/bookings/${bookingId}/report-returned`);
+      return data as {
+        success: true;
+        alreadyReported: boolean;
+        wasOverdue: boolean;
+        report: { rentalBookingId: string; reportedAt: string };
+      };
+    },
+    [api]
+  );
+
   const reportNotReceived = useCallback(
     async (bookingId: string) => {
       const { data } = await api.post(`/rentals/bookings/${bookingId}/report-not-received`);
@@ -830,6 +852,7 @@ export function useRentalApi() {
     initiatePickupPayment,
     acceptAndStart,
     reportNotReceived,
+    reportReturned,
     getStartPin,
     fetchBookingDetail,
     verifyStartPin,

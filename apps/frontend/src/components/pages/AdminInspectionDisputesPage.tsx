@@ -4,11 +4,16 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -28,6 +33,18 @@ interface NotReceivedRow {
     booking_number?: string | null;
     status?: string | null;
     rental_location_listing?: { rental_item?: { name?: string | null } | null } | null;
+  } | null;
+}
+
+interface ReturnReportRow {
+  id: string;
+  booking_number?: string | null;
+  status?: string | null;
+  renter_reported_returned_at?: string | null;
+  renter_return_escalated_at?: string | null;
+  rental_location_listing?: {
+    rental_item?: { name?: string | null } | null;
+    business_location?: { name?: string | null } | null;
   } | null;
 }
 
@@ -53,8 +70,13 @@ const AdminInspectionDisputesPage: React.FC = () => {
   const api = useApiClient();
   const [rows, setRows] = useState<DisputeRow[]>([]);
   const [reports, setReports] = useState<NotReceivedRow[]>([]);
+  const [returns, setReturns] = useState<ReturnReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +92,12 @@ const AdminInspectionDisputesPage: React.FC = () => {
       setReports(Array.isArray(data) ? data : []);
     } catch {
       setReports([]);
+    }
+    try {
+      const { data } = await api.get<ReturnReportRow[]>('/admin/rentals/return-reports');
+      setReturns(Array.isArray(data) ? data : []);
+    } catch {
+      setReturns([]);
     } finally {
       setLoading(false);
     }
@@ -190,6 +218,120 @@ const AdminInspectionDisputesPage: React.FC = () => {
           </Table>
         )}
       </Box>
+      <Box sx={{ mt: 4 }} data-testid="admin-return-reports">
+        <Typography variant="h5">{t('rentals.returnReport.adminTitle', 'Renter return reports')}</Typography>
+        <Typography sx={{ mt: 1, mb: 2 }}>
+          {t(
+            'rentals.returnReport.adminHint',
+            'The renter says the item is back. Status and the deposit stay unchanged until you or the business confirm.'
+          )}
+        </Typography>
+        {loading ? null : (
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('rentalInspection.adminBooking', 'Booking')}</TableCell>
+                <TableCell>{t('rentalInspection.adminItem', 'Item')}</TableCell>
+                <TableCell>{t('rentalInspection.adminStatus', 'Status')}</TableCell>
+                <TableCell>{t('rentalInspection.adminNotReceivedWhen', 'Reported')}</TableCell>
+                <TableCell />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {returns.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.booking_number || row.id}</TableCell>
+                  <TableCell>{row.rental_location_listing?.rental_item?.name || '—'}</TableCell>
+                  <TableCell>
+                    <Chip
+                      color={row.renter_return_escalated_at ? 'warning' : 'default'}
+                      label={
+                        row.renter_return_escalated_at
+                          ? t('rentals.returnReport.adminEscalated', 'Escalated')
+                          : t('rentals.returnReport.waitingChip', 'Waiting')
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {row.renter_reported_returned_at
+                      ? formatListingDue(row.renter_reported_returned_at, i18n.language)
+                      : '—'}
+                  </TableCell>
+                  <TableCell>
+                    {row.renter_return_escalated_at ? (
+                      <Button
+                        sx={{ minHeight: 48 }}
+                        variant="contained"
+                        onClick={() => {
+                          setConfirmId(row.id);
+                          setReason('');
+                          setConfirmError(null);
+                        }}
+                      >
+                        {t('rentals.returnReport.confirmReturn', 'Confirm return')}
+                      </Button>
+                    ) : (
+                      <Button component={RouterLink} to={`/admin/rental-inspections/${row.id}`} sx={{ minHeight: 48 }}>
+                        {t('rentalInspection.adminOpen', 'Open')}
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {returns.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5}>{t('rentals.returnReport.adminEmpty', 'No open return reports.')}</TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        )}
+      </Box>
+      <Dialog open={Boolean(confirmId)} onClose={() => !busy && setConfirmId(null)} fullWidth>
+        <DialogTitle>{t('rentals.returnReport.confirmReturn', 'Confirm return')}</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>
+            {t(
+              'rentals.returnReport.adminConfirmBody',
+              'This uses the same confirm or handback path as the business. The deposit follows those rules.'
+            )}
+          </Typography>
+          <TextField
+            label={t('rentals.returnReport.adminReason', 'Reason')}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            required
+            fullWidth
+            multiline
+          />
+          {confirmError ? <Typography color="error" sx={{ mt: 1 }}>{confirmError}</Typography> : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmId(null)} disabled={busy}>{t('common.cancel', 'Cancel')}</Button>
+          <Button
+            variant="contained"
+            disabled={busy || !reason.trim()}
+            sx={{ minHeight: 48 }}
+            onClick={() => void (async () => {
+              if (!confirmId) return;
+              setBusy(true);
+              setConfirmError(null);
+              try {
+                await api.post(`/admin/rentals/bookings/${confirmId}/confirm-reported-return`, { reason: reason.trim() });
+                setConfirmId(null);
+                await load();
+              } catch (err: unknown) {
+                const data = (err as { response?: { data?: { message?: string } } }).response?.data;
+                setConfirmError(data?.message || t('rentals.requestFailed', 'Request failed'));
+              } finally {
+                setBusy(false);
+              }
+            })()}
+          >
+            {t('common.confirm', 'Confirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

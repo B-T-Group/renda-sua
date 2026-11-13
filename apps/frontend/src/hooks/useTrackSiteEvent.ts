@@ -244,7 +244,8 @@ export type SiteEventTypeV1 =
   | 'delivery_confirm_action'
   | 'rentals_client_tab_tap'
   | 'rentals_client_tab_browse_tap'
-  | 'rental_accept_and_start_tap';
+  | 'rental_accept_and_start_tap'
+  | 'rental_renter_reported_returned';
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

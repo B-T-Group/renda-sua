@@ -359,6 +359,18 @@ export interface AcceptAndStartResult {
   bookingId: string;
 }
 
+export async function reportReturned(bookingId: string): Promise<{
+  success: true;
+  alreadyReported: boolean;
+  wasOverdue: boolean;
+  report: { rentalBookingId: string; reportedAt: string };
+}> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/report-returned`,
+    { method: 'POST' }
+  );
+}
+
 export async function reportNotReceived(bookingId: string): Promise<{
   success: true;
   alreadyReported: boolean;
@@ -662,6 +674,7 @@ export const rentalsApi = {
   initiatePickupPayment,
   acceptAndStart,
   reportNotReceived,
+  reportReturned,
   getBusinessItems,
   getBusinessItem,
   createBusinessItem,

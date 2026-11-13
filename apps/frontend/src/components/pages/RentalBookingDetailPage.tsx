@@ -1,4 +1,4 @@
-import { CheckCircle, RadioButtonUnchecked } from '@mui/icons-material';
+import { CheckCircle, Lens, RadioButtonUnchecked } from '@mui/icons-material';
 import {
   Alert,
   Avatar,
@@ -19,6 +19,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
+import { useClientFlags } from '../../hooks/useClientFlags';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
   type RentalBookingDetail,
@@ -34,6 +35,7 @@ import {
   useDidntReceiveWindow,
 } from '../rentals/DidntReceiveReportButton';
 import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
+import { RenterReturnPanel } from '../rentals/RenterReturnPanel';
 import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import SEOHead from '../seo/SEOHead';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -42,6 +44,7 @@ import {
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
 import { bookingRequestedPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
+import { formatDoualaStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
 import {
   bookingDetailStatusLabelKey,
   bookingDetailTimeline,
@@ -102,10 +105,12 @@ function BookingStatusStep({
 }) {
   const { t } = useTranslation();
   const labelKey = bookingDetailStatusLabelKey(step);
-  const color = done ? 'text.primary' : 'text.disabled';
+  const color = done || current ? 'text.primary' : 'text.disabled';
   return (
     <Stack direction="row" spacing={1} alignItems="center">
-      {done ? (
+      {current ? (
+        <Lens sx={{ fontSize: 16, color: '#0A4FB5' }} />
+      ) : done ? (
         <CheckCircle sx={{ fontSize: 18, color: 'success.main' }} />
       ) : (
         <RadioButtonUnchecked sx={{ fontSize: 18, color: 'text.disabled' }} />
@@ -117,7 +122,15 @@ function BookingStatusStep({
   );
 }
 
-function BookingStatusSteps({ status }: { status: string }) {
+function BookingStatusSteps({
+  status,
+  returnNote,
+  noteColor,
+}: {
+  status: string;
+  returnNote?: string;
+  noteColor?: string;
+}) {
   const { t } = useTranslation();
   const steps = bookingDetailTimeline(status);
   const current = bookingDetailTimelineIndex(steps, status);
@@ -131,12 +144,18 @@ function BookingStatusSteps({ status }: { status: string }) {
   return (
     <Stack spacing={0.5} sx={{ mt: 0.5 }}>
       {steps.map((step, idx) => (
-        <BookingStatusStep
-          key={step}
-          step={step}
-          done={current >= idx}
-          current={doneCurrent(current, idx)}
-        />
+        <Box key={step}>
+          <BookingStatusStep
+            step={step}
+            done={current > idx}
+            current={doneCurrent(current, idx)}
+          />
+          {step === 'awaiting_return' && returnNote ? (
+            <Typography variant="caption" sx={{ ml: 3.5, color: noteColor ?? '#0A4FB5', display: 'block' }}>
+              {returnNote}
+            </Typography>
+          ) : null}
+        </Box>
       ))}
     </Stack>
   );
@@ -149,6 +168,7 @@ function doneCurrent(current: number, idx: number): boolean {
 const RentalBookingDetailPage: React.FC = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
   const { t, i18n } = useTranslation();
+  const { flags, loaded: flagsLoaded } = useClientFlags();
   const theme = useTheme();
   const navigate = useNavigate();
   const { isAuthenticated } = useSessionAuth();
@@ -342,7 +362,14 @@ const RentalBookingDetailPage: React.FC = () => {
   const showClientPin = isClient && inspection.gate.showStart && !inspection.loading;
   const showCollect = isBusiness && inspection.gate.showCollectPayment && !inspection.loading;
   const showVerify = isBusiness && inspection.gate.showStart && !inspection.loading;
-  const showReturnPicker = isBusiness && inspection.showLegacyReturn;
+  const showReturnPicker =
+    isBusiness &&
+    inspection.showLegacyReturn &&
+    !(
+      flagsLoaded &&
+      flags.rentals_renter_return_report_enabled &&
+      booking?.renter_reported_returned_at
+    );
   const paymentRail = paymentStatus?.payment_rail;
   const isStripePending =
     paymentRail === 'stripe' || (paymentRail == null && isStripeRail);
@@ -402,6 +429,20 @@ const RentalBookingDetailPage: React.FC = () => {
     i18n.language,
     dayCountLabel
   );
+  const returnPhase = renterReturnPhase({
+    status: booking.status,
+    endAt: booking.end_at,
+    reportedAt: booking.renter_reported_returned_at,
+    escalatedAt: booking.renter_return_escalated_at,
+  });
+  const showReturnReport =
+    Boolean(isClient) && flagsLoaded && flags.rentals_renter_return_report_enabled && returnPhase !== 'hidden';
+  const showBusinessReport =
+    Boolean(isBusiness) &&
+    flagsLoaded &&
+    flags.rentals_renter_return_report_enabled &&
+    Boolean(booking.renter_reported_returned_at);
+  const returnLocation = booking.return_place?.name || locationName;
   const returnByLabel = booking.end_at
     ? formatRentalPeriod(
         [{ start_at: booking.end_at, end_at: booking.end_at }],
@@ -509,11 +550,9 @@ const RentalBookingDetailPage: React.FC = () => {
             </Box>
             <Chip
               label={
-                t('rentals.status', 'Status') +
-                ': ' +
-                (status === 'awaiting_return'
+                status === 'awaiting_return'
                   ? t(detailStatusKey, 'Return due')
-                  : t(`rentals.bookingStatus.${status}`, status))
+                  : `${t('rentals.status', 'Status')}: ${t(`rentals.bookingStatus.${status}`, status)}`
               }
               color={statusChipColor}
               sx={{ fontWeight: 800 }}
@@ -531,6 +570,7 @@ const RentalBookingDetailPage: React.FC = () => {
             </Alert>
           ) : null}
 
+          {showReturnReport || showBusinessReport ? null : (
           <Box sx={{ mb: 2 }}>
             <RentalPhaseBanner
               bookingStatus={status}
@@ -656,6 +696,7 @@ const RentalBookingDetailPage: React.FC = () => {
               }
             />
           </Box>
+          )}
 
           {bookingId && inspection.enrolled ? (
             <Box id="rental-inspection">
@@ -669,7 +710,61 @@ const RentalBookingDetailPage: React.FC = () => {
             </Box>
           ) : null}
 
-          {isClient &&
+          {showReturnReport && bookingId ? (
+            <RenterReturnPanel
+              phase={returnPhase as Exclude<typeof returnPhase, 'hidden'>}
+              bookingId={bookingId}
+              location={returnLocation}
+              address={booking.return_place?.address ?? returnLocation}
+              phone={booking.return_place?.phone ?? null}
+              endAt={booking.end_at}
+              reportedAt={booking.renter_reported_returned_at}
+              depositLabel={formatDetailMoney(depositAmount)}
+              onChanged={() => void load()}
+            />
+          ) : null}
+          {showBusinessReport && booking.renter_reported_returned_at ? (
+            <Alert severity="success" sx={{ mb: 2 }} data-testid="business-return-report">
+              <Typography fontWeight={700}>
+                {t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
+                  time: formatDoualaStamp(booking.renter_reported_returned_at, i18n.language),
+                })}
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
+                {t(
+                  'rentals.returnReport.businessBody',
+                  'Please check the item, then confirm the return. The {{amount}} deposit is released only after you confirm.',
+                  { amount: formatDetailMoney(depositAmount) }
+                )}
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1.5 }}>
+                <Button
+                  variant="contained"
+                  color="success"
+                  sx={{ minHeight: 48 }}
+                  onClick={() => {
+                    if (inspection.showLegacyReturn) {
+                      setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                      setReturnDialogOpen(true);
+                      return;
+                    }
+                    document.getElementById('rental-inspection')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                >
+                  {t('rentals.returnReport.confirmReturn', 'Confirm return')}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  sx={{ minHeight: 48 }}
+                  onClick={() => document.getElementById('rental-inspection')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  {t('rentals.returnReport.reportProblem', 'Report a problem')}
+                </Button>
+              </Stack>
+            </Alert>
+          ) : null}
+          {!showReturnReport && isClient &&
           (booking.status === 'active' ||
             booking.status === 'awaiting_return') ? (
             <Alert severity="info" sx={{ mb: 2 }}>
@@ -706,7 +801,19 @@ const RentalBookingDetailPage: React.FC = () => {
               <Typography variant="h6" fontWeight={900}>
                 {t('rentals.status', 'Status')}
               </Typography>
-              <BookingStatusSteps status={status} />
+              <BookingStatusSteps
+                status={status}
+                noteColor={returnPhase === 'overdue' ? 'error.main' : '#0A4FB5'}
+                returnNote={
+                  returnPhase === 'waiting'
+                    ? t('rentals.returnReport.waitingStepper', 'Waiting for confirmation')
+                    : returnPhase === 'escalated'
+                      ? t('rentals.returnReport.escalatedStepper', 'Support is checking')
+                      : returnPhase === 'overdue'
+                        ? t('rentals.returnReport.overdue', 'Overdue')
+                        : undefined
+                }
+              />
             </Paper>
             <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, border: 1, borderColor: 'divider' }}>
               <Stack spacing={1.25}>
@@ -989,6 +1096,7 @@ const RentalBookingDetailPage: React.FC = () => {
             ) : null}
 
             {bookingId && booking.status !== 'cancelled' ? (
+              <Box id="rental-messages">
               <UserMessagesComponent
                 entityType="rental_booking"
                 entityId={bookingId}
@@ -996,6 +1104,7 @@ const RentalBookingDetailPage: React.FC = () => {
                 defaultExpanded={messagesDefaultExpanded(booking.status)}
                 maxVisibleMessages={5}
               />
+              </Box>
             ) : null}
           </Stack>
         </Container>

@@ -10,12 +10,16 @@ export function MyRentalsHeader({
   onBack,
   findLabel,
   onFind,
+  settingsLabel,
+  onSettings,
 }: {
   title: string;
   backLabel?: string;
   onBack?: () => void;
   findLabel?: string;
   onFind?: () => void;
+  settingsLabel?: string;
+  onSettings?: () => void;
 }) {
   const { colors, typography, spacing } = useTheme();
   return (
@@ -45,6 +49,17 @@ export function MyRentalsHeader({
       >
         {title}
       </Text>
+      {onSettings ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={settingsLabel}
+          onPress={onSettings}
+          hitSlop={8}
+          style={styles.hit}
+        >
+          <MaterialCommunityIcons name="cog-outline" size={22} color={colors.text.primary} />
+        </Pressable>
+      ) : null}
       {onFind ? (
         <Pressable
           accessibilityRole="button"

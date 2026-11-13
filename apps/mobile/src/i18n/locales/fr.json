@@ -6411,6 +6411,33 @@
       "returnReminder": "Retournez avant {{time}} à {{location}}. Le commerçant confirmera le retour.",
       "overtimePending": "Paiement des heures supplémentaires en cours : {{amount}}."
     },
+    "returnReport": {
+      "nextStep": "Prochaine étape",
+      "dueTitle": "Apportez l’article chez {{location}} avant le {{time}}",
+      "directions": "Itinéraire",
+      "contact": "Contacter l’entreprise",
+      "primary": "J’ai rendu l’article",
+      "sheetTitle": "Avez-vous remis l’article à l’entreprise ?",
+      "sheetBody": "L’entreprise vérifiera l’article et confirmera. Votre caution de {{amount}} ne sera libérée qu’après sa confirmation. Cela ne met pas fin à la location.",
+      "waitingTitle": "En attente de la confirmation de l’entreprise",
+      "waitingBody": "Vous avez signalé le retour le {{time}}. L’entreprise vérifiera l’article. Votre caution de {{amount}} ne sera libérée qu’après sa confirmation.",
+      "waitingStepper": "En attente de confirmation",
+      "waitingChip": "En attente",
+      "overdue": "En retard",
+      "overdueTitle": "En retard depuis le {{time}}",
+      "overdueBody": "Apportez l’article chez {{location}} dès que possible.",
+      "escalatedTitle": "Le support vérifie votre retour",
+      "escalatedBody": "Vous avez signalé le retour le {{time}}. L’entreprise n’a pas confirmé dans les 24 heures. Le support assure le suivi. Votre caution de {{amount}} est toujours retenue.",
+      "escalatedStepper": "Le support vérifie",
+      "businessBanner": "Le client indique avoir rendu l’article · {{time}}",
+      "businessBody": "Vérifiez l’article, puis confirmez le retour. La caution de {{amount}} n’est libérée qu’après votre confirmation.",
+      "confirmReturn": "Confirmer le retour",
+      "reportProblem": "Signaler un problème",
+      "call": "Appeler",
+      "message": "Message",
+      "retry": "Réessayer",
+      "networkBody": "Vérifiez votre connexion et réessayez."
+    },
     "messages": {
       "title": "Messages",
       "emptyHint": "Écrivez à l’autre partie pour le retrait, le retour ou la location."

@@ -3512,44 +3512,81 @@ export class RentalsService {
     if (!booking || booking.business_id !== user.business.id) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     }
-    if (booking.status !== 'awaiting_return' && booking.status !== 'active') {
-      throw new HttpException(
-        'Booking must be active or awaiting return',
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    const policy = await this.readInspectionPolicy(bookingId);
-    if (policy != null) throw inspectionUpdateRequired();
-    const previousStatus = booking.status as 'active' | 'awaiting_return';
-    const actualEndAt = await this.resolveActualReturnAt(
+    return this.settleOpenReturn(
       booking,
+      user.id,
+      'business',
+      'Return confirmed',
       actualEndAtInput
     );
+  }
+
+  /** Same settlement as the business confirm. Records the support actor and reason. */
+  async confirmLegacyReturnForSupport(
+    bookingId: string,
+    actorId: string,
+    reason: string
+  ) {
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    return this.settleOpenReturn(
+      booking,
+      actorId,
+      'system',
+      `Support confirmed the return. ${reason}`
+    );
+  }
+
+  private async settleOpenReturn(
+    booking: any,
+    actorId: string,
+    changedByType: 'business' | 'system',
+    notes: string,
+    actualEndAtInput?: string
+  ) {
+    this.assertReturnStillOpen(booking);
+    const policy = await this.readInspectionPolicy(booking.id);
+    if (policy != null) throw inspectionUpdateRequired();
+    const previous = booking.status as 'active' | 'awaiting_return';
+    const actualEndAt = await this.resolveActualReturnAt(booking, actualEndAtInput);
     const settlement = this.computeRentalSettlement(booking, actualEndAt);
+    return this.finishOpenReturn(booking, settlement, previous, actorId, changedByType, notes);
+  }
+
+  private assertReturnStillOpen(booking: { status?: string }): void {
+    if (booking.status === 'awaiting_return' || booking.status === 'active') return;
+    throw new HttpException(
+      'Booking must be active or awaiting return',
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private async finishOpenReturn(
+    booking: any,
+    settlement: RentalReturnSettlement,
+    previous: 'active' | 'awaiting_return',
+    actorId: string,
+    changedByType: 'business' | 'system',
+    notes: string
+  ) {
     if (booking.payment_status === 'authorized') {
       const won = await this.runCompletion(
-        bookingId,
-        previousStatus,
-        user.id,
-        'business',
-        () => this.settleStripeAuthorizedBooking(booking, settlement)
+        booking.id, previous, actorId, changedByType,
+        () => this.settleStripeAuthorizedBooking(booking, settlement),
+        notes
       );
       return this.completionResult(won, settlement.overtimeAmount);
     }
     if (await this.overtimeNeedsMobileMoney(booking, settlement.overtimeAmount)) {
+      await this.logHistory(booking.id, previous, previous, actorId, changedByType, notes);
       return this.deferReturnForOvertimePayment(
-        booking,
-        settlement.overtimeAmount,
-        previousStatus,
-        user.id
+        booking, settlement.overtimeAmount, previous, actorId
       );
     }
     const won = await this.runCompletion(
-      bookingId,
-      previousStatus,
-      user.id,
-      'business',
-      () => this.settleWalletHeldBooking(booking, settlement)
+      booking.id, previous, actorId, changedByType,
+      () => this.settleWalletHeldBooking(booking, settlement),
+      notes
     );
     return this.completionResult(won, settlement.overtimeAmount);
   }
@@ -3828,7 +3865,8 @@ export class RentalsService {
     from: 'active' | 'awaiting_return',
     userId: string | null,
     changedByType: 'business' | 'system',
-    settle: () => Promise<unknown>
+    settle: () => Promise<unknown>,
+    notes = 'Return confirmed'
   ): Promise<boolean> {
     const won = await this.casBooking(bookingId, [from], { status: 'completed' });
     if (!won) return false;
@@ -3844,7 +3882,7 @@ export class RentalsService {
       from,
       userId,
       changedByType,
-      'Return confirmed'
+      notes
     );
     await this.deliveryPinService.clearPinForOrder(bookingId);
     return true;

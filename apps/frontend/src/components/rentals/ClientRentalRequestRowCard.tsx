@@ -10,6 +10,8 @@ import {
 import { alpha, useTheme } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useClientFlags } from '../../hooks/useClientFlags';
+import { listReturnChip } from '../../utils/renterReturnPhase';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import {
   formatRentalMoney,
@@ -86,6 +88,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   onViewBooking,
 }) => {
   const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
   const theme = useTheme();
   const listing = row.rental_location_listing;
   const itemName = listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental');
@@ -142,12 +145,37 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               </Stack>
             ) : null}
           </Box>
+          <Stack direction="row" spacing={0.5}>
           <Chip
             label={statusLabel}
             color={phaseChipColor(phase.phase)}
             size="small"
             sx={{ fontWeight: 600, flexShrink: 0 }}
           />
+          {flags.rentals_renter_return_report_enabled && row.rental_booking
+            ? (() => {
+                const chip = listReturnChip({
+                  status: row.rental_booking.status,
+                  endAt: row.rental_booking.end_at,
+                  reportedAt: row.rental_booking.renter_reported_returned_at,
+                  escalatedAt: row.rental_booking.renter_return_escalated_at,
+                });
+                if (!chip) return null;
+                const overdue = chip === 'overdue';
+                return (
+                  <Chip
+                    size="small"
+                    label={t(
+                      overdue ? 'rentals.returnReport.overdue' : 'rentals.returnReport.waitingChip',
+                      overdue ? 'Overdue' : 'Waiting'
+                    )}
+                    sx={{ color: overdue ? 'error.main' : '#0A4FB5', borderColor: overdue ? 'error.main' : '#0A4FB5' }}
+                    variant="outlined"
+                  />
+                );
+              })()
+            : null}
+          </Stack>
         </Stack>
 
         {phase.nextStepKey ? (

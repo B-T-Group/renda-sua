@@ -6,6 +6,13 @@ import { I18nextProvider } from 'react-i18next';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import { ClientRentalRequestRowCard } from './ClientRentalRequestRowCard';
 
+jest.mock('../../hooks/useClientFlags', () => ({
+  useClientFlags: () => ({
+    loaded: true,
+    flags: { rentals_renter_return_report_enabled: false },
+  }),
+}));
+
 const theme = createTheme();
 
 i18n.init({

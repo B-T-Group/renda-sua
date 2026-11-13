@@ -16,7 +16,8 @@ export type ClientFlagKey =
   | 'rentals_modify_request_enabled'
   | 'rentals_my_rentals_entry_enabled'
   | 'rentals_client_tab_enabled'
-  | 'rentals_not_received_report_enabled';
+  | 'rentals_not_received_report_enabled'
+  | 'rentals_renter_return_report_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -45,6 +46,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_client_tab_enabled: false,
   /** Renter report that the item was not received. Off until a config row turns it on. */
   rentals_not_received_report_enabled: false,
+  /** Renter "I've returned it" report. Off until a config row turns it on. */
+  rentals_renter_return_report_enabled: false,
 };
 
 type ClientFlagsResponse = {

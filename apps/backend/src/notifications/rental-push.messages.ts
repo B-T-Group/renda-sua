@@ -178,6 +178,38 @@ export function buildRentalNotReceivedNotice(params: {
   };
 }
 
+export function buildRenterReturnedNotice(params: {
+  rentalItemName: string;
+  bookingNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const item = params.rentalItemName || 'Rental';
+  const booking = params.bookingNumber || '—';
+  return {
+    title: fr ? 'Le client indique avoir rendu l’article' : 'Renter says the item is back',
+    body: fr
+      ? `${item} · ${booking}. Vérifiez l’article et confirmez le retour.`
+      : `${item} · ${booking}. Please check the item and confirm the return.`,
+  };
+}
+
+export function buildRenterReturnEscalationNotice(params: {
+  rentalItemName: string;
+  bookingNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const item = params.rentalItemName || 'Rental';
+  const booking = params.bookingNumber || '—';
+  return {
+    title: fr ? 'Retour signalé sans confirmation' : 'Return reported and not confirmed',
+    body: fr
+      ? `${item} · ${booking}. Le client a signalé le retour. L’entreprise n’a pas confirmé dans les 24 heures. La caution reste retenue.`
+      : `${item} · ${booking}. The renter reported the return. The business has not confirmed within 24 hours. The deposit is still held.`,
+  };
+}
+
 export function buildRentalNotReceivedSupportNotice(params: {
   bookingNumber: string;
   rentalItemName: string;

@@ -45,6 +45,7 @@ import {
   parseRentalSelectionWindows,
   type RentalHubGroup,
 } from '../../utils/rentals';
+import { listReturnChip } from '../../utils/rentals/renterReturnPhase';
 import { leaveMyRentals } from '../../utils/rentals/leaveMyRentals';
 import { myRentalsEntrySegment } from '../../utils/rentals/myRentalsEntry';
 import { trackRentalsClientTabBrowseTap } from '../../utils/rentals/clientRentalsTabAnalytics';
@@ -413,6 +414,30 @@ export default function ClientMyRentalsScreen({
                 borderColor={statusColors.borderColor}
                 compact
               />
+              {flags.rentals_renter_return_report_enabled
+                ? (() => {
+                    const chip = listReturnChip({
+                      status: item.status,
+                      endAt: item.end_at,
+                      reportedAt: item.renter_reported_returned_at,
+                      escalatedAt: item.renter_return_escalated_at,
+                    });
+                    if (!chip) return null;
+                    const overdue = chip === 'overdue';
+                    return (
+                      <StatusPill
+                        label={t(
+                          overdue ? 'rentals.returnReport.overdue' : 'rentals.returnReport.waitingChip',
+                          overdue ? 'Overdue' : 'Waiting'
+                        )}
+                        backgroundColor={overdue ? '#FDECEC' : '#E8F1FB'}
+                        textColor={overdue ? colors.error.main : '#0A4FB5'}
+                        borderColor={overdue ? colors.error.main : '#0A4FB5'}
+                        compact
+                      />
+                    );
+                  })()
+                : null}
               <Text style={[typography.caption, { color: colors.text.primary, fontWeight: '700' }]}>
                 {formatRentalMoney(item.total_amount, item.currency || 'XAF')}
               </Text>
@@ -430,7 +455,7 @@ export default function ClientMyRentalsScreen({
         </Pressable>
       );
     },
-    [borderRadius.md, colors, navigation, shadows.sm, spacing, t, typography]
+    [borderRadius.md, colors, flags.rentals_renter_return_report_enabled, navigation, shadows.sm, spacing, t, typography]
   );
 
   const loading = requestsLoading || bookingsLoading;
@@ -445,6 +470,8 @@ export default function ClientMyRentalsScreen({
           onBack={asTab ? undefined : onBack}
           findLabel={asTab ? t('rentals.clientRequests.browseRentals', 'Browse rentals') : undefined}
           onFind={asTab ? () => openRentalsLane('header_icon') : undefined}
+          settingsLabel={t('nav.settings', 'Settings')}
+          onSettings={() => navigation.navigate('Profile')}
         />
         <RentalHubTabs
           value={hubSegment}

@@ -135,7 +135,10 @@ export function useClientFlags() {
   return useMemo(
     () => ({
       loaded: true,
-      flags: { rentals_not_received_report_enabled: reportEnabled() },
+      flags: {
+        rentals_not_received_report_enabled: reportEnabled(),
+        rentals_renter_return_report_enabled: Boolean(captureParams().get('return')),
+      },
     }),
     []
   );
@@ -145,6 +148,34 @@ export function useApiClient() {
   return useMemo(
     () => ({
       get: async (url: string) => {
+        if (url.includes('return-reports')) {
+          return {
+            data: [
+              {
+                id: 'b-wait',
+                booking_number: 'RB-27251416',
+                status: 'awaiting_return',
+                renter_reported_returned_at: '2026-11-12T18:42:00.000Z',
+                renter_return_escalated_at: null,
+                rental_location_listing: {
+                  rental_item: { name: 'JBL PartyBox 310' },
+                  business_location: { name: "Stripe Rail - L'Assomption" },
+                },
+              },
+              {
+                id: 'b-esc',
+                booking_number: 'RB-27251417',
+                status: 'awaiting_return',
+                renter_reported_returned_at: '2026-11-11T18:42:00.000Z',
+                renter_return_escalated_at: '2026-11-12T18:42:00.000Z',
+                rental_location_listing: {
+                  rental_item: { name: 'JBL PartyBox 310' },
+                  business_location: { name: "Stripe Rail - L'Assomption" },
+                },
+              },
+            ],
+          };
+        }
         if (url.includes('not-received')) {
           return {
             data: [
@@ -163,6 +194,7 @@ export function useApiClient() {
         }
         return { data: [] };
       },
+      post: async () => ({ data: { success: true } }),
     }),
     []
   );
@@ -180,13 +212,89 @@ export function useTrackSiteEvent() {
   return useMemo(() => ({ trackSiteEvent: () => undefined }), []);
 }
 
+function applyReturn<T extends Record<string, unknown>>(row: T): T {
+  const state = captureParams().get('return');
+  if (!state) return row;
+  const reported = state === 'waiting' || state === 'escalated' || state === 'business';
+  return {
+    ...row,
+    booking_number: 'RB-27251416',
+    status: 'awaiting_return',
+    end_at: '2026-11-12T19:00:00.000Z',
+    actual_start_at: '2026-11-12T12:00:00.000Z',
+    security_deposit_amount: 45000,
+    currency: 'XAF',
+    renter_reported_returned_at: reported ? '2026-11-12T18:42:00.000Z' : null,
+    renter_return_escalated_at: state === 'escalated' ? '2026-11-13T18:42:00.000Z' : null,
+    return_place: {
+      name: "Stripe Rail - L'Assomption",
+      address: "Stripe Rail - L'Assomption",
+      phone: '+237600000000',
+    },
+    inspection_policy_version: null,
+    rental_location_listing: {
+      rental_item: { name: 'JBL PartyBox 310' },
+      business_location: { name: "Stripe Rail - L'Assomption" },
+    },
+  };
+}
+
 export function useRentalApi() {
   return useMemo(() => ({
     fetchBookingDetail: async () => {
-      const row = bookingFor(scene());
+      const row = applyReturn(bookingFor(scene()));
       const { _business: _ignored, ...booking } = row;
       return booking;
     },
+    fetchClientRentalRequests: async () => {
+      if (captureParams().get('return') !== 'list') return [];
+      const booking = applyReturn(bookingFor('started'));
+      return [
+        {
+          id: 'req-overdue',
+          status: 'booked',
+          created_at: '2026-11-10T10:00:00.000Z',
+          rental_location_listing: {
+            id: 'loc',
+            base_price_per_hour: 1000,
+            business_location: { name: "Stripe Rail - L'Assomption" },
+            rental_item: { name: 'JBL PartyBox 310', currency: 'XAF' },
+          },
+          rental_booking: {
+            id: 'overdue',
+            status: 'awaiting_return',
+            end_at: '2026-11-12T19:00:00.000Z',
+            renter_reported_returned_at: null,
+            renter_return_escalated_at: null,
+          },
+        },
+        {
+          id: 'req-waiting',
+          status: 'booked',
+          created_at: '2026-11-10T11:00:00.000Z',
+          rental_location_listing: {
+            id: 'loc',
+            base_price_per_hour: 1000,
+            business_location: { name: "Stripe Rail - L'Assomption" },
+            rental_item: { name: 'JBL PartyBox 310', currency: 'XAF' },
+          },
+          rental_booking: {
+            ...booking,
+            id: 'waiting',
+            status: 'awaiting_return',
+            renter_reported_returned_at: '2026-11-12T18:42:00.000Z',
+          },
+        },
+      ];
+    },
+    createBooking: async () => ({ success: true }),
+    cancelClientRentalRequest: async () => ({ success: true }),
+    reportReturned: async () => ({
+      success: true,
+      alreadyReported: false,
+      wasOverdue: false,
+      report: { rentalBookingId: 'b1', reportedAt: '2026-11-12T18:42:00.000Z' },
+    }),
     getBookingPaymentStatus: async () => ({
       status: 'reserved',
       paymentPending: scene() === 'momo' && ((window as CaptureWindow).__acceptCalls ?? 0) >= 2,
@@ -262,7 +370,7 @@ export function useRentalInspection() {
   return useMemo(() => {
   const labels: [string, string] = french ? ['Unité 1', 'Unité 2'] : ['Unit 1', 'Unit 2'];
   const pickup = current === 'legacy' ? null : viewFor(labels);
-  const enrolled = current !== 'legacy';
+  const enrolled = current !== 'legacy' && !captureParams().get('return');
   return {
     api: {
       acknowledge: async () => undefined,
@@ -283,7 +391,7 @@ export function useRentalInspection() {
       ? { mode: 'waiting' as const, showCollectPayment: false, showStart: false, showOverwrite: false }
       : { mode: 'legacy' as const, showCollectPayment: false, showStart: true, showOverwrite: true },
     reviewStage: current === 'review' || current === 'momo' || current === 'conflict' ? 'pickup' : null,
-    showLegacyReturn: false,
+    showLegacyReturn: captureParams().get('return') === 'business',
     showEnrolledReturn: false,
   };
   }, [current, french]);

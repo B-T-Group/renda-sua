@@ -20,7 +20,9 @@ import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions
 import { IssueRentalStartOverwriteDto } from './dto/issue-rental-start-overwrite.dto';
 import { AdjustOvertimeDto, AdminHandbackDto, DecideInspectionDisputeDto } from './dto/rental-inspection.dto';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
+import { ConfirmReportedReturnDto } from './dto/confirm-reported-return.dto';
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
+import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { RentalsService } from './rentals.service';
 
 interface RequestWithUser extends Request {
@@ -46,7 +48,8 @@ export class AdminRentalBookingsController {
   constructor(
     private readonly rentalsService: RentalsService,
     private readonly inspections: RentalInspectionService,
-    private readonly notReceived: RentalNotReceivedService
+    private readonly notReceived: RentalNotReceivedService,
+    private readonly renterReturns: RentalRenterReturnService
   ) {}
 
   @Post('bookings/:id/start-overwrite-code')
@@ -98,6 +101,29 @@ export class AdminRentalBookingsController {
   @ApiOperation({ summary: 'Open and escalated rental inspection reviews' })
   listDisputes() {
     return this.inspections.listOpenDisputes();
+  }
+
+  @Get('return-reports')
+  @ApiOperation({
+    summary: 'Open renter return reports. Status and the deposit are unchanged.',
+  })
+  listReturnReports() {
+    return this.renterReturns.listForAdmin();
+  }
+
+  @Post('bookings/:id/confirm-reported-return')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Support confirms an escalated renter return through the business confirm or handback path',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  confirmReportedReturn(
+    @Param('id', ParseUUIDPipe) bookingId: string,
+    @Body() body: ConfirmReportedReturnDto,
+    @Req() req: RequestWithUser
+  ) {
+    return this.renterReturns.confirmAsSupport(bookingId, req.user.id, body.reason);
   }
 
   @Get('not-received-reports')

@@ -184,6 +184,7 @@ export const SITE_EVENT_TYPES_V1 = [
   'rentals_client_tab_tap',
   'rentals_client_tab_browse_tap',
   'rental_accept_and_start_tap',
+  'rental_renter_reported_returned',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event
