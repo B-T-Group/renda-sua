@@ -262,7 +262,7 @@ function MessageBubble({
       </Stack>
       ) : null}
       {!isUser && message.rental ? (
-        <Box sx={{ maxWidth: { xs: '100%', sm: '720px' }, width: '100%', pl: showOrb ? 5 : 0 }}>
+        <Box sx={{ maxWidth: { xs: '100%', sm: '720px' }, width: '100%', minWidth: 0, pl: showOrb ? 5 : 0 }}>
           <AssistantRentalThread
             cards={message.cards || []}
             rental={message.rental}

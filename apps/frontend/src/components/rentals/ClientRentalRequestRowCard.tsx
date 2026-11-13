@@ -18,7 +18,7 @@ import { useClientFlags } from '../../hooks/useClientFlags';
 import { listReturnChip } from '../../utils/renterReturnPhase';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import {
-  formatRentalMoney,
+  formatRequestAmount,
   formatRentalRequestLocalDateTime,
   parseRentalSelectionWindows,
   parseRentalPricingSnapshot,
@@ -225,10 +225,10 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
         {priceChanged ? (
           <Alert severity="warning">
             {t('assistant.rental.priceChangedLead', 'The business changed the price:')}{' '}
-            <strong>{formatRentalMoney(accepted, listing?.rental_item.currency || 'XAF')}</strong>
+            <strong>{formatRequestAmount(accepted, listing?.rental_item.currency || 'XAF', i18n.language)}</strong>
             {' '}
             {t('assistant.rental.priceChangedMid', 'instead of the estimated')}{' '}
-            <s>{formatRentalMoney(quoted, listing?.rental_item.currency || 'XAF')}</s>
+            <s>{formatRequestAmount(quoted, listing?.rental_item.currency || 'XAF', i18n.language)}</s>
             {'. '}
             {t('assistant.rental.priceChangedTail', 'Check it before you confirm.')}
           </Alert>
@@ -249,7 +249,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               {t('rentals.clientRequests.quotedTotal', 'Quoted total')}
             </Typography>
             <Typography variant="subtitle1" fontWeight={800} color="success.dark">
-              {formatRentalMoney(quote.total, quote.currency)}
+              {formatRequestAmount(quote.total, quote.currency, i18n.language)}
             </Typography>
           </Box>
         ) : null}

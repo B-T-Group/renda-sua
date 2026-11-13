@@ -8,7 +8,7 @@
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const OUT = '/opt/cursor/artifacts/assistant-rentals-v1';
+const OUT = '/opt/cursor/artifacts/assistant-rentals-v2';
 const WEB = process.env.WEB_URL || 'http://localhost:4200';
 const MOBILE = process.env.MOBILE_URL || 'http://localhost:8081';
 const LISTING = '11111111-1111-4111-8111-111111111111';
@@ -129,6 +129,7 @@ function unfit(fr) {
       mode: 'authorize_upfront',
       latest_card_end_at: '2026-11-16T12:00:00.000Z',
       payment_rail: 'stripe',
+      momo_available: false,
       dates: { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 },
       footnote: 'estimate',
     },
@@ -330,7 +331,7 @@ const PROMPTS = {
   loading: ['HOLD-HAMMER', 'HOLD-MARTEAU'],
   failed: ['rent a generator', 'louer un groupe'],
   network: ['NETWORK-LADDER', 'NETWORK-ECHELLE'],
-  unfit: ['unfit card', 'carte trop longue'],
+  unfit: ['17th to 18th', 'par carte'],
 };
 
 function replyFor(text, fr) {
@@ -344,7 +345,7 @@ function replyFor(text, fr) {
   if (body.includes('deposit') || body.includes('caution')) return { payload: question(fr) };
   if (body.includes('pick') || body.includes('retrait')) return { payload: emptyField(fr) };
   if (body.includes('generator') || body.includes('groupe')) return { payload: failed(fr) };
-  if (body.includes('unfit') || body.includes('trop longue')) return { payload: unfit(fr) };
+  if (body.includes('17th to 18th') || body.includes('par carte')) return { payload: unfit(fr) };
   const undatedHammer = (body.includes('rent a hammer') || body.includes('louer un marteau')) && !/\d/.test(body);
   if (undatedHammer) return { payload: noDates(fr) };
   return { payload: found(fr) };
@@ -392,9 +393,9 @@ function priceRequest() {
     rental_pricing_snapshot: { total: 3000, currency: 'XAF' },
     rental_selection_windows: [{
       billing: 'all_day',
-      calendarDate: '2026-11-17',
-      requestedStartAt: '2026-11-17T07:00:00.000Z',
-      requestedEndAt: '2026-11-18T17:00:00.000Z',
+      calendar_date: '2026-11-17',
+      start_at: '2026-11-17T08:00:00.000Z',
+      end_at: '2026-11-18T08:00:00.000Z',
     }],
     rental_location_listing: {
       id: LISTING,
@@ -495,6 +496,32 @@ async function loadIconFonts(page) {
   });
 }
 
+/** The header keeps “Thinking…” for at least 400 ms after a fast reply, and the bubble fades in. A network failure then reads Offline. */
+async function waitSettled(page, fr) {
+  const thinking = fr ? 'Réflexion' : 'Thinking';
+  await page.waitForFunction((label) => {
+    const title = [...document.querySelectorAll('h1')].find((el) => /Assistant/.test(el.textContent || ''));
+    const status = title?.parentElement?.querySelector('p');
+    return !!status && !(status.textContent || '').includes(label);
+  }, thinking, { timeout: 10000 });
+  await waitOpaque(page, '[data-chat-item]');
+}
+
+async function waitOpaque(page, selector) {
+  await page.waitForFunction((sel) => {
+    const nodes = [...document.querySelectorAll(sel)];
+    if (!nodes.length) return false;
+    return nodes.every((node) => {
+      let current = node;
+      while (current) {
+        if (Number(getComputedStyle(current).opacity) < 0.99) return false;
+        current = current.parentElement;
+      }
+      return true;
+    });
+  }, selector, { timeout: 8000 });
+}
+
 async function sendWeb(page, text) {
   const input = page.locator('textarea[name="message"], input[name="message"]').first();
   await input.waitFor({ timeout: 20000 });
@@ -515,7 +542,7 @@ const CHAT_SHOTS = [
   { id: '06-invalid-dates', en: 'Rent a hammer from the 1st of November', fr: 'Louer un marteau le 1er novembre', waitEn: 'already past', waitFr: 'déjà passé' },
   { id: '07-buy-or-rent', en: 'I need a drill', fr: "J'ai besoin d'une perceuse", waitEn: 'Rent it', waitFr: 'Louer' },
   { id: '08-question-answered', en: 'What is the deposit?', fr: 'Quelle est la caution ?', waitEn: '50', waitFr: '50' },
-  { id: '08-assistant-unfit', en: 'Those dates are an unfit card window', fr: 'Ces dates sont une carte trop longue', waitEn: 'Here are dates that work', waitFr: 'Voici des dates possibles' },
+  { id: '08-assistant-unfit', en: 'I want to rent a hammer from 17th to 18th of November', fr: 'Je veux louer un marteau du 17 au 18 novembre par carte', waitEn: 'Here are dates that work', waitFr: 'Voici des dates possibles' },
   { id: '09-question-empty-field', en: 'Where do I pick it up?', fr: 'Où est le retrait ?', waitEn: 'note', waitFr: 'note' },
   { id: '11-error-check-failed', en: 'I want to rent a generator', fr: 'Je veux louer un groupe', waitEn: 'Try again', waitFr: 'Réessayer' },
 ];
@@ -536,12 +563,15 @@ async function captureAll() {
     executablePath: '/usr/bin/google-chrome',
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
+  const only = process.env.CAPTURE_ONLY || '';
   for (const surface of SURFACES) {
     for (const fr of [false, true]) {
-      await captureChat(browser, surface, fr);
-      await captureLoading(browser, surface, fr);
-      await captureNetwork(browser, surface, fr);
-      await capturePrice(browser, surface, fr);
+      if (!only || only === 'chat') {
+        await captureChat(browser, surface, fr);
+        await captureLoading(browser, surface, fr);
+        await captureNetwork(browser, surface, fr);
+      }
+      if (!only || only === 'price') await capturePrice(browser, surface, fr);
     }
   }
   await browser.close();
@@ -565,6 +595,7 @@ async function captureChat(browser, surface, fr) {
     await page.getByTestId('assistant-page').waitFor({ timeout: 30000 });
     await sendWeb(page, fr ? shot.fr : shot.en);
     await page.getByText(fr ? shot.waitFr : shot.waitEn).first().waitFor({ timeout: 20000 });
+    await waitSettled(page, fr);
     await shoot(page, fileName(shot.id, fr ? 'fr' : 'en', surface));
     if (shot.editor) await captureEditor(page, surface, fr);
   }
@@ -582,6 +613,7 @@ async function captureLoading(browser, surface, fr) {
   const { page, context } = await openChat(browser, surface, fr);
   const pending = sendWeb(page, fr ? 'HOLD-MARTEAU louer un marteau' : 'HOLD-HAMMER rent a hammer');
   await page.getByText(fr ? 'Vérification' : 'Checking').first().waitFor({ timeout: 15000 });
+  await waitOpaque(page, '[role="status"]');
   await shoot(page, fileName('10-loading', fr ? 'fr' : 'en', surface));
   await pending;
   await context.close();
@@ -591,6 +623,7 @@ async function captureNetwork(browser, surface, fr) {
   const { page, context } = await openChat(browser, surface, fr);
   await sendWeb(page, fr ? 'NETWORK-ECHELLE' : 'NETWORK-LADDER');
   await page.getByText(fr ? 'Message non envoyé' : 'Message not sent').first().waitFor({ timeout: 15000 });
+  await waitSettled(page, fr);
   await shoot(page, fileName('12-error-network', fr ? 'fr' : 'en', surface));
   await context.close();
 }
@@ -601,6 +634,15 @@ async function capturePrice(browser, surface, fr) {
   await installRoutes(page, fr, { auth: true });
   await gotoApp(page, '/rentals/requests');
   await page.getByText(fr ? 'modifié le prix' : 'changed the price').first().waitFor({ timeout: 20000 });
+  const totalBottom = await page.evaluate(() => {
+    const total = [...document.querySelectorAll('h6')].find((el) => /FCFA/.test(el.textContent || ''));
+    return total ? total.getBoundingClientRect().bottom : 0;
+  });
+  if (totalBottom > 760) {
+    await page.mouse.move(180, 420);
+    await page.mouse.wheel(0, totalBottom - 640);
+    await page.waitForTimeout(250);
+  }
   await shoot(page, fileName('13-price-changed', fr ? 'fr' : 'en', surface));
   await context.close();
 }

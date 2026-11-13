@@ -41,7 +41,7 @@ export function AssistantRentalThread({
       {rental?.dates ? (
         <Chip label={formatRange(rental.dates, i18n.language)} onClick={onEditDates} variant="outlined" sx={{ alignSelf: 'flex-start', height: 40 }} />
       ) : null}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 1.5, minWidth: 0 }}>
         {rentalCards.map((card) => (
           <RentalCard
             key={card.id}
@@ -99,13 +99,13 @@ function RentalCard({
   const rental = card.rental!;
   const booked = rental.availability === 'unavailable' && rental.cta === 'shift';
   return (
-    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, minWidth: 0, overflow: 'hidden' }}>
       <Stack direction="row" spacing={1.5}>
         <Box sx={{ width: 64, height: 64, borderRadius: 1.5, bgcolor: 'action.hover', overflow: 'hidden' }}>
           {card.imageUrl ? <Box component="img" src={card.imageUrl} alt="" sx={{ width: 64, height: 64, objectFit: 'cover' }} /> : null}
         </Box>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="subtitle2" noWrap>{card.title}</Typography>
+        <Box sx={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+          <Typography variant="subtitle2" noWrap sx={{ display: 'block' }}>{card.title}</Typography>
           {rental.businessName ? <Typography variant="caption" color="text.secondary" display="block">{rental.businessName}</Typography> : null}
           {rental.city ? <Typography variant="caption" color="text.secondary" display="block">{rental.city}</Typography> : null}
           <Typography variant="caption" color={booked ? 'warning.main' : 'success.main'} display="block">

@@ -13,6 +13,15 @@ jest.mock('../../hooks/useClientFlags', () => ({
   }),
 }));
 
+jest.mock('../../hooks/useApiClient', () => ({
+  useApiClient: () => ({ post: jest.fn().mockResolvedValue({ data: {} }) }),
+}));
+
+jest.mock('../../hooks/useTrackSiteEvent', () => ({
+  useTrackSiteEvent: () => ({ trackSiteEvent: jest.fn() }),
+  SITE_EVENT_ASSISTANT_RENTAL_PRICE_CHANGED: 'assistant.rental.price_changed_shown',
+}));
+
 const theme = createTheme();
 
 i18n.init({
@@ -148,6 +157,29 @@ describe('ClientRentalRequestRowCard period', () => {
     renderCard(row([day('2026-11-12')]));
     expect(screen.getByText('12 nov. · 1 jour')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Réserver' })).toBeInTheDocument();
+  });
+
+  it('shows the requested dates and formats a changed price like the rest of the app', async () => {
+    const item = row([day('2026-11-17')]);
+    item.quoted_total = 2500;
+    item.rental_pricing_snapshot = { total: 3000, currency: 'XAF' };
+    renderCard(item);
+    expect(screen.getByText('17 Nov · 1 day')).toBeInTheDocument();
+    expect(screen.queryByText('Requested period unavailable')).toBeNull();
+    expect(screen.getAllByText(/3\s000\sFCFA/)).toHaveLength(2);
+    expect(screen.getByText(/2\s500\sFCFA/)).toBeInTheDocument();
+    expect(screen.queryByText(/FCFA\s*3[,.]?000/)).toBeNull();
+  });
+
+  it('formats the changed price in French the same way', async () => {
+    await i18n.changeLanguage('fr');
+    const item = row([day('2026-11-17')]);
+    item.quoted_total = 2500;
+    item.rental_pricing_snapshot = { total: 3000, currency: 'XAF' };
+    renderCard(item);
+    expect(screen.getByText('17 nov. · 1 jour')).toBeInTheDocument();
+    expect(screen.getAllByText(/3\s000\sFCFA/)).toHaveLength(2);
+    expect(screen.queryByText(/FCFA\s*3[,.]?000/)).toBeNull();
   });
 
   it('still opens the booking from a booked request', () => {
