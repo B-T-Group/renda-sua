@@ -18,6 +18,11 @@ export class RentalInspectionFlags {
   }
 
   /** Country row, then the global row. Missing or unreadable stays false. */
+  async chargeAtPickupEnabled(countryCode?: string | null): Promise<boolean> {
+    return this.booleanConfig('rentals_card_charge_at_pickup_enabled', countryCode, false);
+  }
+
+  /** Country row, then the global row. Missing or unreadable stays false. */
   async allowSelfBooking(countryCode?: string | null): Promise<boolean> {
     return this.booleanConfig(ALLOW_SELF_BOOKING_KEY, countryCode, false);
   }

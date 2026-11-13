@@ -1,6 +1,7 @@
 import { presentRentalSearch } from './assistant-rental-present';
+import { cardWindowUnfitReply, formatCardCutoff } from './assistant-rental-card-copy';
 import type { RentalSearchHit } from '../rentals/rental-search.service';
-import { latestCardEndAt } from '../rentals/rental-card-window';
+import { exclusiveEndInstant, latestCardEndAt } from '../rentals/rental-card-window';
 
 const NOW = new Date('2026-11-13T12:00:00.000Z');
 
@@ -64,6 +65,7 @@ describe('rental presenter card window', () => {
       dayCount: 2,
       cardWindow: {
         fits: false,
+        mode: 'authorize_upfront',
         latest_card_end_at: latestCardEndAt(NOW).toISOString(),
         payment_rail: 'stripe',
         momo_available: false,
@@ -80,6 +82,12 @@ describe('rental presenter card window', () => {
     const payload = JSON.parse(presented.content);
     expect(payload.card_window.fits).toBe(false);
     expect(payload.card_window.offered.endDate).toBe('2026-11-16');
+    expect(payload.card_window.offered.dayCount).toBe(2);
     expect(payload.card_window.payment_rail).toBe('stripe');
+    const latest = payload.card_window.latest_card_end_at as string;
+    expect(exclusiveEndInstant(payload.card_window.offered.endDate, 'Africa/Douala').getTime()).toBeLessThanOrEqual(Date.parse(latest));
+    const say = cardWindowUnfitReply('en', formatCardCutoff(latest, 'Africa/Douala', 'en'));
+    expect(payload.card_window.say).toBe(say);
+    expect(payload.card_window.say).not.toMatch(/inspected/i);
   });
 });

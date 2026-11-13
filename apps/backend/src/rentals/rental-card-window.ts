@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon';
+import { parseSearchDateRange } from './rental-search.dates';
 import {
   DEFAULT_STRIPE_REVIEW_HOURS,
   STRIPE_AUTH_WINDOW_DAYS,
@@ -6,15 +7,19 @@ import {
 } from './inspection/rental-inspection.policy';
 
 export type CardPaymentRail = 'stripe' | 'mobile_money';
+export type CardPaymentMode = 'authorize_upfront' | 'charge_at_pickup';
 
-/** Field names shared with the card date guard. */
-export interface CardWindowFields {
-  latest_card_end_at: string;
+/** Shared with the card date guard. latest_card_end_at is null when the window does not apply. */
+export interface CardPaymentPolicy {
+  mode: CardPaymentMode;
+  latest_card_end_at: string | null;
   payment_rail: CardPaymentRail;
   momo_available: boolean;
   stripe_review_hours: number;
   timezone: string;
 }
+
+export type CardWindowFields = CardPaymentPolicy;
 
 export interface CardWindowOffer {
   startDate: string;
@@ -33,25 +38,54 @@ export function latestCardEndAt(
   return new Date(now.getTime() + authMs - reviewMs);
 }
 
+export function resolveCardPaymentPolicy(input: {
+  rail: CardPaymentRail;
+  timezone: string;
+  now?: Date;
+  reviewHours?: number;
+  authWindowDays?: number;
+  /** Use a value already on the payload. Recompute when it is absent. */
+  latestCardEndAt?: string | null;
+  chargeAtPickupEnabled?: boolean;
+  /** True when this booking is on the inspection policy, or a new one would be. */
+  inspected?: boolean;
+}): CardPaymentPolicy {
+  const reviewHours = input.reviewHours ?? DEFAULT_STRIPE_REVIEW_HOURS;
+  const chargeAtPickup =
+    input.chargeAtPickupEnabled === true && input.inspected === true && input.rail === 'stripe';
+  const mode: CardPaymentMode = chargeAtPickup ? 'charge_at_pickup' : 'authorize_upfront';
+  return {
+    mode,
+    latest_card_end_at: upfrontLatest(input, mode, reviewHours),
+    payment_rail: input.rail,
+    momo_available: input.rail === 'mobile_money',
+    stripe_review_hours: reviewHours,
+    timezone: input.timezone,
+  };
+}
+
 export function cardWindowFields(input: {
   now: Date;
   rail: CardPaymentRail;
   timezone: string;
   reviewHours?: number;
   authWindowDays?: number;
-  /** Use a value already on the payload. Recompute when it is absent. */
   latestCardEndAt?: string | null;
-}): CardWindowFields {
-  const reviewHours = input.reviewHours ?? DEFAULT_STRIPE_REVIEW_HOURS;
-  const computed = latestCardEndAt(input.now, reviewHours, input.authWindowDays);
+  chargeAtPickupEnabled?: boolean;
+  inspected?: boolean;
+}): CardPaymentPolicy {
+  return resolveCardPaymentPolicy(input);
+}
+
+function upfrontLatest(
+  input: { now?: Date; rail: CardPaymentRail; authWindowDays?: number; latestCardEndAt?: string | null },
+  mode: CardPaymentMode,
+  reviewHours: number
+): string | null {
+  if (mode !== 'authorize_upfront' || input.rail !== 'stripe') return null;
   const provided = parseInstant(input.latestCardEndAt);
-  return {
-    latest_card_end_at: (provided ?? computed).toISOString(),
-    payment_rail: input.rail,
-    momo_available: input.rail === 'mobile_money',
-    stripe_review_hours: reviewHours,
-    timezone: input.timezone,
-  };
+  const computed = latestCardEndAt(input.now ?? new Date(), reviewHours, input.authWindowDays);
+  return (provided ?? computed).toISOString();
 }
 
 export function readLatestCardEndAt(value: unknown): string | null {
@@ -84,22 +118,34 @@ export function clampExclusiveRange(input: {
   startDate: string;
   endDate: string;
   dayCount: number;
-  latestCardEndAt: string;
+  latestCardEndAt: string | null;
   zone: string;
   today: string;
 }): { fits: boolean; offer: CardWindowOffer | null } {
+  if (!input.latestCardEndAt) return { fits: true, offer: ranged(input.startDate, input.endDate) };
   const cap = latestExclusiveEndDate(input.latestCardEndAt, input.zone);
   if (input.endDate <= cap && input.startDate >= input.today && input.startDate < input.endDate) {
-    return { fits: true, offer: rangeOf(input.startDate, input.endDate, input.dayCount) };
+    return { fits: true, offer: ranged(input.startDate, input.endDate) };
   }
   const start = input.startDate < cap ? laterDate(input.startDate, input.today) : addDays(cap, -1);
-  const days = dayCount(start, cap);
-  if (start < input.today || start >= cap || !days || days < 1) return { fits: false, offer: null };
-  return { fits: false, offer: rangeOf(start, cap, days) };
+  if (start < input.today || start >= cap) return { fits: false, offer: null };
+  const offer = ranged(start, cap);
+  if (!offer) return { fits: false, offer: null };
+  return { fits: false, offer };
 }
 
-function rangeOf(startDate: string, endDate: string, dayCount: number): CardWindowOffer {
+function ranged(startDate: string, endDate: string): CardWindowOffer | null {
+  const dayCount = rentalDurationDays(startDate, endDate);
+  if (!dayCount) return null;
   return { startDate, endDate, dayCount };
+}
+
+function rentalDurationDays(start: string, end: string): number | null {
+  try {
+    return parseSearchDateRange(start, end)?.dayCount ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function laterDate(left: string, right: string): string {
@@ -108,11 +154,6 @@ function laterDate(left: string, right: string): string {
 
 function addDays(iso: string, days: number): string {
   return DateTime.fromISO(iso, { zone: 'utc' }).plus({ days }).toFormat('yyyy-MM-dd');
-}
-
-function dayCount(start: string, end: string): number | null {
-  const days = DateTime.fromISO(end).diff(DateTime.fromISO(start), 'days').days;
-  return Number.isFinite(days) ? Math.round(days) : null;
 }
 
 function parseInstant(value?: string | null): Date | null {

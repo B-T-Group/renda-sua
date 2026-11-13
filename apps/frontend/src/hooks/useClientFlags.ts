@@ -14,6 +14,7 @@ export type ClientFlagKey =
   | 'assistant_launcher_v1'
   | 'assistant_shopping_v1'
   | 'assistant_rentals_enabled'
+  | 'rentals_card_charge_at_pickup_enabled'
   | 'restock_alerts_v1'
   | 'discovery_sort_v1'
   | 'agent_contract_required'
@@ -38,6 +39,7 @@ const DEFAULT_FLAGS: ClientFlags = {
   assistant_launcher_v1: false,
   assistant_shopping_v1: false,
   assistant_rentals_enabled: false,
+  rentals_card_charge_at_pickup_enabled: false,
   restock_alerts_v1: false,
   discovery_sort_v1: false,
   agent_contract_required: true,

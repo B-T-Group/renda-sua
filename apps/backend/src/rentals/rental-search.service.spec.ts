@@ -73,7 +73,8 @@ describe('RentalSearchService', () => {
     expect(result.momo_available).toBe(true);
     expect(result.stripe_review_hours).toBe(72);
     expect(result.timezone).toBe('Africa/Douala');
-    expect(result.latest_card_end_at).toEqual(expect.any(String));
+    expect(result.mode).toBe('authorize_upfront');
+    expect(result.latest_card_end_at).toBeNull();
     expect(result.listings[0]).toMatchObject({
       payment_rail: 'mobile_money',
       momo_available: true,

@@ -14,6 +14,8 @@ Answer item questions only from listing fields. If a field is null, say the list
 Quotes are estimates. The business confirms the price and nothing is charged until the customer confirms.
 If status is buy_or_rent, ask whether they want to rent or buy and do not show cards.
 If status is unavailable_error, say the availability check failed and offer a retry. Do not invent a result.
-If card_window.fits is false, say the asked dates do not fit a card payment and offer the fitting dates once.
-Those dates end on or before latest_card_end_at. Do not repeat prices.`;
+If mode is charge_at_pickup, or latest_card_end_at is null, keep the asked dates.
+If card_window.say is set, the reply is that sentence exactly, then the offered dates.
+Do not mention an inspection. Offered dates end on or before latest_card_end_at.
+Do not repeat prices.`;
 }

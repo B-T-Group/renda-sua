@@ -8,17 +8,17 @@ import { DEFAULT_STRIPE_REVIEW_HOURS } from './inspection/rental-inspection.poli
 import { availabilityForListing, parseSearchDateRange, type SearchDateRange } from './rental-search.dates';
 import { type CapacityWindow } from './rental-capacity';
 import {
-  cardWindowFields,
   listingCountryCode,
   readLatestCardEndAt,
-  type CardWindowFields,
+  resolveCardPaymentPolicy,
+  type CardPaymentPolicy,
 } from './rental-card-window';
 import { RentalsService, type PublicRentalListingRow } from './rentals.service';
 
 const DAY_MS = 86_400_000;
 const HORIZON_DAYS = 45;
 
-export interface RentalSearchHit extends Partial<CardWindowFields> {
+export interface RentalSearchHit extends Partial<CardPaymentPolicy> {
   listing: PublicRentalListingRow;
   available: boolean | null;
   nextAvailableDate: string | null;
@@ -55,16 +55,20 @@ export class RentalSearchService {
     return this.page(hits, query, range, window);
   }
 
-  async cardWindow(country?: string | null, latest?: string | null): Promise<CardWindowFields> {
+  async cardWindow(country?: string | null, latest?: string | null, inspected?: boolean): Promise<CardPaymentPolicy> {
     const code = (country || '').trim();
     const rail = await this.railFor(code);
     const reviewHours = await this.reviewHours(code);
-    return cardWindowFields({
+    const chargeAtPickupEnabled = this.flags ? await this.flags.chargeAtPickupEnabled(code) : false;
+    const willInspect = inspected ?? (this.flags ? await this.flags.isEnabled(code) : false);
+    return resolveCardPaymentPolicy({
       now: new Date(),
       rail,
       timezone: marketTimeZone(code) ?? 'Africa/Douala',
       latestCardEndAt: latest,
       reviewHours,
+      chargeAtPickupEnabled,
+      inspected: willInspect,
     });
   }
 
@@ -160,7 +164,7 @@ export class RentalSearchService {
     hits: Array<RentalSearchHit & { catalogIndex: number }>,
     query: RentalSearchQueryDto,
     range: SearchDateRange | null,
-    window: CardWindowFields
+    window: CardPaymentPolicy
   ) {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
@@ -182,9 +186,9 @@ export class RentalSearchService {
   private async stampHits(
     hits: Array<RentalSearchHit & { catalogIndex: number }>,
     fallback: string | undefined,
-    known: CardWindowFields
+    known: CardPaymentPolicy
   ) {
-    const cache = new Map<string, CardWindowFields>();
+    const cache = new Map<string, CardPaymentPolicy>();
     const key = `${(fallback || '').trim().toUpperCase()}|`;
     cache.set(key, known);
     const stamped = [];
@@ -195,7 +199,7 @@ export class RentalSearchService {
   private async stampHit(
     hit: RentalSearchHit & { catalogIndex: number },
     fallback: string | undefined,
-    cache: Map<string, CardWindowFields>
+    cache: Map<string, CardPaymentPolicy>
   ) {
     const code = listingCountryCode(hit.listing, fallback);
     const latest = readLatestCardEndAt(hit.listing);
@@ -225,6 +229,7 @@ function stripCatalogIndex(hit: RentalSearchHit & { catalogIndex: number }): Ren
     pricePerDay: hit.pricePerDay,
     totalForDates: hit.totalForDates,
     dayCount: hit.dayCount,
+    mode: hit.mode,
     latest_card_end_at: hit.latest_card_end_at,
     payment_rail: hit.payment_rail,
     momo_available: hit.momo_available,

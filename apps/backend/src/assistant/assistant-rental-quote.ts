@@ -1,4 +1,5 @@
 import { cardRailFits } from '../rentals/rental-card-window';
+import { stripeReviewFits } from '../rentals/inspection/rental-inspection.policy';
 import { quotePlanTotal } from '../rentals/rental-request-edit';
 
 export type QuoteViolation =
@@ -29,6 +30,7 @@ export function quoteHourlyWindow(input: {
   now: Date;
   cardRail: boolean;
   reviewHours?: number;
+  latestCardEndAt?: string | null;
 }): { hours: number; quoteTotal: number | null; ruleViolation?: QuoteViolation } {
   const hours = Math.max(0, (input.end.getTime() - input.start.getTime()) / 3_600_000);
   if (input.units > input.unitsAvailable) {
@@ -44,11 +46,34 @@ export function quoteHourlyWindow(input: {
     input.perHour,
     input.units
   );
-  const violation = cardWindow(input.end, input.now, input.cardRail, input.reviewHours);
+  const violation = cardWindow(input);
   return { hours, quoteTotal, ruleViolation: violation };
 }
 
-function cardWindow(end: Date, now: Date, cardRail: boolean, reviewHours?: number): QuoteViolation | undefined {
-  if (!cardRail || cardRailFits(end, now, reviewHours)) return undefined;
+function cardWindow(input: {
+  end: Date;
+  now: Date;
+  cardRail: boolean;
+  reviewHours?: number;
+  latestCardEndAt?: string | null;
+}): QuoteViolation | undefined {
+  if (!input.cardRail || hourlyFits(input)) return undefined;
   return 'card_window';
+}
+
+function hourlyFits(input: {
+  end: Date;
+  now: Date;
+  reviewHours?: number;
+  latestCardEndAt?: string | null;
+}): boolean {
+  if (!Object.prototype.hasOwnProperty.call(input, 'latestCardEndAt')) {
+    return cardRailFits(input.end, input.now, input.reviewHours);
+  }
+  return stripeReviewFits({
+    endAt: input.end,
+    now: input.now,
+    reviewHours: input.reviewHours,
+    latest_card_end_at: input.latestCardEndAt,
+  });
 }

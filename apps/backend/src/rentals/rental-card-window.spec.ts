@@ -6,6 +6,7 @@ import {
   latestCardEndAt,
   latestExclusiveEndDate,
   readLatestCardEndAt,
+  resolveCardPaymentPolicy,
 } from './rental-card-window';
 
 const NOW = new Date('2026-11-13T12:00:00.000Z');
@@ -30,6 +31,7 @@ describe('card window', () => {
       latestCardEndAt: provided,
     });
     expect(fields).toEqual({
+      mode: 'authorize_upfront',
       latest_card_end_at: provided,
       payment_rail: 'stripe',
       momo_available: false,
@@ -73,5 +75,55 @@ describe('card window', () => {
       today: '2026-11-13',
     });
     expect(after.offer).toEqual({ startDate: '2026-11-15', endDate: '2026-11-16', dayCount: 1 });
+  });
+
+  it('charges at pickup only for an inspected Stripe booking and then does not clamp', () => {
+    const pickup = resolveCardPaymentPolicy({
+      rail: 'stripe',
+      timezone: 'Africa/Douala',
+      now: NOW,
+      chargeAtPickupEnabled: true,
+      inspected: true,
+    });
+    expect(pickup.mode).toBe('charge_at_pickup');
+    expect(pickup.latest_card_end_at).toBeNull();
+    expect(stripeReviewFits({ endAt: new Date(NOW.getTime() + 4 * DAY), now: NOW, latest_card_end_at: null })).toBe(true);
+    const open = clampExclusiveRange({
+      startDate: '2026-11-14',
+      endDate: '2026-11-20',
+      dayCount: 6,
+      latestCardEndAt: null,
+      zone: 'Africa/Douala',
+      today: '2026-11-13',
+    });
+    expect(open.fits).toBe(true);
+    expect(open.offer?.endDate).toBe('2026-11-20');
+  });
+
+  it('keeps authorize_upfront unless the flag is on and the Stripe booking is inspected', () => {
+    const momo = resolveCardPaymentPolicy({ rail: 'mobile_money', timezone: 'Africa/Douala', now: NOW });
+    expect(momo.mode).toBe('authorize_upfront');
+    expect(momo.latest_card_end_at).toBeNull();
+    expect(momo.momo_available).toBe(true);
+    const flagOff = resolveCardPaymentPolicy({
+      rail: 'stripe',
+      timezone: 'Africa/Douala',
+      now: NOW,
+      chargeAtPickupEnabled: false,
+      inspected: true,
+    });
+    expect(flagOff.mode).toBe('authorize_upfront');
+    expect(flagOff.latest_card_end_at).toEqual(expect.any(String));
+    const notInspected = resolveCardPaymentPolicy({
+      rail: 'stripe',
+      timezone: 'Africa/Douala',
+      now: NOW,
+      chargeAtPickupEnabled: true,
+      inspected: false,
+    });
+    expect(notInspected.mode).toBe('authorize_upfront');
+    const latest = flagOff.latest_card_end_at as string;
+    expect(stripeReviewFits({ endAt: new Date(latest), now: NOW, latest_card_end_at: latest })).toBe(true);
+    expect(stripeReviewFits({ endAt: new Date(Date.parse(latest) + 1), now: NOW, latest_card_end_at: latest })).toBe(false);
   });
 });

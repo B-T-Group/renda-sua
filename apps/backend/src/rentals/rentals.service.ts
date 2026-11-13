@@ -51,7 +51,7 @@ import {
   type RentalWindowSnapshot,
 } from './rental-request-edit';
 import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, shouldNotifyPriceChange } from './rental-price-change';
-import { cardWindowFields } from './rental-card-window';
+import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
@@ -4965,42 +4965,34 @@ export class RentalsService {
   private async enrolOrReject(req: any, country: string | null): Promise<number | null> {
     const input = await this.enrolmentInput(req, country);
     const decision = decideInspectionEnrolment(input);
-    if (decision.outcome === 'reject') throw this.rejectEnrolment(decision, input, country);
+    if (decision.outcome === 'reject') throw await this.rejectEnrolment(decision, country);
     return decision.outcome === 'enrol' ? decision.policyVersion : null;
   }
 
-  private rejectEnrolment(
-    decision: { code: string; message: string },
-    input: { rail: string; now: Date; reviewHours?: number },
-    country: string | null
-  ) {
-    const extra = decision.code === INSPECTION_CODES.STRIPE_WINDOW ? this.cardWindowBody(input, country) : undefined;
+  private async rejectEnrolment(decision: { code: string; message: string }, country: string | null) {
+    const extra = decision.code === INSPECTION_CODES.STRIPE_WINDOW ? await this.cardWindowBody(country, true) : undefined;
     return inspectionRejected(decision.code, decision.message, extra);
   }
 
-  async cardWindowFieldsFor(country?: string | null, latest?: string | null) {
+  async cardWindowFieldsFor(country?: string | null, latest?: string | null, inspected?: boolean) {
     const code = (country || '').trim();
     const rail = code ? await this.paymentRoutingService.resolveRailForCountry(code) : 'mobile_money';
     const reviewHours = await this.stripeReviewHours(code || null);
-    return cardWindowFields({
+    const chargeAtPickupEnabled = await this.inspectionFlags.chargeAtPickupEnabled(code);
+    const willInspect = inspected ?? (await this.inspectionFlags.isEnabled(code));
+    return resolveCardPaymentPolicy({
       now: new Date(),
       rail: rail === 'stripe' ? 'stripe' : 'mobile_money',
       timezone: marketTimeZone(code) ?? 'Africa/Douala',
       latestCardEndAt: latest,
       reviewHours,
+      chargeAtPickupEnabled,
+      inspected: willInspect,
     });
   }
 
-  private cardWindowBody(
-    input: { rail: string; now: Date; reviewHours?: number },
-    country: string | null
-  ) {
-    return cardWindowFields({
-      now: input.now,
-      rail: input.rail === 'stripe' ? 'stripe' : 'mobile_money',
-      timezone: marketTimeZone(country) ?? 'Africa/Douala',
-      reviewHours: input.reviewHours,
-    });
+  private async cardWindowBody(country: string | null, inspected: boolean) {
+    return this.cardWindowFieldsFor(country, null, inspected);
   }
 
   private async enrolmentInput(req: any, country: string | null) {
@@ -5008,6 +5000,8 @@ export class RentalsService {
     const rail = country
       ? await this.paymentRoutingService.resolveRailForCountry(country)
       : 'mobile_money';
+    const reviewHours = await this.stripeReviewHours(country);
+    const card = await this.paymentPolicy(country, true, rail === 'stripe' ? 'stripe' : 'mobile_money', reviewHours);
     return {
       enabled: true,
       windowCount: windows.length,
@@ -5016,9 +5010,26 @@ export class RentalsService {
       rail,
       endAt: new Date(Math.max(...windows.map((window) => window.end.getTime()))),
       now: new Date(),
-      reviewHours: await this.stripeReviewHours(country),
+      reviewHours,
       allowSelfBooking: await this.inspectionFlags.allowSelfBooking(country),
+      latest_card_end_at: card.latest_card_end_at,
     };
+  }
+
+  private async paymentPolicy(
+    country: string | null,
+    inspected: boolean,
+    rail: 'stripe' | 'mobile_money',
+    reviewHours: number
+  ) {
+    const chargeAtPickupEnabled = await this.inspectionFlags.chargeAtPickupEnabled(country);
+    return resolveCardPaymentPolicy({
+      rail,
+      timezone: marketTimeZone(country) ?? 'Africa/Douala',
+      reviewHours,
+      chargeAtPickupEnabled,
+      inspected,
+    });
   }
 
   private stripeReviewHours(country: string | null): Promise<number> {
@@ -5037,6 +5048,7 @@ export class RentalsService {
     const policy = await this.readInspectionPolicy(bookingId);
     if (policy == null) return;
     const reviewHours = await this.stripeReviewHours(country);
+    const card = await this.paymentPolicy(country, true, 'stripe', reviewHours);
     const input = {
       enabled: true,
       windowCount: 1,
@@ -5046,9 +5058,10 @@ export class RentalsService {
       endAt: new Date(endAtIso),
       now: new Date(),
       reviewHours,
+      latest_card_end_at: card.latest_card_end_at,
     };
     const decision = decideInspectionEnrolment(input);
-    if (decision.outcome === 'reject') throw this.rejectEnrolment(decision, input, country);
+    if (decision.outcome === 'reject') throw await this.rejectEnrolment(decision, country);
   }
 
   /** null = legacy. A failed read throws 503 so callers retry instead of guessing. */

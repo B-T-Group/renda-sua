@@ -15,6 +15,7 @@ import type {
   AssistantRentalCta,
   AssistantRentalMeta,
 } from './assistant.types';
+import { cardWindowUnfitReply, formatCardCutoff } from './assistant-rental-card-copy';
 import { addCalendarDays, exclusiveDayCount, marketCalendarDate } from './assistant-rental-dates';
 import { perDayPriceLabel } from './assistant-rental-format';
 
@@ -158,6 +159,7 @@ function modelPayload(input: RentalPresentInput, refs: Record<string, string>) {
           fits: input.cardWindow.fits !== false,
           asked: input.cardWindow.asked ?? null,
           offered: input.cardWindow.offered ?? null,
+          say: cardWindowSay(input),
           ...windowFields(input),
         }
       : null,
@@ -317,10 +319,18 @@ function cardCap(hit: RentalSearchHit): string | undefined {
   return latestExclusiveEndDate(hit.latest_card_end_at, hit.timezone);
 }
 
+function cardWindowSay(input: RentalPresentInput): string | null {
+  const window = input.cardWindow;
+  if (!window || window.fits !== false || !window.latest_card_end_at) return null;
+  const cutoff = formatCardCutoff(window.latest_card_end_at, window.timezone, input.locale);
+  return cardWindowUnfitReply(input.locale, cutoff);
+}
+
 function windowFields(input: RentalPresentInput): Partial<CardWindowFields> {
   const window = input.cardWindow;
   if (!window) return {};
   return {
+    mode: window.mode,
     latest_card_end_at: window.latest_card_end_at,
     payment_rail: window.payment_rail,
     momo_available: window.momo_available,

@@ -208,6 +208,7 @@ export class AssistantRentalService {
       now: new Date(),
       cardRail: window.payment_rail === 'stripe',
       reviewHours: window.stripe_review_hours,
+      latestCardEndAt: window.latest_card_end_at,
     });
     const fits = quoted.ruleViolation !== 'card_window';
     return {
@@ -241,7 +242,9 @@ export class AssistantRentalService {
 
   private async cardDates(country: string, checked?: { startDate: string; endDate: string; dayCount: number }): Promise<CardDateChoice> {
     const window = await this.search.cardWindow(country);
-    if (!checked || window.payment_rail !== 'stripe') return openCardDates(checked, window);
+    if (!checked || window.payment_rail !== 'stripe' || window.latest_card_end_at == null) {
+      return openCardDates(checked, window);
+    }
     const clamped = clampExclusiveRange({
       startDate: checked.startDate,
       endDate: checked.endDate,
@@ -512,7 +515,7 @@ function pricedRange(
   range: { startDate: string; endDate: string; dayCount: number },
   window: CardWindowFields
 ) {
-  if (window.payment_rail !== 'stripe') return { fits: true, offer: range };
+  if (window.payment_rail !== 'stripe' || window.latest_card_end_at == null) return { fits: true, offer: range };
   return clampExclusiveRange({
     startDate: range.startDate,
     endDate: range.endDate,
@@ -557,7 +560,8 @@ function quoteResult(body: Record<string, unknown>): AssistantToolResult {
       status: 'ok',
       dateIssue: 'card_window',
       dates: offer,
-      latest_card_end_at: String(body.latest_card_end_at || ''),
+      mode: body.mode === 'charge_at_pickup' ? 'charge_at_pickup' : 'authorize_upfront',
+      latest_card_end_at: typeof body.latest_card_end_at === 'string' ? body.latest_card_end_at : null,
       payment_rail: body.payment_rail === 'stripe' ? 'stripe' : 'mobile_money',
       momo_available: body.momo_available === true,
       stripe_review_hours: Number(body.stripe_review_hours) || 72,

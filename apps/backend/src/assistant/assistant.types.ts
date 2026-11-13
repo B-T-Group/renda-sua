@@ -99,7 +99,8 @@ export type AssistantRentalDates =
 export type AssistantRentalMeta = {
   status?: 'ok' | 'needs_dates' | 'invalid_dates' | 'unavailable_error' | 'buy_or_rent';
   dateIssue?: 'past' | 'end_before_start' | 'too_long' | 'unparseable' | 'card_window';
-  latest_card_end_at?: string;
+  mode?: 'authorize_upfront' | 'charge_at_pickup';
+  latest_card_end_at?: string | null;
   payment_rail?: 'stripe' | 'mobile_money';
   momo_available?: boolean;
   stripe_review_hours?: number;

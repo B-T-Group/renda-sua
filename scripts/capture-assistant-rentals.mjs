@@ -18,7 +18,9 @@ function moneyCard(input) {
     kind: 'rental',
     id: input.id,
     title: input.title,
-    href: `/rentals/${input.listingId}?start_date=2026-11-17&end_date=2026-11-18&openRequest=1`,
+    href: input.startDate && input.endDate
+      ? `/rentals/${input.listingId}?start_date=${input.startDate}&end_date=${input.endDate}&openRequest=1`
+      : `/rentals/${input.listingId}`,
     rental: {
       listingId: input.listingId,
       businessName: input.business,
@@ -95,6 +97,40 @@ function found(fr) {
       footnote: 'estimate',
       showAllCount: 3,
       showAllHref: '/rentals?search=hammer',
+    },
+  };
+}
+
+function unfit(fr) {
+  return {
+    reply: fr
+      ? 'Avec une carte, cette location doit se terminer le 16 nov. · 13:00. Voici des dates possibles :'
+      : 'With a card, this rental must end by 16 Nov · 13:00. Here are dates that work:',
+    handoff: false,
+    cards: [
+      moneyCard({
+        id: 'r1',
+        listingId: LISTING,
+        title: 'Marteau de coffreur 1,2 kg',
+        business: 'Quincaillerie Akwa',
+        city: 'Akwa, Douala',
+        availability: 'available',
+        quote: 5000,
+        perDay: 2500,
+        deposit: 10000,
+        startDate: '2026-11-14',
+        endDate: '2026-11-16',
+        dayCount: 2,
+      }),
+    ],
+    rental: {
+      status: 'ok',
+      dateIssue: 'card_window',
+      mode: 'authorize_upfront',
+      latest_card_end_at: '2026-11-16T12:00:00.000Z',
+      payment_rail: 'stripe',
+      dates: { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 },
+      footnote: 'estimate',
     },
   };
 }
@@ -294,6 +330,7 @@ const PROMPTS = {
   loading: ['HOLD-HAMMER', 'HOLD-MARTEAU'],
   failed: ['rent a generator', 'louer un groupe'],
   network: ['NETWORK-LADDER', 'NETWORK-ECHELLE'],
+  unfit: ['unfit card', 'carte trop longue'],
 };
 
 function replyFor(text, fr) {
@@ -307,6 +344,7 @@ function replyFor(text, fr) {
   if (body.includes('deposit') || body.includes('caution')) return { payload: question(fr) };
   if (body.includes('pick') || body.includes('retrait')) return { payload: emptyField(fr) };
   if (body.includes('generator') || body.includes('groupe')) return { payload: failed(fr) };
+  if (body.includes('unfit') || body.includes('trop longue')) return { payload: unfit(fr) };
   const undatedHammer = (body.includes('rent a hammer') || body.includes('louer un marteau')) && !/\d/.test(body);
   if (undatedHammer) return { payload: noDates(fr) };
   return { payload: found(fr) };
@@ -391,20 +429,22 @@ function fulfill(route, body, status = 200) {
   });
 }
 
-async function installRoutes(page, fr) {
+async function installRoutes(page, fr, options = {}) {
+  const authed = options.auth === true;
   await page.route('http://localhost:3000/**', async (route) => {
     if (route.request().method() === 'OPTIONS') return fulfill(route, '', 204);
     return route.fallback();
   });
   await page.route('**/app-config/client-flags**', (route) => fulfill(route, flagsBody()));
-  await page.route('**/auth/login/refresh', (route) =>
-    fulfill(route, {
+  await page.route('**/auth/login/refresh', (route) => {
+    if (!authed) return fulfill(route, { message: 'no session' }, 401);
+    return fulfill(route, {
       access_token: 'capture-access',
       id_token: jwt({ sub: 'auth0|capture', email: 'renter@example.com', email_verified: true }),
       token_type: 'Bearer',
       expires_in: 3600,
-    })
-  );
+    });
+  });
   await page.route('**/users/me', (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return fulfill(route, {
@@ -442,191 +482,159 @@ async function installRoutes(page, fr) {
 }
 
 async function shoot(page, name) {
+  await loadIconFonts(page);
   await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false });
   console.log('saved', name);
 }
 
+async function loadIconFonts(page) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    const faces = [...document.fonts].filter((face) => /icon|material|symbols/i.test(face.family));
+    await Promise.all(faces.map((face) => face.load().catch(() => undefined)));
+  });
+}
+
 async function sendWeb(page, text) {
-  const input = page.getByPlaceholder(/Ask about an item|Demandez|commande ou la livraison|order or delivery/i);
+  const input = page.locator('textarea[name="message"], input[name="message"]').first();
   await input.waitFor({ timeout: 20000 });
+  await page.waitForFunction(() => {
+    const el = document.querySelector('textarea[name="message"], input[name="message"]');
+    return !!el && !el.disabled;
+  }, null, { timeout: 20000 });
   await input.click();
   await input.fill(text);
   await page.keyboard.press('Enter');
 }
 
-async function captureWeb() {
-  const browser = await chromium.launch({
-    executablePath: '/usr/bin/google-chrome',
-    args: ['--no-sandbox', '--disable-dev-shm-usage'],
-  });
-  for (const fr of [false, true]) {
-    const lang = fr ? 'fr' : 'en';
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      locale: fr ? 'fr-FR' : 'en-US',
-      deviceScaleFactor: 2,
-    });
-    await context.addInitScript((language) => {
-      localStorage.setItem('i18nextLng', language);
-    }, lang);
-    const page = await context.newPage();
-    await installRoutes(page, fr);
-    await page.goto(`${WEB}/assistant`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.getByTestId('assistant-page').waitFor({ timeout: 30000 });
-    await page.evaluate(() => document.fonts.ready);
+const CHAT_SHOTS = [
+  { id: '01-found', en: 'I want to rent a hammer from 17th - 18th of November', fr: 'Je veux louer un marteau du 17 au 18 novembre', waitEn: 'Request rental', waitFr: 'Demander la location', editor: true },
+  { id: '02-booked', en: 'Can I rent a concrete mixer from 17th to 18th of November?', fr: 'Puis-je louer une bétonnière du 17 au 18 novembre ?', waitEn: '20 Nov', waitFr: '20 nov' },
+  { id: '03-notfound', en: 'I want to rent a pressure washer', fr: 'Je veux louer un nettoyeur', waitEn: 'pressure washer', waitFr: 'nettoyeur' },
+  { id: '04-nodates', en: 'I want to rent a hammer', fr: 'Je veux louer un marteau', waitEn: 'Today', waitFr: "Aujourd'hui" },
+  { id: '06-invalid-dates', en: 'Rent a hammer from the 1st of November', fr: 'Louer un marteau le 1er novembre', waitEn: 'already past', waitFr: 'déjà passé' },
+  { id: '07-buy-or-rent', en: 'I need a drill', fr: "J'ai besoin d'une perceuse", waitEn: 'Rent it', waitFr: 'Louer' },
+  { id: '08-question-answered', en: 'What is the deposit?', fr: 'Quelle est la caution ?', waitEn: '50', waitFr: '50' },
+  { id: '08-assistant-unfit', en: 'Those dates are an unfit card window', fr: 'Ces dates sont une carte trop longue', waitEn: 'Here are dates that work', waitFr: 'Voici des dates possibles' },
+  { id: '09-question-empty-field', en: 'Where do I pick it up?', fr: 'Où est le retrait ?', waitEn: 'note', waitFr: 'note' },
+  { id: '11-error-check-failed', en: 'I want to rent a generator', fr: 'Je veux louer un groupe', waitEn: 'Try again', waitFr: 'Réessayer' },
+];
 
-    await sendWeb(page, fr ? 'Je veux louer un marteau du 17 au 18 novembre' : 'I want to rent a hammer from 17th - 18th of November');
-    await page.getByText(fr ? 'Demander la location' : 'Request rental').first().waitFor({ timeout: 20000 });
-    if (lang === 'en') await shoot(page, '01-found-en');
-    else await shoot(page, '01-found-fr');
+const SURFACES = [
+  { kind: 'phone', width: 390, height: 844, suffix: '', scale: 2 },
+  { kind: 'phone', width: 360, height: 800, suffix: '-360', scale: 2 },
+  { kind: 'web', width: 1440, height: 900, suffix: '', scale: 1 },
+];
 
-    await page.getByRole('button', { name: /Nov 17|17 nov/i }).click();
-    await page.getByRole('dialog').waitFor({ timeout: 10000 });
-    await shoot(page, fr ? '05-date-editor-fr' : '05-date-editor-en');
-    await page.keyboard.press('Escape');
-
-    await context.close();
-  }
-
-  const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-US', deviceScaleFactor: 1 });
-  await desktop.addInitScript(() => localStorage.setItem('i18nextLng', 'en'));
-  const enPage = await desktop.newPage();
-  await installRoutes(enPage, false);
-  await enPage.goto(`${WEB}/assistant`, { waitUntil: 'domcontentloaded' });
-  await enPage.getByTestId('assistant-page').waitFor();
-  await sendWeb(enPage, 'I want to rent a hammer from 17th - 18th of November');
-  await enPage.getByText('Request rental').first().waitFor();
-  await shoot(enPage, '14-web-found-en');
-  await desktop.close();
-
-  const desktopFr = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'fr-FR' });
-  await desktopFr.addInitScript(() => localStorage.setItem('i18nextLng', 'fr'));
-  const frPage = await desktopFr.newPage();
-  await installRoutes(frPage, true);
-  await frPage.goto(`${WEB}/assistant`, { waitUntil: 'domcontentloaded' });
-  await frPage.getByTestId('assistant-page').waitFor();
-  await sendWeb(frPage, 'Je veux louer un marteau du 17 au 18 novembre');
-  await frPage.getByText('Demander la location').first().waitFor();
-  await shoot(frPage, '14-web-found-fr');
-  await desktopFr.close();
-
-  await browser.close();
+function fileName(id, lang, surface) {
+  if (surface.kind === 'web') return `14-web-${id.replace(/^\d+-/, '')}-${lang}`;
+  return `${id}-${lang}${surface.suffix}`;
 }
 
-async function captureWebStates() {
+async function captureAll() {
   const browser = await chromium.launch({
     executablePath: '/usr/bin/google-chrome',
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
-  const shots = [
-    ['02-booked', 'Can I rent a concrete mixer from 17th to 18th of November?', 'Puis-je louer une bétonnière du 17 au 18 novembre ?', '20 Nov'],
-    ['03-notfound', 'I want to rent a pressure washer', 'Je veux louer un nettoyeur', 'View item'],
-    ['04-nodates', 'I want to rent a hammer', 'Je veux louer un marteau', 'Today'],
-    ['06-invalid-dates', 'Rent a hammer from the 1st of November', 'Louer un marteau le 1er novembre', '17 Nov'],
-    ['07-buy-or-rent', 'I need a drill', "J'ai besoin d'une perceuse", 'Rent it'],
-    ['08-question-answered', 'What is the deposit?', 'Quelle est la caution ?', '50'],
-    ['09-question-empty-field', 'Where do I pick it up?', 'Où est le retrait ?', 'note'],
-    ['11-error-check-failed', 'I want to rent a generator', 'Je veux louer un groupe', 'Try again'],
-  ];
-  for (const [name, en, frText, marker] of shots) {
+  for (const surface of SURFACES) {
     for (const fr of [false, true]) {
-      const context = await browser.newContext({
-        viewport: { width: 390, height: 844 },
-        locale: fr ? 'fr-FR' : 'en-US',
-        deviceScaleFactor: 2,
-      });
-      await context.addInitScript((language) => localStorage.setItem('i18nextLng', language), fr ? 'fr' : 'en');
-      const page = await context.newPage();
-      await installRoutes(page, fr);
-      await page.goto(`${WEB}/assistant`, { waitUntil: 'domcontentloaded' });
-      await page.getByTestId('assistant-page').waitFor();
-      await sendWeb(page, fr ? frText : en);
-      await page.waitForTimeout(1200);
-      await shoot(page, `${name}-${fr ? 'fr' : 'en'}`);
-      await context.close();
+      await captureChat(browser, surface, fr);
+      await captureLoading(browser, surface, fr);
+      await captureNetwork(browser, surface, fr);
+      await capturePrice(browser, surface, fr);
     }
-    void marker;
   }
-
-  for (const fr of [false, true]) {
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      locale: fr ? 'fr-FR' : 'en-US',
-      deviceScaleFactor: 2,
-    });
-    await context.addInitScript((language) => localStorage.setItem('i18nextLng', language), fr ? 'fr' : 'en');
-    const page = await context.newPage();
-    await installRoutes(page, fr);
-    await page.goto(`${WEB}/assistant`, { waitUntil: 'domcontentloaded' });
-    await page.getByTestId('assistant-page').waitFor();
-    const pending = sendWeb(page, fr ? 'HOLD-MARTEAU' : 'HOLD-HAMMER');
-    await page.getByText(fr ? 'Vérification' : 'Checking').waitFor({ timeout: 8000 }).catch(() => undefined);
-    await shoot(page, `10-loading-${fr ? 'fr' : 'en'}`);
-    await pending.catch(() => undefined);
-    await context.close();
-  }
-
-  for (const fr of [false, true]) {
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      locale: fr ? 'fr-FR' : 'en-US',
-      deviceScaleFactor: 2,
-    });
-    await context.addInitScript((language) => localStorage.setItem('i18nextLng', language), fr ? 'fr' : 'en');
-    const page = await context.newPage();
-    await installRoutes(page, fr);
-    await page.goto(`${WEB}/assistant`, { waitUntil: 'domcontentloaded' });
-    await page.getByTestId('assistant-page').waitFor();
-    await sendWeb(page, fr ? 'NETWORK-ECHELLE' : 'NETWORK-LADDER');
-    await page.waitForTimeout(1500);
-    await shoot(page, `12-error-network-${fr ? 'fr' : 'en'}`);
-    await context.close();
-  }
-
-  for (const fr of [false, true]) {
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      locale: fr ? 'fr-FR' : 'en-US',
-      deviceScaleFactor: 2,
-    });
-    await context.addInitScript((language) => localStorage.setItem('i18nextLng', language), fr ? 'fr' : 'en');
-    const page = await context.newPage();
-    await installRoutes(page, fr);
-    await page.goto(`${WEB}/rentals/requests`, { waitUntil: 'domcontentloaded' });
-    await page.getByText(fr ? 'modifié le prix' : 'changed the price').waitFor({ timeout: 20000 });
-    await shoot(page, `13-price-changed-${fr ? 'fr' : 'en'}`);
-    await context.close();
-  }
-
-  const narrow = await browser.newContext({ viewport: { width: 360, height: 800 }, locale: 'en-US', deviceScaleFactor: 2 });
-  await narrow.addInitScript(() => localStorage.setItem('i18nextLng', 'en'));
-  const narrowPage = await narrow.newPage();
-  await installRoutes(narrowPage, false);
-  await narrowPage.goto(`${WEB}/assistant`, { waitUntil: 'domcontentloaded' });
-  await narrowPage.getByTestId('assistant-page').waitFor();
-  await sendWeb(narrowPage, 'I want to rent a hammer from 17th - 18th of November');
-  await narrowPage.getByText('Request rental').first().waitFor();
-  await shoot(narrowPage, '01-found-en-360');
-  await narrow.close();
-
-  const narrowFr = await browser.newContext({ viewport: { width: 360, height: 800 }, locale: 'fr-FR', deviceScaleFactor: 2 });
-  await narrowFr.addInitScript(() => localStorage.setItem('i18nextLng', 'fr'));
-  const narrowFrPage = await narrowFr.newPage();
-  await installRoutes(narrowFrPage, true);
-  await narrowFrPage.goto(`${WEB}/assistant`, { waitUntil: 'domcontentloaded' });
-  await narrowFrPage.getByTestId('assistant-page').waitFor();
-  await sendWeb(narrowFrPage, 'Je veux louer un marteau du 17 au 18 novembre');
-  await narrowFrPage.getByText('Demander la location').first().waitFor();
-  await shoot(narrowFrPage, '01-found-fr-360');
-  await narrowFr.close();
   await browser.close();
 }
+
+async function gotoApp(page, path) {
+  const response = await page.goto(`${WEB}${path}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  if (response && response.status() < 400) return;
+  await page.goto(WEB, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.evaluate((next) => {
+    window.history.pushState({}, '', next);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+}
+
+async function captureChat(browser, surface, fr) {
+  const { page, context } = await openChat(browser, surface, fr);
+  for (const shot of CHAT_SHOTS) {
+    await page.evaluate(() => sessionStorage.clear()).catch(() => undefined);
+    await gotoApp(page, '/assistant');
+    await page.getByTestId('assistant-page').waitFor({ timeout: 30000 });
+    await sendWeb(page, fr ? shot.fr : shot.en);
+    await page.getByText(fr ? shot.waitFr : shot.waitEn).first().waitFor({ timeout: 20000 });
+    await shoot(page, fileName(shot.id, fr ? 'fr' : 'en', surface));
+    if (shot.editor) await captureEditor(page, surface, fr);
+  }
+  await context.close();
+}
+
+async function captureEditor(page, surface, fr) {
+  await page.getByRole('button', { name: /Nov 17|17 nov/i }).click();
+  await page.getByRole('dialog').waitFor({ timeout: 10000 });
+  await shoot(page, fileName('05-date-editor', fr ? 'fr' : 'en', surface));
+  await page.keyboard.press('Escape');
+}
+
+async function captureLoading(browser, surface, fr) {
+  const { page, context } = await openChat(browser, surface, fr);
+  const pending = sendWeb(page, fr ? 'HOLD-MARTEAU louer un marteau' : 'HOLD-HAMMER rent a hammer');
+  await page.getByText(fr ? 'Vérification' : 'Checking').first().waitFor({ timeout: 15000 });
+  await shoot(page, fileName('10-loading', fr ? 'fr' : 'en', surface));
+  await pending;
+  await context.close();
+}
+
+async function captureNetwork(browser, surface, fr) {
+  const { page, context } = await openChat(browser, surface, fr);
+  await sendWeb(page, fr ? 'NETWORK-ECHELLE' : 'NETWORK-LADDER');
+  await page.getByText(fr ? 'Message non envoyé' : 'Message not sent').first().waitFor({ timeout: 15000 });
+  await shoot(page, fileName('12-error-network', fr ? 'fr' : 'en', surface));
+  await context.close();
+}
+
+async function capturePrice(browser, surface, fr) {
+  const context = await newContext(browser, surface, fr);
+  const page = await context.newPage();
+  await installRoutes(page, fr, { auth: true });
+  await gotoApp(page, '/rentals/requests');
+  await page.getByText(fr ? 'modifié le prix' : 'changed the price').first().waitFor({ timeout: 20000 });
+  await shoot(page, fileName('13-price-changed', fr ? 'fr' : 'en', surface));
+  await context.close();
+}
+
+async function openChat(browser, surface, fr) {
+  const context = await newContext(browser, surface, fr);
+  const page = await context.newPage();
+  await installRoutes(page, fr);
+  const refresh = page.waitForResponse((res) => res.url().includes('/auth/login/refresh'), { timeout: 20000 });
+  await gotoApp(page, '/assistant');
+  await page.getByTestId('assistant-page').waitFor({ timeout: 30000 });
+  await refresh.catch(() => undefined);
+  return { page, context };
+}
+
+function newContext(browser, surface, fr) {
+  const context = browser.newContext({
+    viewport: { width: surface.width, height: surface.height },
+    locale: fr ? 'fr-FR' : 'en-US',
+    deviceScaleFactor: surface.scale,
+  });
+  return context.then(async (ready) => {
+    await ready.addInitScript((language) => {
+      localStorage.setItem('i18nextLng', language);
+      ['rendasua.assistant.chat.v1', 'rendasua.assistant.thread_id.v1', 'rendasua.assistant.last_activity.v1', 'rendasua.assistant.owner.v1', 'rendasua.assistant.pending.v1'].forEach((key) => sessionStorage.removeItem(key));
+    }, fr ? 'fr' : 'en');
+    return ready;
+  });
+}
+
 
 async function main() {
   await mkdir(OUT, { recursive: true });
-  const only = process.argv[2];
-  if (only !== 'states') await captureWeb();
-  if (only !== 'found') await captureWebStates();
+  await captureAll();
   console.log('done', OUT);
 }
 
