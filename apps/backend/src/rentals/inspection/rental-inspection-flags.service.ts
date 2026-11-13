@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 
 const FLAG_KEY = 'rental_inspection_enabled';
+const ALLOW_SELF_BOOKING_KEY = 'rentals_inspection_allow_self_booking';
 
 /**
  * Country row wins over the global row. Missing or unreadable config stays off.
@@ -14,6 +15,11 @@ export class RentalInspectionFlags {
 
   async isEnabled(countryCode?: string | null): Promise<boolean> {
     return this.booleanConfig(FLAG_KEY, countryCode, false);
+  }
+
+  /** Country row, then the global row. Missing or unreadable stays false. */
+  async allowSelfBooking(countryCode?: string | null): Promise<boolean> {
+    return this.booleanConfig(ALLOW_SELF_BOOKING_KEY, countryCode, false);
   }
 
   async numberConfig(key: string, countryCode: string | null | undefined, fallback: number): Promise<number> {

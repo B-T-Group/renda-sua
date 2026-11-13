@@ -4869,29 +4869,35 @@ export class RentalsService {
   }
 
   private async enrolOrReject(req: any, country: string | null): Promise<number | null> {
+    const decision = decideInspectionEnrolment(await this.enrolmentInput(req, country));
+    if (decision.outcome === 'reject') throw inspectionRejected(decision.code, decision.message);
+    return decision.outcome === 'enrol' ? decision.policyVersion : null;
+  }
+
+  private async enrolmentInput(req: any, country: string | null) {
     const windows = this.parseRentalSelectionWindows(req);
     const rail = country
       ? await this.paymentRoutingService.resolveRailForCountry(country)
       : 'mobile_money';
-    const reviewHours = await this.inspectionFlags.numberConfig(
-      'rental_inspection_stripe_review_hours',
-      country,
-      DEFAULT_STRIPE_REVIEW_HOURS
-    );
-    const decision = decideInspectionEnrolment({
+    return {
       enabled: true,
       windowCount: windows.length,
       clientUserId: req.client?.user_id,
       businessUserId: req.rental_location_listing?.rental_item?.business?.user_id,
       rail,
-      endAt: new Date(Math.max(...windows.map((w) => w.end.getTime()))),
+      endAt: new Date(Math.max(...windows.map((window) => window.end.getTime()))),
       now: new Date(),
-      reviewHours,
-    });
-    if (decision.outcome === 'reject') {
-      throw inspectionRejected(decision.code, decision.message);
-    }
-    return decision.outcome === 'enrol' ? decision.policyVersion : null;
+      reviewHours: await this.stripeReviewHours(country),
+      allowSelfBooking: await this.inspectionFlags.allowSelfBooking(country),
+    };
+  }
+
+  private stripeReviewHours(country: string | null): Promise<number> {
+    return this.inspectionFlags.numberConfig(
+      'rental_inspection_stripe_review_hours',
+      country,
+      DEFAULT_STRIPE_REVIEW_HOURS
+    );
   }
 
   private async assertEnrolledStripeReviewWindow(
@@ -4901,11 +4907,7 @@ export class RentalsService {
   ): Promise<void> {
     const policy = await this.readInspectionPolicy(bookingId);
     if (policy == null) return;
-    const reviewHours = await this.inspectionFlags.numberConfig(
-      'rental_inspection_stripe_review_hours',
-      country,
-      DEFAULT_STRIPE_REVIEW_HOURS
-    );
+    const reviewHours = await this.stripeReviewHours(country);
     const decision = decideInspectionEnrolment({
       enabled: true,
       windowCount: 1,

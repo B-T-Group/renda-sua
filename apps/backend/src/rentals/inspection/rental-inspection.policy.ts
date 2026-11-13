@@ -38,6 +38,8 @@ export interface EnrolmentInput {
   now: Date;
   reviewHours?: number;
   authWindowDays?: number;
+  /** Skip only the self-rental rejection. Other enrolment checks still apply. */
+  allowSelfBooking?: boolean;
 }
 
 export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecision {
@@ -48,7 +50,7 @@ export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecis
       'This booking is missing a client or business account, so it cannot use condition inspections.'
     );
   }
-  if (input.clientUserId === input.businessUserId) {
+  if (input.clientUserId === input.businessUserId && !input.allowSelfBooking) {
     return reject(
       INSPECTION_CODES.SELF_RENTAL,
       'You cannot book your own listing while condition inspections are enabled.'
