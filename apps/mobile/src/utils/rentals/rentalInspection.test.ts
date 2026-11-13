@@ -183,6 +183,15 @@ describe('client review and money copy', () => {
     expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: late })).toBe(false);
     expect(showDidntReceiveLink({ enrolled: false, startedAt: start, now: soon })).toBe(false);
     expect(showDidntReceiveLink({ enrolled: true, startedAt: null, now: soon })).toBe(false);
+    const at = new Date(start).getTime();
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at })).toBe(true);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at + 30 * 60000 })).toBe(true);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at + 30 * 60000 + 1 })).toBe(
+      false
+    );
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at - 1 })).toBe(false);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: 'not-a-date', now: at })).toBe(false);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: '', now: at })).toBe(false);
   });
 
   it('maps a not-received rejection to its message', () => {
@@ -192,9 +201,15 @@ describe('client review and money copy', () => {
     expect(notReceivedErrorKey('RENTAL_NOT_RECEIVED_NOT_INSPECTED')).toBe(
       'rentalInspection.didntReceiveNotInspected'
     );
+    expect(notReceivedErrorKey('RENTAL_NOT_RECEIVED_ALREADY')).toBe('rentalInspection.didntReceiveAlready');
+    expect(notReceivedErrorKey(null)).toBe('rentalInspection.didntReceiveStopped');
     expect(notReceivedErrorKey('OTHER')).toBe('rentalInspection.didntReceiveStopped');
+    expect(notReceivedFailure(null)).toBe('retry');
     expect(notReceivedFailure({ code: 'ERR_NETWORK' })).toBe('retry');
+    expect(notReceivedFailure({ status: 500 })).toBe('retry');
     expect(notReceivedFailure({ response: { status: 503 } })).toBe('retry');
+    expect(notReceivedFailure({ status: 401 })).toBe('terminal');
+    expect(notReceivedFailure({ response: { status: 404 } })).toBe('terminal');
     expect(notReceivedFailure({ response: { status: 409, data: { code: 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED' } } })).toBe(
       'terminal'
     );

@@ -78,6 +78,16 @@ describe('RentalNotReceivedService.report', () => {
 
     const missing = setup({ booking: null });
     await expect(missing.service.report('b1', inside)).rejects.toMatchObject({ status: 404 });
+
+    const noProfile = setup({ user: { id: 'u4', active_persona: 'client', client: null } });
+    await expect(noProfile.service.report('b1', inside)).rejects.toMatchObject({ status: 403 });
+    expect(noProfile.executeQuery).not.toHaveBeenCalled();
+
+    const agent = setup({
+      user: { id: 'u5', active_persona: 'agent', client: { id: 'c1' } },
+    });
+    await expect(agent.service.report('b1', inside)).rejects.toMatchObject({ status: 403 });
+    expect(agent.executeQuery).not.toHaveBeenCalled();
   });
 
   it('rejects a booking with no condition report', async () => {
@@ -87,6 +97,27 @@ describe('RentalNotReceivedService.report', () => {
       response: { code: 'RENTAL_NOT_RECEIVED_NOT_INSPECTED' },
     });
     expect(notifications.sendBusinessRentalNotReceived).not.toHaveBeenCalled();
+  });
+
+  it('rejects a report before the start, with no start, or with an unusable start', async () => {
+    const future = setup({ booking: { actual_start_at: '2026-11-12T14:10:00.001Z' } });
+    await expect(future.service.report('b1', inside)).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED' },
+    });
+    expect(future.executeMutation).not.toHaveBeenCalled();
+
+    const missingStart = setup({ booking: { actual_start_at: null } });
+    await expect(missingStart.service.report('b1', inside)).rejects.toMatchObject({
+      response: { code: 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED' },
+    });
+    expect(missingStart.executeMutation).not.toHaveBeenCalled();
+
+    const unusable = setup({ booking: { actual_start_at: 'not-a-date' } });
+    await expect(unusable.service.report('b1', inside)).rejects.toMatchObject({
+      response: { code: 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED' },
+    });
+    expect(unusable.executeMutation).not.toHaveBeenCalled();
   });
 
   it('rejects a report outside the 30-minute window, including one millisecond past', async () => {
@@ -129,6 +160,27 @@ describe('RentalNotReceivedService.report', () => {
     });
   });
 
+  it('still stores the report when the business user, number, or item name is missing', async () => {
+    const { service, executeMutation, notifications } = setup({
+      booking: {
+        business: null,
+        booking_number: null,
+        rental_location_listing: null,
+      },
+    });
+    await expect(service.report('b1', inside)).resolves.toMatchObject({ alreadyReported: false });
+    expect(executeMutation).toHaveBeenCalledTimes(1);
+    expect(notifications.sendBusinessRentalNotReceived).toHaveBeenCalledWith({
+      businessUserId: '',
+      bookingId: 'b1',
+    });
+    expect(notifications.notifySupportRentalNotReceived).toHaveBeenCalledWith({
+      bookingId: 'b1',
+      bookingNumber: 'b1',
+      rentalItemName: 'Rental',
+    });
+  });
+
   it('returns the existing report and does not notify again, even after the window', async () => {
     const { service, executeMutation, notifications } = setup({ existing: stored });
     const result = await service.report('b1', closed);
@@ -150,6 +202,19 @@ describe('RentalNotReceivedService.report', () => {
     });
     await expect(duplicate.service.report('b1', inside)).resolves.toMatchObject({ alreadyReported: true });
     expect(duplicate.notifications.sendBusinessRentalNotReceived).not.toHaveBeenCalled();
+
+    const lost = setup({
+      insertError: { message: 'duplicate key value violates unique constraint' },
+    });
+    await expect(lost.service.report('b1', inside)).rejects.toMatchObject({
+      status: 409,
+      message: 'Try again',
+    });
+    expect(lost.notifications.notifySupportRentalNotReceived).not.toHaveBeenCalled();
+
+    const down = setup({ insertError: new Error('connection reset') });
+    await expect(down.service.report('b1', inside)).rejects.toThrow('connection reset');
+    expect(down.notifications.sendBusinessRentalNotReceived).not.toHaveBeenCalled();
   });
 
   it('exposes an existing report for the booking read', async () => {
@@ -157,6 +222,32 @@ describe('RentalNotReceivedService.report', () => {
     await expect(found.service.findForBooking('b1')).resolves.toEqual(stored);
     const missing = setup();
     await expect(missing.service.findForBooking('b1')).resolves.toBeNull();
+
+    const executeQuery = jest.fn(async () => {
+      throw new Error('down');
+    });
+    const failed = new RentalNotReceivedService(
+      { getUser: async () => ({}) } as never,
+      { executeQuery, executeMutation: jest.fn() } as never,
+      {
+        sendBusinessRentalNotReceived: jest.fn(),
+        notifySupportRentalNotReceived: jest.fn(),
+      } as never
+    );
+    await expect(failed.findForBooking('b1')).resolves.toBeNull();
+
+    const listQuery = jest.fn(async () => ({ rental_not_received_reports: null }));
+    const admin = new RentalNotReceivedService(
+      { getUser: async () => ({}) } as never,
+      { executeQuery: listQuery, executeMutation: jest.fn() } as never,
+      {
+        sendBusinessRentalNotReceived: jest.fn(),
+        notifySupportRentalNotReceived: jest.fn(),
+      } as never
+    );
+    await expect(admin.listForAdmin()).resolves.toEqual([]);
+    listQuery.mockResolvedValueOnce({ rental_not_received_reports: [stored] });
+    await expect(admin.listForAdmin()).resolves.toEqual([stored]);
   });
 
   it('does not change booking status in this service', () => {

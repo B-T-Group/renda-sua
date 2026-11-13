@@ -62,4 +62,44 @@ describe('getEnv public overrides', () => {
     expect(env.auth0Config.audience).toBe('https://rendasua.ca.auth0.com/api/v2/');
     expect(env.stripePublishableKey.startsWith('pk_live_')).toBe(true);
   });
+
+  it('ignores an unknown public env and accepts a padded local value', () => {
+    clearPublicEnv();
+    vi.stubEnv('EXPO_PUBLIC_ENV', 'staging');
+
+    expect(getEnv().apiUrl).toBe('https://prod.api.rendasua.com/api');
+    expect(getEnv().auth0Config.domain).toBe('rendasua-prod.ca.auth0.com');
+
+    vi.stubEnv('EXPO_PUBLIC_ENV', ' local ');
+    const local = getEnv();
+    expect(local.apiUrl).toBe('http://localhost:3000/api');
+    expect(local.auth0Config.domain).toBe('rendasua.ca.auth0.com');
+    expect(local.auth0Config.clientId).toBe('KkXPODOPy753EuBeaFttZk148wyMkvJ4');
+  });
+
+  it('keeps the prod Auth0 client when only the domain is overridden', () => {
+    clearPublicEnv();
+    vi.stubEnv('EXPO_PUBLIC_AUTH0_DOMAIN', 'rendasua.ca.auth0.com');
+    vi.stubEnv('EXPO_PUBLIC_AUTH0_CLIENT_ID', '   ');
+    vi.stubEnv('EXPO_PUBLIC_AUTH0_AUDIENCE', '');
+
+    const env = getEnv();
+
+    expect(env.auth0Config.domain).toBe('rendasua.ca.auth0.com');
+    expect(env.auth0Config.clientId).toBe('aIAEhMVPX6ENAdVU2gzZguYJYhlp2xCM');
+    expect(env.auth0Config.audience).toBe('https://rendasua-prod.ca.auth0.com/api/v2/');
+    expect(env.apiUrl).toBe('https://prod.api.rendasua.com/api');
+  });
+
+  it('does not append /api twice and ignores whitespace Auth0 overrides', () => {
+    clearPublicEnv();
+    vi.stubEnv('EXPO_PUBLIC_API_URL', 'https://dev.api.rendasua.com/api/');
+    vi.stubEnv('EXPO_PUBLIC_AUTH0_DOMAIN', '   ');
+
+    const env = getEnv();
+
+    expect(env.apiUrl).toBe('https://dev.api.rendasua.com/api');
+    expect(env.auth0Config.domain).toBe('rendasua-prod.ca.auth0.com');
+    expect(env.auth0Config.clientId).toBe('aIAEhMVPX6ENAdVU2gzZguYJYhlp2xCM');
+  });
 });

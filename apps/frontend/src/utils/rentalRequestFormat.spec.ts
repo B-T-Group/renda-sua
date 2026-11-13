@@ -5,6 +5,7 @@ import {
   bookingPeriodWindows,
   bookingRequestedPeriodLines,
   clientRequestPeriodLines,
+  formatListingDue,
   formatRentalDateRange,
   formatRentalPeriod,
   isSingleRequestedPeriod,
@@ -89,6 +90,15 @@ describe('Douala listing clock', () => {
     expect(formatRentalPeriod(at('2026-11-12T18:00:00.000Z'), 'en', days)).toBe('12 Nov · 18:00');
     expect(formatRentalPeriod(at('2026-11-14T18:00:00.000Z'), 'fr', jours)).toBe('14 nov. · 18:00');
     expect(formatRentalPeriod(at('2026-11-12T18:00:00.000Z'), 'en', days)).not.toMatch(/PM|AM|2026/);
+  });
+
+  it('formats a return-due instant from the stored listing clock', () => {
+    expect(formatListingDue('2026-11-12T09:00:00.000Z', 'en')).toBe('12\u00A0Nov\u00A0·\u00A009:00');
+    expect(formatListingDue('2026-11-12T23:30:00.000Z', 'en')).toBe('12\u00A0Nov\u00A0·\u00A023:30');
+    expect(formatListingDue('2026-11-14T18:00:00.000Z', 'fr')).toBe('14\u00A0nov.\u00A0·\u00A018:00');
+    expect(formatListingDue('2026-11-12T09:00:00.000Z', 'en')).not.toContain('10:00');
+    expect(formatListingDue('2026-11-12', 'en')).toBe('2026-11-12');
+    expect(formatListingDue('not-a-date', 'en')).toBe('not-a-date');
   });
 
   it('does not roll a late listing clock onto the next calendar day', () => {

@@ -471,4 +471,50 @@ describe('accept and start', () => {
       false
     );
   });
+
+  it('does not treat an unpaid confirmed booking as already paid', () => {
+    expect(
+      acceptStartPaymentRail({ status: 'confirmed', paymentStatus: 'paid', walletCovers: false })
+    ).toBe('wallet');
+    expect(
+      acceptStartPaymentRail({ status: 'confirmed', paymentStatus: 'authorized', walletCovers: true })
+    ).toBe('card');
+    expect(
+      acceptStartPaymentRail({ status: 'confirmed', paymentStatus: 'pending', walletCovers: true })
+    ).toBeNull();
+    expect(
+      acceptStartPaymentRail({ status: 'confirmed', paymentStatus: null, walletCovers: false })
+    ).toBeNull();
+    expect(
+      acceptStartPaymentRail({ status: 'confirmed', paymentStatus: 'failed', walletCovers: true })
+    ).toBeNull();
+    expect(
+      acceptStartPaymentRail({ status: 'active', paymentStatus: 'authorized', walletCovers: false })
+    ).toBeNull();
+    expect(
+      acceptStartPaymentRail({ status: 'cancelled', paymentStatus: 'paid', walletCovers: true })
+    ).toBeNull();
+    expect(
+      acceptStartPaymentRail({ status: 'reserved', paymentStatus: 'paid', walletCovers: false })
+    ).toBe('mobile_money');
+    expect(
+      acceptStartPaymentRail({ status: 'reserved', paymentStatus: 'authorized', walletCovers: true })
+    ).toBe('wallet');
+  });
+
+  it('keeps the missing-item window closed before the start and on a bad timestamp', () => {
+    const start = new Date('2026-11-12T14:20:00.000Z');
+    expect(didntReceiveWindowOpen(start.toISOString(), start)).toBe(true);
+    expect(didntReceiveWindowOpen(start.toISOString(), new Date(start.getTime() + 30 * 60000))).toBe(
+      true
+    );
+    expect(
+      didntReceiveWindowOpen(start.toISOString(), new Date(start.getTime() + 30 * 60000 + 1))
+    ).toBe(false);
+    expect(didntReceiveWindowOpen(start.toISOString(), new Date(start.getTime() - 1))).toBe(false);
+    expect(didntReceiveWindowOpen(null, start)).toBe(false);
+    expect(didntReceiveWindowOpen(undefined, start)).toBe(false);
+    expect(didntReceiveWindowOpen('', start)).toBe(false);
+    expect(didntReceiveWindowOpen('not-a-date', start)).toBe(false);
+  });
 });
