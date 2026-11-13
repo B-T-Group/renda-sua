@@ -7133,7 +7133,8 @@
       "adminEscalated": "Transmis au support",
       "adminEmpty": "Aucun retour signalé en cours.",
       "adminConfirmBody": "Cela utilise le même chemin de confirmation ou de remise que l’entreprise. La caution suit ces règles.",
-      "adminReason": "Motif"
+      "adminReason": "Motif",
+      "adminReported": "Signalé le {{time}}"
     },
     "messages": {
       "title": "Messages"

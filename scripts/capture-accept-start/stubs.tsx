@@ -233,7 +233,10 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
     },
     inspection_policy_version: null,
     rental_location_listing: {
-      rental_item: { name: 'JBL PartyBox 310' },
+      rental_item: {
+        name: 'JBL PartyBox 310',
+        rental_item_images: [{ id: 'img', image_url: '/hero.png', alt_text: 'JBL PartyBox 310' }],
+      },
       business_location: { name: "Stripe Rail - L'Assomption" },
     },
   };

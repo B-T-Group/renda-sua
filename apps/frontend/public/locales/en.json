@@ -7413,7 +7413,8 @@
       "adminEscalated": "Escalated",
       "adminEmpty": "No open return reports.",
       "adminConfirmBody": "This uses the same confirm or handback path as the business. The deposit follows those rules.",
-      "adminReason": "Reason"
+      "adminReason": "Reason",
+      "adminReported": "Reported {{time}}"
     },
     "messages": {
       "title": "Messages"

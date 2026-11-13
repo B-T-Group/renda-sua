@@ -26,12 +26,24 @@ import {
   RENTAL_EDIT_LEAD_MS,
 } from './rentalRequestFormat';
 
+const NBSP = '\u00A0';
+
+function joined(text: string): string {
+  return text.replace(/ /g, NBSP);
+}
+
 describe('formatRequestAmount', () => {
   it('puts the amount before FCFA in English and French', () => {
-    expect(formatRequestAmount(760, 'XAF', 'en')).toBe('760 FCFA');
-    expect(formatRequestAmount(380, 'FCFA', 'fr')).toBe('380 FCFA');
-    expect(formatRequestAmount(1140, 'XAF', 'en')).toBe('1 140 FCFA');
-    expect(formatRequestAmount(1140, 'XAF', 'fr')).toBe('1 140 FCFA');
+    expect(formatRequestAmount(760, 'XAF', 'en')).toBe(joined('760 FCFA'));
+    expect(formatRequestAmount(380, 'FCFA', 'fr')).toBe(joined('380 FCFA'));
+    expect(formatRequestAmount(1140, 'XAF', 'en')).toBe(joined('1 140 FCFA'));
+    expect(formatRequestAmount(1140, 'XAF', 'fr')).toBe(joined('1 140 FCFA'));
+  });
+
+  it('uses non-breaking spaces so 45 000 FCFA stays on one line', () => {
+    const value = formatRequestAmount(45000, 'XAF', 'fr');
+    expect(value).toBe(`45${NBSP}000${NBSP}FCFA`);
+    expect(value.includes(' ')).toBe(false);
   });
 
   it('does not put the currency code in front', () => {
@@ -40,17 +52,17 @@ describe('formatRequestAmount', () => {
   });
 
   it('keeps a minus and a zero, and treats a fr-CM tag as French', () => {
-    expect(formatRequestAmount(0, 'XAF', 'en')).toBe('0 FCFA');
-    expect(formatRequestAmount(-2500, 'XAF', 'en')).toBe('-2 500 FCFA');
-    expect(formatRequestAmount(-2500, 'xaf', 'fr-CM')).toBe('-2 500 FCFA');
+    expect(formatRequestAmount(0, 'XAF', 'en')).toBe(joined('0 FCFA'));
+    expect(formatRequestAmount(-2500, 'XAF', 'en')).toBe(joined('-2 500 FCFA'));
+    expect(formatRequestAmount(-2500, 'xaf', 'fr-CM')).toBe(joined('-2 500 FCFA'));
   });
 
-  it('groups XAF and XOF with a space and an FCFA suffix, and leaves USD alone', () => {
-    expect(formatRequestAmount(45000, 'XAF', 'en')).toBe('45 000 FCFA');
-    expect(formatRequestAmount(45000.4, 'XAF', 'en')).toBe('45 000 FCFA');
-    expect(formatRequestAmount(45000.5, 'xaf', 'fr')).toBe('45 001 FCFA');
-    expect(formatRequestAmount(1000000, 'FCFA', 'en')).toBe('1 000 000 FCFA');
-    expect(formatRequestAmount(55000, 'XOF', 'fr')).toBe('55 000 FCFA');
+  it('groups XAF and XOF with a non-breaking space and an FCFA suffix, and leaves USD alone', () => {
+    expect(formatRequestAmount(45000, 'XAF', 'en')).toBe(joined('45 000 FCFA'));
+    expect(formatRequestAmount(45000.4, 'XAF', 'en')).toBe(joined('45 000 FCFA'));
+    expect(formatRequestAmount(45000.5, 'xaf', 'fr')).toBe(joined('45 001 FCFA'));
+    expect(formatRequestAmount(1000000, 'FCFA', 'en')).toBe(joined('1 000 000 FCFA'));
+    expect(formatRequestAmount(55000, 'XOF', 'fr')).toBe(joined('55 000 FCFA'));
     expect(formatRequestAmount(260, 'USD', 'en')).not.toMatch(/FCFA/);
     expect(formatRequestAmount(260, 'USD', 'fr')).not.toMatch(/FCFA/);
   });
@@ -184,8 +196,8 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(one.priceLabel).toBe('2 days × 380 FCFA / day');
-    expect(one.priceAmount).toBe('760 FCFA');
+    expect(one.priceLabel).toBe(`2 days × 380${NBSP}FCFA / day`);
+    expect(one.priceAmount).toBe(`760${NBSP}FCFA`);
     expect(one.hoursCaption).toBeUndefined();
 
     const two = requestPriceCopy({
@@ -199,7 +211,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(two.priceLabel).toBe('1 days × 380 FCFA / day × 2');
+    expect(two.priceLabel).toBe(`1 days × 380${NBSP}FCFA / day × 2`);
   });
 
   it('keeps the hourly caption and a negative total sign', () => {
@@ -214,9 +226,9 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(hourly.priceLabel).toBe('8 h × 16 FCFA / hour × 3');
+    expect(hourly.priceLabel).toBe(`8 h × 16${NBSP}FCFA / hour × 3`);
     expect(hourly.hoursCaption).toBe('8 billable hours total');
-    expect(hourly.totalAmount).toBe('-128 FCFA');
+    expect(hourly.totalAmount).toBe(`-128${NBSP}FCFA`);
     expect(hourly.priceLabel?.startsWith('FCFA')).toBe(false);
   });
 

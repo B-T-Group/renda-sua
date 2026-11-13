@@ -23,6 +23,7 @@ import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useApiClient } from '../../hooks/useApiClient';
 import { usePermission } from '../../hooks/usePermissions';
 import { bookingDetailStatusLabelKey } from '../../utils/rentalPhase';
+import { formatAdminDoualaTime } from '../../utils/adminDoualaTime';
 import { formatListingDue } from '../../utils/rentalRequestFormat';
 
 interface NotReceivedRow {
@@ -254,7 +255,7 @@ const AdminInspectionDisputesPage: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     {row.renter_reported_returned_at
-                      ? formatListingDue(row.renter_reported_returned_at, i18n.language)
+                      ? formatAdminDoualaTime(row.renter_reported_returned_at, i18n.language)
                       : '—'}
                   </TableCell>
                   <TableCell>
@@ -290,6 +291,14 @@ const AdminInspectionDisputesPage: React.FC = () => {
       <Dialog open={Boolean(confirmId)} onClose={() => !busy && setConfirmId(null)} fullWidth>
         <DialogTitle>{t('rentals.returnReport.confirmReturn', 'Confirm return')}</DialogTitle>
         <DialogContent>
+          <Typography sx={{ mb: 1 }}>
+            {t('rentals.returnReport.adminReported', 'Reported {{time}}', {
+              time: formatAdminDoualaTime(
+                returns.find((row) => row.id === confirmId)?.renter_reported_returned_at ?? '',
+                i18n.language
+              ),
+            })}
+          </Typography>
           <Typography sx={{ mb: 2 }}>
             {t(
               'rentals.returnReport.adminConfirmBody',

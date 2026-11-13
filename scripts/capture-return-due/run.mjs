@@ -12,7 +12,14 @@ import { buildMobile } from '../capture-accept-start/build-mobile.mjs';
 const root = path.resolve(import.meta.dirname, '../..');
 const stub = path.join(root, 'scripts/capture-accept-start/stubs.tsx');
 const outDir = '/tmp/capture-return-due';
-const artifacts = '/opt/cursor/artifacts/return-due';
+const artifacts = '/opt/cursor/artifacts/return-due-v2';
+const hero = readFileSync(path.join(root, 'scripts/capture-return-due/hero.png'));
+const iconFont = readFileSync(
+  path.join(
+    root,
+    'apps/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'
+  )
+);
 mkdirSync(artifacts, { recursive: true });
 mkdirSync(outDir, { recursive: true });
 
@@ -61,13 +68,26 @@ await esbuild.build({
     },
   ],
 });
-await buildMobile(path.join(outDir, 'mobile.js'), 'scripts/capture-return-due/mobile-app.tsx');
+await buildMobile(path.join(outDir, 'mobile.js'), 'scripts/capture-return-due/mobile-app.tsx', {
+  keepVectorIcons: true,
+});
 
-const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,#root{margin:0;background:#FAF9F7}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>`;
+const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>@font-face{font-family:material-community;src:url(/MaterialCommunityIcons.ttf) format('truetype');font-display:block}html,body,#root{margin:0;background:#FAF9F7}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>`;
 
 function listen(file, port) {
   const js = readFileSync(file);
   const server = createServer((req, res) => {
+    if (req.url?.startsWith('/MaterialCommunityIcons.ttf')) {
+      res.setHeader('content-type', 'font/ttf');
+      res.setHeader('access-control-allow-origin', '*');
+      res.end(iconFont);
+      return;
+    }
+    if (req.url?.startsWith('/hero.png')) {
+      res.setHeader('content-type', 'image/png');
+      res.end(hero);
+      return;
+    }
     if (req.url?.startsWith('/app.js')) {
       res.setHeader('content-type', 'text/javascript');
       res.end(js);
@@ -98,7 +118,8 @@ async function shot(port, query, file, width, height, click) {
     if (msg.type() === 'error') console.log('CONSOLE', query, msg.text().slice(0, 400));
   });
   await page.goto(`http://127.0.0.1:${port}/?${query}`);
-  await page.waitForTimeout(600);
+  if (port === 8782) await page.evaluate(() => document.fonts.load('24px material-community'));
+  await page.waitForTimeout(port === 8782 ? 400 : 600);
   if (click) {
     const button = page.getByRole('button', { name: click }).first();
     if (await button.count()) await button.click();
@@ -145,6 +166,73 @@ await shot(8781, `return=business&now=${WAITING}&lang=fr&view=business`, 'web-bu
 await shot(8781, `return=list&now=${OVERDUE}&lang=en&view=list`, 'web-my-rentals-chips-en.png', 480, 900);
 await shot(8781, 'return=admin&lang=en&view=admin', 'web-admin-list-en.png', 1100, 900);
 await shot(8781, 'return=admin&lang=en&view=admin', 'web-admin-confirm-en.png', 1100, 900, 'Confirm return');
+
+async function clipTexts(port, query, file, width, height, labels) {
+  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
+  await page.goto(`http://127.0.0.1:${port}/?${query}`);
+  if (port === 8782) await page.evaluate(() => document.fonts.load('24px material-community'));
+  await page.waitForTimeout(400);
+  const boxes = [];
+  for (const label of labels) {
+    const box = await page.getByText(label, { exact: true }).last().boundingBox();
+    if (box) boxes.push(box);
+  }
+  if (!boxes.length) {
+    console.log('NOCLIP', file);
+    await page.close();
+    return;
+  }
+  const x = Math.max(0, Math.min(...boxes.map((box) => box.x)) - 36);
+  const y = Math.max(0, Math.min(...boxes.map((box) => box.y)) - 10);
+  const right = Math.max(...boxes.map((box) => box.x + box.width)) + 16;
+  const bottom = Math.max(...boxes.map((box) => box.y + box.height)) + 10;
+  await page.screenshot({
+    path: path.join(artifacts, file),
+    clip: { x, y, width: Math.min(width - x, right - x), height: bottom - y },
+  });
+  await page.close();
+  console.log(file);
+}
+
+async function crop(port, query, file, width, height, pick) {
+  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
+  page.on('pageerror', (err) => console.log('PAGEERROR', query, err.message));
+  await page.goto(`http://127.0.0.1:${port}/?${query}`);
+  if (port === 8782) await page.evaluate(() => document.fonts.load('24px material-community'));
+  await page.waitForTimeout(port === 8782 ? 400 : 600);
+  const target = pick(page);
+  if (await target.count()) await target.screenshot({ path: path.join(artifacts, file) });
+  else console.log('NOCROP', file);
+  await page.close();
+  console.log(file);
+}
+
+await crop(8781, 'return=admin&lang=en&view=admin', 'admin-list-douala-en.png', 1100, 900, (page) =>
+  page.getByTestId('admin-return-reports')
+);
+await crop(8782, `return=waiting&now=${WAITING}&lang=fr`, 'waiting-fr-amount.png', 390, 844, (page) =>
+  page.getByText('Caution: 45 000 FCFA')
+);
+await crop(8782, `return=business&now=${WAITING}&lang=en&view=business`, 'business-en-amount.png', 390, 844, (page) =>
+  page.getByTestId('business-return-report')
+);
+await crop(8782, `return=due&now=${DUE}&lang=en`, 'icons-en.png', 390, 844, (page) =>
+  page.getByTestId('renter-return-due')
+);
+await clipTexts(
+  8782,
+  `return=escalated&now=${ESCALATED}&lang=en`,
+  'escalated-en.png',
+  390,
+  844,
+  ['Return due', 'Support is checking']
+);
+await crop(8782, `return=due&now=${DUE}&lang=en`, 'renter-detail-hero-en.png', 390, 844, (page) =>
+  page.locator('img').first()
+);
+await crop(8781, `return=business&now=${WAITING}&lang=en&view=business`, 'business-detail-hero-en.png', 1280, 900, (page) =>
+  page.locator('img').first()
+);
 
 await browser.close();
 webServer.close();
