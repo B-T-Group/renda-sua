@@ -61,9 +61,10 @@ const ClientRentalRequestsPage: React.FC = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { isAuthenticated } = useSessionAuth();
-  const { createBooking, cancelClientRentalRequest, fetchClientRentalRequests } =
+  const { createBooking, cancelClientRentalRequest, fetchClientRentalRequests, fetchCardPaymentPolicy } =
     useRentalApi();
   const { isStripeRail } = useIsStripeRail();
+  const [chargeAtPickup, setChargeAtPickup] = useState(false);
   const [rows, setRows] = useState<ClientRentalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +73,13 @@ const ClientRentalRequestsPage: React.FC = () => {
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [bookConfirmRequestId, setBookConfirmRequestId] = useState<string | null>(null);
   const [hubSegment, setHubSegment] = useState<RentalHubGroup>('action_needed');
+
+  useEffect(() => {
+    if (!isStripeRail) return;
+    void fetchCardPaymentPolicy()
+      .then((mode) => setChargeAtPickup(mode === 'charge_at_pickup'))
+      .catch(() => setChargeAtPickup(false));
+  }, [fetchCardPaymentPolicy, isStripeRail]);
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
@@ -357,7 +365,12 @@ const ClientRentalRequestsPage: React.FC = () => {
           'Review and confirm your reservation'
         )}
         message={
-          isStripeRail
+          isStripeRail && chargeAtPickup
+            ? t(
+                'rentalInspection.termsChargeAtPickup',
+                'Nothing is charged until pickup. At pickup we charge the rental and place a separate hold for the deposit. You can cancel for free before pickup.'
+              )
+            : isStripeRail
             ? t(
                 'rentals.clientRequests.bookConfirmMessageStripe',
                 'By continuing, you will be redirected to a secure Stripe Checkout page. The rental total plus the security deposit is held on your card — nothing is charged until the item is returned, and the final charge is at least the rental total. Free cancellation before the rental starts.'
@@ -372,11 +385,14 @@ const ClientRentalRequestsPage: React.FC = () => {
             <RentalBookConfirmSummary
               row={bookConfirmRow}
               isStripeRail={isStripeRail}
+              chargeAtPickup={chargeAtPickup}
             />
           ) : null
         }
         confirmText={
-          isStripeRail
+          isStripeRail && chargeAtPickup
+            ? t('rentalInspection.saveCard', 'Save card')
+            : isStripeRail
             ? t(
                 'rentals.clientRequests.bookConfirmButtonStripe',
                 'Continue to payment'

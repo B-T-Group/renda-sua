@@ -32,8 +32,10 @@ import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
   settleRentalStripePayment,
+  useRentalCardSetup,
   useRentalStripePayment,
 } from '../../hooks/useRentalStripePayment';
+import { confirmRentalCard, saveRentalCard } from '../../services/rentalsApi';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import {
   bookingDetailStatusLabelKey,
@@ -97,6 +99,7 @@ export default function RentalBookingDetailScreen() {
     refetch: refetchStripeRail,
   } = useIsStripeRail();
   const { pay: payWithSheet, loading: sheetLoading } = useRentalStripePayment();
+  const presentCardSetup = useRentalCardSetup();
   const {
     messages,
     loading: messagesLoading,
@@ -124,6 +127,16 @@ export default function RentalBookingDetailScreen() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const saveCard = async () => {
+    if (!bookingId) return;
+    const setup = await saveRentalCard(bookingId, 'payment_sheet');
+    if (!setup.clientSecret) return;
+    const ok = await presentCardSetup(setup.clientSecret);
+    if (!ok) return;
+    await confirmRentalCard(bookingId);
+    await refetch();
+  };
+
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState(0);
 
@@ -688,7 +701,23 @@ export default function RentalBookingDetailScreen() {
               )}
             </Text>
           ) : null}
-          {isPayAtPickup && booking.payment_status !== 'paid' ? (
+          {booking.card_payment_mode === 'charge_at_pickup' && !booking.card_saved_at ? (
+            <Text style={[typography.body2, { color: colors.primary.main, marginTop: spacing.xs }]}>
+              {t('rentalInspection.saveCardMandate', 'Nothing is charged until pickup. By saving your card, you allow Rendasua to charge {{rent}} at pickup on {{when}}, and to place and renew a {{deposit}} hold for the security deposit until the condition review ends. You can cancel for free before pickup.', {
+                rent: formatDetailMoney(toAmount(booking.total_amount)),
+                deposit: formatDetailMoney(depositAmount),
+                when: formatListingDeadline(booking.start_at, i18n.language),
+              })}
+            </Text>
+          ) : booking.card_payment_mode === 'charge_at_pickup' ? (
+            <Text style={[typography.body2, { color: colors.primary.main, marginTop: spacing.xs }]}>
+              {t('rentalInspection.beforePickup', 'At pickup we will charge {{rent}} and hold {{deposit}} as a deposit. Nothing is charged now. You can cancel for free until {{when}}.', {
+                rent: formatDetailMoney(toAmount(booking.total_amount)),
+                deposit: formatDetailMoney(depositAmount),
+                when: formatListingDeadline(booking.start_at, i18n.language),
+              })}
+            </Text>
+          ) : isPayAtPickup && booking.payment_status !== 'paid' ? (
             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
               {t(
                 'rentals.bookingDetail.payAtPickup',
@@ -739,6 +768,16 @@ export default function RentalBookingDetailScreen() {
         ) : null}
 
         <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          {booking.card_payment_mode === 'charge_at_pickup' && !booking.card_saved_at ? (
+            <Button
+              mode="contained"
+              buttonColor={colors.primary.main}
+              loading={actionLoading}
+              onPress={() => void saveCard()}
+            >
+              {t('rentalInspection.saveCard', 'Save card')}
+            </Button>
+          ) : null}
           {canCancel ? (
             <Button
               mode="outlined"

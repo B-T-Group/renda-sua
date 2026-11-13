@@ -40,6 +40,10 @@ const SERVER_EVENT_ID_ALLOWLIST = new Set([
   'rejectionId',
   'reviewerId',
   'deciderId',
+  'bookingId',
+  'captureBefore',
+  'previousCaptureBefore',
+  'newCaptureBefore',
 ]);
 
 // Assistant metadata validators (Phase 0 #451 PR review): per-key validation

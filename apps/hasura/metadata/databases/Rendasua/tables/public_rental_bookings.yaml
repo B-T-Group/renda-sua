@@ -59,6 +59,21 @@ select_permissions:
         - overtime_amount
         - payment_timing
         - payment_status
+        - card_payment_mode
+        - card_brand
+        - card_last4
+        - card_saved_at
+        - deposit_capture_before
+        - deposit_hold_amount
+        - deposit_renewal_status
+        - deposit_renewal_reason
+        - deposit_settled_at
+        - pickup_payment_failure_code
+        - remainder_amount
+        - remainder_status
+        - remainder_overtime_covered
+        - remainder_damage_covered
+        - remainder_invoiced_at
         - end_reminder_sent_at
         - rental_start_pin_attempts
         - rental_start_overwrite_code_used_at
@@ -103,6 +118,21 @@ select_permissions:
         - overtime_amount
         - payment_timing
         - payment_status
+        - card_payment_mode
+        - card_brand
+        - card_last4
+        - card_saved_at
+        - deposit_capture_before
+        - deposit_hold_amount
+        - deposit_renewal_status
+        - deposit_renewal_reason
+        - deposit_settled_at
+        - pickup_payment_failure_code
+        - remainder_amount
+        - remainder_status
+        - remainder_overtime_covered
+        - remainder_damage_covered
+        - remainder_invoiced_at
         - period_ended_notified_at
         - actual_start_at
         - actual_end_at

@@ -64,6 +64,7 @@ import {
   decideInspectionEnrolment,
   DEFAULT_STRIPE_REVIEW_HOURS,
   OVERTIME_PROMPT_BACKOFF_MS,
+  extendedReservedDeadline,
   pickupStartAllowed,
   priceEnrolledCapture,
   settlementGate,
@@ -72,6 +73,8 @@ import {
   type PickupGateBooking,
   type SettlementGateBooking,
 } from './inspection/rental-inspection.policy';
+import { ChargeAtPickupService } from './card-pickup/charge-at-pickup.service';
+import { resolveCardPaymentPolicy } from './card-pickup/rental-card-payment-policy';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import {
   fetchStripeEnabledCountries,
@@ -410,7 +413,8 @@ export class RentalsService {
     private readonly stripeCaptureService: StripeCaptureService,
     private readonly rentalListingAiReviewService: RentalListingAiReviewService,
     private readonly rentalStartPinShare: RentalStartPinShareService,
-    private readonly inspectionFlags: RentalInspectionFlags
+    private readonly inspectionFlags: RentalInspectionFlags,
+    private readonly chargeAtPickup: ChargeAtPickupService
   ) {}
 
   async listPublicRentalListings(
@@ -1494,6 +1498,16 @@ export class RentalsService {
     const rail = listingCountry
       ? await this.paymentRoutingService.resolveRailForCountry(listingCountry)
       : await this.paymentRoutingService.resolveRailForUser(user.id);
+    if (rail === 'stripe' && (await this.chargeAtPickupRoute(bookingId))) {
+      return this.reserveChargeAtPickup({
+        bookingId,
+        bookingNumber,
+        requestId: booking.rental_request_id,
+        userId: user.id,
+        email: user.email,
+        stripePaymentMethod: options?.stripe_payment_method,
+      });
+    }
     if (rail === 'stripe') {
       this.assertStripeRentalEndWithinAuthWindow(booking.end_at as string);
       await this.assertEnrolledStripeReviewWindow(
@@ -2295,6 +2309,9 @@ export class RentalsService {
         params.userId
       );
     }
+    if (await this.chargeAtPickupRoute(params.bookingId)) {
+      return this.reserveChargeAtPickup(params);
+    }
     const enrolledEnd = this.requestWindowEnvelope(params.req).endAt;
     this.assertStripeRentalEndWithinAuthWindow(enrolledEnd);
     await this.assertEnrolledStripeReviewWindow(params.bookingId, enrolledEnd, listingCountry);
@@ -2348,6 +2365,136 @@ export class RentalsService {
       payment_rail: 'mobile_money',
       reserved: true,
     };
+  }
+
+  private async chargeAtPickupRoute(bookingId: string): Promise<boolean> {
+    if ((await this.readInspectionPolicy(bookingId)) == null) return false;
+    const booking = await this.fetchBooking(bookingId);
+    if (booking?.payment_status === 'authorized') return false;
+    return this.chargeAtPickup.isEnabled();
+  }
+
+  private async reserveChargeAtPickup(params: {
+    bookingId: string;
+    bookingNumber: string;
+    requestId: string;
+    userId: string;
+    email?: string | null;
+    stripePaymentMethod?: 'payment_sheet';
+  }): Promise<RentalBookingActionResult> {
+    const won = await this.casBooking(params.bookingId, ['proposed'], {
+      status: 'reserved',
+      payment_timing: 'pay_at_pickup',
+      payment_status: 'pending',
+      card_payment_mode: 'charge_at_pickup',
+    });
+    if (!won) return this.reserveReplayResult(params.bookingId);
+    await this.markRequestBooked(params.requestId);
+    const saved = await this.openSaveCard(params);
+    await this.logHistory(
+      params.bookingId,
+      'reserved',
+      'proposed',
+      params.userId,
+      'client',
+      'Card will be saved. Nothing is charged until pickup.'
+    );
+    await this.notifyRentalBookingReserved(params.bookingId);
+    return this.saveCardResult(params.bookingId, saved);
+  }
+
+  private async markRequestBooked(requestId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
+      id: requestId,
+      status: 'booked',
+    });
+  }
+
+  private async openSaveCard(params: {
+    bookingId: string;
+    userId: string;
+    email?: string | null;
+    stripePaymentMethod?: 'payment_sheet';
+  }) {
+    const booking = await this.fetchBooking(params.bookingId);
+    const channel = params.stripePaymentMethod === 'payment_sheet' ? 'payment_sheet' : 'checkout';
+    return this.chargeAtPickup.beginSaveCard(
+      {
+        ...booking,
+        client: { ...(booking?.client ?? {}), user_id: params.userId, user: { email: params.email } },
+      },
+      channel
+    );
+  }
+
+  private saveCardResult(
+    bookingId: string,
+    saved: { clientSecret: string | null; checkoutUrl: string | null }
+  ): RentalBookingActionResult {
+    return {
+      success: true,
+      bookingId,
+      payment_rail: 'stripe',
+      reserved: true,
+      payment_intent_client_secret: saved.clientSecret ?? undefined,
+      checkout_url: saved.checkoutUrl ?? undefined,
+    };
+  }
+
+  async saveRentalCard(bookingId: string, channel: 'payment_sheet' | 'checkout') {
+    const booking = await this.requireCardPickupClient(bookingId);
+    return this.chargeAtPickup.beginSaveCard(booking, channel);
+  }
+
+  async confirmRentalCard(bookingId: string): Promise<{ success: true; saved: boolean }> {
+    const booking = await this.requireCardPickupClient(bookingId);
+    return { success: true, saved: await this.chargeAtPickup.confirmSavedCard(booking) };
+  }
+
+  async payRentalRemainder(bookingId: string) {
+    const booking = await this.requireCardPickupClient(bookingId);
+    return this.chargeAtPickup.payRemainder(booking);
+  }
+
+  async cardPaymentPolicy() {
+    const enabled = await this.chargeAtPickup.isEnabled();
+    return resolveCardPaymentPolicy({
+      rail: 'stripe',
+      inspected: true,
+      chargeAtPickupEnabled: enabled,
+      now: new Date(),
+    });
+  }
+
+  async sweepChargeAtPickup(): Promise<void> {
+    await this.chargeAtPickup.sweep();
+  }
+
+  async noteReservedExpired(booking: any): Promise<void> {
+    await this.chargeAtPickup.noteExpiredUnstarted(booking);
+  }
+
+  async listCardPickupAlerts(): Promise<unknown[]> {
+    const res = await this.hasuraSystemService.executeQuery<{ rental_support_alerts: unknown[] }>(
+      `query CardPickupAlerts { rental_support_alerts(order_by: { created_at: desc }, limit: 100) { id booking_id kind message created_at } }`,
+      {}
+    );
+    return res.rental_support_alerts ?? [];
+  }
+
+  private async requireCardPickupClient(bookingId: string): Promise<any> {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
+      throw new HttpException('Only the renter can do this', HttpStatus.FORBIDDEN);
+    }
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || booking.client_id !== user.client.id) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+    if (booking.card_payment_mode !== 'charge_at_pickup') {
+      throw new HttpException('This booking is not charge-at-pickup', HttpStatus.BAD_REQUEST);
+    }
+    return { ...booking, client: { ...booking.client, user_id: user.id, user: { email: user.email } } };
   }
 
   private async notifyRentalBookingReserved(bookingId: string): Promise<void> {
@@ -3043,6 +3190,9 @@ export class RentalsService {
       // A hold placed after this read is released by the paid-stamp compare-and-set.
       await this.releaseHoldIfNeeded(bookingId, booking);
       await this.cancelStripeAuthorizationIfAny(booking);
+      if (booking.card_payment_mode === 'charge_at_pickup') {
+        await this.chargeAtPickup.noteCancelled(booking);
+      }
     } catch (error) {
       await this.casBooking(bookingId, ['cancelled'], {
         status: from,
@@ -3244,7 +3394,59 @@ export class RentalsService {
     return this.payReservedAcceptStart(fresh);
   }
 
+  private async payCardAtPickup(booking: any): Promise<AcceptAndStartResult> {
+    const result = await this.chargeAtPickup.chargeAtStart(booking);
+    if (result.type !== 'start') return this.cardPickupPending(booking, result);
+    await this.confirmCardPickup(booking.id);
+    const fresh = await this.fetchBooking(booking.id);
+    return this.finishAcceptStart(fresh ?? booking, 'card', 0);
+  }
+
+  private async confirmCardPickup(bookingId: string): Promise<void> {
+    const won = await this.casBooking(bookingId, ['reserved', 'confirmed'], { status: 'confirmed' });
+    if (won) return;
+    const fresh = await this.fetchBooking(bookingId);
+    if (fresh?.status === 'confirmed' || fresh?.status === 'active') return;
+    throw acceptStartConflict('Booking status changed');
+  }
+
+  private cardPickupPending(
+    booking: any,
+    result: { type: string; code: string | null; clientSecret: string | null }
+  ): AcceptAndStartResult {
+    const held = extendedReservedDeadline(new Date(booking.start_at), new Date());
+    return {
+      ...this.acceptStartBody(booking, 'card', Number(booking.total_amount) || 0, false, true),
+      code: result.code ?? result.type,
+      client_secret: result.clientSecret,
+      held_until: held.toISOString(),
+    };
+  }
+
+  private previewCardPickup(booking: any) {
+    return {
+      payment_rail: 'card' as const,
+      amount_due_at_pickup: Number(booking.total_amount) || 0,
+      deposit_hold_amount: Number(booking.security_deposit_amount) || 0,
+    };
+  }
+
+  private async captureChargeAtPickup(booking: any, settlement: RentalReturnSettlement): Promise<void> {
+    const decided = await this.decidedDamage(booking.id);
+    const damage = damageCollectedOnAgree({
+      paymentStatus: 'deposit_held',
+      claimedAmount: booking.claimed_damage_amount ?? null,
+      upheldAmount: decided.amount,
+      decision: decided.decision,
+    });
+    const won = await this.runCompletion(booking.id, booking.status, null, 'system', () =>
+      this.chargeAtPickup.settleReturned(booking, settlement.overtimeAmount, damage, damage > 0)
+    );
+    if (won) await this.stampSettlementCompleted(booking.id);
+  }
+
   private async payReservedAcceptStart(booking: any): Promise<AcceptAndStartResult> {
+    if (booking.card_payment_mode === 'charge_at_pickup') return this.payCardAtPickup(booking);
     const total = Number(booking.total_amount);
     const userId = booking.client.user_id as string;
     const account = await this.hasuraSystemService.getAccount(userId, booking.currency);
@@ -3293,13 +3495,15 @@ export class RentalsService {
   }
 
   private async replayAcceptStart(booking: any): Promise<AcceptAndStartResult> {
-    const paid = booking.payment_status === 'authorized' || booking.payment_status === 'paid';
+    const paid = ['authorized', 'paid', 'deposit_held'].includes(booking.payment_status);
     const due = paid ? 0 : Number(booking.total_amount) || 0;
     return this.acceptStartBody(booking, await this.replayPaymentRail(booking), due, true, false, true);
   }
 
   private async replayPaymentRail(booking: any): Promise<AcceptStartPaymentRail> {
-    if (booking.payment_status === 'authorized') return 'card';
+    if (booking.payment_status === 'authorized' || booking.payment_status === 'deposit_held') {
+      return 'card';
+    }
     const bookingNumber = booking.booking_number as string | undefined;
     if (bookingNumber) {
       const momo = await this.mobilePaymentsDatabaseService.hasSuccessfulRentalBookingPayment(
@@ -3360,6 +3564,7 @@ export class RentalsService {
       return { payment_rail: 'wallet' as const, amount_due_at_pickup: 0 };
     }
     if (booking.status !== 'reserved') return null;
+    if (booking.card_payment_mode === 'charge_at_pickup') return this.previewCardPickup(booking);
     return this.previewReservedRail(booking);
   }
 
@@ -4927,6 +5132,7 @@ export class RentalsService {
       now: new Date(),
       reviewHours: await this.stripeReviewHours(country),
       allowSelfBooking: await this.inspectionFlags.allowSelfBooking(country),
+      chargeAtPickupEnabled: await this.chargeAtPickup.isEnabled(),
     };
   }
 
@@ -4955,6 +5161,7 @@ export class RentalsService {
       endAt: new Date(endAtIso),
       now: new Date(),
       reviewHours,
+      chargeAtPickupEnabled: await this.chargeAtPickup.isEnabled(),
     });
     if (decision.outcome === 'reject') {
       throw inspectionRejected(decision.code, decision.message);
@@ -5152,6 +5359,10 @@ export class RentalsService {
     const override = fresh.overtime_amount_override;
     if (override != null && override !== '' && Number.isFinite(Number(override))) {
       settlement.overtimeAmount = Math.max(0, Number(override));
+    }
+    if (fresh.card_payment_mode === 'charge_at_pickup' || fresh.payment_status === 'deposit_held') {
+      await this.captureChargeAtPickup(fresh, settlement);
+      return;
     }
     if (fresh.payment_status === 'authorized') {
       await this.captureEnrolledStripe(fresh, settlement);

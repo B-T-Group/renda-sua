@@ -230,7 +230,16 @@ export interface RentalBookingDetail {
   accept_start_preview?: {
     payment_rail: 'card' | 'wallet' | 'mobile_money';
     amount_due_at_pickup: number;
+    deposit_hold_amount?: number;
   } | null;
+  card_payment_mode?: 'authorize_upfront' | 'charge_at_pickup' | null;
+  card_brand?: string | null;
+  card_last4?: string | null;
+  card_saved_at?: string | null;
+  deposit_renewal_status?: string | null;
+  remainder_amount?: number | string | null;
+  remainder_status?: string | null;
+  pickup_payment_failure_code?: string | null;
   return_handed_back_at?: string | null;
   return_resolution?: string | null;
   rental_pricing_snapshot?: unknown;

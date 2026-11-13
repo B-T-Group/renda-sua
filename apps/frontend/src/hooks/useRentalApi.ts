@@ -323,7 +323,18 @@ export interface RentalBookingDetail {
   claimed_damage_amount?: number | string | null;
   reserved_cancel_after?: string | null;
   payment_timing?: 'pay_now' | 'pay_at_pickup' | null;
-  payment_status?: 'pending' | 'authorized' | 'paid' | 'cancelled' | null;
+  payment_status?: 'pending' | 'authorized' | 'paid' | 'cancelled' | 'deposit_held' | null;
+  card_payment_mode?: 'authorize_upfront' | 'charge_at_pickup' | null;
+  card_brand?: string | null;
+  card_last4?: string | null;
+  card_saved_at?: string | null;
+  deposit_renewal_status?: string | null;
+  remainder_amount?: number | string | null;
+  remainder_status?: string | null;
+  remainder_overtime_covered?: number | string | null;
+  remainder_damage_covered?: number | string | null;
+  deposit_settled_at?: string | null;
+  pickup_payment_failure_code?: string | null;
   actual_start_at?: string | null;
   actual_end_at?: string | null;
   units_booked?: number | null;
@@ -335,6 +346,7 @@ export interface RentalBookingDetail {
   accept_start_preview?: {
     payment_rail: 'card' | 'wallet' | 'mobile_money';
     amount_due_at_pickup: number;
+    deposit_hold_amount?: number;
   } | null;
   return_handed_back_at?: string | null;
   return_resolution?: string | null;
@@ -716,6 +728,9 @@ export function useRentalApi() {
         payment_rail: 'card' | 'wallet' | 'mobile_money';
         amount_due_at_pickup: number;
         bookingId: string;
+        code?: string | null;
+        client_secret?: string | null;
+        held_until?: string | null;
       };
     },
     [api]
@@ -826,7 +841,36 @@ export function useRentalApi() {
     [api]
   );
 
+  const saveRentalCard = useCallback(
+    async (bookingId: string, channel: 'payment_sheet' | 'checkout') => {
+      const { data } = await api.post(`/rentals/bookings/${bookingId}/save-card`, { channel });
+      return data as { clientSecret: string | null; checkoutUrl: string | null };
+    },
+    [api]
+  );
+
+  const confirmRentalCard = useCallback(async (bookingId: string) => {
+    const { data } = await api.post(`/rentals/bookings/${bookingId}/confirm-card`);
+    return data as { success: true; saved: boolean };
+  }, [api]);
+
+  const payRentalRemainder = useCallback(async (bookingId: string) => {
+    const { data } = await api.post(`/rentals/bookings/${bookingId}/pay-remainder`);
+    return data as { clientSecret: string | null; checkoutUrl: string | null };
+  }, [api]);
+
+  const fetchCardPaymentPolicy = useCallback(async () => {
+    const { data } = await api.get<{ mode: 'authorize_upfront' | 'charge_at_pickup' }>(
+      '/rentals/card-payment-policy'
+    );
+    return data.mode;
+  }, [api]);
+
   return {
+    fetchCardPaymentPolicy,
+    saveRentalCard,
+    confirmRentalCard,
+    payRentalRemainder,
     fetchBusinessRentalItems,
     fetchBusinessRentalItem,
     updateBusinessRentalItem,

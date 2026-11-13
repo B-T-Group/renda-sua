@@ -11,6 +11,8 @@ import {
   Patch,
   Post,
   Query,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -34,6 +36,7 @@ import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
 import { UpdateRentalRequestDto } from './dto/update-rental-request.dto';
 import { RespondRentalRequestDto } from './dto/respond-rental-request.dto';
 import { AcceptAndStartRentalDto } from './dto/accept-and-start-rental.dto';
+import { SaveRentalCardDto } from './dto/save-rental-card.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
@@ -54,6 +57,15 @@ export class RentalsController {
     private readonly notReceived: RentalNotReceivedService,
     private readonly renterReturns: RentalRenterReturnService
   ) {}
+
+  @Get('card-payment-policy')
+  @ApiOperation({
+    summary: 'Card payment mode for inspected Stripe rentals. Reads only application_configurations.',
+  })
+  @ApiResponse({ status: 200, description: 'authorize_upfront or charge_at_pickup' })
+  cardPaymentPolicy() {
+    return this.rentalsService.cardPaymentPolicy();
+  }
 
   @Public()
   @Get('categories')
@@ -595,6 +607,39 @@ export class RentalsController {
   @ApiResponse({ status: 400, description: 'Booking is not reserved' })
   async initiatePickupPayment(@Param('id') bookingId: string) {
     return this.rentalsService.initiateRentalPickupPayment(bookingId);
+  }
+
+  @Post('bookings/:id/save-card')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Start a Stripe SetupIntent so the renter can save a card. Nothing is charged.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: SaveRentalCardDto })
+  @ApiResponse({ status: 200, description: 'setup client secret or checkout url' })
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  saveCard(@Param('id') bookingId: string, @Body() body: SaveRentalCardDto) {
+    return this.rentalsService.saveRentalCard(bookingId, body.channel);
+  }
+
+  @Post('bookings/:id/confirm-card')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm the SetupIntent succeeded and stamp the saved card' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'saved true when the SetupIntent succeeded' })
+  confirmCard(@Param('id') bookingId: string) {
+    return this.rentalsService.confirmRentalCard(bookingId);
+  }
+
+  @Post('bookings/:id/pay-remainder')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Pay an invoiced damage remainder on session. Does not reopen the rental.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'client secret when the bank asks for a step-up' })
+  payRemainder(@Param('id') bookingId: string) {
+    return this.rentalsService.payRentalRemainder(bookingId);
   }
 
   @Post('bookings/:id/accept-and-start')

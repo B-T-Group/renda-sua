@@ -6,6 +6,9 @@ export type StripePaymentEntity =
   | 'account'
   | 'claim_order'
   | 'rental_booking'
+  | 'rental_pickup_contract'
+  | 'rental_deposit'
+  | 'rental_remainder'
   | 'order_cash_reconciliation'
   | 'token'
   | 'reel_ai_token';

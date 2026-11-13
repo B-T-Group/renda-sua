@@ -159,6 +159,8 @@
 - "!include public_rental_booking_windows.yaml"
 - "!include public_rental_booking_units.yaml"
 - "!include public_rental_bookings.yaml"
+- "!include public_rental_card_money_events.yaml"
+- "!include public_rental_support_alerts.yaml"
 - "!include public_rental_custody_events.yaml"
 - "!include public_rental_inspection_acks.yaml"
 - "!include public_rental_inspection_disputes.yaml"

@@ -638,4 +638,141 @@ export class StripeService {
       `refund_${params.metadata?.orderId ?? params.paymentIntentId}`;
     return this.getClient().refunds.create(refundParams, { idempotencyKey });
   }
+
+  async createRentalCustomer(params: {
+    userId: string;
+    email?: string | null;
+  }): Promise<string> {
+    const email = usableCustomerEmail(params.email ?? undefined);
+    const customer = await this.getClient().customers.create(
+      {
+        ...(email ? { email } : {}),
+        metadata: { userId: params.userId, purpose: 'rental_card' },
+      },
+      { idempotencyKey: `cus_rental_${params.userId}` }
+    );
+    return customer.id;
+  }
+
+  async createCardSetupIntent(params: {
+    customerId: string;
+    bookingId: string;
+    idempotencyKey: string;
+  }): Promise<Stripe.SetupIntent> {
+    return this.getClient().setupIntents.create(
+      {
+        customer: params.customerId,
+        usage: 'off_session',
+        automatic_payment_methods: { enabled: true },
+        metadata: { bookingId: params.bookingId, purpose: 'rental_card_setup' },
+      },
+      { idempotencyKey: params.idempotencyKey }
+    );
+  }
+
+  async createSetupCheckout(params: {
+    customerId: string;
+    bookingId: string;
+    successUrl: string;
+    cancelUrl: string;
+    idempotencyKey: string;
+  }): Promise<Stripe.Checkout.Session> {
+    return this.getClient().checkout.sessions.create(
+      {
+        mode: 'setup',
+        customer: params.customerId,
+        success_url: params.successUrl,
+        cancel_url: params.cancelUrl,
+        payment_method_types: ['card'],
+        setup_intent_data: {
+          metadata: { bookingId: params.bookingId, purpose: 'rental_card_setup' },
+        },
+        metadata: { bookingId: params.bookingId, purpose: 'rental_card_setup' },
+      },
+      { idempotencyKey: params.idempotencyKey }
+    );
+  }
+
+  async retrieveSetupIntent(id: string): Promise<Stripe.SetupIntent> {
+    return this.getClient().setupIntents.retrieve(id, { expand: ['payment_method'] });
+  }
+
+  async retrieveCardPaymentMethod(id: string): Promise<Stripe.PaymentMethod> {
+    return this.getClient().paymentMethods.retrieve(id);
+  }
+
+  /** Off-session confirm. A 3DS or decline error still returns the PaymentIntent when Stripe attached one. */
+  async createOffSessionPaymentIntent(params: {
+    amount: number;
+    currency: string;
+    customerId: string;
+    paymentMethodId: string;
+    description: string;
+    captureMethod: 'automatic' | 'manual';
+    metadata: Record<string, string>;
+    idempotencyKey: string;
+    extendedAuthorization?: boolean;
+    offSession?: boolean;
+  }): Promise<Stripe.PaymentIntent> {
+    const body = this.offSessionBody(params);
+    try {
+      return await this.getClient().paymentIntents.create(body, {
+        idempotencyKey: params.idempotencyKey,
+      });
+    } catch (error: any) {
+      const intent = error?.payment_intent ?? error?.raw?.payment_intent;
+      if (intent?.id) return intent as Stripe.PaymentIntent;
+      throw error;
+    }
+  }
+
+  async retrieveExpandedPaymentIntent(id: string): Promise<Stripe.PaymentIntent> {
+    return this.getClient().paymentIntents.retrieve(id, { expand: ['latest_charge'] });
+  }
+
+  async refundCardPayment(params: {
+    paymentIntentId: string;
+    amount: number;
+    currency: string;
+    idempotencyKey: string;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Refund> {
+    return this.getClient().refunds.create(
+      {
+        payment_intent: params.paymentIntentId,
+        amount: this.toMinorUnits(params.amount, params.currency),
+        metadata: params.metadata,
+      },
+      { idempotencyKey: params.idempotencyKey }
+    );
+  }
+
+  private offSessionBody(params: {
+    amount: number;
+    currency: string;
+    customerId: string;
+    paymentMethodId: string;
+    description: string;
+    captureMethod: 'automatic' | 'manual';
+    metadata: Record<string, string>;
+    extendedAuthorization?: boolean;
+    offSession?: boolean;
+  }): Stripe.PaymentIntentCreateParams {
+    const extended = params.extendedAuthorization
+      ? { card: { request_extended_authorization: 'if_available' as const } }
+      : undefined;
+    const offSession = params.offSession !== false;
+    return {
+      amount: this.toMinorUnits(params.amount, params.currency),
+      currency: params.currency.toLowerCase(),
+      customer: params.customerId,
+      payment_method: params.paymentMethodId,
+      confirm: true,
+      off_session: offSession,
+      capture_method: params.captureMethod,
+      description: params.description,
+      metadata: params.metadata,
+      ...(extended ? { payment_method_options: extended } : {}),
+    };
+  }
 }

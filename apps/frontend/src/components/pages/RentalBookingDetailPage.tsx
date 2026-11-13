@@ -37,6 +37,7 @@ import {
 import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
 import { RenterReturnPanel } from '../rentals/RenterReturnPanel';
 import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
+import { ChargeAtPickupNotice, chargeNoticeModel } from '../rentals/charge-at-pickup/ChargeAtPickupNotice';
 import SEOHead from '../seo/SEOHead';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
@@ -191,6 +192,9 @@ const RentalBookingDetailPage: React.FC = () => {
     confirmReturn,
     getBookingPaymentStatus,
     retryBookingPayment,
+    saveRentalCard,
+    confirmRentalCard,
+    payRentalRemainder,
   } = useRentalApi();
   const [booking, setBooking] = useState<RentalBookingDetail | null>(null);
   const [reportedNow, setReportedNow] = useState(false);
@@ -253,6 +257,24 @@ const RentalBookingDetailPage: React.FC = () => {
       setLoading(false);
     }
   }, [bookingId, fetchBookingDetail, getBookingPaymentStatus, t]);
+
+  const openCardSetup = useCallback(async () => {
+    if (!bookingId) return;
+    const saved = await saveRentalCard(bookingId, 'checkout');
+    if (saved.checkoutUrl) {
+      window.location.assign(saved.checkoutUrl);
+      return;
+    }
+    if (await confirmRentalCard(bookingId).then((row) => row.saved).catch(() => false)) {
+      await load();
+    }
+  }, [bookingId, confirmRentalCard, load, saveRentalCard]);
+
+  const payRemainder = useCallback(async () => {
+    if (!bookingId) return;
+    const paid = await payRentalRemainder(bookingId);
+    if (!paid.clientSecret) await load();
+  }, [bookingId, load, payRentalRemainder]);
 
   useEffect(() => {
     if (isAuthenticated && personaReady) void load();
@@ -910,7 +932,17 @@ const RentalBookingDetailPage: React.FC = () => {
                         </strong>
                       </Typography>
                     ) : null}
-                    {booking.payment_status === 'authorized' && authorizedAmount > 0 ? (
+                    {booking.card_payment_mode === 'charge_at_pickup' ? (
+                      <ChargeAtPickupNotice
+                        model={{
+                          ...chargeNoticeModel(booking, isBusiness, formatDetailMoney, i18n.language),
+                          onSaveCard: () => void openCardSetup(),
+                          onUpdateCard: () => void openCardSetup(),
+                          onPayRemainder: () => void payRemainder(),
+                        }}
+                      />
+                    ) : null}
+                    {booking.card_payment_mode !== 'charge_at_pickup' && booking.payment_status === 'authorized' && authorizedAmount > 0 ? (
                       <Typography variant="body2" color="text.secondary">
                         {t(
                           'rentals.bookingDetail.authorizedOnCard',
@@ -919,7 +951,8 @@ const RentalBookingDetailPage: React.FC = () => {
                         )}
                       </Typography>
                     ) : null}
-                    {booking.payment_timing === 'pay_at_pickup' &&
+                    {booking.card_payment_mode !== 'charge_at_pickup' &&
+                    booking.payment_timing === 'pay_at_pickup' &&
                     booking.payment_status === 'pending' ? (
                       <Typography variant="body2" color="text.secondary">
                         {t(
