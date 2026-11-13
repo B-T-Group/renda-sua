@@ -1,11 +1,14 @@
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createRequest } from '../services/rentalsApi';
+import { cardWindowErrorMessage } from '../utils/rentals/cardWindow';
 import type {
   CreateRentalRequestBody,
   CreateRentalRequestResult,
 } from '../types/rentals';
 
 export function useCreateRentalRequest() {
+  const { i18n } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,14 +24,15 @@ export function useCreateRentalRequest() {
         return res;
       } catch (e: unknown) {
         const msg =
-          e instanceof Error ? e.message : 'Failed to create rental request';
+          cardWindowErrorMessage(e, i18n.language) ??
+          (e instanceof Error ? e.message : 'Failed to create rental request');
         setError(msg);
         throw e;
       } finally {
         setLoading(false);
       }
     },
-    []
+    [i18n.language]
   );
 
   return { submit, loading, error };

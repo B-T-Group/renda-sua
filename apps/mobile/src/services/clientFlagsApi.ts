@@ -19,7 +19,8 @@ export type ClientFlagKey =
   | 'rentals_my_rentals_entry_enabled'
   | 'rentals_client_tab_enabled'
   | 'rentals_not_received_report_enabled'
-  | 'rentals_renter_return_report_enabled';
+  | 'rentals_renter_return_report_enabled'
+  | 'rentals_card_window_guard_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -53,6 +54,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_not_received_report_enabled: false,
   /** Renter "I've returned it" report. Off until a config row turns it on. */
   rentals_renter_return_report_enabled: false,
+  /** Card date guard. Off until a config row turns it on. No NODE_ENV override. */
+  rentals_card_window_guard_enabled: false,
 };
 
 type ClientFlagsResponse = {

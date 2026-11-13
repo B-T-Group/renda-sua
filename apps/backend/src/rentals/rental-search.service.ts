@@ -8,6 +8,7 @@ import { DEFAULT_STRIPE_REVIEW_HOURS } from './inspection/rental-inspection.poli
 import { availabilityForListing, parseSearchDateRange, type SearchDateRange } from './rental-search.dates';
 import { type CapacityWindow } from './rental-capacity';
 import {
+  latestExclusiveEndDate,
   listingCountryCode,
   readLatestCardEndAt,
   resolveCardPaymentPolicy,
@@ -50,7 +51,9 @@ export class RentalSearchService {
       max_price: query.max_price,
     });
     const window = await this.cardWindow(query.country_code);
-    const hits = await this.stampHits(await this.annotate(rows, range), query.country_code, window);
+    const stamped = await this.stampHits(await this.annotate(rows, range), query.country_code, window);
+    const guard = range ? await this.cardGuardEnabled(query.country_code) : false;
+    const hits = guard && range ? stamped.map((hit) => this.blockPastCardEnd(hit, range)) : stamped;
     hits.sort((a, b) => compareHits(a, b));
     return this.page(hits, query, range, window);
   }
@@ -218,6 +221,23 @@ export class RentalSearchService {
   private reviewHours(code: string): Promise<number> {
     if (!this.flags) return Promise.resolve(DEFAULT_STRIPE_REVIEW_HOURS);
     return this.flags.numberConfig('rental_inspection_stripe_review_hours', code || null, DEFAULT_STRIPE_REVIEW_HOURS);
+  }
+
+  async cardGuardEnabled(country?: string | null): Promise<boolean> {
+    if (!this.flags?.cardWindowGuardEnabled) return false;
+    return this.flags.cardWindowGuardEnabled(country);
+  }
+
+  private blockPastCardEnd<T extends RentalSearchHit>(hit: T, range: SearchDateRange): T {
+    if (hit.available === false || !this.pastCardCutoff(hit, range)) return hit;
+    return { ...hit, available: false, totalForDates: null, nextAvailableDate: null };
+  }
+
+  private pastCardCutoff(hit: RentalSearchHit, range: SearchDateRange): boolean {
+    if (hit.payment_rail !== 'stripe' || hit.momo_available !== false) return false;
+    if (!hit.latest_card_end_at || !hit.timezone) return false;
+    const cap = latestExclusiveEndDate(hit.latest_card_end_at, hit.timezone);
+    return range.endDate > cap;
   }
 }
 

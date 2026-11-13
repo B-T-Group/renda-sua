@@ -109,11 +109,12 @@ export class AssistantRentalService {
     }
     const checked = range?.status === 'invalid_dates' ? range.suggestion : range?.status === 'ok' ? range : undefined;
     try {
-      const card = await this.cardDates(country, checked);
-      const found = await this.matchingPage(query, country, card.start, card.end, call);
+      const dated = await this.cardDates(country, checked);
+      const found = await this.matchingPage(query, country, dated.start, dated.end, call);
       const page = found.page;
       const placed = filterPlace(page.listings, text(call.input.place));
       const priced = filterPrice(placed.hits, numberOr(call.input.max_price_per_day));
+      const card = this.keepSearchableOffer(dated, priced);
       const allow = await this.inspectionFlags.allowSelfBooking(country);
       const categories = found.categories;
       const buyItems = priced.length ? [] : await this.buyItems(query, country, locale);
@@ -134,6 +135,7 @@ export class AssistantRentalService {
           fits: !card.issue,
           asked: card.asked,
           offered: card.offer,
+          guard: card.guard,
         },
         placeNote: placed.ignored ? 'place_ignored' : undefined,
         categories,
@@ -242,10 +244,17 @@ export class AssistantRentalService {
     return dayQuoteBody(listing, units, window, range, { fits: priced.fits, offer }, free);
   }
 
+  private keepSearchableOffer(card: CardDateChoice, hits: Array<{ available: boolean | null }>): CardDateChoice {
+    if (card.issue !== 'card_window' || !card.offer) return card;
+    if (hits.some((hit) => hit.available === true)) return card;
+    return { ...card, offer: null, start: undefined, end: undefined, dayCount: undefined };
+  }
+
   private async cardDates(country: string, checked?: { startDate: string; endDate: string; dayCount: number }): Promise<CardDateChoice> {
     const window = await this.search.cardWindow(country);
-    if (!checked || window.payment_rail !== 'stripe' || window.latest_card_end_at == null) {
-      return openCardDates(checked, window);
+    const guard = this.search.cardGuardEnabled ? await this.search.cardGuardEnabled(country) : false;
+    if (!guard || !checked || window.payment_rail !== 'stripe' || window.latest_card_end_at == null) {
+      return { ...openCardDates(checked, window), guard };
     }
     const clamped = clampExclusiveRange({
       startDate: checked.startDate,
@@ -255,7 +264,7 @@ export class AssistantRentalService {
       zone: window.timezone,
       today: marketCalendarDate(new Date(), window.timezone),
     });
-    if (clamped.fits) return openCardDates(checked, window);
+    if (clamped.fits) return { ...openCardDates(checked, window), guard };
     return {
       start: clamped.offer?.startDate,
       end: clamped.offer?.endDate,
@@ -264,6 +273,7 @@ export class AssistantRentalService {
       window,
       asked: { startDate: checked.startDate, endDate: checked.endDate },
       offer: clamped.offer,
+      guard,
     };
   }
 
@@ -530,6 +540,7 @@ type CardDateChoice = {
   offer: { startDate: string; endDate: string; dayCount: number } | null;
   issue?: 'card_window';
   asked?: { startDate: string; endDate: string };
+  guard?: boolean;
 };
 
 type RentalSearchPage = Awaited<ReturnType<RentalSearchService['search']>>;

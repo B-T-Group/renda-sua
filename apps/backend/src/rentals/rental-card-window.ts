@@ -21,6 +21,12 @@ export interface CardPaymentPolicy {
 
 export type CardWindowFields = CardPaymentPolicy;
 
+/** Policy plus the listing fields the date picker already reads. */
+export interface ListingCardWindow extends CardPaymentPolicy {
+  inspection_enabled: boolean;
+  card_auth_window_days: number;
+}
+
 export interface CardWindowOffer {
   startDate: string;
   endDate: string;

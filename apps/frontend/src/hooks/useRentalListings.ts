@@ -59,6 +59,14 @@ export interface RentalListingRow {
   distance_text?: string;
   duration_text?: string;
   distance_value?: number;
+  mode?: 'authorize_upfront' | 'charge_at_pickup';
+  payment_rail?: 'stripe' | 'mobile_money';
+  momo_available?: boolean;
+  inspection_enabled?: boolean;
+  latest_card_end_at?: string | null;
+  card_auth_window_days?: number;
+  stripe_review_hours?: number;
+  timezone?: string;
 }
 
 export interface TopRentalLocationRow {

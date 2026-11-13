@@ -32,8 +32,11 @@ import {
   resolveRentalPhase,
   type RentalHubGroup,
 } from '../../utils/rentalPhase';
+import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 
 function apiErrorMessage(err: unknown, fallback: string): string {
+  const friendly = cardWindowErrorMessage(err, navigator.language);
+  if (friendly) return friendly;
   const m = (err as { response?: { data?: { message?: string } } })?.response?.data
     ?.message;
   return typeof m === 'string' && m.trim() ? m : fallback;

@@ -65,14 +65,15 @@ export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecis
     );
   }
   if (input.rail === 'stripe' && !stripeReviewFits(reviewFitInput(input))) {
-    return reject(
-      INSPECTION_CODES.STRIPE_WINDOW,
-      'Card payments for inspected rentals must end early enough that the 72-hour review still fits inside the 6-day card authorization.'
-    );
+    return reject(INSPECTION_CODES.STRIPE_WINDOW, STRIPE_WINDOW_MESSAGE);
   }
   return { outcome: 'enrol', policyVersion: INSPECTION_POLICY_VERSION };
 }
 
+export const STRIPE_WINDOW_MESSAGE =
+  'Card payments for inspected rentals must end early enough that the 72-hour review still fits inside the 6-day card authorization.';
+
+/** True when the end is on or before latest_card_end_at. A null cutoff does not limit dates. */
 export function stripeReviewFits(input: {
   endAt: Date;
   now: Date;

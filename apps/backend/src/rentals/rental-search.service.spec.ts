@@ -83,6 +83,34 @@ describe('RentalSearchService', () => {
     });
   });
 
+  it('does not mark a card-only Stripe stay available past the cutoff when the guard is on', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-12T19:00:00.000Z'));
+    const routing = { resolveRailForCountry: jest.fn().mockResolvedValue('stripe') };
+    const flags = {
+      cardWindowGuardEnabled: jest.fn().mockResolvedValue(true),
+      chargeAtPickupEnabled: jest.fn().mockResolvedValue(false),
+      isEnabled: jest.fn().mockResolvedValue(true),
+      numberConfig: jest.fn().mockResolvedValue(72),
+    };
+    const guarded = new RentalSearchService(rentals as any, hasura as any, routing as any, flags as any);
+    const row = listing('ca', 'Drill');
+    row.business_location.address.country = 'CA';
+    rentals.collectPublicRentalListings.mockResolvedValue([row]);
+    hasura.executeQuery.mockResolvedValue({ rental_booking_windows: [] });
+    const late = await guarded.search({ start_date: '2026-11-12', end_date: '2026-11-20', country_code: 'CA' });
+    expect(late.listings[0].available).toBe(false);
+    expect(late.listings[0].payment_rail).toBe('stripe');
+    expect(late.listings[0].momo_available).toBe(false);
+    expect(late.listings[0].latest_card_end_at).toBe('2026-11-15T19:00:00.000Z');
+    const early = await guarded.search({ start_date: '2026-11-13', end_date: '2026-11-15', country_code: 'CA' });
+    expect(early.listings[0].available).toBe(true);
+    flags.cardWindowGuardEnabled.mockResolvedValue(false);
+    const open = await guarded.search({ start_date: '2026-11-12', end_date: '2026-11-20', country_code: 'CA' });
+    expect(open.listings[0].available).toBe(true);
+    expect(open.listings[0].latest_card_end_at).toBe('2026-11-15T19:00:00.000Z');
+    jest.restoreAllMocks();
+  });
+
   it('suggests categories and in-market titles', async () => {
     hasura.executeQuery.mockResolvedValue({
       rental_categories: [{ id: 'cat-cam', name: 'Cameras' }],

@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { INSPECTION_CODES } from './rental-inspection.policy';
+import type { ListingCardWindow } from '../rental-card-window';
 
 export function inspectionUpdateRequired(): HttpException {
   return new HttpException(
@@ -57,6 +58,32 @@ export function inspectionRejected(
 ): HttpException {
   return new HttpException(
     { success: false, code, error: message, message, ...(extra ?? {}) },
+    HttpStatus.BAD_REQUEST
+  );
+}
+
+/** Stable card-window body. Clients map `code` and never show `message`. */
+export function cardWindowRejected(
+  code: string,
+  message: string,
+  fields: ListingCardWindow
+): HttpException {
+  const legacy = code === 'RENTAL_STRIPE_BOOKING_WINDOW_EXCEEDED';
+  return new HttpException(
+    {
+      success: false,
+      code,
+      error: legacy ? code : message,
+      message,
+      mode: fields.mode,
+      payment_rail: fields.payment_rail,
+      momo_available: fields.momo_available,
+      inspection_enabled: fields.inspection_enabled,
+      latest_card_end_at: fields.latest_card_end_at,
+      card_auth_window_days: fields.card_auth_window_days,
+      stripe_review_hours: fields.stripe_review_hours,
+      timezone: fields.timezone,
+    },
     HttpStatus.BAD_REQUEST
   );
 }

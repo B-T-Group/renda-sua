@@ -15,7 +15,7 @@ import type {
   AssistantRentalCta,
   AssistantRentalMeta,
 } from './assistant.types';
-import { cardWindowUnfitReply, formatCardCutoff } from './assistant-rental-card-copy';
+import { cardWindowCutoffOnly, cardWindowUnfitReply, formatCardCutoff } from './assistant-rental-card-copy';
 import { rentalArea } from './assistant-rental-questions';
 import { addCalendarDays, exclusiveDayCount, marketCalendarDate } from './assistant-rental-dates';
 import { perDayPriceLabel } from './assistant-rental-format';
@@ -44,6 +44,7 @@ export type RentalPresentInput = {
     fits?: boolean;
     asked?: { startDate: string; endDate: string };
     offered?: CardWindowOffer | null;
+    guard?: boolean;
   };
 };
 
@@ -301,6 +302,9 @@ function shiftRange(next: string | null | undefined, dayCount?: number, cap?: st
 function datesForCard(hit: RentalSearchHit, input: RentalPresentInput) {
   const start = input.startDate;
   const end = input.endDate;
+  if (input.cardWindow?.guard === false) {
+    return { startDate: start, endDate: end, dayCount: input.dayCount, cap: undefined as string | undefined };
+  }
   const cap = cardCap(hit);
   if (!cap || !start || !end || end <= cap) {
     return { startDate: start, endDate: end, dayCount: input.dayCount, cap };
@@ -325,6 +329,7 @@ function cardWindowSay(input: RentalPresentInput): string | null {
   const window = input.cardWindow;
   if (!window || window.fits !== false || !window.latest_card_end_at) return null;
   const cutoff = formatCardCutoff(window.latest_card_end_at, window.timezone, input.locale);
+  if (!window.offered) return cardWindowCutoffOnly(input.locale, cutoff);
   return cardWindowUnfitReply(input.locale, cutoff);
 }
 
