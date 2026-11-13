@@ -29,6 +29,7 @@ import { perDayPriceLabel } from './assistant-rental-format';
 import { presentRentalDetails, presentRentalSearch } from './assistant-rental-present';
 import { quoteDayTotal, quoteHourlyWindow } from './assistant-rental-quote';
 import { rentalAnswerGrounded, rentalQuestionSay, rentalQuestionTopic } from './assistant-rental-questions';
+import { rentalSearchTerms } from './assistant-rental-query';
 import { buildZeroResultDraft, rentalDayBucket } from './assistant-rental-zero-results';
 
 const SEARCH_MS = 4000;
@@ -109,14 +110,15 @@ export class AssistantRentalService {
     const checked = range?.status === 'invalid_dates' ? range.suggestion : range?.status === 'ok' ? range : undefined;
     try {
       const card = await this.cardDates(country, checked);
-      const page = await this.searchWithRetry(query, country, card.start, card.end, call);
+      const found = await this.matchingPage(query, country, card.start, card.end, call);
+      const page = found.page;
       const placed = filterPlace(page.listings, text(call.input.place));
       const priced = filterPrice(placed.hits, numberOr(call.input.max_price_per_day));
       const allow = await this.inspectionFlags.allowSelfBooking(country);
-      const categories = await this.categories(country);
+      const categories = found.categories;
       const buyItems = priced.length ? [] : await this.buyItems(query, country, locale);
       const presented = presentRentalSearch({
-        ...base(call, locale, query, priced, placed.ignored ? page.total : priced.length),
+        ...base(call, locale, found.query, priced, placed.ignored ? page.total : priced.length),
         allowSelfBooking: allow,
         ownListingIds: priced
           .filter((hit) => hit.listing.rental_item.business?.id === call.identity.businessId)
@@ -298,21 +300,53 @@ export class AssistantRentalService {
     return validateExclusiveRange(start, end, today);
   }
 
-  private async searchWithRetry(query: string, country: string, start?: string, end?: string, call?: AssistantRentalCall) {
+  private async matchingPage(query: string, country: string, start: string | undefined, end: string | undefined, call: AssistantRentalCall) {
+    const categories = await this.categories(country);
+    const terms = rentalSearchTerms(query, text(call.turn?.userText), categories);
+    let last: RentalSearchPage = emptySearchPage();
+    for (const term of terms) {
+      const page = await this.pageForTerm(term, country, start, end, call);
+      last = page;
+      if (page.listings.length) return { page, query: term, categories };
+    }
+    return { page: last, query: terms[0] || query, categories };
+  }
+
+  private async pageForTerm(term: string, country: string, start: string | undefined, end: string | undefined, call: AssistantRentalCall) {
+    const scoped = await this.searchWithRetry(term, country, start, end, call, false);
+    if (scoped.listings.length || !call.identity.market?.state) return scoped;
+    return this.searchWithRetry(term, country, start, end, call, true);
+  }
+
+  private async searchWithRetry(
+    query: string,
+    country: string,
+    start?: string,
+    end?: string,
+    call?: AssistantRentalCall,
+    omitState = false
+  ) {
     try {
-      return await this.timedSearch(query, country, start, end, call);
+      return await this.timedSearch(query, country, start, end, call, omitState);
     } catch (error: any) {
       if (!retryable(error)) throw error;
-      return this.timedSearch(query, country, start, end, call);
+      return this.timedSearch(query, country, start, end, call, omitState);
     }
   }
 
-  private timedSearch(query: string, country: string, start?: string, end?: string, call?: AssistantRentalCall) {
+  private timedSearch(
+    query: string,
+    country: string,
+    start?: string,
+    end?: string,
+    call?: AssistantRentalCall,
+    omitState = false
+  ) {
     return withTimeout(
       this.search.search({
         q: query,
         country_code: country || undefined,
-        state: call?.identity.market?.state || undefined,
+        state: omitState ? undefined : call?.identity.market?.state || undefined,
         start_date: start,
         end_date: end,
         max_price: numberOr(call?.input.max_price_per_day),
@@ -497,6 +531,25 @@ type CardDateChoice = {
   issue?: 'card_window';
   asked?: { startDate: string; endDate: string };
 };
+
+type RentalSearchPage = Awaited<ReturnType<RentalSearchService['search']>>;
+
+function emptySearchPage(): RentalSearchPage {
+  return {
+    listings: [],
+    total: 0,
+    page: 1,
+    limit: 6,
+    availableCount: 0,
+    dates: null,
+    mode: 'authorize_upfront',
+    latest_card_end_at: null,
+    payment_rail: 'mobile_money',
+    momo_available: true,
+    stripe_review_hours: 72,
+    timezone: 'Africa/Douala',
+  };
+}
 
 function openCardDates(
   checked: { startDate: string; endDate: string; dayCount: number } | undefined,
