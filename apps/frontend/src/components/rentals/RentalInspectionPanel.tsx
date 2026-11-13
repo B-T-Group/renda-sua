@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
 import { ChargeAtPickupNotice, ChargeAtPickupPayLine } from './charge-at-pickup/ChargeAtPickupNotice';
+import { cardActionSettled, confirmStripeCardAction } from '../../utils/confirmStripeCardAction';
 import type { useRentalInspection } from '../../hooks/useRentalInspection';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
@@ -235,7 +236,8 @@ export function RentalInspectionPanel({
   };
 
   const confirmStart = async () => {
-    if (!view?.versionId) return;
+    const versionId = view?.versionId;
+    if (!versionId) return;
     const preview = booking.accept_start_preview;
     trackSiteEvent({
       eventType: 'rental_accept_and_start_tap',
@@ -249,7 +251,8 @@ export function RentalInspectionPanel({
     });
     setBusy(true);
     try {
-      const result = await acceptAndStart(bookingId, view.versionId);
+      let result = await acceptAndStart(bookingId, versionId);
+      result = await settleCardAction(result, () => acceptAndStart(bookingId, versionId));
       setConfirmOpen(false);
       if (result.paymentPending && isCardPickupHold(result.code)) {
         setCardHeldUntil(result.held_until || result.code || '');
@@ -590,6 +593,19 @@ export function RentalInspectionPanel({
       />
     </Stack>
   );
+}
+
+async function settleCardAction<T extends { code?: string | null; client_secret?: string | null }>(
+  first: T,
+  retry: () => Promise<T>
+): Promise<T> {
+  let result = first;
+  for (let step = 0; step < 2 && result.code === 'PICKUP_REQUIRES_ACTION' && result.client_secret; step += 1) {
+    const status = await confirmStripeCardAction(result.client_secret);
+    if (!cardActionSettled(status)) break;
+    result = await retry();
+  }
+  return result;
 }
 
 function isCardPickupHold(code: string | null | undefined): boolean {

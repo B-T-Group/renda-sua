@@ -670,6 +670,11 @@ export class StripeService {
     );
   }
 
+  /**
+   * Checkout `mode: 'setup'` with `customer` attaches the card to that customer.
+   * This API version has no `setup_intent_data.usage`. A SetupIntent defaults to
+   * `off_session`, which is what the later pickup charge needs.
+   */
   async createSetupCheckout(params: {
     customerId: string;
     bookingId: string;

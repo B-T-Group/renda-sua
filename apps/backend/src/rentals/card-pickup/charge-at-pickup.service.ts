@@ -23,12 +23,12 @@ import {
   decidePickup,
   priceChargeAtPickupSettlement,
   readCaptureBeforeIso,
+  renewalNeedsReconcile,
   type IntentState,
   type PickupPlan,
 } from './charge-at-pickup.machine';
 import {
   contractKey,
-  contractRefundKey,
   depositCancelKey,
   depositCaptureKey,
   depositKey,
@@ -86,7 +86,7 @@ export class ChargeAtPickupService {
     const id = booking.stripe_setup_intent_id as string | undefined;
     if (!id) return false;
     const intent = await this.stripe.retrieveSetupIntent(id);
-    if (intent.status !== 'succeeded') return false;
+    if (intent.status !== 'succeeded' || !this.offSessionCard(intent)) return false;
     await this.stampSavedCard(booking, intent);
     return true;
   }
@@ -95,22 +95,22 @@ export class ChargeAtPickupService {
     const early = this.alreadyCharged(booking);
     if (early) return early;
     if (!booking.card_saved_at || !booking.stripe_payment_method_id) {
-      const plan = decidePickup(this.pickupInput(booking, 'absent', 'absent'));
-      await applyPickupPlan(plan, this.effects(booking, null, null, plan));
-      return this.startResult(plan, null, null);
+      return this.finishStart(booking, 'absent', 'absent', null, null);
+    }
+    const deposit = await this.ensureDeposit(booking);
+    if (!this.depositReady(deposit.state)) {
+      return this.finishStart(booking, 'absent', deposit.state, null, deposit.intent);
     }
     const contract = await this.ensureContract(booking);
-    const deposit = await this.depositAfterContract(booking, contract.state);
-    const plan = decidePickup(this.pickupInput(booking, contract.state, deposit.state));
-    await applyPickupPlan(plan, this.effects(booking, contract.intent, deposit.intent, plan));
-    return this.startResult(plan, contract.intent, deposit.intent);
+    return this.finishStart(booking, contract.state, deposit.state, contract.intent, deposit.intent);
   }
 
   async settleReturned(booking: any, overtime: number, damage: number, collectDamage: boolean): Promise<void> {
+    const held = Number(booking.deposit_hold_amount ?? booking.security_deposit_amount) || 0;
     const quote = priceChargeAtPickupSettlement({
       overtime,
       damage,
-      deposit: Number(booking.deposit_hold_amount ?? booking.security_deposit_amount) || 0,
+      deposit: await this.authorizedDeposit(booking, held),
       collectDamage,
     });
     await this.applySettlement(booking, quote);
@@ -124,7 +124,7 @@ export class ChargeAtPickupService {
 
   async onSetupSucceeded(intent: Stripe.SetupIntent): Promise<void> {
     const bookingId = intent.metadata?.bookingId;
-    if (!bookingId || intent.status !== 'succeeded') return;
+    if (!bookingId || intent.status !== 'succeeded' || !this.offSessionCard(intent)) return;
     const booking = await this.load(bookingId);
     if (!booking) return;
     const won = await this.claim(booking, `setup:${intent.id}:succeeded`, 'setup', 0, 'succeeded', intent.id);
@@ -197,12 +197,20 @@ export class ChargeAtPickupService {
     };
   }
 
-  private async depositAfterContract(booking: any, contract: IntentState) {
-    if (contract !== 'succeeded') return { state: 'absent' as IntentState, intent: null };
-    if ((Number(booking.security_deposit_amount) || 0) <= 0) {
-      return { state: 'succeeded' as IntentState, intent: null };
-    }
-    return this.ensureDeposit(booking);
+  private depositReady(state: IntentState): boolean {
+    return state === 'requires_capture' || state === 'succeeded';
+  }
+
+  private async finishStart(
+    booking: any,
+    contract: IntentState,
+    deposit: IntentState,
+    contractIntent: Stripe.PaymentIntent | null,
+    depositIntent: Stripe.PaymentIntent | null
+  ): Promise<ChargeStartResult> {
+    const plan = decidePickup(this.pickupInput(booking, contract, deposit));
+    await applyPickupPlan(plan, this.effects(booking, contractIntent, depositIntent, plan));
+    return this.startResult(plan, contractIntent, depositIntent);
   }
 
   private startResult(plan: PickupPlan, contract: Stripe.PaymentIntent | null, deposit: Stripe.PaymentIntent | null): ChargeStartResult {
@@ -217,7 +225,7 @@ export class ChargeAtPickupService {
 
   private effects(booking: any, contract: Stripe.PaymentIntent | null, deposit: Stripe.PaymentIntent | null, plan: PickupPlan) {
     return {
-      refundContract: () => this.compensate(booking, contract),
+      cancelDeposit: () => this.cancelDepositHold(deposit?.id ?? booking.deposit_payment_intent_id),
       ledgerContract: () => this.ledgerContractOnce(booking, contract),
       markStarted: () => this.markDepositHeld(booking, contract, deposit),
       rememberFailure: (code: string) => this.rememberFailure(booking, code, plan),
@@ -262,6 +270,10 @@ export class ChargeAtPickupService {
     return { clientSecret: null, checkoutUrl: session.url ?? null };
   }
 
+  private offSessionCard(intent: Stripe.SetupIntent): boolean {
+    return !intent.usage || intent.usage === 'off_session';
+  }
+
   private async stampSavedCard(booking: any, intent: Stripe.SetupIntent): Promise<void> {
     const methodId = typeof intent.payment_method === 'string' ? intent.payment_method : intent.payment_method?.id;
     const card = await this.cardSummary(methodId);
@@ -284,9 +296,9 @@ export class ChargeAtPickupService {
   }
 
   private async ensureContract(booking: any): Promise<{ state: IntentState; intent: Stripe.PaymentIntent | null }> {
-    const reused = await this.reuseIntent(booking, 'contract');
+    const reused = await this.liveIntent(booking, 'contract');
     if (reused) return reused;
-    const attempt = this.attempt(booking);
+    const attempt = await this.freshAttempt(booking, 'contract');
     const intent = await this.stripe.createOffSessionPaymentIntent({
       amount: Number(booking.total_amount),
       currency: booking.currency,
@@ -302,9 +314,12 @@ export class ChargeAtPickupService {
   }
 
   private async ensureDeposit(booking: any): Promise<{ state: IntentState; intent: Stripe.PaymentIntent | null }> {
-    const reused = await this.reuseIntent(booking, 'deposit');
+    if ((Number(booking.security_deposit_amount) || 0) <= 0) {
+      return { state: 'succeeded', intent: null };
+    }
+    const reused = await this.liveIntent(booking, 'deposit');
     if (reused) return reused;
-    const attempt = this.attempt(booking);
+    const attempt = await this.freshAttempt(booking, 'deposit');
     const amount = Math.max(0, Number(booking.security_deposit_amount) || 0);
     const intent = await this.stripe.createOffSessionPaymentIntent({
       amount,
@@ -321,12 +336,33 @@ export class ChargeAtPickupService {
     return { state: classifyIntent(intent.status), intent };
   }
 
-  private async reuseIntent(booking: any, leg: 'contract' | 'deposit') {
-    if (this.attempt(booking) !== Number(booking.charged_attempt)) return null;
-    const id = leg === 'contract' ? booking.contract_payment_intent_id : booking.deposit_payment_intent_id;
+  private async liveIntent(booking: any, leg: 'contract' | 'deposit') {
+    const id = this.intentId(booking, leg);
     if (!id) return null;
     const intent = await this.stripe.retrieveExpandedPaymentIntent(id);
-    return { state: classifyIntent(intent.status), intent };
+    const state = classifyIntent(intent.status);
+    if (!this.reusable(leg, state)) return null;
+    return { state, intent };
+  }
+
+  private reusable(leg: 'contract' | 'deposit', state: IntentState): boolean {
+    if (leg === 'deposit') return state === 'requires_capture' || state === 'requires_action' || state === 'succeeded';
+    return state === 'succeeded' || state === 'requires_action';
+  }
+
+  private async freshAttempt(booking: any, leg: 'contract' | 'deposit'): Promise<number> {
+    const attempt = this.attempt(booking);
+    const id = this.intentId(booking, leg);
+    if (!id || Number(booking.charged_attempt) !== attempt) return attempt;
+    const next = attempt + 1;
+    await this.patch(booking.id, { pickup_charge_attempt: next });
+    booking.pickup_charge_attempt = next;
+    return next;
+  }
+
+  private intentId(booking: any, leg: 'contract' | 'deposit'): string | null {
+    const id = leg === 'contract' ? booking.contract_payment_intent_id : booking.deposit_payment_intent_id;
+    return id ? String(id) : null;
   }
 
   private async rememberIntent(booking: any, leg: 'contract' | 'deposit', intent: Stripe.PaymentIntent, attempt: number) {
@@ -342,18 +378,12 @@ export class ChargeAtPickupService {
     booking.charged_attempt = attempt;
   }
 
-  private async compensate(booking: any, contract: Stripe.PaymentIntent | null): Promise<void> {
-    if (!contract?.id) return;
-    await this.ledgerContractOnce(booking, contract);
-    await this.stripe.refundCardPayment({
-      paymentIntentId: contract.id,
-      amount: Number(booking.total_amount),
-      currency: booking.currency,
-      idempotencyKey: contractRefundKey(booking.id, this.attempt(booking)),
-      metadata: { bookingId: booking.id, purpose: 'deposit_auth_failed' },
-    });
-    await this.reverseContractLedger(booking);
-    this.emit('rental_pickup_payment_failed', booking, { reason: 'DEPOSIT_AUTH_FAILED' });
+  private async cancelDepositHold(paymentIntentId: string | null | undefined): Promise<void> {
+    if (!paymentIntentId) return;
+    const intent = await this.stripe.retrieveExpandedPaymentIntent(paymentIntentId);
+    const state = classifyIntent(intent.status);
+    if (state !== 'requires_capture' && state !== 'requires_action') return;
+    await this.stripe.cancelPaymentIntent(paymentIntentId, depositCancelKey(paymentIntentId));
   }
 
   private async ledgerContractOnce(booking: any, contract: Stripe.PaymentIntent | null): Promise<void> {
@@ -388,9 +418,7 @@ export class ChargeAtPickupService {
       pickup_payment_failure_reason: plan.type,
       pickup_charge_attempt: this.attempt(booking) + 1,
     });
-    if (code !== 'DEPOSIT_AUTH_FAILED') {
-      this.emit('rental_pickup_payment_failed', booking, { reason: code });
-    }
+    this.emit('rental_pickup_payment_failed', booking, { reason: code });
   }
 
   private async rememberAction(booking: any): Promise<void> {
@@ -414,17 +442,19 @@ export class ChargeAtPickupService {
   }
 
   private async captureDeposit(booking: any, pi: string, quote: ReturnType<typeof priceChargeAtPickupSettlement>): Promise<void> {
-    await this.stripe.capturePaymentIntent(pi, depositCaptureKey(booking.id, quote.capture), {
-      amount: quote.capture,
+    const authorized = Number(booking.deposit_hold_amount) || quote.capture;
+    const amount = Math.min(quote.capture, authorized);
+    await this.stripe.capturePaymentIntent(pi, depositCaptureKey(booking.id, amount), {
+      amount,
       currency: booking.currency,
     });
-    await this.ledgerAmount(booking, quote.capture, 'deposit-capture', 'Deposit capture');
+    await this.ledgerAmount(booking, amount, 'deposit-capture', 'Deposit capture');
     await this.patch(booking.id, {
       deposit_settled_at: new Date().toISOString(),
       payment_status: 'paid',
       overtime_amount: quote.overtimeTaken,
     });
-    this.emit('rental_deposit_captured', booking, { amount: quote.capture, invoice: quote.invoice });
+    this.emit('rental_deposit_captured', booking, { amount, invoice: quote.invoice });
   }
 
   private async invoiceRemainder(booking: any, quote: ReturnType<typeof priceChargeAtPickupSettlement>): Promise<void> {
@@ -458,8 +488,10 @@ export class ChargeAtPickupService {
     });
     await this.recordPaymentRow(booking, intent, 'remainder');
     await this.patch(booking.id, { remainder_payment_intent_id: intent.id });
-    if (classifyIntent(intent.status) === 'succeeded') await this.onRemainderPaid(this.fakeTx(booking, intent, amount));
-    return { clientSecret: intent.client_secret, checkoutUrl: null };
+    const state = classifyIntent(intent.status);
+    if (state === 'succeeded') await this.onRemainderPaid(this.fakeTx(booking, intent, amount));
+    const secret = state === 'requires_action' ? intent.client_secret : null;
+    return { clientSecret: secret, checkoutUrl: null };
   }
 
   private async sweepRenewals(now: Date): Promise<void> {
@@ -470,6 +502,7 @@ export class ChargeAtPickupService {
   private async renewOne(booking: any, now: Date): Promise<void> {
     const fresh = await this.load(booking.id);
     if (!fresh?.deposit_capture_before || fresh.deposit_settled_at) return;
+    if (await this.reconcileRenewal(fresh)) return;
     const created = await this.renewalIntent(fresh);
     const plan = decideDepositRenewal({
       captureBefore: new Date(fresh.deposit_capture_before),
@@ -517,19 +550,40 @@ export class ChargeAtPickupService {
     if (plan.type === 'escalate') return this.escalateRenewal(booking);
   }
 
+  private async reconcileRenewal(booking: any): Promise<boolean> {
+    const renewalId = booking.renewal_payment_intent_id as string | null;
+    if (!renewalId || renewalId === booking.deposit_payment_intent_id) return false;
+    const intent = await this.stripe.retrieveExpandedPaymentIntent(renewalId);
+    const due = renewalNeedsReconcile({
+      renewalState: classifyIntent(intent.status),
+      currentDepositId: booking.deposit_payment_intent_id ?? null,
+      renewalId,
+    });
+    if (!due) return false;
+    await this.swapHold(booking, intent);
+    return true;
+  }
+
   private async swapHold(booking: any, intent: Stripe.PaymentIntent): Promise<void> {
     const previous = booking.deposit_capture_before as string;
-    const next = await this.captureBefore(intent);
     const oldId = booking.deposit_payment_intent_id as string;
-    await this.stripe.cancelPaymentIntent(oldId, depositCancelKey(oldId));
+    const next = await this.captureBefore(intent);
+    await this.recordBothHolds(booking.id, oldId, intent.id);
+    if (oldId && oldId !== intent.id) await this.cancelDepositHold(oldId);
     await this.patch(booking.id, {
       deposit_payment_intent_id: intent.id,
       deposit_capture_before: next,
-      renewal_payment_intent_id: null,
       deposit_renewal_status: 'succeeded',
       deposit_renewal_failed_at: null,
     });
     this.emit('rental_deposit_renewal_succeeded', booking, { previousCaptureBefore: previous, newCaptureBefore: next });
+  }
+
+  private async recordBothHolds(bookingId: string, oldId: string, newId: string): Promise<void> {
+    await this.patch(bookingId, {
+      previous_deposit_payment_intent_id: oldId,
+      renewal_payment_intent_id: newId,
+    });
   }
 
   private async keepOldHold(booking: any, type: string, intent: Stripe.PaymentIntent | null): Promise<void> {
@@ -637,13 +691,15 @@ export class ChargeAtPickupService {
     await this.credit(business, amount, booking.id, `${leg}:proceeds`, `Rental ${label} proceeds ${booking.id}`);
   }
 
-  private async reverseContractLedger(booking: any): Promise<void> {
-    const amount = Number(booking.total_amount);
-    const client = await this.accountsId(booking.client.user_id, booking.currency);
-    const business = await this.businessAccount(booking);
-    await this.debit(business, amount, booking.id, 'pickup-contract:refund-proceeds', `Refund rental contract ${booking.id}`);
-    await this.credit(client, amount, booking.id, 'pickup-contract:refund-payment', `Refund rental contract ${booking.id}`);
-    await this.debit(client, amount, booking.id, 'pickup-contract:refund-credit', `Refund rental contract ${booking.id}`);
+  private async authorizedDeposit(booking: any, held: number): Promise<number> {
+    const id = booking.deposit_payment_intent_id as string | undefined;
+    if (!id) return held;
+    try {
+      const intent = await this.stripe.retrieveExpandedPaymentIntent(id);
+      return Math.min(held, this.major(intent));
+    } catch {
+      return held;
+    }
   }
 
   private async credit(accountId: string, amount: number, bookingId: string, leg: string, memo: string): Promise<void> {
@@ -877,7 +933,7 @@ const BOOKING_QUERY = `query ChargeAtPickupBooking($id: uuid!) {
   rental_bookings_by_pk(id: $id) {
     id booking_number status currency total_amount security_deposit_amount payment_status payment_timing
     card_payment_mode stripe_setup_intent_id stripe_customer_id stripe_payment_method_id card_brand card_last4 card_saved_at
-    contract_payment_intent_id deposit_payment_intent_id deposit_capture_before deposit_hold_amount deposit_settled_at
+    contract_payment_intent_id deposit_payment_intent_id previous_deposit_payment_intent_id deposit_capture_before deposit_hold_amount deposit_settled_at
     deposit_renewal_status deposit_renewal_attempt deposit_renewal_failed_at deposit_renewal_escalated_at
     renewal_payment_intent_id renewal_intent_attempt pickup_charge_attempt charged_attempt
     pickup_payment_failure_code remainder_amount remainder_status remainder_invoiced_at remainder_reminded_at

@@ -5,6 +5,7 @@ import {
   decideDepositRenewal,
   decidePickup,
   priceChargeAtPickupSettlement,
+  renewalNeedsReconcile,
 } from './charge-at-pickup.machine';
 
 const base = {
@@ -17,29 +18,47 @@ const base = {
 };
 
 describe('charge at pickup state machine', () => {
-  it('starts when the rental charge and the deposit hold both succeed', () => {
+  it('starts when the deposit hold and the rental charge both succeed', () => {
     const plan = decidePickup(base);
-    expect(plan).toMatchObject({ type: 'start', start: true, refundContract: false });
+    expect(plan).toMatchObject({ type: 'start', start: true, cancelDeposit: false });
   });
 
-  it('refunds the rental charge when the deposit auth fails', () => {
-    const plan = decidePickup({ ...base, deposit: 'failed' });
+  it('charges nothing when the deposit auth fails', () => {
+    const plan = decidePickup({ ...base, deposit: 'failed', contract: 'absent' });
     expect(plan).toMatchObject({
-      type: 'compensate',
+      type: 'declined',
       code: 'DEPOSIT_AUTH_FAILED',
       start: false,
-      refundContract: true,
+      cancelDeposit: false,
     });
   });
 
-  it('does not start or refund when the bank asks for a step-up', () => {
+  it('cancels the deposit hold when the rental charge fails and does not start', () => {
+    const plan = decidePickup({ ...base, contract: 'failed' });
+    expect(plan).toMatchObject({
+      type: 'release_deposit',
+      code: 'PICKUP_PAYMENT_DECLINED',
+      start: false,
+      cancelDeposit: true,
+    });
+  });
+
+  it('keeps a still-valid deposit hold when the rental charge needs a bank step', () => {
     expect(decidePickup({ ...base, contract: 'requires_action' })).toMatchObject({
       type: 'requires_action',
       which: 'contract',
-      refundContract: false,
+      cancelDeposit: false,
       start: false,
     });
-    expect(decidePickup({ ...base, deposit: 'requires_action' }).which).toBe('deposit');
+  });
+
+  it('asks for deposit authentication before any rental charge', () => {
+    expect(decidePickup({ ...base, deposit: 'requires_action', contract: 'absent' })).toMatchObject({
+      type: 'requires_action',
+      which: 'deposit',
+      cancelDeposit: false,
+      start: false,
+    });
   });
 
   it('renews by replacing the hold and does not end the rental', () => {
@@ -53,6 +72,36 @@ describe('charge at pickup state machine', () => {
       escalated: false,
     });
     expect(plan).toMatchObject({ type: 'renewed', cancelOld: true, endRental: false, alertSupport: false });
+  });
+
+  it('does not cancel the old hold when the new authorization still needs action', () => {
+    const now = new Date('2026-11-13T12:00:00.000Z');
+    const plan = decideDepositRenewal({
+      captureBefore: new Date(now.getTime() + 24 * 3600000),
+      now,
+      newHold: 'requires_action',
+      firstFailureAt: null,
+      escalated: false,
+    });
+    expect(plan).toMatchObject({ type: 'needs_action', cancelOld: false, endRental: false });
+  });
+
+  it('reconciles only a live new hold that has not replaced the current one', () => {
+    expect(renewalNeedsReconcile({
+      renewalState: 'requires_capture',
+      currentDepositId: 'pi_old',
+      renewalId: 'pi_new',
+    })).toBe(true);
+    expect(renewalNeedsReconcile({
+      renewalState: 'failed',
+      currentDepositId: 'pi_old',
+      renewalId: 'pi_new',
+    })).toBe(false);
+    expect(renewalNeedsReconcile({
+      renewalState: 'requires_capture',
+      currentDepositId: 'pi_new',
+      renewalId: 'pi_new',
+    })).toBe(false);
   });
 
   it('keeps the old hold and continues the rental when renewal fails', () => {
@@ -98,7 +147,7 @@ describe('charge at pickup state machine', () => {
       paymentStatus: 'authorized',
     });
     expect(plan.type).toBe('legacy_unchanged');
-    expect(plan.refundContract).toBe(false);
+    expect(plan.cancelDeposit).toBe(false);
   });
 
   it('does nothing new when the flag is off and the booking was not stamped', () => {
@@ -121,13 +170,26 @@ describe('charge at pickup state machine', () => {
       invoice: 15000,
       recaptureContract: false,
     });
+    expect(quote.capture).toBeLessThanOrEqual(45000);
   });
 
-  it('runs the compensate effects and does not start', async () => {
+  it('never captures more than the authorized deposit and invoices only the excess', () => {
+    const quote = priceChargeAtPickupSettlement({
+      overtime: 80000,
+      damage: 10000,
+      deposit: 45000,
+      collectDamage: true,
+    });
+    expect(quote.capture).toBe(45000);
+    expect(quote.invoice).toBe(45000);
+    expect(quote.capture).toBeLessThanOrEqual(45000);
+  });
+
+  it('cancels the deposit and does not start when the rental charge failed', async () => {
     const calls: string[] = [];
-    await applyPickupPlan(decidePickup({ ...base, deposit: 'failed' }), {
-      refundContract: async () => {
-        calls.push('refund');
+    await applyPickupPlan(decidePickup({ ...base, contract: 'failed' }), {
+      cancelDeposit: async () => {
+        calls.push('cancel');
       },
       ledgerContract: async () => {
         calls.push('ledger');
@@ -142,7 +204,7 @@ describe('charge at pickup state machine', () => {
         calls.push('action');
       },
     });
-    expect(calls).toEqual(['refund', 'fail']);
+    expect(calls).toEqual(['cancel', 'fail']);
   });
 });
 

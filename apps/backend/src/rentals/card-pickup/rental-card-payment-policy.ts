@@ -14,8 +14,6 @@ export const CARD_PAYMENT_MODES = ['authorize_upfront', 'charge_at_pickup'] as c
 export type CardPaymentMode = (typeof CARD_PAYMENT_MODES)[number];
 
 export const CHARGE_AT_PICKUP_FLAG = 'rentals_card_charge_at_pickup_enabled';
-/** Seeded false. v1 does not read it. Phase 2 legacy card rentals are out of scope. */
-export const CHARGE_AT_PICKUP_LEGACY_FLAG = 'rentals_card_charge_at_pickup_legacy_enabled';
 
 const DEFAULT_REVIEW_HOURS = 72;
 const DEFAULT_AUTH_WINDOW_DAYS = 6;

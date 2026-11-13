@@ -37,6 +37,7 @@
     "@mui/x-data-grid": "^8.7.0",
     "@mui/x-date-pickers": "^8.14.0",
     "@mui/x-date-pickers-pro": "^8.14.0",
+    "@stripe/stripe-js": "^8.11.0",
     "@vis.gl/react-google-maps": "^1.10.1",
     "apexcharts": "^4.2.0",
     "axios": "^1.6.0",

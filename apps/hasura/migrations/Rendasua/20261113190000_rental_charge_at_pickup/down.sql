@@ -1,7 +1,6 @@
 DELETE FROM public.application_configurations
 WHERE config_key IN (
-  'rentals_card_charge_at_pickup_enabled',
-  'rentals_card_charge_at_pickup_legacy_enabled'
+  'rentals_card_charge_at_pickup_enabled'
 ) AND country_code IS NULL;
 
 DROP TABLE IF EXISTS public.rental_support_alerts;
@@ -34,6 +33,7 @@ ALTER TABLE public.rental_bookings
   DROP COLUMN IF EXISTS deposit_hold_amount,
   DROP COLUMN IF EXISTS deposit_capture_before,
   DROP COLUMN IF EXISTS deposit_payment_intent_id,
+  DROP COLUMN IF EXISTS previous_deposit_payment_intent_id,
   DROP COLUMN IF EXISTS contract_payment_intent_id,
   DROP COLUMN IF EXISTS card_saved_at,
   DROP COLUMN IF EXISTS card_last4,

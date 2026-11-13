@@ -1,6 +1,6 @@
 -- Charge the rental at pickup and hold only the deposit for inspected Stripe bookings.
 -- v1 flag stays false. Dev is turned on by hand. Production stays off.
--- Phase 2 flag is inserted false and is not read by v1. Legacy card rentals stay on the booking-time hold.
+-- Legacy card rentals stay on the booking-time hold. Phase 2 can add its own flag.
 
 ALTER TYPE public.rental_booking_payment_status_enum ADD VALUE IF NOT EXISTS 'deposit_held';
 
@@ -14,6 +14,7 @@ ALTER TABLE public.rental_bookings
   ADD COLUMN IF NOT EXISTS card_saved_at timestamptz,
   ADD COLUMN IF NOT EXISTS contract_payment_intent_id text,
   ADD COLUMN IF NOT EXISTS deposit_payment_intent_id text,
+  ADD COLUMN IF NOT EXISTS previous_deposit_payment_intent_id text,
   ADD COLUMN IF NOT EXISTS deposit_capture_before timestamptz,
   ADD COLUMN IF NOT EXISTS deposit_hold_amount numeric(18, 2),
   ADD COLUMN IF NOT EXISTS deposit_renewal_status text,
@@ -49,6 +50,9 @@ ALTER TABLE public.rental_bookings
 
 COMMENT ON COLUMN public.rental_bookings.card_payment_mode IS
   'authorize_upfront keeps today''s booking-time hold. charge_at_pickup saves a card, charges the contract at pickup, and holds only the deposit.';
+
+COMMENT ON COLUMN public.rental_bookings.previous_deposit_payment_intent_id IS
+  'Deposit PaymentIntent replaced by a renewal. Kept so a crash between the new auth and the cancel is visible.';
 
 COMMENT ON COLUMN public.rental_bookings.deposit_capture_before IS
   'Stripe charge.payment_method_details.card.capture_before for the current deposit hold. Not a hardcoded 6 or 7 days.';
@@ -102,17 +106,3 @@ WHERE NOT EXISTS (
   WHERE config_key = 'rentals_card_charge_at_pickup_enabled' AND country_code IS NULL
 );
 
-INSERT INTO public.application_configurations (
-  config_key, config_name, description, data_type, boolean_value,
-  country_code, status, version, tags
-)
-SELECT
-  'rentals_card_charge_at_pickup_legacy_enabled',
-  'Charge legacy card rentals at pickup',
-  'Phase 2. Not read by v1. When a later change turns this on, new non-inspected Stripe bookings skip the 6-day end rule and charge at start. Bookings already confirmed and authorized stay on the original hold. Inserted false.',
-  'boolean', false, NULL, 'active', 1,
-  ARRAY['rentals', 'feature-flag', 'payments']
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.application_configurations
-  WHERE config_key = 'rentals_card_charge_at_pickup_legacy_enabled' AND country_code IS NULL
-);

@@ -53,6 +53,7 @@ import {
   messagesDefaultExpanded,
 } from '../../utils/rentalPhase';
 import { unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { cardActionSettled, confirmStripeCardAction } from '../../utils/confirmStripeCardAction';
 
 const PAYMENT_POLL_MS = 4000;
 
@@ -272,7 +273,12 @@ const RentalBookingDetailPage: React.FC = () => {
 
   const payRemainder = useCallback(async () => {
     if (!bookingId) return;
-    const paid = await payRentalRemainder(bookingId);
+    let paid = await payRentalRemainder(bookingId);
+    if (paid.clientSecret) {
+      const status = await confirmStripeCardAction(paid.clientSecret);
+      if (!cardActionSettled(status)) return;
+      paid = await payRentalRemainder(bookingId);
+    }
     if (!paid.clientSecret) await load();
   }, [bookingId, load, payRentalRemainder]);
 

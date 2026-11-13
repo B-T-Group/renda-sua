@@ -107,21 +107,17 @@ export default function ClientInspectionScreen() {
     });
     setStarting(true);
     try {
-      const result = await acceptAndStart(bookingId, model.view.versionId);
+      let result = await acceptAndStart(bookingId, model.view.versionId);
+      for (let step = 0; step < 2 && result.code === 'PICKUP_REQUIRES_ACTION' && result.client_secret; step += 1) {
+        const stepped = await completeBankStep(result.client_secret);
+        if (!stepped) break;
+        result = await acceptAndStart(bookingId, model.view.versionId);
+      }
       setConfirmOpen(false);
       setNotice(null);
-      if (result.code === 'PICKUP_REQUIRES_ACTION' && result.client_secret) {
-        const stepped = await completeBankStep(result.client_secret);
-        if (stepped) {
-          const again = await acceptAndStart(bookingId, model.view.versionId);
-          if (!again.paymentPending) {
-            navigation.goBack();
-            return;
-          }
-          setCardHeldUntil(again.held_until || again.code || '');
-          setMomoPhase(null);
-          return;
-        }
+      if (!result.paymentPending) {
+        navigation.goBack();
+        return;
       }
       if (result.paymentPending && isCardHold(result.code)) {
         setCardHeldUntil(result.held_until || result.code || '');

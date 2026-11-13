@@ -14,10 +14,6 @@ export function depositKey(bookingId: string, attempt: number): string {
   return `pi_rental_deposit_${bookingId}_a${attempt}`;
 }
 
-export function contractRefundKey(bookingId: string, attempt: number): string {
-  return `refund_rental_contract_${bookingId}_a${attempt}`;
-}
-
 export function renewalKey(bookingId: string, captureBefore: string, attempt: number): string {
   return `pi_rental_deposit_renew_${bookingId}_${captureBefore}_a${attempt}`;
 }
