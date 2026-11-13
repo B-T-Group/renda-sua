@@ -40,6 +40,7 @@ import { RentalBookingMessagingService } from './rental-booking-messaging.servic
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
+import { readLatestCardEndAt } from './rental-card-window';
 import { RentalsService } from './rentals.service';
 
 @ApiTags('rentals')
@@ -263,7 +264,11 @@ export class RentalsController {
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
-    return { success: true, data: { listing } };
+    const card = await this.rentalsService.cardWindowFieldsFor(
+      listing.business_location?.address?.country,
+      readLatestCardEndAt(listing)
+    );
+    return { success: true, data: { listing: Object.assign(listing, card) } };
   }
 
   @Get('business/items')
@@ -543,6 +548,17 @@ export class RentalsController {
     @Body() dto: RespondRentalRequestDto
   ) {
     return this.rentalsService.respondToRentalRequest(requestId, dto);
+  }
+
+  @Post('requests/:id/price-change-seen')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Renter has seen the new rental price' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Price notice acknowledged' })
+  @ApiResponse({ status: 403, description: 'Only the renter can confirm the price' })
+  @ApiResponse({ status: 404, description: 'Request not found' })
+  async priceChangeSeen(@Param('id') requestId: string) {
+    return this.rentalsService.markRentalPriceChangeSeen(requestId);
   }
 
   @Post('requests/:id/cancel')

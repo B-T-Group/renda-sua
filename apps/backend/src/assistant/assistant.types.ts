@@ -33,6 +33,85 @@ export type AssistantIdentity = {
 
 export type AssistantCardKind = 'item' | 'order' | 'rental' | 'store' | 'sign_in';
 
+export type AssistantRentalAvailability =
+  | 'available'
+  | 'partial_units'
+  | 'unavailable'
+  | 'no_dates'
+  | 'too_long'
+  | 'too_short'
+  | 'own_listing';
+
+export type AssistantRentalCta = 'request' | 'sign_in' | 'shift' | 'own' | 'none';
+
+/** Optional block on kind 'rental'. Older apps ignore it and still show title + price. */
+export type AssistantRentalCardDetails = {
+  listingId: string;
+  businessName: string;
+  city?: string;
+  availability: AssistantRentalAvailability;
+  startDate?: string;
+  endDate?: string;
+  dayCount?: number;
+  startAt?: string;
+  endAt?: string;
+  hours?: number;
+  unitsRequested: number;
+  unitsFree?: number;
+  quoteTotal?: number;
+  perDay?: number;
+  perHour?: number;
+  deposit?: number;
+  currency: string;
+  nextAvailableDate?: string | null;
+  maxHours?: number | null;
+  minHours?: number;
+  canRequest: boolean;
+  cta: AssistantRentalCta;
+  shiftStart?: string;
+  shiftEnd?: string;
+  cardNote?: string;
+};
+
+export type AssistantChipAction =
+  | 'dates'
+  | 'search'
+  | 'buy'
+  | 'rent'
+  | 'retry'
+  | 'calendar'
+  | 'category';
+
+export type AssistantChip = {
+  id: string;
+  label: string;
+  message?: string;
+  action?: AssistantChipAction;
+  startDate?: string;
+  endDate?: string;
+  query?: string;
+};
+
+export type AssistantRentalDates =
+  | { startDate: string; endDate: string; dayCount: number }
+  | { startAt: string; endAt: string; hours: number };
+
+export type AssistantRentalMeta = {
+  status?: 'ok' | 'needs_dates' | 'invalid_dates' | 'unavailable_error' | 'buy_or_rent';
+  dateIssue?: 'past' | 'end_before_start' | 'too_long' | 'unparseable' | 'card_window';
+  latest_card_end_at?: string;
+  payment_rail?: 'stripe' | 'mobile_money';
+  momo_available?: boolean;
+  stripe_review_hours?: number;
+  timezone?: string;
+  dates?: AssistantRentalDates;
+  chips?: AssistantChip[];
+  footnote?: string;
+  showAllHref?: string;
+  showAllCount?: number;
+  refs?: Record<string, string>;
+};
+
 export type AssistantCard = {
   kind: AssistantCardKind;
   id: string;
@@ -42,12 +121,14 @@ export type AssistantCard = {
   href?: string;
   /** Completed client orders only. */
   secondaryHref?: string;
+  rental?: AssistantRentalCardDetails;
 };
 
 export type AssistantToolResult = {
   content: string;
   handoff?: boolean;
   cards?: AssistantCard[];
+  rental?: AssistantRentalMeta;
 };
 
 export type AssistantChatInput = {
@@ -59,6 +140,15 @@ export type AssistantChatInput = {
   marketContext?: AssistantMarket | null;
   /** Client-generated thread ID for analytics (optional) */
   threadId?: string;
+  /** Dates the client already confirmed (date chip or editor). */
+  rentalDates?: {
+    startDate?: string;
+    endDate?: string;
+    startAt?: string;
+    endAt?: string;
+  };
+  /** Refs from the previous rental search (r1 → listing id). */
+  rentalRefs?: Record<string, string>;
   /** Set when the HTTP client disconnects so the tool loop can stop. */
   signal?: AbortSignal;
 };
@@ -71,6 +161,8 @@ export type AssistantReply = {
   silent: boolean;
   /** In-app entity cards. Omitted on WhatsApp. */
   cards?: AssistantCard[];
+  /** Rental date chip, follow-up chips, and the estimate footnote. */
+  rental?: AssistantRentalMeta;
 };
 
 export type AssistantTurnInput = Omit<AssistantChatInput, 'locale'> & {

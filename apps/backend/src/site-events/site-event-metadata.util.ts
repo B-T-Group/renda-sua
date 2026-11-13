@@ -45,7 +45,7 @@ const SERVER_EVENT_ID_ALLOWLIST = new Set([
 // Assistant metadata validators (Phase 0 #451 PR review): per-key validation
 const ASSISTANT_ENUM_VALUES = {
   input: new Set(['typed', 'chip', 'voice']),
-  intent: new Set(['buy', 'availability', 'reorder', 'track', 'support', 'other']),
+  intent: new Set(['buy', 'availability', 'reorder', 'track', 'support', 'other', 'rent', 'food', 'mixed', 'question']),
   confidence: new Set(['high', 'low']),
   rating: new Set(['up', 'down']),
   reason: new Set(['wrong_price', 'wrong_stock', 'off_topic', 'other']),
@@ -56,7 +56,19 @@ const ASSISTANT_ENUM_VALUES = {
   dismiss_reason: new Set(['close', 'outside', 'timeout', 'opened']),
   trigger: new Set(['first_run', 'zero_results', 'reorder_eligible', 'chip', 'model', 'low_confidence']),
   context: new Set(['empty_state', 'in_thread']),
-  type: new Set(['item', 'store', 'cart', 'reorder', 'order', 'search']),
+  type: new Set(['item', 'store', 'cart', 'reorder', 'order', 'search', 'rental', 'rental_request']),
+  rental_result: new Set(['ok', 'needs_dates', 'invalid_dates', 'unavailable_error', 'zero', 'buy_or_rent']),
+  day_bucket: new Set(['1', '2-3', '4-7', '8-30', 'none']),
+  latency_bucket: new Set(['fast', 'slow', 'timeout']),
+  rental_mode: new Set(['day', 'hour', 'none']),
+  date_source: new Set(['chip', 'typed', 'structured', 'calendar', 'explicit', 'relative', 'none']),
+  clarify_reason: new Set(['buy_or_rent', 'missing_dates', 'past', 'end_before_start', 'too_long', 'vague', 'item', 'card_window']),
+  question_topic: new Set(['price', 'deposit', 'condition', 'pickup', 'return', 'included', 'hours', 'description', 'other']),
+  answer_fallback: new Set(['silent', 'answered', 'none', 'request_note', 'support']),
+  from: new Set(['chip', 'editor']),
+  pct_bucket: new Set(['<10', '10-25', '>25']),
+  price_direction: new Set(['up', 'down']),
+  availability: new Set(['available', 'unavailable', 'partial_units', 'no_dates']),
   via: new Set(['reorder', 'item', 'store']),
   card_type: new Set(['item', 'store', 'order', 'reorder', 'link']),
   length_bucket: new Set(['<20', '20-80', '>80']),
@@ -82,6 +94,11 @@ const ASSISTANT_TOOL_NAMES = new Set([
   'get_my_addresses',
   'search_catalog',
   'get_reorder_options',
+  'search_rentals',
+  'search_restaurants',
+  'get_rental_listing_details',
+  'quote_rental',
+  'get_my_rental_bookings',
 ]);
 
 const SCREEN_CHIP_PATTERN = /^[A-Za-z0-9_.-]{1,40}$/;
@@ -89,7 +106,13 @@ const SCREEN_CHIP_PATTERN = /^[A-Za-z0-9_.-]{1,40}$/;
 const MAX_SHOWN_PRICE = 99_999_999;
 
 // Keys exempt from the phone heuristic only when the value is a strict UUID.
-const ASSISTANT_UUID_ID_KEYS: ReadonlySet<string> = new Set(['thread_id', 'target_id', 'order_id']);
+const ASSISTANT_UUID_ID_KEYS: ReadonlySet<string> = new Set([
+  'thread_id',
+  'target_id',
+  'order_id',
+  'listing_id',
+  'request_id',
+]);
 // Client reorder events (mobile sends metadata.orderId; web uses subject_id).
 const REORDER_UUID_ID_KEYS: ReadonlySet<string> = new Set(['orderId']);
 const RENTAL_RETURN_UUID_KEYS: ReadonlySet<string> = new Set(['booking_id']);
@@ -115,7 +138,7 @@ function validateAssistantValue(key: string, value: unknown): unknown | null {
   }
 
   // Boolean fields
-  if (['is_signed_in', 'has_active_order', 'reorder_eligible', 'grounded'].includes(key)) {
+  if (['is_signed_in', 'has_active_order', 'reorder_eligible', 'grounded', 'has_dates', 'has_budget'].includes(key)) {
     if (typeof value === 'boolean') {
       return value;
     }
@@ -123,7 +146,7 @@ function validateAssistantValue(key: string, value: unknown): unknown | null {
   }
 
   // Bounded non-negative integers
-  if (['turn', 'position', 'minutes_since_tap'].includes(key)) {
+  if (['turn', 'position', 'minutes_since_tap', 'units', 'available_count', 'buy_matches'].includes(key)) {
     if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 999999) {
       return value;
     }
@@ -166,6 +189,10 @@ function validateAssistantValue(key: string, value: unknown): unknown | null {
   // Reject any arrays not explicitly handled above
   if (Array.isArray(value)) {
     return null;
+  }
+
+  if (key === 'category_guess' && typeof value === 'string' && /^[\p{L}0-9 ._-]{1,40}$/u.test(value)) {
+    return value;
   }
 
   // Unknown key or invalid type

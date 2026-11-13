@@ -50,6 +50,9 @@ import {
   type RentalEditBlock,
   type RentalWindowSnapshot,
 } from './rental-request-edit';
+import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, shouldNotifyPriceChange } from './rental-price-change';
+import { cardWindowFields } from './rental-card-window';
+import { marketTimeZone } from '../common/market-timezones';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
   acceptStartConflict,
@@ -63,6 +66,7 @@ import {
   damageCollectedOnAgree,
   decideInspectionEnrolment,
   DEFAULT_STRIPE_REVIEW_HOURS,
+  INSPECTION_CODES,
   OVERTIME_PROMPT_BACKOFF_MS,
   pickupStartAllowed,
   priceEnrolledCapture,
@@ -277,6 +281,7 @@ interface RentalRequestRowForClientNotification {
     business_location?: { address?: { country?: string | null } | null } | null;
   } | null;
   rental_selection_windows?: unknown;
+  quoted_total?: number | string | null;
 }
 
 /** Browse catalog row: same shape as frontend `RentalListingRow`. */
@@ -290,6 +295,7 @@ export interface PublicRentalListingRow {
   min_rental_hours: number;
   max_rental_hours: number | null;
   units_available: number;
+  security_deposit_amount?: number | string | null;
   pickup_instructions: string;
   dropoff_instructions: string;
   weekly_availability: WeeklyAvailabilityRow[];
@@ -351,6 +357,8 @@ export interface ClientRentalRequestRow {
   client_request_note?: string | null;
   units_requested?: number;
   unavailable_reason_code?: string | null;
+  quoted_total?: number | string | null;
+  price_change_seen_at?: string | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
   expires_at?: string | null;
@@ -1297,7 +1305,11 @@ export class RentalsService {
       req,
       unitsRequested
     );
-    const snap = computedSnapshot;
+    const priced = applyAcceptedPrice(computedSnapshot, dto.rentalPricingSnapshot);
+    if (priced.currencyMismatch) {
+      throw new HttpException('Accepted price currency does not match the quote', HttpStatus.BAD_REQUEST);
+    }
+    const snap = priced.snapshot;
     const total = Number(snap.total);
     const contractExpiresAt = new Date(now.getTime() + hours * 3600000).toISOString();
     const clientId = req.client_id;
@@ -1322,12 +1334,55 @@ export class RentalsService {
         contractExpiresAt,
         requestId
       );
+      await this.notifyClientIfPriceChanged(req, snap.total, requestId);
     } catch (e: any) {
       if (bookingId) await this.deleteBooking(bookingId);
       throw e instanceof HttpException
         ? e
         : new HttpException(e?.message || 'Failed to respond', HttpStatus.BAD_REQUEST);
     }
+  }
+
+  private async notifyClientIfPriceChanged(
+    req: RentalRequestRowForClientNotification,
+    accepted: number,
+    requestId: string
+  ): Promise<void> {
+    if (!shouldNotifyPriceChange(req.quoted_total, accepted)) return;
+    const clientUserId = req.client?.user_id;
+    if (!clientUserId) return;
+    await this.notificationsService.sendClientRentalPriceChanged({
+      clientUserId,
+      requestId,
+      rentalItemName: req.rental_location_listing?.rental_item?.name ?? 'rental',
+      quoted: Number(req.quoted_total),
+      accepted,
+    });
+  }
+
+  private assertPriceChangeSeen(req: {
+    quoted_total?: unknown;
+    price_change_seen_at?: string | null;
+    rental_pricing_snapshot?: { total?: unknown } | null;
+  }): void {
+    const accepted = Number(req.rental_pricing_snapshot?.total);
+    if (!paymentBlockedUntilPriceSeen({ quoted: req.quoted_total, accepted, seenAt: req.price_change_seen_at })) return;
+    throw new HttpException('PRICE_CHANGE_UNSEEN', HttpStatus.CONFLICT);
+  }
+
+  async markRentalPriceChangeSeen(requestId: string): Promise<{ success: boolean }> {
+    const user = await this.hasuraUserService.getUser();
+    const clientId = user.client?.id;
+    if (!clientId) throw new HttpException('Only the renter can confirm the price', HttpStatus.FORBIDDEN);
+    const row = await this.fetchRequest(requestId);
+    if (row.client_id !== clientId) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    await this.hasuraSystemService.executeQuery(
+      `mutation SeeRentalPrice($id: uuid!, $seen: timestamptz!) {
+        update_rental_requests_by_pk(pk_columns: { id: $id }, _set: { price_change_seen_at: $seen }) { id }
+      }`,
+      { id: requestId, seen: new Date().toISOString() }
+    );
+    return { success: true };
   }
 
   async getBusinessRentalItems(): Promise<any[]> {
@@ -2244,6 +2299,7 @@ export class RentalsService {
     if (!exp || new Date(exp) <= new Date()) {
       throw new HttpException('Contract has expired', HttpStatus.GONE);
     }
+    this.assertPriceChangeSeen(req);
     // Exclude this proposed booking — its windows already hold capacity.
     await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
@@ -4907,9 +4963,44 @@ export class RentalsService {
   }
 
   private async enrolOrReject(req: any, country: string | null): Promise<number | null> {
-    const decision = decideInspectionEnrolment(await this.enrolmentInput(req, country));
-    if (decision.outcome === 'reject') throw inspectionRejected(decision.code, decision.message);
+    const input = await this.enrolmentInput(req, country);
+    const decision = decideInspectionEnrolment(input);
+    if (decision.outcome === 'reject') throw this.rejectEnrolment(decision, input, country);
     return decision.outcome === 'enrol' ? decision.policyVersion : null;
+  }
+
+  private rejectEnrolment(
+    decision: { code: string; message: string },
+    input: { rail: string; now: Date; reviewHours?: number },
+    country: string | null
+  ) {
+    const extra = decision.code === INSPECTION_CODES.STRIPE_WINDOW ? this.cardWindowBody(input, country) : undefined;
+    return inspectionRejected(decision.code, decision.message, extra);
+  }
+
+  async cardWindowFieldsFor(country?: string | null, latest?: string | null) {
+    const code = (country || '').trim();
+    const rail = code ? await this.paymentRoutingService.resolveRailForCountry(code) : 'mobile_money';
+    const reviewHours = await this.stripeReviewHours(code || null);
+    return cardWindowFields({
+      now: new Date(),
+      rail: rail === 'stripe' ? 'stripe' : 'mobile_money',
+      timezone: marketTimeZone(code) ?? 'Africa/Douala',
+      latestCardEndAt: latest,
+      reviewHours,
+    });
+  }
+
+  private cardWindowBody(
+    input: { rail: string; now: Date; reviewHours?: number },
+    country: string | null
+  ) {
+    return cardWindowFields({
+      now: input.now,
+      rail: input.rail === 'stripe' ? 'stripe' : 'mobile_money',
+      timezone: marketTimeZone(country) ?? 'Africa/Douala',
+      reviewHours: input.reviewHours,
+    });
   }
 
   private async enrolmentInput(req: any, country: string | null) {
@@ -4946,19 +5037,18 @@ export class RentalsService {
     const policy = await this.readInspectionPolicy(bookingId);
     if (policy == null) return;
     const reviewHours = await this.stripeReviewHours(country);
-    const decision = decideInspectionEnrolment({
+    const input = {
       enabled: true,
       windowCount: 1,
       clientUserId: 'client',
       businessUserId: 'business',
-      rail: 'stripe',
+      rail: 'stripe' as const,
       endAt: new Date(endAtIso),
       now: new Date(),
       reviewHours,
-    });
-    if (decision.outcome === 'reject') {
-      throw inspectionRejected(decision.code, decision.message);
-    }
+    };
+    const decision = decideInspectionEnrolment(input);
+    if (decision.outcome === 'reject') throw this.rejectEnrolment(decision, input, country);
   }
 
   /** null = legacy. A failed read throws 503 so callers retry instead of guessing. */

@@ -14,6 +14,7 @@ import { GeoScopeService } from '../rbac/geo-scope.service';
 import { SmsService } from '../sms/sms.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { DeepLinkService } from './deep-link.service';
+import { priceChangeCopy } from '../rentals/rental-price-change';
 import {
   MERCHANT_INCOMING_ORDER_PUSH,
   ORDER_OFFER_CANCELLED_PUSH,
@@ -3392,6 +3393,54 @@ export class NotificationsService {
         `sendBusinessRentalBookingRequestEmail: ${error?.message ?? String(error)}`
       );
     }
+  }
+
+  /** In-app message and push when the accepted rental price differs from the quote. Never throws. */
+  async sendClientRentalPriceChanged(payload: {
+    clientUserId: string;
+    requestId: string;
+    rentalItemName: string;
+    quoted: number;
+    accepted: number;
+  }): Promise<void> {
+    try {
+      const user = await this.getUserRowForEmail(payload.clientUserId);
+      const locale = user?.preferred_language === 'fr' ? 'fr' : 'en';
+      const copy = priceChangeCopy(locale, payload.rentalItemName, payload.quoted, payload.accepted);
+      const path = `/rentals/requests/${payload.requestId}`;
+      await this.insertRentalPriceChangedMessage(payload.clientUserId, payload.requestId, copy.inApp, path);
+      await this.pushRentalPriceChanged(payload.clientUserId, payload.requestId, copy, path);
+    } catch (error: any) {
+      this.logger.error(`sendClientRentalPriceChanged: ${error?.message ?? String(error)}`);
+    }
+  }
+
+  private async insertRentalPriceChangedMessage(userId: string, requestId: string, body: string, path: string) {
+    await this.hasuraSystemService.executeMutation(
+      `mutation InsertRentalPriceChanged($object: user_messages_insert_input!) {
+        insert_user_messages_one(object: $object) { id }
+      }`,
+      {
+        object: {
+          user_id: userId,
+          entity_type: 'rental_request',
+          entity_id: requestId,
+          message_type: 'RENTAL_PRICE_CHANGED',
+          message: body,
+          message_payload: { requestId, path },
+        },
+      }
+    );
+  }
+
+  private async pushRentalPriceChanged(
+    userId: string,
+    requestId: string,
+    copy: { pushTitle: string; pushBody: string },
+    path: string
+  ) {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    await this.pushRentalRequestUpdated(userId, requestId, { title: copy.pushTitle, body: copy.pushBody }, path);
   }
 
   /** Push plus an in-app row. Never throws. WhatsApp stays on the original request template. */

@@ -92,8 +92,8 @@ describe('TrackSiteEventDto', () => {
     const assistantEvents = [...SITE_EVENT_TYPES_V1].filter((type) =>
       type.startsWith('assistant.')
     );
-    // 15 assistant event types in SITE_EVENT_TYPES_V1 (public events only, 2 moved to server-only)
-    expect(assistantEvents).toHaveLength(15);
+    // 18 assistant public events (15 original + rental request, date chip, price notice)
+    expect(assistantEvents).toHaveLength(18);
   });
 
   it('counts total new event types correctly', () => {
@@ -103,8 +103,8 @@ describe('TrackSiteEventDto', () => {
     const assistantEvents = [...SITE_EVENT_TYPES_V1].filter((type) =>
       type.startsWith('assistant.')
     );
-    // 3 reorder + 15 assistant = 18 new public types
-    expect(reorderEvents.length + assistantEvents.length).toBe(18);
+    // 3 reorder + 18 assistant = 21 public types in these two groups
+    expect(reorderEvents.length + assistantEvents.length).toBe(21);
   });
 
   describe('#594 dedicated agents UI events (#644, #645, #646)', () => {

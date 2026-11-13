@@ -1,3 +1,43 @@
+export type AssistantRentalDetails = {
+  listingId: string;
+  businessName?: string;
+  city?: string;
+  availability?: string;
+  startDate?: string;
+  endDate?: string;
+  dayCount?: number;
+  quoteTotal?: number;
+  perDay?: number;
+  deposit?: number;
+  currency?: string;
+  nextAvailableDate?: string | null;
+  cta?: string;
+  shiftStart?: string;
+  shiftEnd?: string;
+  canRequest?: boolean;
+};
+
+export type AssistantRentalChip = {
+  id: string;
+  label: string;
+  message?: string;
+  action?: string;
+  startDate?: string;
+  endDate?: string;
+  query?: string;
+};
+
+export type AssistantRentalMeta = {
+  status?: string;
+  dateIssue?: string;
+  dates?: { startDate: string; endDate: string; dayCount: number };
+  chips?: AssistantRentalChip[];
+  footnote?: string;
+  showAllHref?: string;
+  showAllCount?: number;
+  refs?: Record<string, string>;
+};
+
 export type AssistantResultCard = {
   kind: 'item' | 'order' | 'rental' | 'store' | 'sign_in';
   id: string;
@@ -6,7 +46,13 @@ export type AssistantResultCard = {
   priceLabel?: string;
   href?: string;
   secondaryHref?: string;
+  rental?: AssistantRentalDetails;
 };
+
+export function readAssistantRental(value: unknown): AssistantRentalMeta | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  return value as AssistantRentalMeta;
+}
 
 const KINDS = new Set(['item', 'order', 'rental', 'store', 'sign_in']);
 

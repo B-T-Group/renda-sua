@@ -1,14 +1,24 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { marketTimeZone } from '../common/market-timezones';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { RentalSearchQueryDto, RentalSuggestQueryDto, RentalTopCategoriesQueryDto } from './dto/rental-search.dto';
+import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
+import { DEFAULT_STRIPE_REVIEW_HOURS } from './inspection/rental-inspection.policy';
 import { availabilityForListing, parseSearchDateRange, type SearchDateRange } from './rental-search.dates';
 import { type CapacityWindow } from './rental-capacity';
+import {
+  cardWindowFields,
+  listingCountryCode,
+  readLatestCardEndAt,
+  type CardWindowFields,
+} from './rental-card-window';
 import { RentalsService, type PublicRentalListingRow } from './rentals.service';
 
 const DAY_MS = 86_400_000;
 const HORIZON_DAYS = 45;
 
-export interface RentalSearchHit {
+export interface RentalSearchHit extends Partial<CardWindowFields> {
   listing: PublicRentalListingRow;
   available: boolean | null;
   nextAvailableDate: string | null;
@@ -21,7 +31,9 @@ export interface RentalSearchHit {
 export class RentalSearchService {
   constructor(
     private readonly rentals: RentalsService,
-    private readonly hasura: HasuraSystemService
+    private readonly hasura: HasuraSystemService,
+    private readonly routing?: PaymentRoutingService,
+    private readonly flags?: RentalInspectionFlags
   ) {}
 
   async search(query: RentalSearchQueryDto) {
@@ -37,9 +49,23 @@ export class RentalSearchService {
       min_price: query.min_price,
       max_price: query.max_price,
     });
-    const hits = await this.annotate(rows, range);
+    const window = await this.cardWindow(query.country_code);
+    const hits = await this.stampHits(await this.annotate(rows, range), query.country_code, window);
     hits.sort((a, b) => compareHits(a, b));
-    return this.page(hits, query, range);
+    return this.page(hits, query, range, window);
+  }
+
+  async cardWindow(country?: string | null, latest?: string | null): Promise<CardWindowFields> {
+    const code = (country || '').trim();
+    const rail = await this.railFor(code);
+    const reviewHours = await this.reviewHours(code);
+    return cardWindowFields({
+      now: new Date(),
+      rail,
+      timezone: marketTimeZone(code) ?? 'Africa/Douala',
+      latestCardEndAt: latest,
+      reviewHours,
+    });
   }
 
   async suggest(query: RentalSuggestQueryDto) {
@@ -130,7 +156,12 @@ export class RentalSearchService {
     return res.rental_bookings ?? [];
   }
 
-  private page(hits: Array<RentalSearchHit & { catalogIndex: number }>, query: RentalSearchQueryDto, range: SearchDateRange | null) {
+  private page(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    query: RentalSearchQueryDto,
+    range: SearchDateRange | null,
+    window: CardWindowFields
+  ) {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
     const start = (page - 1) * limit;
@@ -144,7 +175,45 @@ export class RentalSearchService {
       dates: range
         ? { startDate: range.startDate, endDate: range.endDate, dayCount: range.dayCount }
         : null,
+      ...window,
     };
+  }
+
+  private async stampHits(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    fallback: string | undefined,
+    known: CardWindowFields
+  ) {
+    const cache = new Map<string, CardWindowFields>();
+    const key = `${(fallback || '').trim().toUpperCase()}|`;
+    cache.set(key, known);
+    const stamped = [];
+    for (const hit of hits) stamped.push(await this.stampHit(hit, fallback, cache));
+    return stamped;
+  }
+
+  private async stampHit(
+    hit: RentalSearchHit & { catalogIndex: number },
+    fallback: string | undefined,
+    cache: Map<string, CardWindowFields>
+  ) {
+    const code = listingCountryCode(hit.listing, fallback);
+    const latest = readLatestCardEndAt(hit.listing);
+    const key = `${code}|${latest ?? ''}`;
+    const fields = cache.get(key) ?? (await this.cardWindow(code, latest));
+    cache.set(key, fields);
+    return { ...hit, ...fields };
+  }
+
+  private async railFor(code: string): Promise<'stripe' | 'mobile_money'> {
+    if (!code || !this.routing) return 'mobile_money';
+    const rail = await this.routing.resolveRailForCountry(code);
+    return rail === 'stripe' ? 'stripe' : 'mobile_money';
+  }
+
+  private reviewHours(code: string): Promise<number> {
+    if (!this.flags) return Promise.resolve(DEFAULT_STRIPE_REVIEW_HOURS);
+    return this.flags.numberConfig('rental_inspection_stripe_review_hours', code || null, DEFAULT_STRIPE_REVIEW_HOURS);
   }
 }
 
@@ -156,6 +225,11 @@ function stripCatalogIndex(hit: RentalSearchHit & { catalogIndex: number }): Ren
     pricePerDay: hit.pricePerDay,
     totalForDates: hit.totalForDates,
     dayCount: hit.dayCount,
+    latest_card_end_at: hit.latest_card_end_at,
+    payment_rail: hit.payment_rail,
+    momo_available: hit.momo_available,
+    stripe_review_hours: hit.stripe_review_hours,
+    timezone: hit.timezone,
   };
 }
 

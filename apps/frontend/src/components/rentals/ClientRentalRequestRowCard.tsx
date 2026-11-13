@@ -1,5 +1,6 @@
 import { CalendarMonth, LocationOn } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -8,8 +9,11 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useApiClient } from '../../hooks/useApiClient';
+import { SITE_EVENT_ASSISTANT_RENTAL_PRICE_CHANGED, useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
+import { priceChangeMeta } from '../../utils/rentalAssistantAttribution';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { listReturnChip } from '../../utils/renterReturnPhase';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
@@ -89,11 +93,25 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
 }) => {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
+  const api = useApiClient();
+  const { trackSiteEvent } = useTrackSiteEvent();
   const theme = useTheme();
   const listing = row.rental_location_listing;
   const itemName = listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental');
   const locName = listing?.business_location?.name;
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
+  const quoted = Number(row.quoted_total);
+  const accepted = Number(quote?.total);
+  const priceChanged = Number.isFinite(quoted) && Number.isFinite(accepted) && Math.abs(quoted - accepted) >= 0.01;
+  useEffect(() => {
+    if (!priceChanged) return;
+    void trackSiteEvent({
+      eventType: SITE_EVENT_ASSISTANT_RENTAL_PRICE_CHANGED,
+      metadata: { listing_id: listing?.id, ...priceChangeMeta(quoted, accepted) },
+    });
+    if (row.price_change_seen_at) return;
+    void api.post(`/rentals/requests/${row.id}/price-change-seen`, {}).catch(() => undefined);
+  }, [accepted, api, listing?.id, priceChanged, quoted, row.id, row.price_change_seen_at, trackSiteEvent]);
   const phase = resolveRentalPhase(
     {
       requestStatus: row.status,
@@ -202,6 +220,18 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             <strong>{t('rentals.clientRequests.yourNote', 'Your note')}:</strong>{' '}
             {row.client_request_note.trim()}
           </Typography>
+        ) : null}
+
+        {priceChanged ? (
+          <Alert severity="warning">
+            {t('assistant.rental.priceChangedLead', 'The business changed the price:')}{' '}
+            <strong>{formatRentalMoney(accepted, listing?.rental_item.currency || 'XAF')}</strong>
+            {' '}
+            {t('assistant.rental.priceChangedMid', 'instead of the estimated')}{' '}
+            <s>{formatRentalMoney(quoted, listing?.rental_item.currency || 'XAF')}</s>
+            {'. '}
+            {t('assistant.rental.priceChangedTail', 'Check it before you confirm.')}
+          </Alert>
         ) : null}
 
         {quote ? (

@@ -155,6 +155,7 @@ export interface ClientRentalRequestRow {
   units_requested?: number | null;
   edit_version?: number | null;
   quoted_total?: number | string | null;
+  price_change_seen_at?: string | null;
   change_summary?: { fields?: string[] } | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;

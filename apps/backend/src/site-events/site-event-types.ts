@@ -160,6 +160,9 @@ export const SITE_EVENT_TYPES_V1 = [
   'assistant.deeplink.tap',
   'assistant.attributed.add_to_cart',
   'assistant.attributed.order_created',
+  'assistant.attributed.rental_request_created',
+  'assistant.rental.date_chip.edit',
+  'assistant.rental.price_changed_shown',
   'assistant.handoff.requested',
   'assistant.feedback.submitted',
   'assistant.error.shown',
@@ -247,6 +250,10 @@ export const SERVER_SITE_EVENT_TYPES = [
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',
+  'assistant.rental.search',
+  'assistant.rental.clarify',
+  'assistant.rental.question',
+  'assistant.rental.zero_result',
   // Rejected-item recovery + appeals (B10, spec section 6)
   'item_moderation.rejected',
   'item_moderation.resubmitted',

@@ -14,6 +14,8 @@ import { AssistantAccountToolsService } from './assistant-account-tools.service'
 import { AssistantAgentToolsService } from './assistant-agent-tools.service';
 import { AssistantBusinessToolsService } from './assistant-business-tools.service';
 import { AssistantClientToolsService } from './assistant-client-tools.service';
+import { AssistantRentalService, type AssistantRentalTurn } from './assistant-rental.service';
+import { assertModelCannotCreateRentalRequests, listedToolNames } from './assistant-rental-guard';
 import type {
   AssistantCard,
   AssistantIdentity,
@@ -28,6 +30,7 @@ interface ToolRequest {
   input: Record<string, unknown>;
   identity: AssistantIdentity;
   locale?: AssistantLocale;
+  turn?: AssistantRentalTurn;
 }
 
 /** Live config tools that satisfy market/payment grounding (not static KB copy). */
@@ -49,7 +52,8 @@ export class AssistantToolsService {
     hasura: HasuraSystemService,
     private readonly marketsCatalog: AssistantMarketsCatalogService,
     private readonly inventoryItems: InventoryItemsService,
-    private readonly appConfig: AppConfigService
+    private readonly appConfig: AppConfigService,
+    private readonly rentals?: AssistantRentalService
   ) {
     this.accountTools = new AssistantAccountToolsService(hasura);
     this.clientTools = new AssistantClientToolsService(hasura);
@@ -57,7 +61,10 @@ export class AssistantToolsService {
     this.businessTools = new AssistantBusinessToolsService(hasura);
   }
 
-  async getToolConfig(identity: AssistantIdentity): Promise<ToolConfiguration> {
+  async getToolConfig(
+    identity: AssistantIdentity,
+    channel: 'app' | 'whatsapp' = 'app'
+  ): Promise<ToolConfiguration> {
     const tools = [
       this.knowledgeTool(),
       this.countryStatesTool(),
@@ -70,18 +77,35 @@ export class AssistantToolsService {
     if (shoppingEnabled) {
       tools.push(this.searchCatalogTool());
     }
-    tools.push(...this.clientTools.publicTools());
+    const rentalsOn = await this.rentalsEnabled(country, channel);
+    if (rentalsOn && this.rentals) tools.push(...this.rentals.toolSpecs());
+    tools.push(...this.clientTools.publicTools({ omitRentals: rentalsOn }));
     if (identity.userId && identity.accountType !== 'delegate') {
       tools.push(...this.accountTools.tools(identity));
       tools.push(...this.clientTools.tools(identity));
       tools.push(...this.agentTools.tools(identity));
       tools.push(...this.businessTools.tools(identity));
     }
+    assertModelCannotCreateRentalRequests(listedToolNames(tools));
     return { tools };
   }
 
-  buildToolConfig(identity: AssistantIdentity): Promise<ToolConfiguration> {
-    return this.getToolConfig(identity);
+  buildToolConfig(
+    identity: AssistantIdentity,
+    channel: 'app' | 'whatsapp' = 'app'
+  ): Promise<ToolConfiguration> {
+    return this.getToolConfig(identity, channel);
+  }
+
+  private async rentalsEnabled(countryCode?: string, channel: 'app' | 'whatsapp' = 'app'): Promise<boolean> {
+    if (channel === 'whatsapp' || !this.rentals) return false;
+    return this.rentals.enabled(countryCode);
+  }
+
+  private async useRentalV2(request: ToolRequest): Promise<boolean> {
+    if (!this.rentals?.handles(request.name)) return false;
+    if (request.name !== 'search_rentals') return request.turn?.channel !== 'whatsapp';
+    return this.rentalsEnabled(request.identity.market?.country_code, request.turn?.channel || 'app');
   }
 
   private async isShoppingEnabled(countryCode?: string): Promise<boolean> {
@@ -142,6 +166,7 @@ export class AssistantToolsService {
       return this.listPaymentSystems(request);
     }
     if (request.name === 'search_catalog') return this.searchCatalog(request);
+    if (await this.useRentalV2(request)) return this.rentals!.run(request);
     if (request.name === 'request_human_support') return this.handoff(request);
     if (this.clientTools.handles(request.name)) return this.clientTools.run(request);
     if (!request.identity.userId) return { content: 'Authentication is required.' };

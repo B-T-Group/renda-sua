@@ -13,6 +13,7 @@ export type ClientFlagKey =
   | 'catalog_experience_v1'
   | 'assistant_launcher_v1'
   | 'assistant_shopping_v1'
+  | 'assistant_rentals_enabled'
   | 'restock_alerts_v1'
   | 'discovery_sort_v1'
   | 'agent_contract_required'
@@ -36,6 +37,7 @@ const DEFAULT_FLAGS: ClientFlags = {
   catalog_experience_v1: false,
   assistant_launcher_v1: false,
   assistant_shopping_v1: false,
+  assistant_rentals_enabled: false,
   restock_alerts_v1: false,
   discovery_sort_v1: false,
   agent_contract_required: true,

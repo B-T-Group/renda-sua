@@ -247,6 +247,7 @@ export const GET_RENTAL_REQUEST_FULL = `
       units_requested
       edit_version
       quoted_total
+      price_change_seen_at
       change_summary
       client_request_note
       expires_at
@@ -1053,6 +1054,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       units_requested
       edit_version
       quoted_total
+      price_change_seen_at
       change_summary
       unavailable_reason_code
       rental_pricing_snapshot

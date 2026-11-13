@@ -1,7 +1,11 @@
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
+import { api } from '../../services/apiClient';
+import { trackSiteEvent } from '../../services/analytics/AppEventsService';
+import { priceChangeMeta } from '../../utils/rentalAssistantAttribution';
 import { StatusPill } from '../common/StatusPill';
 import { useTheme } from '../../contexts/ThemeContext';
 import { fontFamily } from '../../theme/fonts';
@@ -52,6 +56,19 @@ export function ClientRentalRequestRow({
   const place = placeLine(row);
   const subtitle = listing?.business_location?.name;
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
+  const quoted = Number(row.quoted_total);
+  const accepted = Number(quote?.total);
+  const priceChanged = Number.isFinite(quoted) && Number.isFinite(accepted) && Math.abs(quoted - accepted) >= 0.01;
+  useEffect(() => {
+    if (!priceChanged) return;
+    const meta = priceChangeMeta(quoted, accepted);
+    trackSiteEvent({
+      eventType: 'assistant.rental.price_changed_shown',
+      metadata: { listing_id: listing?.id, ...meta },
+    });
+    if (row.price_change_seen_at) return;
+    void api.post(`/rentals/requests/${row.id}/price-change-seen`, {}).catch(() => undefined);
+  }, [accepted, listing?.id, priceChanged, quoted, row.id, row.price_change_seen_at]);
   const phase = resolveRentalPhase(
     { requestStatus: row.status, bookingStatus: row.rental_booking?.status ?? null },
     'client'
@@ -187,6 +204,24 @@ export function ClientRentalRequestRow({
               })
             : t('rentals.clientRequests.contractExpiredHint', 'This offer has expired. You can send a new request from the listing.')}
         </Text>
+      ) : null}
+
+      {priceChanged ? (
+        <View style={{ marginTop: spacing.sm, padding: spacing.sm, borderRadius: 12, backgroundColor: '#FFF6E0' }}>
+          <Text style={[typography.body2, { color: '#8A5A00', fontFamily: fontFamily.medium }]}>
+            {t('assistant.rental.priceChangedLead', 'The business changed the price:')}{' '}
+            <Text style={{ fontFamily: fontFamily.bold, fontWeight: '700', color: '#8A5A00' }}>
+              {formatRequestAmount(accepted, listing?.rental_item?.currency || 'XAF', i18n.language)}
+            </Text>
+            {' '}
+            {t('assistant.rental.priceChangedMid', 'instead of the estimated')}{' '}
+            <Text style={{ textDecorationLine: 'line-through', color: '#8A5A00' }}>
+              {formatRequestAmount(quoted, listing?.rental_item?.currency || 'XAF', i18n.language)}
+            </Text>
+            {'. '}
+            {t('assistant.rental.priceChangedTail', 'Check it before you confirm.')}
+          </Text>
+        </View>
       ) : null}
 
       <View style={[styles.actions, { marginTop: spacing.sm }]}>

@@ -34,6 +34,8 @@ import {
 
 import {
   readAssistantCards,
+  readAssistantRental,
+  type AssistantRentalMeta,
   type AssistantResultCard,
 } from '../components/assistant/assistantResultCards';
 
@@ -42,12 +44,14 @@ export type AssistantChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   cards?: AssistantResultCard[];
+  rental?: AssistantRentalMeta;
 };
 
 type ChatApiResponse = {
   reply: string;
   handoff: boolean;
   cards?: unknown;
+  rental?: unknown;
   /** Contract v2 (#451 §5.2): structured tool results. Absent on today's backend. */
   blocks?: Array<{ kind?: unknown } | null> | null;
 };
@@ -105,6 +109,7 @@ interface AssistantChatContextType {
   /** Re-sends the thread whose last user message failed, without adding a copy. */
   retry: () => Promise<boolean>;
   setDraft: (draft: string) => void;
+  setRentalDates: (dates: { startDate: string; endDate: string } | null) => void;
   clearChat: () => void;
 }
 
@@ -314,6 +319,8 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
 
   // Refs mirror state so async callbacks never act on a stale thread.
   const messagesRef = useRef<AssistantChatMessage[]>([]);
+  const rentalDatesRef = useRef<{ startDate?: string; endDate?: string } | null>(null);
+  const rentalRefsRef = useRef<Record<string, string>>({});
   const threadIdRef = useRef('');
   const readyRef = useRef(false);
   const isSendingRef = useRef(false);
@@ -558,12 +565,21 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
         if (requestThreadId) {
           body.threadId = requestThreadId;
         }
+        if (rentalDatesRef.current?.startDate) {
+          (body as { rentalDates?: { startDate?: string; endDate?: string } }).rentalDates = rentalDatesRef.current;
+        }
+        if (Object.keys(rentalRefsRef.current).length) {
+          (body as { rentalRefs?: Record<string, string> }).rentalRefs = rentalRefsRef.current;
+        }
         const { data } = await apiClient.post<ChatApiResponse>(
           '/assistant/chat',
           body,
           controller ? { signal: controller.signal } : undefined
         );
         if (!isCurrent()) return;
+        const rentalMeta = readAssistantRental(data?.rental);
+        if (rentalMeta?.refs) rentalRefsRef.current = { ...rentalRefsRef.current, ...rentalMeta.refs };
+        if (rentalMeta?.dates && 'startDate' in rentalMeta.dates) rentalDatesRef.current = rentalMeta.dates;
         removeStorage(STORAGE_KEY_PENDING);
         const reply = data?.reply?.trim() || '';
         if (reply) {
@@ -574,6 +590,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
               role: 'assistant',
               content: reply,
               cards: readAssistantCards(data?.cards),
+              rental: readAssistantRental(data?.rental),
             },
           ]);
           setLastReply((prev) => ({
@@ -596,6 +613,10 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
     },
     [apiClient, commitMessages, releaseIfTokenOwnerChanged, setSending, selectedMarket]
   );
+
+  const setRentalDates = useCallback((dates: { startDate: string; endDate: string } | null) => {
+    rentalDatesRef.current = dates;
+  }, []);
 
   const sendMessage = useCallback(
     async (text: string): Promise<boolean> => {
@@ -644,6 +665,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
       sendMessage,
       retry,
       setDraft,
+      setRentalDates,
       clearChat,
     }),
     [
@@ -658,6 +680,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
       lastReply,
       sendMessage,
       retry,
+      setRentalDates,
       clearChat,
     ]
   );

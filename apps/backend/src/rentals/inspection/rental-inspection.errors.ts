@@ -50,9 +50,13 @@ export function acceptStartConflict(message = 'That report changed. Review it ag
   );
 }
 
-export function inspectionRejected(code: string, message: string): HttpException {
+export function inspectionRejected(
+  code: string,
+  message: string,
+  extra?: object
+): HttpException {
   return new HttpException(
-    { success: false, code, error: message, message },
+    { success: false, code, error: message, message, ...(extra ?? {}) },
     HttpStatus.BAD_REQUEST
   );
 }

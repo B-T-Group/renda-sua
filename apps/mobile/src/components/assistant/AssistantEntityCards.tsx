@@ -164,8 +164,14 @@ export function openAssistantCard(
     return;
   }
   const rental = href.match(/^\/rentals\/([^/?]+)/);
-  if (rental) {
-    navigation.navigate('RentalListingDetail', { listingId: rental[1] });
+  if (rental && rental[1] !== 'bookings') {
+    const params = new URLSearchParams(href.split('?')[1] || '');
+    navigation.navigate('RentalListingDetail', {
+      listingId: card.rental?.listingId || rental[1],
+      startDate: params.get('start_date') || card.rental?.startDate,
+      endDate: params.get('end_date') || card.rental?.endDate,
+      openRequest: params.get('openRequest') === '1',
+    });
     return;
   }
   if (href.startsWith('/business/rentals')) {
