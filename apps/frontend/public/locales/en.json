@@ -9006,6 +9006,8 @@
       "checking": "Checking availability…",
       "tryDates": "Try these dates",
       "details": "Listing details",
+      "openListing": "Open listing",
+      "otherRentals": "Other things you can rent",
       "chooseDates": "Choose dates",
       "start": "Start",
       "end": "End",

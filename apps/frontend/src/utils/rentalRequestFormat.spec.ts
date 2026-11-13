@@ -7,6 +7,7 @@ import {
   clientRequestPeriodLines,
   formatListingDue,
   formatRentalDateRange,
+  formatRentalDay,
   formatRentalPeriod,
   isSingleRequestedPeriod,
   type PeriodWindow,
@@ -67,6 +68,8 @@ describe('formatRentalPeriod', () => {
     expect(formatRentalPeriod(cross, 'fr', jours)).toBe('30 nov. \u2013 2 d\u00e9c. · 3 jours');
     expect(formatRentalPeriod([], 'en', days)).toBe('\u2014');
     expect(formatRentalDateRange([daily('2026-11-15')], 'en')).toBe('15 Nov');
+    expect(formatRentalDay('2026-11-17', 'en')).toBe('17 Nov');
+    expect(formatRentalDay('2026-11-17', 'fr')).toBe('17 nov.');
   });
 });
 

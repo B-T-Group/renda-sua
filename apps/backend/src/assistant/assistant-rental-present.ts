@@ -16,6 +16,7 @@ import type {
   AssistantRentalMeta,
 } from './assistant.types';
 import { cardWindowUnfitReply, formatCardCutoff } from './assistant-rental-card-copy';
+import { rentalArea } from './assistant-rental-questions';
 import { addCalendarDays, exclusiveDayCount, marketCalendarDate } from './assistant-rental-dates';
 import { perDayPriceLabel } from './assistant-rental-format';
 
@@ -427,6 +428,7 @@ function listingFacts(listing: PublicRentalListingRow) {
     min_hours: listing.min_rental_hours ?? null,
     max_hours: listing.max_rental_hours ?? null,
     units: listing.units_available ?? null,
+    area: rentalArea(listing),
     pickup: blankToNull(listing.pickup_instructions),
     dropoff: blankToNull(listing.dropoff_instructions),
     description: blankToNull(listing.rental_item.description),

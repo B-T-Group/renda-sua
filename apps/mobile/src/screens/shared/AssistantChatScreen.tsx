@@ -301,7 +301,7 @@ function MessageBubble({
           onChip={onRentalChip}
         />
       ) : null}
-      {!isUser && item.cards?.some((card) => !card.rental) && onOpenCard ? (
+      {!isUser && !item.rental && item.cards?.some((card) => !card.rental) && onOpenCard ? (
         <AssistantEntityCards cards={item.cards.filter((card) => !card.rental)} onOpen={onOpenCard} onReorder={onReorder} />
       ) : null}
     </Animated.View>

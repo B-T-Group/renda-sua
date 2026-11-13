@@ -28,7 +28,7 @@ import { shouldAskBuyOrRent } from './assistant-rental-intent';
 import { perDayPriceLabel } from './assistant-rental-format';
 import { presentRentalDetails, presentRentalSearch } from './assistant-rental-present';
 import { quoteDayTotal, quoteHourlyWindow } from './assistant-rental-quote';
-import { rentalAnswerGrounded, rentalQuestionTopic } from './assistant-rental-questions';
+import { rentalAnswerGrounded, rentalQuestionSay, rentalQuestionTopic } from './assistant-rental-questions';
 import { buildZeroResultDraft, rentalDayBucket } from './assistant-rental-zero-results';
 
 const SEARCH_MS = 4000;
@@ -159,7 +159,7 @@ export class AssistantRentalService {
     const allow = await this.inspectionFlags.allowSelfBooking(country);
     const ref = refFor(call, listing.id);
     const window = await this.search.cardWindow(listingCountryCode(listing, country), readLatestCardEndAt(listing));
-    const presented = presentRentalDetails({
+    const presented = withQuestionSay(call, listing, presentRentalDetails({
       listing,
       locale,
       signedIn: !!call.identity.userId,
@@ -167,7 +167,7 @@ export class AssistantRentalService {
       allowSelfBooking: allow,
       ref,
       window,
-    });
+    }));
     this.emitQuestion(call, listing);
     return presented;
   }
@@ -619,6 +619,27 @@ function filterPlace(hits: RentalSearchHit[], place: string) {
 function filterPrice(hits: RentalSearchHit[], max?: number) {
   if (max == null) return hits;
   return hits.filter((hit) => hit.pricePerDay <= max);
+}
+
+function withQuestionSay(
+  call: AssistantRentalCall,
+  listing: PublicRentalListingRow,
+  presented: AssistantToolResult,
+): AssistantToolResult {
+  const locale = call.locale === 'fr' ? 'fr' : 'en';
+  const topic = call.name === 'quote_rental' ? 'price' : rentalQuestionTopic(call.turn?.userText || '');
+  const say = rentalQuestionSay(listing, topic, locale);
+  return say ? { ...presented, content: mergeSay(presented.content, say) } : presented;
+}
+
+function mergeSay(content: string, say: string): string {
+  try {
+    const body = JSON.parse(content) as Record<string, unknown>;
+    body.say = say;
+    return JSON.stringify(body);
+  } catch (error: any) {
+    return content || String(error?.message || '');
+  }
 }
 
 function resolveListingId(call: AssistantRentalCall): string | null {

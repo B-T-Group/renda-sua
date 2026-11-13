@@ -8,7 +8,8 @@
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const OUT = '/opt/cursor/artifacts/assistant-rentals-v2';
+const OUT = '/opt/cursor/artifacts/assistant-rentals-v3';
+const PHOTO = '/assistant-rentals/hammer-test.jpg';
 const WEB = process.env.WEB_URL || 'http://localhost:4200';
 const MOBILE = process.env.MOBILE_URL || 'http://localhost:8081';
 const LISTING = '11111111-1111-4111-8111-111111111111';
@@ -18,6 +19,7 @@ function moneyCard(input) {
     kind: 'rental',
     id: input.id,
     title: input.title,
+    imageUrl: input.imageUrl || null,
     href: input.startDate && input.endDate
       ? `/rentals/${input.listingId}?start_date=${input.startDate}&end_date=${input.endDate}&openRequest=1`
       : `/rentals/${input.listingId}`,
@@ -56,6 +58,7 @@ function found(fr) {
         title: 'Marteau de coffreur 1,2 kg',
         business: 'Quincaillerie Akwa',
         city: 'Akwa, Douala',
+        imageUrl: PHOTO,
         availability: 'available',
         quote: 2500,
         perDay: 2500,
@@ -169,8 +172,8 @@ function booked(fr) {
 function notFound(fr) {
   return {
     reply: fr
-      ? "Je n'ai pas trouvé de nettoyeur haute pression à louer au Cameroun pour le moment.\n\nVous pouvez en acheter un. J'ai trouvé 2 nettoyeurs en vente.\n\nAutres choses à louer :"
-      : "I couldn't find a pressure washer to rent in Cameroon right now.\n\nYou can buy one instead. I found 2 pressure washers for sale.\n\nOther things you can rent:",
+      ? "Je n'ai pas trouvé de nettoyeur haute pression à louer au Cameroun pour le moment.\n\nVous pouvez en acheter un. J'ai trouvé 2 nettoyeurs en vente."
+      : "I couldn't find a pressure washer to rent in Cameroon right now.\n\nYou can buy one instead. I found 2 pressure washers for sale.",
     handoff: false,
     cards: [
       { kind: 'item', id: 'b1', title: 'Nettoyeur haute pression Kärcher', priceLabel: '65\u00A0000\u00A0FCFA', href: '/item/b1' },
@@ -283,11 +286,40 @@ function question(fr) {
   };
 }
 
+function pickupAnswer(fr) {
+  return {
+    reply: fr
+      ? "Le retrait est à Akwa, Douala. L'adresse exacte est communiquée une fois que l'entreprise accepte."
+      : 'Pickup is in Akwa, Douala. The exact address is shared once the business accepts.',
+    handoff: false,
+    cards: [
+      moneyCard({
+        id: 'r1',
+        listingId: LISTING,
+        title: 'Marteau de coffreur 1,2 kg',
+        business: 'Quincaillerie Akwa',
+        city: 'Akwa, Douala',
+        imageUrl: PHOTO,
+        availability: 'available',
+        perDay: 2500,
+        deposit: 10000,
+        startDate: '2026-11-17',
+        endDate: '2026-11-18',
+      }),
+    ],
+    rental: {
+      status: 'ok',
+      dates: { startDate: '2026-11-17', endDate: '2026-11-18', dayCount: 1 },
+      footnote: 'estimate',
+    },
+  };
+}
+
 function emptyField(fr) {
   return {
     reply: fr
-      ? "L'annonce ne précise pas le lieu de retrait. Vous pouvez ajouter une note à la demande."
-      : "The listing doesn't say where to pick it up. You can add a note on the request.",
+      ? "L'annonce ne le précise pas. Vous pouvez le demander dans la note quand vous envoyez la demande."
+      : "The listing doesn't say. You can ask the business in the note when you send your request.",
     handoff: false,
     cards: [
       moneyCard({
@@ -327,7 +359,8 @@ const PROMPTS = {
   invalid: ['1st of November', '1er novembre'],
   buyOrRent: ['need a drill', "besoin d'une perceuse"],
   question: ['what is the deposit', 'quelle est la caution'],
-  empty: ['where do I pick', 'où est le retrait'],
+  empty: ["what's included", "qu'est-ce qui est inclus"],
+  pickup: ['where do I pick', 'où est le retrait'],
   loading: ['HOLD-HAMMER', 'HOLD-MARTEAU'],
   failed: ['rent a generator', 'louer un groupe'],
   network: ['NETWORK-LADDER', 'NETWORK-ECHELLE'],
@@ -343,7 +376,8 @@ function replyFor(text, fr) {
   if (body.includes('1st') || body.includes('1er')) return { payload: invalid(fr) };
   if (body.includes('drill') || body.includes('perceuse')) return { payload: buyOrRent(fr) };
   if (body.includes('deposit') || body.includes('caution')) return { payload: question(fr) };
-  if (body.includes('pick') || body.includes('retrait')) return { payload: emptyField(fr) };
+  if (body.includes('included') || body.includes('inclus')) return { payload: emptyField(fr) };
+  if (body.includes('pick') || body.includes('retrait')) return { payload: pickupAnswer(fr) };
   if (body.includes('generator') || body.includes('groupe')) return { payload: failed(fr) };
   if (body.includes('17th to 18th') || body.includes('par carte')) return { payload: unfit(fr) };
   const undatedHammer = (body.includes('rent a hammer') || body.includes('louer un marteau')) && !/\d/.test(body);
@@ -490,9 +524,11 @@ async function shoot(page, name) {
 
 async function loadIconFonts(page) {
   await page.evaluate(async () => {
-    await document.fonts.ready;
+    const families = ['MaterialCommunityIcons', 'Material Icons', 'Material Symbols Outlined'];
+    await Promise.all(families.map((family) => document.fonts.load(`16px "${family}"`).catch(() => undefined)));
     const faces = [...document.fonts].filter((face) => /icon|material|symbols/i.test(face.family));
     await Promise.all(faces.map((face) => face.load().catch(() => undefined)));
+    await document.fonts.ready;
   });
 }
 
@@ -505,6 +541,8 @@ async function waitSettled(page, fr) {
     return !!status && !(status.textContent || '').includes(label);
   }, thinking, { timeout: 10000 });
   await waitOpaque(page, '[data-chat-item]');
+  const cards = page.locator('[data-rental-card] svg');
+  if (await cards.count()) await cards.first().waitFor({ timeout: 5000 });
 }
 
 async function waitOpaque(page, selector) {
@@ -537,13 +575,14 @@ async function sendWeb(page, text) {
 const CHAT_SHOTS = [
   { id: '01-found', en: 'I want to rent a hammer from 17th - 18th of November', fr: 'Je veux louer un marteau du 17 au 18 novembre', waitEn: 'Request rental', waitFr: 'Demander la location', editor: true },
   { id: '02-booked', en: 'Can I rent a concrete mixer from 17th to 18th of November?', fr: 'Puis-je louer une bétonnière du 17 au 18 novembre ?', waitEn: '20 Nov', waitFr: '20 nov' },
-  { id: '03-notfound', en: 'I want to rent a pressure washer', fr: 'Je veux louer un nettoyeur', waitEn: 'pressure washer', waitFr: 'nettoyeur' },
+  { id: '03-notfound', en: 'I want to rent a pressure washer', fr: 'Je veux louer un nettoyeur', waitEn: 'Other things you can rent', waitFr: 'Autres choses à louer' },
   { id: '04-nodates', en: 'I want to rent a hammer', fr: 'Je veux louer un marteau', waitEn: 'Today', waitFr: "Aujourd'hui" },
   { id: '06-invalid-dates', en: 'Rent a hammer from the 1st of November', fr: 'Louer un marteau le 1er novembre', waitEn: 'already past', waitFr: 'déjà passé' },
   { id: '07-buy-or-rent', en: 'I need a drill', fr: "J'ai besoin d'une perceuse", waitEn: 'Rent it', waitFr: 'Louer' },
   { id: '08-question-answered', en: 'What is the deposit?', fr: 'Quelle est la caution ?', waitEn: '50', waitFr: '50' },
   { id: '08-assistant-unfit', en: 'I want to rent a hammer from 17th to 18th of November', fr: 'Je veux louer un marteau du 17 au 18 novembre par carte', waitEn: 'Here are dates that work', waitFr: 'Voici des dates possibles' },
-  { id: '09-question-empty-field', en: 'Where do I pick it up?', fr: 'Où est le retrait ?', waitEn: 'note', waitFr: 'note' },
+  { id: '09-question-empty-field', en: "What's included?", fr: "Qu'est-ce qui est inclus ?", waitEn: "doesn't say", waitFr: 'précise' },
+  { id: '09-question-pickup', en: 'Where do I pick it up?', fr: 'Où est le retrait ?', waitEn: 'Akwa', waitFr: 'Akwa' },
   { id: '11-error-check-failed', en: 'I want to rent a generator', fr: 'Je veux louer un groupe', waitEn: 'Try again', waitFr: 'Réessayer' },
 ];
 
@@ -568,8 +607,10 @@ async function captureAll() {
     for (const fr of [false, true]) {
       if (!only || only === 'chat') {
         await captureChat(browser, surface, fr);
-        await captureLoading(browser, surface, fr);
-        await captureNetwork(browser, surface, fr);
+        if (!process.env.CAPTURE_SHOT) {
+          await captureLoading(browser, surface, fr);
+          await captureNetwork(browser, surface, fr);
+        }
       }
       if (!only || only === 'price') await capturePrice(browser, surface, fr);
     }
@@ -589,7 +630,9 @@ async function gotoApp(page, path) {
 
 async function captureChat(browser, surface, fr) {
   const { page, context } = await openChat(browser, surface, fr);
+  const shotFilter = process.env.CAPTURE_SHOT || '';
   for (const shot of CHAT_SHOTS) {
+    if (shotFilter && shot.id !== shotFilter) continue;
     await page.evaluate(() => sessionStorage.clear()).catch(() => undefined);
     await gotoApp(page, '/assistant');
     await page.getByTestId('assistant-page').waitFor({ timeout: 30000 });

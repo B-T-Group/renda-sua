@@ -307,7 +307,7 @@ function MessageBubble({
           </Dialog>
         </Box>
       ) : null}
-      {!isUser && message.cards?.some((card) => !card.rental) ? (
+      {!isUser && !message.rental && message.cards?.some((card) => !card.rental) ? (
         <Box sx={{ maxWidth: { xs: '80%', sm: '560px' }, pl: showOrb ? 5 : 0 }}>
           <AssistantEntityCards cards={message.cards.filter((card) => !card.rental)} />
         </Box>
