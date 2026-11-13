@@ -76,6 +76,7 @@ describe('enrolment reads the self-booking flag', () => {
     svc.inspectionFlags = {
       numberConfig: jest.fn().mockResolvedValue(72),
       allowSelfBooking: jest.fn().mockResolvedValue(false),
+      chargeAtPickupEnabled: jest.fn().mockResolvedValue(false),
     };
   });
 

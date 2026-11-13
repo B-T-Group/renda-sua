@@ -69,6 +69,18 @@ describe('RentalSearchService', () => {
     expect(result.listings[1].nextAvailableDate).toBe('2026-11-15');
     expect(result.listings[1].totalForDates).toBeNull();
     expect(result.availableCount).toBe(1);
+    expect(result.payment_rail).toBe('mobile_money');
+    expect(result.momo_available).toBe(true);
+    expect(result.stripe_review_hours).toBe(72);
+    expect(result.timezone).toBe('Africa/Douala');
+    expect(result.mode).toBe('authorize_upfront');
+    expect(result.latest_card_end_at).toBeNull();
+    expect(result.listings[0]).toMatchObject({
+      payment_rail: 'mobile_money',
+      momo_available: true,
+      stripe_review_hours: 72,
+      timezone: 'Africa/Douala',
+    });
   });
 
   it('suggests categories and in-market titles', async () => {

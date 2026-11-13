@@ -15,6 +15,7 @@
 - "!include public_ai_image_cleanup_results.yaml"
 - "!include public_airtel_money_payments.yaml"
 - "!include public_application_configurations.yaml"
+- "!include public_assistant_rental_zero_results.yaml"
 - "!include public_brands.yaml"
 - "!include public_business_addresses.yaml"
 - "!include public_ai_token_transfers.yaml"

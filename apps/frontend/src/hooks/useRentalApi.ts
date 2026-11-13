@@ -239,6 +239,8 @@ export interface ClientRentalRequestRow {
   unavailable_reason_code?: string | null;
   client_request_note?: string | null;
   units_requested?: number;
+  quoted_total?: number | string | null;
+  price_change_seen_at?: string | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
   expires_at?: string | null;

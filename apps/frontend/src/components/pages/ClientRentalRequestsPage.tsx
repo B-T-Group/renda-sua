@@ -236,7 +236,7 @@ const ClientRentalRequestsPage: React.FC = () => {
       <Box
         sx={{
           minHeight: '100%',
-          pb: 4,
+          pb: { xs: '96px', md: 4 },
           bgcolor: alpha(theme.palette.divider, 0.04),
         }}
       >

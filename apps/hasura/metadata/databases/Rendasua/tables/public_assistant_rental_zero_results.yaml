@@ -1,0 +1,3 @@
+table:
+  name: assistant_rental_zero_results
+  schema: public

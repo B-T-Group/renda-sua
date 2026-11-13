@@ -40,8 +40,8 @@ export class AssistantClientToolsService {
     return CLIENT_TOOLS.has(name) || PUBLIC_TOOLS.has(name);
   }
 
-  publicTools(): Tool[] {
-    return [rentalSearchTool(), restaurantSearchTool()];
+  publicTools(options?: { omitRentals?: boolean }): Tool[] {
+    return options?.omitRentals ? [restaurantSearchTool()] : [rentalSearchTool(), restaurantSearchTool()];
   }
 
   tools(identity: AssistantIdentity): Tool[] {

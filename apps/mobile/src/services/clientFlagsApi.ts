@@ -9,6 +9,8 @@ export type ClientFlagKey =
   | 'catalog_experience_v1'
   | 'assistant_launcher_v1'
   | 'assistant_shopping_v1'
+  | 'assistant_rentals_enabled'
+  | 'rentals_card_charge_at_pickup_enabled'
   | 'restock_alerts_v1'
   | 'discovery_sort_v1'
   | 'agent_contract_required'
@@ -31,6 +33,9 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   catalog_experience_v1: false,
   assistant_launcher_v1: false,
   assistant_shopping_v1: false,
+  assistant_rentals_enabled: false,
+  /** Card charge at pickup. Off until a config row turns it on. */
+  rentals_card_charge_at_pickup_enabled: false,
   /** Restock alerts for liked items (#343). Backend default off. */
   restock_alerts_v1: false,
   /** Discovery sort modes + empty-result recovery (#342). Backend default off. */

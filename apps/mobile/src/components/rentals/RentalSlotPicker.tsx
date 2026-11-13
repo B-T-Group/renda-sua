@@ -9,6 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppModal } from '../common/AppModal';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCreateRentalRequest } from '../../hooks/useCreateRentalRequest';
+import { trackSiteEvent } from '../../services/analytics/AppEventsService';
+import { consumeRentalRequestAttribution } from '../../utils/rentalAssistantAttribution';
 import type { ClientRootStackParamList, GuestRootStackParamList } from '../../navigation/types';
 import type { RentalTakenWindow } from '../../types/rentals';
 import { RentalTimeOptionSheet } from './RentalTimeOptionSheet';
@@ -553,6 +555,17 @@ export function RentalSlotPicker({
         clientRequestNote: notes.trim() || undefined,
       });
       setConfirmOpen(false);
+      const attribution = consumeRentalRequestAttribution(listingId);
+      if (attribution) {
+        trackSiteEvent({
+          eventType: 'assistant.attributed.rental_request_created',
+          metadata: {
+            thread_id: attribution.threadId,
+            listing_id: listingId,
+            minutes_since_tap: attribution.minutes,
+          },
+        });
+      }
       if (onSubmitted) {
         onSubmitted(res.requestId);
         return;

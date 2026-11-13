@@ -48,6 +48,6 @@ import { RentalAvailabilityService } from './rental-availability.service';
     RentalRenterReturnService,
     RentalInspectionEvidenceService,
   ],
-  exports: [RentalsService, RentalPaymentCallbackHandler],
+  exports: [RentalsService, RentalSearchService, RentalInspectionFlags, RentalPaymentCallbackHandler],
 })
 export class RentalsModule {}

@@ -31,7 +31,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { RentalListingRow } from '../../hooks/useRentalListings';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
@@ -455,6 +455,7 @@ const InstructionBlock: React.FC<InstructionBlockProps> = ({ icon, title, body }
 
 const RentalListingDetailPage: React.FC = () => {
   const { listingId } = useParams<{ listingId: string }>();
+  const [searchParams] = useSearchParams();
   const location = useLocation();
   const { t } = useTranslation();
   const theme = useTheme();
@@ -913,6 +914,8 @@ const RentalListingDetailPage: React.FC = () => {
                   basePricePerHour={Number(row.base_price_per_hour)}
                   basePricePerDay={Number(row.base_price_per_day ?? 0)}
                   currency={row.rental_item.currency}
+                  initialStartDate={searchParams.get('start_date') || undefined}
+                  initialEndDate={searchParams.get('end_date') || undefined}
                 />
               ) : null}
             </Grid>

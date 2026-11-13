@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { takePendingRentalRequest } from '../utils/pendingRentalRequest';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { observer } from 'mobx-react-lite';
@@ -267,6 +268,7 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
   useAppIconBadge(appIconBadgeCount);
   useCheckNotificationPermissionOnStart();
   useResumePendingMyRentals(persona.activePersona === 'client');
+  useResumePendingRentalRequest(persona.activePersona === 'client', navigation);
   const rentalsTodo = useMyRentalsTodoCount(
     flags.rentals_client_tab_enabled,
     persona.activePersona === 'client'
@@ -674,3 +676,18 @@ export function ClientRootNavigator() {
 const onRootTouch = () => markLauncherInteraction();
 
 const styles = StyleSheet.create({ flex: { flex: 1 } });
+
+function useResumePendingRentalRequest(
+  isClient: boolean,
+  navigation: { getParent?: () => unknown }
+): void {
+  useEffect(() => {
+    if (!isClient) return;
+    const pending = takePendingRentalRequest();
+    if (!pending) return;
+    const stackNav = (navigation.getParent?.() ?? navigation) as {
+      navigate: (name: string, params?: object) => void;
+    };
+    stackNav.navigate('RentalListingDetail', { ...pending, openRequest: true });
+  }, [isClient, navigation]);
+}

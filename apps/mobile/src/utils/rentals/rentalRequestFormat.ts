@@ -196,6 +196,13 @@ function sameMonth(left: string, right: string): boolean {
   return left.slice(0, 7) === right.slice(0, 7);
 }
 
+/** `17 Nov` / `17 nov.` Day then month, never the locale's month-day order. */
+export function formatRentalDay(iso: string, locale: string): string {
+  const day = iso.slice(0, 10);
+  if (!ISO_DATE.test(day)) return iso;
+  return `${dayNum(day)} ${monthLabel(day, locale)}`;
+}
+
 /**
  * `12 Nov` or `15–17 Nov`. `calendar_date` values are booked days, and the last one is included.
  * Listing wall clock is the Z components (Africa/Douala stored as UTC).

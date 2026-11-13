@@ -67,6 +67,13 @@ function addUtcDays(iso: string, offset: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** `17 Nov` / `17 nov.` Day then month, never the locale's month-day order. */
+export function formatRentalDay(iso: string, locale: string): string {
+  const day = iso.slice(0, 10);
+  if (!ISO_DATE.test(day)) return iso;
+  return `${dayNum(day)} ${monthLabel(day, locale)}`;
+}
+
 /** `12 Nov` or `12–14 Nov`. A cross-month stay reads `30 Nov – 2 Dec`. */
 export function formatRentalDateRange(windows: PeriodWindow[], locale: string): string {
   const days = calendarDays(windows);

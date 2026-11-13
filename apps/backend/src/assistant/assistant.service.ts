@@ -8,11 +8,15 @@ import { collectCards, signInCard } from './assistant-cards';
 import { guestAsksForPersonalData, staticKnowledgeTopic } from './assistant-intents';
 import { needsKnowledgeGrounding } from './needs-knowledge-grounding';
 import { sanitizeAssistantReply } from './sanitize-assistant-reply';
+import { rentalPromptAddendum } from './assistant-rental-prompt';
+import { sanitizeRentalModelText } from './assistant-rental-guard';
 import { AssistantToolsService } from './assistant-tools.service';
+import type { AssistantRentalTurn } from './assistant-rental.service';
 import type {
   AssistantCard,
   AssistantChatInput,
   AssistantLocale,
+  AssistantRentalMeta,
   AssistantReply,
   AssistantTurnInput,
 } from './assistant.types';
@@ -106,18 +110,22 @@ export class AssistantService implements OnModuleInit {
     let usedKnowledge = false;
     let groundedStatic = false;
     let cards: AssistantCard[] = [];
+    let rentalMeta: AssistantRentalMeta | undefined;
     const toolsUsed = new Set<string>();
     const maxLoops = Math.max(1, settings?.maxToolIterations || 5);
-    const toolConfig = await this.tools.buildToolConfig(input.identity);
+    const toolConfig = await this.tools.buildToolConfig(input.identity, input.channel);
     const hasShoppingTools = toolConfig.tools?.some(
       (t) => t.toolSpec?.name === 'search_catalog'
     ) ?? false;
+    const rentalOn = toolConfig.tools?.some((t) => t.toolSpec?.name === 'quote_rental') ?? false;
+    const rentalAddendum = rentalOn ? rentalPromptAddendum(input.identity.market?.country_code) : '';
+    const turn = rentalTurn(input);
     for (let index = 0; index < maxLoops; index++) {
       const stopped = this.stoppedReply(input.signal, locale);
       if (stopped) return stopped;
       const result = await this.bedrock.converseWithTools({
         model: settings?.model || undefined,
-        system: this.systemPrompt(input, locale, hasShoppingTools),
+        system: this.systemPrompt(input, locale, hasShoppingTools) + rentalAddendum,
         messages,
         toolConfig,
         maxTokens: 700,
@@ -144,7 +152,7 @@ export class AssistantService implements OnModuleInit {
           usedKnowledge = true;
           continue;
         }
-        const reply = this.finalize(result.text, handoff, input.channel, locale, cards);
+        const reply = this.finalize(result.text, handoff, input.channel, locale, cards, rentalMeta, rentalOn);
         this.emitMessageClassified(input, locale, toolsUsed, handoff);
         return reply;
       }
@@ -155,6 +163,7 @@ export class AssistantService implements OnModuleInit {
         result.toolUses,
         input,
         locale,
+        turn,
         input.signal
       );
       const stoppedAfterTools = this.stoppedReply(input.signal, locale);
@@ -164,6 +173,7 @@ export class AssistantService implements OnModuleInit {
       groundedStatic ||= executed.usedStaticKnowledge;
       handoff ||= executed.handoff;
       cards = collectCards([cards, executed.cards]);
+      if (executed.rental) rentalMeta = executed.rental;
       messages.push({ role: 'user', content: executed.content });
     }
     this.emitMessageClassified(input, locale, toolsUsed, handoff);
@@ -203,9 +213,16 @@ export class AssistantService implements OnModuleInit {
   private classifyIntent(
     messages: AssistantChatInput['messages'],
     toolsUsed: Set<string>
-  ): 'buy' | 'availability' | 'reorder' | 'track' | 'support' | 'other' {
+  ): 'buy' | 'availability' | 'reorder' | 'track' | 'support' | 'rent' | 'question' | 'mixed' | 'food' | 'other' {
     const latest = [...messages].reverse().find((m) => m.role === 'user');
     const text = (latest?.content || '').toLowerCase();
+    const rentalTool = ['search_rentals', 'get_rental_listing_details', 'quote_rental'].some((name) =>
+      toolsUsed.has(name)
+    );
+    if (rentalTool && toolsUsed.has('search_catalog')) return 'mixed';
+    if (toolsUsed.has('get_rental_listing_details') || toolsUsed.has('quote_rental')) return 'question';
+    if (toolsUsed.has('search_rentals')) return 'rent';
+    if (toolsUsed.has('search_restaurants')) return 'food';
     
     if (toolsUsed.has('search_catalog')) {
       if (/\b(available|availability|disponible|stock|en stock)\b/i.test(text)) {
@@ -222,6 +239,7 @@ export class AssistantService implements OnModuleInit {
     if (/\b(reorder|recommander|re-order|again|encore)\b/i.test(text)) {
       return 'reorder';
     }
+    if (/\b(rent|rental|louer|location)\b/i.test(text)) return 'rent';
     if (/\b(buy|purchase|acheter|vendre|order|commande|prix|price|cost|co[uû]t)\b/i.test(text)) {
       return 'buy';
     }
@@ -352,6 +370,7 @@ export class AssistantService implements OnModuleInit {
     }>,
     input: Omit<AssistantChatInput, 'locale'>,
     locale: AssistantLocale,
+    turn: AssistantRentalTurn,
     signal?: AbortSignal
   ): Promise<{
     content: ContentBlock[];
@@ -359,12 +378,14 @@ export class AssistantService implements OnModuleInit {
     usedKnowledge: boolean;
     usedStaticKnowledge: boolean;
     cards: AssistantCard[];
+    rental?: AssistantRentalMeta;
   }> {
     const content: ContentBlock[] = [];
     const cards: AssistantCard[] = [];
     let handoff = false;
     let usedKnowledge = false;
     let usedStaticKnowledge = false;
+    let rental: AssistantRentalMeta | undefined;
     for (const use of uses) {
       if (signal?.aborted) break;
       const result = await this.tools.executeTool({
@@ -372,7 +393,9 @@ export class AssistantService implements OnModuleInit {
         input: use.input,
         identity: input.identity,
         locale,
+        turn,
       });
+      if (result.rental) rental = mergeRentalMeta(rental, result.rental);
       if (this.tools.isMarketCatalogTool(use.name)) usedKnowledge = true;
       if (use.name === 'get_knowledge') usedStaticKnowledge = true;
       handoff ||= !!result.handoff;
@@ -385,7 +408,7 @@ export class AssistantService implements OnModuleInit {
         },
       });
     }
-    return { content, handoff, usedKnowledge, usedStaticKnowledge, cards };
+    return { content, handoff, usedKnowledge, usedStaticKnowledge, cards, rental };
   }
 
   private toMessages(
@@ -487,9 +510,15 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
     handoff: boolean,
     channel: AssistantChatInput['channel'],
     locale: AssistantLocale,
-    cards: AssistantCard[]
+    cards: AssistantCard[],
+    rental?: AssistantRentalMeta,
+    rentalIntent = false
   ): AssistantReply {
-    const cleaned = sanitizeAssistantReply(replyBesideCards(text, channel, cards, locale));
+    const beside = replyBesideCards(text, channel, cards, locale);
+    const rentalCards = cards.some((card) => card.kind === 'rental' || card.rental);
+    const cleaned = sanitizeAssistantReply(
+      sanitizeRentalModelText(beside, { rentalCards, rentalGrounded: rentalIntent, rentalIntent })
+    );
     if (!cleaned || this.isNoReplyToken(cleaned)) {
       if (channel === 'whatsapp') {
         return { reply: '', handoff, locale, silent: true };
@@ -502,6 +531,7 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
       locale,
       silent: false,
       cards: channel === 'app' && cards.length ? cards : undefined,
+      rental: channel === 'app' ? rental : undefined,
     };
   }
 
@@ -567,12 +597,38 @@ function audienceRules(identity: AssistantChatInput['identity']): string {
   return `Active persona: ${persona}. Use only the tools registered for this persona.`;
 }
 
+function mergeRentalMeta(prev: AssistantRentalMeta | undefined, next: AssistantRentalMeta): AssistantRentalMeta {
+  if (!prev || next.dateIssue !== 'card_window') return next;
+  return {
+    ...prev,
+    ...next,
+    refs: next.refs ?? prev.refs,
+    chips: next.chips ?? prev.chips,
+    showAllHref: next.showAllHref ?? prev.showAllHref,
+    showAllCount: next.showAllCount ?? prev.showAllCount,
+    footnote: next.footnote ?? prev.footnote,
+  };
+}
+
+function rentalTurn(input: Omit<AssistantChatInput, 'locale'>): AssistantRentalTurn {
+  const latest = [...input.messages].reverse().find((item) => item.role === 'user');
+  return {
+    userText: latest?.content || '',
+    channel: input.channel,
+    rentalDates: input.rentalDates,
+    rentalRefs: { ...(input.rentalRefs || {}) },
+  };
+}
+
 function cardNote(
   content: string,
   cards: AssistantCard[] | undefined,
   channel: AssistantChatInput['channel']
 ): string {
   if (!cards?.length) return content;
+  if (cards.some((card) => card.rental)) {
+    return `App rental cards are attached (${cards.length}). Do not repeat prices. Mentioning the dates once is fine.\n${content}`;
+  }
   if (channel === 'whatsapp') {
     return `Include each name and price in the reply. There are no tappable cards on WhatsApp.\n${content}`;
   }

@@ -68,12 +68,15 @@ export class AssistantController {
       locale: identity.preferredLanguage,
       marketContext: body.market,
       threadId: body.threadId,
+      rentalDates: body.rentalDates,
+      rentalRefs: body.rentalRefs,
       signal: clientDisconnectSignal(req, res),
     });
     return {
       reply: result.reply,
       handoff: result.handoff,
       cards: result.cards,
+      rental: result.rental,
     };
   }
 }

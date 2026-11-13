@@ -24,11 +24,13 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { RentalTakenWindow } from '../../hooks/useRentalApi';
 import { useRentalApi } from '../../hooks/useRentalApi';
+import { SITE_EVENT_ASSISTANT_RENTAL_REQUEST_CREATED, useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
+import { consumeRentalRequestAttribution } from '../../utils/rentalAssistantAttribution';
 import { localPickerInstantToRequestParts, requestedSlotUtcIso } from '../../utils/rentalRequestUtc';
 import { estimateTotalFromSelectionRanges } from '../../utils/rentalPricingLines';
 import {
@@ -53,6 +55,17 @@ const RENTAL_MIN_START_BUFFER_MS = 2 * 60 * 60 * 1000;
 function parseDateInputLocal(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0);
+}
+
+function exclusiveDays(start: string, end: string): string[] {
+  const days: string[] = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  while (cursor < last && days.length < 30) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
 }
 
 function todayDateInputValue(): string {
@@ -86,6 +99,8 @@ export interface RentalListingRequestSectionProps {
   basePricePerHour?: number;
   basePricePerDay?: number;
   currency?: string;
+  initialStartDate?: string;
+  initialEndDate?: string;
 }
 
 export const RentalListingRequestSection: React.FC<RentalListingRequestSectionProps> = ({
@@ -99,10 +114,13 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   basePricePerHour = 0,
   basePricePerDay = 0,
   currency = 'XAF',
+  initialStartDate,
+  initialEndDate,
 }) => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { createRequest, fetchListingBookedWindows } = useRentalApi();
+  const { trackSiteEvent } = useTrackSiteEvent();
   const [booked, setBooked] = useState<RentalTakenWindow[]>([]);
   const [dateStr, setDateStr] = useState(todayDateInputValue());
   const [startMs, setStartMs] = useState<number | ''>('');
@@ -114,6 +132,23 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   const [msg, setMsg] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const seededDates = useRef(false);
+
+  useEffect(() => {
+    if (seededDates.current || !initialStartDate || !initialEndDate || initialEndDate <= initialStartDate) return;
+    seededDates.current = true;
+    const ranges = exclusiveDays(initialStartDate, initialEndDate).map((day) => ({
+      id: `prefill-${day}`,
+      startMs: Date.parse(`${day}T08:00:00`),
+      endMs: Date.parse(`${day}T18:00:00`),
+      billing: 'all_day' as const,
+      calendarDate: day,
+    }));
+    if (!ranges.length) return;
+    setDateStr(initialStartDate);
+    setSelections(ranges);
+    document.getElementById(RENTAL_REQUEST_SECTION_ID)?.scrollIntoView({ behavior: 'smooth' });
+  }, [initialEndDate, initialStartDate]);
 
   const stock = Math.max(1, Math.floor(Number(unitsAvailable)) || 1);
 
@@ -347,6 +382,17 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         unitsRequested,
         clientRequestNote: notes.trim() || undefined,
       });
+      const attribution = consumeRentalRequestAttribution(listingId);
+      if (attribution) {
+        void trackSiteEvent({
+          eventType: SITE_EVENT_ASSISTANT_RENTAL_REQUEST_CREATED,
+          metadata: {
+            thread_id: attribution.threadId,
+            listing_id: listingId,
+            minutes_since_tap: attribution.minutes,
+          },
+        });
+      }
       setConfirmOpen(false);
       void loadBooked();
       navigate('/rentals/request-submitted');

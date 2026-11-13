@@ -40,6 +40,8 @@ export interface EnrolmentInput {
   authWindowDays?: number;
   /** Skip only the self-rental rejection. Other enrolment checks still apply. */
   allowSelfBooking?: boolean;
+  /** From resolveCardPaymentPolicy. Null means charge-at-pickup: the window does not apply. */
+  latest_card_end_at?: string | null;
 }
 
 export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecision {
@@ -62,7 +64,7 @@ export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecis
       'Condition inspections do not support multi-window bookings yet. Book a single window.'
     );
   }
-  if (input.rail === 'stripe' && !stripeReviewFits(input)) {
+  if (input.rail === 'stripe' && !stripeReviewFits(reviewFitInput(input))) {
     return reject(
       INSPECTION_CODES.STRIPE_WINDOW,
       'Card payments for inspected rentals must end early enough that the 72-hour review still fits inside the 6-day card authorization.'
@@ -76,10 +78,29 @@ export function stripeReviewFits(input: {
   now: Date;
   reviewHours?: number;
   authWindowDays?: number;
+  /** Set from the card payment policy. Null skips the window. A string is the latest legal end. */
+  latest_card_end_at?: string | null;
 }): boolean {
+  if (Object.prototype.hasOwnProperty.call(input, 'latest_card_end_at')) {
+    if (input.latest_card_end_at == null) return true;
+    const latest = new Date(input.latest_card_end_at);
+    if (Number.isNaN(latest.getTime())) return false;
+    return input.endAt.getTime() <= latest.getTime();
+  }
   const reviewMs = (input.reviewHours ?? DEFAULT_STRIPE_REVIEW_HOURS) * 3600000;
   const authMs = (input.authWindowDays ?? STRIPE_AUTH_WINDOW_DAYS) * 86400000;
   return input.endAt.getTime() + reviewMs <= input.now.getTime() + authMs;
+}
+
+function reviewFitInput(input: EnrolmentInput) {
+  const fit = {
+    endAt: input.endAt,
+    now: input.now,
+    reviewHours: input.reviewHours,
+    authWindowDays: input.authWindowDays,
+  };
+  if (!Object.prototype.hasOwnProperty.call(input, 'latest_card_end_at')) return fit;
+  return { ...fit, latest_card_end_at: input.latest_card_end_at };
 }
 
 export interface PickupGateBooking {

@@ -146,6 +146,9 @@ export const SITE_EVENT_ASSISTANT_DEEPLINK_SHOWN = 'assistant.deeplink.shown' as
 export const SITE_EVENT_ASSISTANT_DEEPLINK_TAP = 'assistant.deeplink.tap' as const;
 export const SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED = 'assistant.handoff.requested' as const;
 export const SITE_EVENT_ASSISTANT_ERROR_SHOWN = 'assistant.error.shown' as const;
+export const SITE_EVENT_ASSISTANT_RENTAL_DATE_CHIP = 'assistant.rental.date_chip.edit' as const;
+export const SITE_EVENT_ASSISTANT_RENTAL_PRICE_CHANGED = 'assistant.rental.price_changed_shown' as const;
+export const SITE_EVENT_ASSISTANT_RENTAL_REQUEST_CREATED = 'assistant.attributed.rental_request_created' as const;
 
 // Dedicated agents admin UI (#594, UX blockers)
 export const SITE_EVENT_DEDICATED_UI_SECTION_VIEWED = 'dedicated_ui.section_viewed' as const;
@@ -218,6 +221,9 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_ASSISTANT_DEEPLINK_TAP
   | typeof SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED
   | typeof SITE_EVENT_ASSISTANT_ERROR_SHOWN
+  | typeof SITE_EVENT_ASSISTANT_RENTAL_DATE_CHIP
+  | typeof SITE_EVENT_ASSISTANT_RENTAL_PRICE_CHANGED
+  | typeof SITE_EVENT_ASSISTANT_RENTAL_REQUEST_CREATED
   | typeof SITE_EVENT_RESTOCK_ALERT_OPENED
   | typeof SITE_EVENT_RESTOCK_ADD_TO_CART_FROM_ALERT
   | typeof SITE_EVENT_RESTOCK_OPT_OUT

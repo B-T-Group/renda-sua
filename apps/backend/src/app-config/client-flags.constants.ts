@@ -10,6 +10,8 @@ export const CLIENT_FLAG_KEYS = [
   'catalog_experience_v1',
   'assistant_launcher_v1',
   'assistant_shopping_v1',
+  'assistant_rentals_enabled',
+  'rentals_card_charge_at_pickup_enabled',
   'restock_alerts_v1',
   'discovery_sort_v1',
   'agent_contract_required',
@@ -47,6 +49,10 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   assistant_launcher_v1: false,
   /** Shopping assistant catalog tools (search_catalog, get_reorder_options) - per market. */
   assistant_shopping_v1: false,
+  /** Assistant rental search, quotes and cards. Off until a row turns it on. No NODE_ENV override. */
+  assistant_rentals_enabled: false,
+  /** Card rentals charged at pickup skip the 6-day authorization window. Off until a row turns it on. */
+  rentals_card_charge_at_pickup_enabled: false,
   /** Restock alerts for liked items (#343): bell, Likes 'Back in stock', settings row. */
   restock_alerts_v1: false,
   /** Discovery sort modes, rating trust signal and empty-result recovery (#342). Per market. */
