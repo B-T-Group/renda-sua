@@ -1,0 +1,43 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main, prod]
+    paths:
+      - 'apps/backend/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'nx.json'
+      - 'tsconfig.base.json'
+      - '.github/workflows/backend-ci.yml'
+  push:
+    branches: [main, prod]
+    paths:
+      - 'apps/backend/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'nx.json'
+      - 'tsconfig.base.json'
+      - '.github/workflows/backend-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  boot-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Boot smoke test
+        run: npx nx test backend --testPathPattern=app-boot-smoke --skip-nx-cache
