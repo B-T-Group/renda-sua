@@ -9,6 +9,14 @@ export interface PaymentCallbackHandler {
   ): Promise<void>;
   onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void>;
   onPaymentAuthorized?(transaction: MobilePaymentTransaction): Promise<void>;
+  /** Stripe SetupIntent succeeded. Card details stay at Stripe. */
+  onSetupIntentSucceeded?(intent: {
+    id: string;
+    status: string | null;
+    metadata?: { bookingId?: string } | null;
+    payment_method?: string | { id?: string } | null;
+    customer?: string | { id?: string } | null;
+  }): Promise<void>;
   /**
    * Provider SUCCESS arrived for an attempt we had cancelled as superseded (#545), or
    * for a plain attempt we had marked failed (F3 declined-then-approved, M1).

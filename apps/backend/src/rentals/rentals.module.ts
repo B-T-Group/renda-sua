@@ -5,6 +5,7 @@ import { AwsModule } from '../aws/aws.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
+import { SiteEventsModule } from '../site-events/site-events.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { AdminRentalBookingsController } from './admin-rental-bookings.controller';
 import { RentalPaymentCallbackHandler } from './rental-payment-callback.handler';
@@ -19,6 +20,7 @@ import { RentalInspectionFlags } from './inspection/rental-inspection-flags.serv
 import { RentalInspectionService } from './inspection/rental-inspection.service';
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
+import { ChargeAtPickupService } from './card-pickup/charge-at-pickup.service';
 import { RentalsService } from './rentals.service';
 import { RentalSearchService } from './rental-search.service';
 import { RentalAvailabilityService } from './rental-availability.service';
@@ -31,10 +33,12 @@ import { RentalAvailabilityService } from './rental-availability.service';
     NotificationsModule,
     ImageValidationModule,
     StripePaymentsModule,
+    SiteEventsModule,
     RentalListingAiReviewModule,
   ],
   controllers: [RentalsController, RentalSearchController, RentalInspectionsController, AdminRentalBookingsController],
   providers: [
+    ChargeAtPickupService,
     RentalsService,
     RentalSearchService,
     RentalAvailabilityService,

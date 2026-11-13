@@ -1,3 +1,4 @@
+import { useStripe } from '@stripe/stripe-react-native';
 import { Linking } from 'react-native';
 import type { CreateRentalBookingResult } from '../types/rentals';
 import {
@@ -42,4 +43,28 @@ export async function settleRentalStripePayment(
 
 export function useRentalStripePayment() {
   return useOrderStripePayment();
+}
+
+/** Completes a bank step-up on an off-session PaymentIntent. */
+export function useRentalNextAction() {
+  const { handleNextAction } = useStripe();
+  return async (clientSecret: string): Promise<boolean> => {
+    const result = await handleNextAction(clientSecret);
+    return !result.error;
+  };
+}
+
+/** Saves a card with a SetupIntent. Nothing is charged. */
+export function useRentalCardSetup() {
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  return async (clientSecret: string): Promise<boolean> => {
+    const ready = await initPaymentSheet({
+      merchantDisplayName: 'Rendasua',
+      setupIntentClientSecret: clientSecret,
+      returnURL: 'rendasua://payment/return',
+    });
+    if (ready.error) return false;
+    const presented = await presentPaymentSheet();
+    return !presented.error;
+  };
 }

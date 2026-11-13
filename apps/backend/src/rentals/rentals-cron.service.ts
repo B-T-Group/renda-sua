@@ -161,6 +161,15 @@ export class RentalsCronService {
   }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleChargeAtPickup(): Promise<void> {
+    try {
+      await this.rentalsService.sweepChargeAtPickup();
+    } catch (error: any) {
+      this.logger.error(`charge at pickup sweep: ${error?.message ?? error}`);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async handleInspectionReviews(): Promise<void> {
     try {
       const reviewed = await this.inspections.remindAndEscalate();
@@ -224,6 +233,7 @@ export class RentalsCronService {
       }
     );
     if (!won) return;
+    await this.rentalsService.noteReservedExpired(booking);
     await this.logHistory(
       bookingId,
       'cancelled',

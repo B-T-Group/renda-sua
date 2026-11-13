@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { resolveCardPaymentPolicy } from '../card-pickup/rental-card-payment-policy';
 
 /** Stamped on bookings created while the flag is on. NULL stays legacy. */
 export const INSPECTION_POLICY_VERSION = 1;
@@ -40,6 +41,8 @@ export interface EnrolmentInput {
   authWindowDays?: number;
   /** Skip only the self-rental rejection. Other enrolment checks still apply. */
   allowSelfBooking?: boolean;
+  /** When true, an inspected Stripe booking is not limited by the 6-day auth window. */
+  chargeAtPickupEnabled?: boolean;
 }
 
 export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecision {
@@ -62,7 +65,7 @@ export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecis
       'Condition inspections do not support multi-window bookings yet. Book a single window.'
     );
   }
-  if (input.rail === 'stripe' && !stripeReviewFits(input)) {
+  if (input.rail === 'stripe' && !stripeReviewFits({ ...input, inspected: true })) {
     return reject(
       INSPECTION_CODES.STRIPE_WINDOW,
       'Card payments for inspected rentals must end early enough that the 72-hour review still fits inside the 6-day card authorization.'
@@ -76,10 +79,23 @@ export function stripeReviewFits(input: {
   now: Date;
   reviewHours?: number;
   authWindowDays?: number;
+  rail?: string;
+  inspected?: boolean;
+  chargeAtPickupEnabled?: boolean;
+  alreadyAuthorized?: boolean;
 }): boolean {
-  const reviewMs = (input.reviewHours ?? DEFAULT_STRIPE_REVIEW_HOURS) * 3600000;
-  const authMs = (input.authWindowDays ?? STRIPE_AUTH_WINDOW_DAYS) * 86400000;
-  return input.endAt.getTime() + reviewMs <= input.now.getTime() + authMs;
+  const policy = resolveCardPaymentPolicy({
+    rail: input.rail ?? 'stripe',
+    inspected: input.inspected ?? true,
+    chargeAtPickupEnabled: input.chargeAtPickupEnabled ?? false,
+    alreadyAuthorized: input.alreadyAuthorized ?? false,
+    endAt: input.endAt,
+    now: input.now,
+    reviewHours: input.reviewHours,
+    authWindowDays: input.authWindowDays,
+  });
+  if (policy.latest_card_end_at == null) return true;
+  return input.endAt.getTime() <= new Date(policy.latest_card_end_at).getTime();
 }
 
 export interface PickupGateBooking {
@@ -128,6 +144,9 @@ export interface AcceptAndStartResult {
   payment_rail: AcceptStartPaymentRail;
   amount_due_at_pickup: number;
   bookingId: string;
+  code?: string | null;
+  client_secret?: string | null;
+  held_until?: string | null;
 }
 
 /** Card is already authorized. Wallet covers the contract. Otherwise Mobile Money. */
@@ -258,7 +277,7 @@ export function damageCollectedOnAgree(input: {
   upheldAmount: number;
   decision: string | null;
 }): number {
-  if (input.paymentStatus !== 'authorized') return 0;
+  if (input.paymentStatus !== 'authorized' && input.paymentStatus !== 'deposit_held') return 0;
   if (input.decision === 'damage_upheld') return round2(Math.max(0, input.upheldAmount));
   if (input.decision === 'no_damage' || input.decision === 'damage_rejected') return 0;
   const claimed = Number(input.claimedAmount);

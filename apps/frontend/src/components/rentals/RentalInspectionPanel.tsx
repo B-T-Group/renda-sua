@@ -17,6 +17,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
+import { ChargeAtPickupNotice, ChargeAtPickupPayLine } from './charge-at-pickup/ChargeAtPickupNotice';
+import { cardActionSettled, confirmStripeCardAction } from '../../utils/confirmStripeCardAction';
 import type { useRentalInspection } from '../../hooks/useRentalInspection';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
@@ -54,10 +56,12 @@ interface PanelBooking {
   end_at?: string | null;
   total_amount?: number | string | null;
   currency?: string | null;
+  card_payment_mode?: string | null;
   client?: { user?: { first_name?: string | null } | null } | null;
   accept_start_preview?: {
     payment_rail: 'card' | 'wallet' | 'mobile_money';
     amount_due_at_pickup: number;
+    deposit_hold_amount?: number;
   } | null;
   overtime_amount_override?: number | string | null;
   rental_pricing_snapshot?: unknown;
@@ -108,6 +112,7 @@ export function RentalInspectionPanel({
   const [claim, setClaim] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [momoPhase, setMomoPhase] = useState<'waiting' | 'failed' | 'stalled' | null>(null);
+  const [cardHeldUntil, setCardHeldUntil] = useState<string | null>(null);
   const waitingSince = useRef<number | null>(null);
   const [offline, setOffline] = useState(!navigator.onLine);
   const draftOpened = useRef(false);
@@ -231,7 +236,8 @@ export function RentalInspectionPanel({
   };
 
   const confirmStart = async () => {
-    if (!view?.versionId) return;
+    const versionId = view?.versionId;
+    if (!versionId) return;
     const preview = booking.accept_start_preview;
     trackSiteEvent({
       eventType: 'rental_accept_and_start_tap',
@@ -245,8 +251,15 @@ export function RentalInspectionPanel({
     });
     setBusy(true);
     try {
-      const result = await acceptAndStart(bookingId, view.versionId);
+      let result = await acceptAndStart(bookingId, versionId);
+      result = await settleCardAction(result, () => acceptAndStart(bookingId, versionId));
       setConfirmOpen(false);
+      if (result.paymentPending && isCardPickupHold(result.code)) {
+        setCardHeldUntil(result.held_until || result.code || '');
+        setMomoPhase(null);
+        return;
+      }
+      setCardHeldUntil(null);
       if (result.paymentPending) {
         setMomoPhase('waiting');
         return;
@@ -512,7 +525,27 @@ export function RentalInspectionPanel({
             }}
           >
             <Stack spacing={1} sx={{ maxWidth: 720, mx: 'auto' }}>
-              {stage === 'pickup' && !damaged && (booking.accept_start_preview?.amount_due_at_pickup ?? 0) > 0 ? (
+              {cardHeldUntil && cardPickupHold(booking) ? (
+                <ChargeAtPickupNotice
+                  model={{
+                    kind: 'decline',
+                    itemName: '',
+                    place: '',
+                    bookingNumber: '',
+                    rent: fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF'),
+                    deposit: fcfaAmount(cardPickupHold(booking) ?? 0, booking.currency ?? 'XAF'),
+                    when: cardHeldUntil,
+                    heldUntil: cardHeldUntil,
+                    onRetry: () => void confirmStart(),
+                  }}
+                />
+              ) : null}
+              {stage === 'pickup' && !damaged && cardPickupHold(booking) && !cardHeldUntil ? (
+                <ChargeAtPickupPayLine
+                  rent={fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF')}
+                  deposit={fcfaAmount(cardPickupHold(booking) ?? 0, booking.currency ?? 'XAF')}
+                />
+              ) : stage === 'pickup' && !damaged && (booking.accept_start_preview?.amount_due_at_pickup ?? 0) > 0 ? (
                 <Typography textAlign="center">
                   {t('rentalInspection.payNow', "You'll pay {{amount}} now", {
                     amount: fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF'),
@@ -560,6 +593,32 @@ export function RentalInspectionPanel({
       />
     </Stack>
   );
+}
+
+async function settleCardAction<T extends { code?: string | null; client_secret?: string | null }>(
+  first: T,
+  retry: () => Promise<T>
+): Promise<T> {
+  let result = first;
+  for (let step = 0; step < 2 && result.code === 'PICKUP_REQUIRES_ACTION' && result.client_secret; step += 1) {
+    const status = await confirmStripeCardAction(result.client_secret);
+    if (!cardActionSettled(status)) break;
+    result = await retry();
+  }
+  return result;
+}
+
+function isCardPickupHold(code: string | null | undefined): boolean {
+  return code === 'PICKUP_PAYMENT_DECLINED'
+    || code === 'PICKUP_REQUIRES_ACTION'
+    || code === 'DEPOSIT_AUTH_FAILED'
+    || code === 'CARD_NOT_SAVED';
+}
+
+function cardPickupHold(booking: PanelBooking): number | null {
+  if (booking.card_payment_mode !== 'charge_at_pickup') return null;
+  if (booking.accept_start_preview?.payment_rail === 'mobile_money') return null;
+  return booking.accept_start_preview?.deposit_hold_amount ?? (Number(booking.security_deposit_amount) || 0);
 }
 
 function fcfaAmount(amount: number, currency: string): string {
@@ -618,7 +677,14 @@ function AcceptStartDialog({
         <Typography>
           {t('rentalInspection.sheetBody', 'The rental clock starts now. Return is due by {{due}}.', { due })}
         </Typography>
-        {showPay ? (
+        {cardPickupHold(booking) ? (
+          <Box sx={{ mt: 2 }}>
+            <ChargeAtPickupPayLine
+              rent={amount}
+              deposit={fcfaAmount(cardPickupHold(booking) ?? 0, booking.currency ?? 'XAF')}
+            />
+          </Box>
+        ) : showPay ? (
           <Alert severity="info" sx={{ mt: 2 }}>
             {preview?.payment_rail === 'mobile_money'
               ? t('rentalInspection.sheetMomo', "You'll pay {{amount}} by Mobile Money", { amount })
@@ -673,7 +739,14 @@ function BusinessAcceptHero({
           t('rentalInspection.waitingBody', "{{name}} is reviewing the condition report. You'll see when the rental starts — then hand over the item.", { name })
         )}
       </Typography>
-      {started ? (
+      {started && booking.card_payment_mode === 'charge_at_pickup' ? (
+        <Typography color="text.secondary">
+          {t('rentalInspection.businessStarted', '{{rent}} has been charged. A {{deposit}} deposit is held until the condition review ends.', {
+            rent: paid,
+            deposit: fcfaAmount(Number(booking.security_deposit_amount) || 0, booking.currency ?? 'XAF'),
+          })}
+        </Typography>
+      ) : started ? (
         <Typography color="success.main" fontWeight={700}>
           {booking.payment_status === 'authorized'
             ? t('rentalInspection.heldAmount', '{{amount}} held', { amount: paid })

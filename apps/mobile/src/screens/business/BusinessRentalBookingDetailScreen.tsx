@@ -880,7 +880,14 @@ function BusinessAcceptStartHero({
           t('rentalInspection.waitingBody', "{{name}} is reviewing the condition report. You'll see when the rental starts — then hand over the item.", { name })
         )}
       </Text>
-      {started ? (
+      {started && booking.card_payment_mode === 'charge_at_pickup' ? (
+        <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
+          {t('rentalInspection.businessStarted', '{{rent}} has been charged. A {{deposit}} deposit is held until the condition review ends.', {
+            rent: paid,
+            deposit: formatRequestAmount(Number(booking.security_deposit_amount) || 0, booking.currency, i18n.language),
+          })}
+        </Text>
+      ) : started ? (
         <Text style={{ color: colors.success.main, textAlign: 'center', fontWeight: '700' }}>
           {booking.payment_status === 'authorized'
             ? t('rentalInspection.heldAmount', '{{amount}} held', { amount: paid })

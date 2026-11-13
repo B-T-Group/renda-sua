@@ -257,6 +257,24 @@ export const SERVER_SITE_EVENT_TYPES = [
   'item_appeal.created',
   'item_appeal.decided',
   'item_appeal.withdrawn',
+  // Charge at pickup (inspected Stripe rentals)
+  'rental_card_setup_started',
+  'rental_card_setup_succeeded',
+  'rental_card_setup_failed',
+  'rental_pickup_contract_captured',
+  'rental_pickup_deposit_held',
+  'rental_pickup_payment_failed',
+  'rental_deposit_renewal_succeeded',
+  'rental_deposit_renewal_failed',
+  'rental_deposit_renewal_escalated',
+  'rental_deposit_released',
+  'rental_deposit_captured',
+  'rental_remainder_invoiced',
+  'rental_remainder_paid',
+  'rental_remainder_overdue',
+  'rental_reserved_expired_unstarted',
+  'rental_cancelled_before_pickup',
+  'rental_long_stay_started',
 ] as const;
 
 export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number] | (typeof SERVER_SITE_EVENT_TYPES)[number];

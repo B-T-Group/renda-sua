@@ -12,6 +12,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useClientInspection } from '../../hooks/useClientInspection';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
+import { useRentalNextAction } from '../../hooks/useRentalStripePayment';
 import { acceptAndStart, getBooking, getPaymentStatus } from '../../services/rentalsApi';
 import { formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
 import { CORRECTION_REASON_CODES, allUnitsReviewed, classifyInspectionError, damageRail, returnHasDamage } from '../../utils/rentals/rentalInspection';
@@ -29,6 +30,8 @@ export default function ClientInspectionScreen() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [momoPhase, setMomoPhase] = useState<'waiting' | 'failed' | 'stalled' | null>(null);
+  const [cardHeldUntil, setCardHeldUntil] = useState<string | null>(null);
+  const completeBankStep = useRentalNextAction();
   const [notice, setNotice] = useState<'conflict' | 'update_required' | 'unavailable' | null>(null);
   const waitingSince = useRef<number | null>(null);
   const [reasons, setReasons] = useState<string[]>([]);
@@ -49,6 +52,12 @@ export default function ClientInspectionScreen() {
   const preview = model.booking?.accept_start_preview;
   const amountDue = preview?.amount_due_at_pickup ?? 0;
   const amountLabel = formatRequestAmount(amountDue, model.booking?.currency ?? 'XAF', i18n.language);
+  const cardPickup = model.booking?.card_payment_mode === 'charge_at_pickup';
+  const depositLabel = formatRequestAmount(
+    preview?.deposit_hold_amount ?? (Number(model.booking?.security_deposit_amount) || 0),
+    model.booking?.currency ?? 'XAF',
+    i18n.language
+  );
   const dueLabel = model.booking?.end_at ? formatListingDue(model.booking.end_at, i18n.language) : '';
   const pickupStart = stage === 'pickup' && !damaged;
 
@@ -98,9 +107,24 @@ export default function ClientInspectionScreen() {
     });
     setStarting(true);
     try {
-      const result = await acceptAndStart(bookingId, model.view.versionId);
+      let result = await acceptAndStart(bookingId, model.view.versionId);
+      for (let step = 0; step < 2 && result.code === 'PICKUP_REQUIRES_ACTION' && result.client_secret; step += 1) {
+        const stepped = await completeBankStep(result.client_secret);
+        if (!stepped) break;
+        result = await acceptAndStart(bookingId, model.view.versionId);
+      }
       setConfirmOpen(false);
       setNotice(null);
+      if (!result.paymentPending) {
+        navigation.goBack();
+        return;
+      }
+      if (result.paymentPending && isCardHold(result.code)) {
+        setCardHeldUntil(result.held_until || result.code || '');
+        setMomoPhase(null);
+        return;
+      }
+      setCardHeldUntil(null);
       if (result.paymentPending) {
         setMomoPhase('waiting');
         return;
@@ -279,7 +303,20 @@ export default function ClientInspectionScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm, gap: spacing.sm, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }]}>
         {panel === 'review' ? (
           <>
-            {pickupStart && amountDue > 0 ? (
+            {cardHeldUntil ? (
+              <View style={[styles.payLine, { backgroundColor: '#FEE2E2', borderRadius: borderRadius.md }]}>
+                <Text style={{ color: '#7F1D1D', fontWeight: '700' }}>
+                  {t('rentalInspection.declined', 'Your card was declined. Update your card or try again. The item stays with the business until payment succeeds. This reservation is held until {{when}}.', { when: cardHeldUntil })}
+                </Text>
+              </View>
+            ) : null}
+            {pickupStart && cardPickup && !cardHeldUntil ? (
+              <View style={[styles.payLine, { backgroundColor: colors.infoTint, borderRadius: borderRadius.md }]}>
+                <Text style={{ color: colors.text.primary, textAlign: 'center' }}>
+                  {t('rentalInspection.chargeAndHold', "You'll pay {{rent}} now. We will hold {{deposit}} as a deposit until the condition review ends.", { rent: amountLabel, deposit: depositLabel })}
+                </Text>
+              </View>
+            ) : pickupStart && amountDue > 0 ? (
               <View style={[styles.payLine, { backgroundColor: colors.infoTint, borderRadius: borderRadius.md }]}>
                 <Text style={{ color: colors.text.primary, textAlign: 'center' }}>
                   {t('rentalInspection.payNow', "You'll pay {{amount}} now", { amount: amountLabel })}
@@ -332,7 +369,13 @@ export default function ClientInspectionScreen() {
             <Text style={[typography.body1, { color: colors.text.secondary, marginTop: 8 }]}>
               {t('rentalInspection.sheetBody', 'The rental clock starts now. Return is due by {{due}}.', { due: dueLabel })}
             </Text>
-            {preview?.payment_rail === 'mobile_money' && amountDue > 0 ? (
+            {cardPickup ? (
+              <View style={[styles.payLine, { backgroundColor: colors.infoTint, borderRadius: borderRadius.md, marginTop: 12 }]}>
+                <Text style={{ color: colors.text.primary }}>
+                  {t('rentalInspection.chargeAndHold', "You'll pay {{rent}} now. We will hold {{deposit}} as a deposit until the condition review ends.", { rent: amountLabel, deposit: depositLabel })}
+                </Text>
+              </View>
+            ) : preview?.payment_rail === 'mobile_money' && amountDue > 0 ? (
               <View style={[styles.payLine, { backgroundColor: colors.infoTint, borderRadius: borderRadius.md, marginTop: 12 }]}>
                 <Text style={{ color: colors.text.primary }}>
                   {t('rentalInspection.sheetMomo', "You'll pay {{amount}} by Mobile Money", { amount: amountLabel })}
@@ -363,6 +406,13 @@ function photoRoleLabel(role: string, t: (key: string, fallback: string) => stri
   if (role === 'other_side') return t('rentalInspection.otherSide', 'Other side');
   if (role === 'accessories') return t('rentalInspection.accessories', 'Accessories');
   return role;
+}
+
+function isCardHold(code: string | null | undefined): boolean {
+  return code === 'PICKUP_PAYMENT_DECLINED'
+    || code === 'PICKUP_REQUIRES_ACTION'
+    || code === 'DEPOSIT_AUTH_FAILED'
+    || code === 'CARD_NOT_SAVED';
 }
 
 function conditionLine(condition: string, t: (key: string, fallback: string) => string): string {

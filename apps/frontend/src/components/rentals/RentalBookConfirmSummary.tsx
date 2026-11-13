@@ -47,11 +47,14 @@ export interface RentalBookConfirmSummaryProps {
   row: ClientRentalRequestRow;
   /** Card rail shows the deposit/authorization terms; other rails show pay-at-pickup. */
   isStripeRail?: boolean;
+  /** Inspected Stripe bookings that charge the rental at pickup. */
+  chargeAtPickup?: boolean;
 }
 
 export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> = ({
   row,
   isStripeRail,
+  chargeAtPickup,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -161,7 +164,19 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
       ) : null}
       <Divider sx={{ my: 1.5 }} />
       <Stack spacing={0.75}>
-        {isStripeRail && quote?.securityDeposit ? (
+        {isStripeRail && chargeAtPickup && quote?.securityDeposit ? (
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+            {t(
+              'rentalInspection.termsChargeAtPickup',
+              'Nothing is charged until pickup. At pickup we charge {{rent}} and place a separate {{deposit}} hold for the deposit. You can cancel for free before pickup.',
+              {
+                rent: formatRentalMoney(quote?.total ?? 0, quote?.currency ?? 'XAF'),
+                deposit: formatRentalMoney(quote?.securityDeposit ?? 0, quote?.currency ?? 'XAF'),
+              }
+            )}
+          </Typography>
+        ) : null}
+        {isStripeRail && !chargeAtPickup && quote?.securityDeposit ? (
           <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
             {t(
               'rentals.clientRequests.paymentTermsCard',

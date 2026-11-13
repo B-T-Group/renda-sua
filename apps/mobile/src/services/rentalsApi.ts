@@ -357,6 +357,9 @@ export interface AcceptAndStartResult {
   payment_rail: 'card' | 'wallet' | 'mobile_money';
   amount_due_at_pickup: number;
   bookingId: string;
+  code?: string | null;
+  client_secret?: string | null;
+  held_until?: string | null;
 }
 
 export async function reportReturned(bookingId: string): Promise<{
@@ -378,6 +381,25 @@ export async function reportNotReceived(bookingId: string): Promise<{
 }> {
   return apiRequest(
     `/rentals/bookings/${encodeURIComponent(bookingId)}/report-not-received`,
+    { method: 'POST' }
+  );
+}
+
+export async function saveRentalCard(
+  bookingId: string,
+  channel: 'payment_sheet' | 'checkout'
+): Promise<{ clientSecret: string | null; checkoutUrl: string | null }> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/save-card`,
+    { method: 'POST', body: JSON.stringify({ channel }) }
+  );
+}
+
+export async function confirmRentalCard(
+  bookingId: string
+): Promise<{ success: true; saved: boolean }> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/confirm-card`,
     { method: 'POST' }
   );
 }

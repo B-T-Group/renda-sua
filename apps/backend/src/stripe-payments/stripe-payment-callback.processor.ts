@@ -38,6 +38,22 @@ export class StripePaymentCallbackProcessor {
     return tx.capture_method === 'manual';
   }
 
+  private isRentalCardEntity(entity: string | undefined): boolean {
+    return (
+      entity === 'rental_pickup_contract' ||
+      entity === 'rental_deposit' ||
+      entity === 'rental_remainder'
+    );
+  }
+
+  async onSetupIntentSucceeded(intent: Stripe.SetupIntent): Promise<void> {
+    if (intent.status !== 'succeeded') return;
+    for (const handler of this.resolveHandlers()) {
+      if (!handler.onSetupIntentSucceeded) continue;
+      await handler.onSetupIntentSucceeded(intent);
+    }
+  }
+
   private resolveHandlers(): PaymentCallbackHandler[] {
     return this.paymentCallbackRegistry.getHandlers();
   }
@@ -147,6 +163,9 @@ export class StripePaymentCallbackProcessor {
       // never runs. Retry the (idempotent) finalization here in case the capture-time attempt
       // failed. A Stripe webhook retry would be dropped as a duplicate event, so a `deferred`
       // outcome is picked up by the reconciler / next refund instead of by throwing here.
+      if (this.isRentalCardEntity(tx.payment_entity)) {
+        await this.runHandlerSuccess(tx);
+      }
       if (tx.payment_entity === 'order' && tx.entity_id) {
         const outcome = await this.orderTaxLifecycle.finalizeAfterCapture({
           orderNumber: tx.entity_id.trim(),
@@ -381,7 +400,8 @@ export class StripePaymentCallbackProcessor {
       !tx.account_id ||
       tx.transaction_type !== 'PAYMENT' ||
       tx.payment_entity === 'token' ||
-      tx.payment_entity === 'reel_ai_token'
+      tx.payment_entity === 'reel_ai_token' ||
+      this.isRentalCardEntity(tx.payment_entity)
     ) {
       return;
     }

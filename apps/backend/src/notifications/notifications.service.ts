@@ -4111,6 +4111,35 @@ export class NotificationsService {
     });
   }
 
+  /** Card-pickup banner. Body is already localized by the caller. No card data. */
+  async sendRentalCardPickupPush(params: {
+    userId: string;
+    bookingId: string;
+    body: string;
+  }): Promise<void> {
+    if (!params.userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    await this.sendPushNotificationByUserId(params.userId, 'Rendasua', params.body, {
+      type: 'rental_card_pickup',
+      rentalBookingId: params.bookingId,
+      url: `/rentals/bookings/${params.bookingId}`,
+    });
+  }
+
+  /** Support queue email when a deposit hold cannot be renewed or a remainder is overdue. */
+  async sendRentalSupportAlert(params: {
+    subject: string;
+    body: string;
+    bookingId: string;
+  }): Promise<void> {
+    const to = process.env.ADMIN_NOTIFICATION_EMAIL || 'support@rendasua.com';
+    await this.sendSimpleLifecycleEmail({
+      to,
+      subject: `Rental ${params.subject} ${params.bookingId}`,
+      html: `<p>${params.body}</p>`,
+    });
+  }
+
   /** T−30m end-of-rental reminder: email + push to both client and business. */
   async sendRentalEndingSoonNotifications(
     payload: RentalPeriodEndedEmailPayload

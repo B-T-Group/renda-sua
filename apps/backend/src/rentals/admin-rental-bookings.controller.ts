@@ -52,6 +52,12 @@ export class AdminRentalBookingsController {
     private readonly renterReturns: RentalRenterReturnService
   ) {}
 
+  @Get('card-pickup-alerts')
+  @ApiOperation({ summary: 'Open charge-at-pickup support alerts (renewal and overdue remainder)' })
+  listCardPickupAlerts() {
+    return this.rentalsService.listCardPickupAlerts();
+  }
+
   @Post('bookings/:id/start-overwrite-code')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Issue a one-time rental start code (support, reason required)' })

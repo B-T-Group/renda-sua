@@ -568,6 +568,21 @@ export const GET_RENTAL_BOOKING_FULL = `
       reserved_cancel_after
       payment_timing
       payment_status
+      card_payment_mode
+      card_brand
+      card_last4
+      card_saved_at
+      deposit_capture_before
+      deposit_hold_amount
+      deposit_renewal_status
+      deposit_renewal_reason
+      deposit_settled_at
+      pickup_payment_failure_code
+      remainder_amount
+      remainder_status
+      remainder_overtime_covered
+      remainder_damage_covered
+      remainder_invoiced_at
       actual_start_at
       actual_end_at
       end_reminder_sent_at
@@ -613,6 +628,21 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       reserved_cancel_after
       payment_timing
       payment_status
+      card_payment_mode
+      card_brand
+      card_last4
+      card_saved_at
+      deposit_capture_before
+      deposit_hold_amount
+      deposit_renewal_status
+      deposit_renewal_reason
+      deposit_settled_at
+      pickup_payment_failure_code
+      remainder_amount
+      remainder_status
+      remainder_overtime_covered
+      remainder_damage_covered
+      remainder_invoiced_at
       actual_start_at
       actual_end_at
       renter_reported_returned_at
@@ -687,6 +717,21 @@ export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
       overtime_amount
       payment_timing
       payment_status
+      card_payment_mode
+      card_brand
+      card_last4
+      card_saved_at
+      deposit_capture_before
+      deposit_hold_amount
+      deposit_renewal_status
+      deposit_renewal_reason
+      deposit_settled_at
+      pickup_payment_failure_code
+      remainder_amount
+      remainder_status
+      remainder_overtime_covered
+      remainder_damage_covered
+      remainder_invoiced_at
       actual_start_at
       actual_end_at
       rental_pricing_snapshot
