@@ -90,6 +90,36 @@ describe('in-flight mobile payment queries', () => {
     expect(query).not.toContain('processing');
   });
 
+  it('treats only a successful rental_booking row as Mobile Money proof', async () => {
+    const { db, executeQuery } = service([{ id: 'tx-rental' }]);
+
+    await expect(db.hasSuccessfulRentalBookingPayment('RB-1')).resolves.toBe(true);
+    expect(executeQuery.mock.calls[0][1]).toEqual({ bookingNumber: 'RB-1' });
+    const query = queryOf(executeQuery);
+    expect(query).toContain('payment_entity: { _eq: rental_booking }');
+    expect(query).toContain('status: { _eq: "success" }');
+    expect(query).toContain('entity_id: { _eq: $bookingNumber }');
+    expect(query).not.toContain('pending');
+    expect(query).not.toContain('processing');
+  });
+
+  it('returns false when the rental payment list is empty or missing', async () => {
+    const empty = service([]);
+    await expect(empty.db.hasSuccessfulRentalBookingPayment('RB-1')).resolves.toBe(false);
+
+    const missing = new MobilePaymentsDatabaseService({
+      executeQuery: jest.fn().mockResolvedValue({}),
+    } as never);
+    await expect(missing.hasSuccessfulRentalBookingPayment('RB-1')).resolves.toBe(false);
+  });
+
+  it('rethrows a rental payment lookup failure instead of calling it unpaid', async () => {
+    const executeQuery = jest.fn().mockRejectedValue(new Error('hasura down'));
+    const db = new MobilePaymentsDatabaseService({ executeQuery } as never);
+
+    await expect(db.hasSuccessfulRentalBookingPayment('RB-1')).rejects.toThrow('hasura down');
+  });
+
   it('lists pending and processing rows for admin reconciliation', async () => {
     const { db, executeQuery } = service();
 

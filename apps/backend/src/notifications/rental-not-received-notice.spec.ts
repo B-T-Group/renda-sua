@@ -121,6 +121,66 @@ describe('rental not-received notices', () => {
     );
   });
 
+  it('skips every channel when the business user id is blank', async () => {
+    const { service, executeMutation, push, email } = setup(true);
+    await service.sendBusinessRentalNotReceived({ businessUserId: '  ', bookingId: 'b1' });
+    await service.sendBusinessRentalNotReceived({ businessUserId: '', bookingId: 'b1' });
+    expect(executeMutation).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(email).not.toHaveBeenCalled();
+  });
+
+  it('still writes the in-app row and English push when the business has no email', async () => {
+    const { service, executeMutation, push, email } = setup(true);
+    jest.spyOn(service as unknown as { getUserRowForEmail: () => Promise<unknown> }, 'getUserRowForEmail').mockResolvedValue({
+      email: null,
+      preferred_language: null,
+    });
+    await service.sendBusinessRentalNotReceived({ businessUserId: 'bu1', bookingId: 'b1' });
+    expect(executeMutation).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith(
+      'bu1',
+      'Item not received',
+      RENTAL_NOT_RECEIVED_BUSINESS_BODY.en,
+      expect.any(Object)
+    );
+    expect(email).not.toHaveBeenCalled();
+  });
+
+  it('treats fr-CM as French and swallows a delivery failure', async () => {
+    const { service, executeMutation } = setup(true);
+    const lookup = jest
+      .spyOn(service as unknown as { getUserRowForEmail: () => Promise<unknown> }, 'getUserRowForEmail')
+      .mockResolvedValue({ email: 'biz@shop.test', preferred_language: 'fr-CM' });
+    await service.sendBusinessRentalNotReceived({ businessUserId: 'bu1', bookingId: 'b1' });
+    expect(executeMutation.mock.calls[0][1].object.message).toBe(RENTAL_NOT_RECEIVED_BUSINESS_BODY.fr);
+
+    lookup.mockRejectedValue(new Error('hasura down'));
+    await expect(
+      service.sendBusinessRentalNotReceived({ businessUserId: 'bu1', bookingId: 'b1' })
+    ).resolves.toBeUndefined();
+  });
+
+  it('escapes the item name and fills a blank booking in the support email', async () => {
+    delete process.env.ADMIN_NOTIFICATION_EMAIL;
+    const { service, email } = setup(false);
+    await service.notifySupportRentalNotReceived({
+      bookingId: 'b1',
+      bookingNumber: 'RB-1',
+      rentalItemName: 'Drill & <saw>',
+    });
+    const html = email.mock.calls[0][0].html as string;
+    expect(html).toContain('Drill &amp; &lt;saw&gt;');
+    expect(html).not.toContain('<saw>');
+
+    await service.notifySupportRentalNotReceived({
+      bookingId: 'b1',
+      bookingNumber: '',
+      rentalItemName: '',
+    });
+    expect(email.mock.calls[1][0].html).toContain('— · Rental.');
+  });
+
   it('sends the support email to ADMIN_NOTIFICATION_EMAIL when that is set', async () => {
     process.env.ADMIN_NOTIFICATION_EMAIL = 'ops@rendasua.com';
     const { service, email } = setup(false);

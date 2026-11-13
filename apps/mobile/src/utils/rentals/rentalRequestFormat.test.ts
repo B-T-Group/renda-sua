@@ -15,6 +15,7 @@ import {
   clientRequestPeriodLines,
   formatChangeDetail,
   formatListingDeadline,
+  formatListingDue,
   formatRentalDateRange,
   formatRentalPeriod,
   isSingleRequestedPeriod,
@@ -46,6 +47,9 @@ describe('formatRequestAmount', () => {
 
   it('groups XAF and XOF with a space and an FCFA suffix, and leaves USD alone', () => {
     expect(formatRequestAmount(45000, 'XAF', 'en')).toBe('45 000 FCFA');
+    expect(formatRequestAmount(45000.4, 'XAF', 'en')).toBe('45 000 FCFA');
+    expect(formatRequestAmount(45000.5, 'xaf', 'fr')).toBe('45 001 FCFA');
+    expect(formatRequestAmount(1000000, 'FCFA', 'en')).toBe('1 000 000 FCFA');
     expect(formatRequestAmount(55000, 'XOF', 'fr')).toBe('55 000 FCFA');
     expect(formatRequestAmount(260, 'USD', 'en')).not.toMatch(/FCFA/);
     expect(formatRequestAmount(260, 'USD', 'fr')).not.toMatch(/FCFA/);
@@ -304,6 +308,17 @@ describe('formatListingDeadline', () => {
     expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).toBe('Fri 20 Nov, 10:00');
     expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'fr')).toBe('ven. 20 nov., 10:00');
     expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).not.toMatch(/AM|PM|2026/);
+  });
+});
+
+describe('formatListingDue', () => {
+  it('keeps a late return on the stored listing day', () => {
+    expect(formatListingDue('2026-11-12T09:00:00.000Z', 'en')).toBe('12\u00A0Nov\u00A0·\u00A009:00');
+    expect(formatListingDue('2026-11-12T23:30:00.000Z', 'en')).toBe('12\u00A0Nov\u00A0·\u00A023:30');
+    expect(formatListingDue('2026-11-14T18:00:00.000Z', 'fr')).toBe('14\u00A0nov.\u00A0·\u00A018:00');
+    expect(formatListingDue('2026-11-12T09:00:00.000Z', 'en')).not.toContain('10:00');
+    expect(formatListingDue('2026-11-12', 'en')).toBe('2026-11-12');
+    expect(formatListingDue('not-a-date', 'en')).toBe('not-a-date');
   });
 });
 
