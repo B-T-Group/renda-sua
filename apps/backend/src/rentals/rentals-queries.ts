@@ -615,6 +615,8 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       payment_status
       actual_start_at
       actual_end_at
+      renter_reported_returned_at
+      renter_return_escalated_at
       units_booked
       inspection_policy_version
       return_handed_back_at
@@ -1074,9 +1076,12 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       rental_booking {
         id
         status
+        end_at
         contract_expires_at
         payment_timing
         payment_status
+        renter_reported_returned_at
+        renter_return_escalated_at
       }
     }
   }
@@ -1098,6 +1103,8 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
       overtime_amount
       payment_timing
       payment_status
+      renter_reported_returned_at
+      renter_return_escalated_at
       created_at
       updated_at
       rental_request_id
@@ -1162,12 +1169,15 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         id
         status
         booking_number
+        end_at
         actual_start_at
         payment_timing
         payment_status
         total_amount
         overtime_amount
         inspection_policy_version
+        renter_reported_returned_at
+        renter_return_escalated_at
       }
       rental_location_listing {
         id

@@ -68,6 +68,7 @@ describe('TrackSiteEventDto', () => {
       'rentals_client_tab_tap',
       'rentals_client_tab_browse_tap',
       'rental_accept_and_start_tap',
+      'rental_renter_reported_returned',
     ]) {
       const dto = new TrackSiteEventDto();
       dto.eventType = eventType as any;

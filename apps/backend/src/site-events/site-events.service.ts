@@ -251,7 +251,8 @@ export class SiteEventsService {
 
   private allowsRentalBookingSubject(body: TrackSiteEventDto): boolean {
     return (
-      body.eventType === 'rental_accept_and_start_tap' &&
+      (body.eventType === 'rental_accept_and_start_tap' ||
+        body.eventType === 'rental_renter_reported_returned') &&
       body.subjectType === 'rental_booking' &&
       Boolean(body.subjectId)
     );

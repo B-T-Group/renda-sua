@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { HeaderSettingsButton } from '../components/common/HeaderSettingsButton';
 import { useTheme } from '../contexts/ThemeContext';
 import { useStore } from '../stores/RootStore';
 
@@ -543,6 +544,7 @@ export function BusinessRootNavigator() {
           options={{
             title: t('business.rentals.bookingTitle', 'Booking'),
             headerBackTitle: t('business.rentals.studioTitle', 'Rentals'),
+            headerRight: () => <HeaderSettingsButton />,
           }}
         />
         <RootStack.Screen

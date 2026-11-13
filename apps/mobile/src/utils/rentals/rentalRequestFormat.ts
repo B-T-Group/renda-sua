@@ -28,7 +28,7 @@ function utcDate(iso: string): Date | null {
 export function formatRequestAmount(amount: number, currency: string, _language: string): string {
   const code = currency.toUpperCase();
   if (code === 'XAF' || code === 'XOF' || code === 'FCFA') {
-    return `${groupedDigits(amount, ' ')} FCFA`;
+    return `${groupedDigits(amount, '\u00A0')}\u00A0FCFA`;
   }
   return formatRentalMoney(amount, currency);
 }

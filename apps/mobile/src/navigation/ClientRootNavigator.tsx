@@ -7,6 +7,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { HeaderSettingsButton } from '../components/common/HeaderSettingsButton';
 import { useTheme } from '../contexts/ThemeContext';
 
 import ClientBrowseHomeScreen from '../screens/client/ClientBrowseHomeScreen';
@@ -523,6 +524,7 @@ export function ClientRootNavigator() {
           options={{
             title: t('rentals.title', 'Rentals'),
             headerBackTitle: t('client.rentals.tabMyRentals', 'My rentals'),
+            headerRight: () => <HeaderSettingsButton />,
           }}
         />
         <ClientRootStack.Screen

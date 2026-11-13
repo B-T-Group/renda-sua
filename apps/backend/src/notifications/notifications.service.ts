@@ -131,6 +131,8 @@ import {
   buildRentalEndingSoonPush,
   buildRentalInspectionNotice,
   buildRentalNotReceivedNotice,
+  buildRenterReturnedNotice,
+  buildRenterReturnEscalationNotice,
   buildRentalNotReceivedSupportNotice,
   buildRentalPeriodEndedPush,
   buildRentalRequestAcceptedPush,
@@ -3751,6 +3753,36 @@ export class NotificationsService {
     }
   }
 
+  /** In-app row and push. Neutral copy. Does not email. Never throws. */
+  async sendBusinessRenterReturned(payload: {
+    businessUserId: string;
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    const userId = payload.businessUserId?.trim();
+    if (!userId) return;
+    try {
+      await this.deliverRenterReturned(userId, payload);
+    } catch (error: any) {
+      this.logger.error(`sendBusinessRenterReturned: ${error?.message ?? error}`);
+    }
+  }
+
+  /** Email the support inbox and push rental moderators once. Never throws. */
+  async notifySupportRenterReturnUnconfirmed(payload: {
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    try {
+      await this.emailSupportReturnUnconfirmed(payload);
+      await this.pushSupportReturnUnconfirmed(payload);
+    } catch (error: any) {
+      this.logger.error(`notifySupportRenterReturnUnconfirmed: ${error?.message ?? error}`);
+    }
+  }
+
   /** Shared support inbox plus a push to rental moderators. Never throws. */
   async notifySupportRentalNotReceived(payload: {
     bookingId: string;
@@ -3821,6 +3853,98 @@ export class NotificationsService {
       to: email,
       subject: msg.title,
       html: `<p>${escapeHtmlForEmail(msg.body)}</p>`,
+    });
+  }
+
+  private async deliverRenterReturned(
+    userId: string,
+    payload: { bookingId: string; bookingNumber: string; rentalItemName: string }
+  ): Promise<void> {
+    const user = await this.getUserRowForEmail(userId);
+    const msg = buildRenterReturnedNotice({ ...payload, preferredLanguage: user?.preferred_language });
+    const path = `/rentals/bookings/${payload.bookingId}?persona=business`;
+    await this.insertRenterReturnedMessage(userId, payload.bookingId, msg.body, path);
+    await this.pushRenterReturned(userId, payload.bookingId, msg, path);
+  }
+
+  private async insertRenterReturnedMessage(
+    userId: string,
+    bookingId: string,
+    body: string,
+    path: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation InsertRenterReturned($object: user_messages_insert_input!) {
+        insert_user_messages_one(object: $object) { id }
+      }`,
+      {
+        object: {
+          user_id: userId,
+          entity_type: 'rental_booking',
+          entity_id: bookingId,
+          message_type: 'RENTAL_RENTER_RETURN_REPORTED',
+          message: body,
+          message_payload: { bookingId, path },
+        },
+      }
+    );
+  }
+
+  private async pushRenterReturned(
+    userId: string,
+    bookingId: string,
+    msg: { title: string; body: string },
+    path: string
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    await this.sendPushNotificationByUserId(userId, msg.title, msg.body, {
+      type: 'rental_renter_returned',
+      rentalBookingId: bookingId,
+      persona: 'business',
+      url: path,
+    });
+  }
+
+  private async emailSupportReturnUnconfirmed(payload: {
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    const adminTo = process.env.ADMIN_NOTIFICATION_EMAIL || 'support@rendasua.com';
+    const msg = buildRenterReturnEscalationNotice({ ...payload, preferredLanguage: 'en' });
+    await this.sendSimpleLifecycleEmail({
+      to: adminTo,
+      subject: msg.title,
+      html: `<p>${escapeHtmlForEmail(msg.body)}</p><p>Review it at /admin/rental-inspections.</p>`,
+    });
+  }
+
+  private async pushSupportReturnUnconfirmed(payload: {
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const recipients = buildOrderRiskRecipients({
+      staff: await this.rbacService.listUsersWithRoles(),
+      roleKeys: [PlatformRoles.SUPERUSER, PlatformRoles.SUPPORT, PlatformRoles.ORDER_MANAGER],
+    });
+    for (const recipient of recipients) {
+      await this.pushOneSupportReturn(recipient, payload);
+    }
+  }
+
+  private async pushOneSupportReturn(
+    recipient: { userId: string; preferredLanguage: string | null },
+    payload: { bookingId: string; bookingNumber: string; rentalItemName: string }
+  ): Promise<void> {
+    const msg = buildRenterReturnEscalationNotice({
+      ...payload,
+      preferredLanguage: recipient.preferredLanguage,
+    });
+    await this.sendPushNotificationByUserId(recipient.userId, msg.title, msg.body, {
+      type: 'rental_return_report_escalated',
+      rentalBookingId: payload.bookingId,
+      url: '/admin/rental-inspections',
     });
   }
 

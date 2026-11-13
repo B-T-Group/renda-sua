@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -22,6 +22,8 @@ import {
   useDidntReceiveWindow,
 } from '../../components/rentals/DidntReceiveReportButton';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
+import { RenterReturnCard } from '../../components/rentals/RenterReturnCard';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { SendRentalStartPinButton } from '../../components/rentals/SendRentalStartPinButton';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalBookingDetail } from '../../hooks/useRentalBookingDetail';
@@ -49,6 +51,7 @@ import {
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
 import { clientInspectionAction, pickupGate } from '../../utils/rentals/rentalInspection';
+import { renterReturnPhase } from '../../utils/rentals/renterReturnPhase';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
@@ -71,6 +74,9 @@ export default function RentalBookingDetailScreen() {
   const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
+  const { flags, loading: flagsLoading } = useClientFlags();
+  const scrollRef = useRef<ScrollView>(null);
+  const messagesY = useRef(0);
   const route = useRoute<RouteProp<Params, 'RentalBookingDetail'>>();
   const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
   const bookingId = route.params?.bookingId;
@@ -185,6 +191,26 @@ export default function RentalBookingDetailScreen() {
   const depositAmount = toAmount(booking?.security_deposit_amount);
   const authorizedAmount = toAmount(booking?.authorized_amount);
   const overtimeAmount = toAmount(booking?.overtime_amount);
+  const returnPhase = renterReturnPhase({
+    status: booking?.status ?? '',
+    endAt: booking?.end_at,
+    reportedAt: booking?.renter_reported_returned_at,
+    escalatedAt: booking?.renter_return_escalated_at,
+  });
+  const showReturnReport = !flagsLoading && flags.rentals_renter_return_report_enabled && returnPhase !== 'hidden';
+  const headerOverdue = showReturnReport && returnPhase === 'overdue';
+  const pillLabel = headerOverdue ? t('rentals.returnReport.overdue', 'Overdue') : statusLabel;
+  const pillColors = headerOverdue
+    ? {
+        backgroundColor: colors.error.main + '18',
+        textColor: colors.error.main,
+        borderColor: colors.error.main + '44',
+      }
+    : statusColors;
+  const returnLocation =
+    booking?.return_place?.name ||
+    booking?.rental_location_listing?.business_location?.name ||
+    '—';
   const isPayAtPickup = booking?.payment_timing === 'pay_at_pickup';
   const paymentPending =
     booking?.status === 'proposed' &&
@@ -316,10 +342,11 @@ export default function RentalBookingDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{
           padding: spacing.md,
-          paddingBottom: insets.bottom + (paymentPending || reviewStage ? 100 : spacing.xl),
+          paddingBottom: insets.bottom + (paymentPending || reviewStage ? 120 : spacing.xl + 32),
         }}
         refreshControl={
           <RefreshControl
@@ -363,13 +390,14 @@ export default function RentalBookingDetailScreen() {
             </Text>
           </View>
           <StatusPill
-            label={statusLabel}
-            backgroundColor={statusColors.backgroundColor}
-            textColor={statusColors.textColor}
-            borderColor={statusColors.borderColor}
+            label={pillLabel}
+            backgroundColor={pillColors.backgroundColor}
+            textColor={pillColors.textColor}
+            borderColor={pillColors.borderColor}
           />
         </View>
 
+        {showReturnReport ? null : (
         <View style={{ marginTop: spacing.md }}>
           <RentalPhaseBanner
             bookingStatus={booking.status}
@@ -420,6 +448,7 @@ export default function RentalBookingDetailScreen() {
             }
           />
         </View>
+        )}
 
         {snapshot.enrolled ? (
           <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
@@ -445,7 +474,22 @@ export default function RentalBookingDetailScreen() {
           </View>
         ) : null}
 
-        {booking.status === 'active' || booking.status === 'awaiting_return' ? (
+        {showReturnReport && booking ? (
+          <RenterReturnCard
+            phase={returnPhase as Exclude<typeof returnPhase, 'hidden'>}
+            bookingId={booking.id}
+            location={returnLocation}
+            address={booking.return_place?.address ?? returnLocation}
+            phone={booking.return_place?.phone ?? null}
+            endAt={booking.end_at}
+            reportedAt={booking.renter_reported_returned_at}
+            depositLabel={formatDetailMoney(depositAmount)}
+            onReported={() => void refetch()}
+            onAlreadyConfirmed={() => void refetch()}
+            onMessage={() => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true })}
+          />
+        ) : null}
+        {!showReturnReport && (booking.status === 'active' || booking.status === 'awaiting_return') ? (
           <View
             style={[
               styles.card,
@@ -530,22 +574,35 @@ export default function RentalBookingDetailScreen() {
               return (
                 <View key={step} style={[styles.timelineRow, { marginTop: spacing.xs }]}>
                   <MaterialCommunityIcons
-                    name={done ? 'check-circle' : 'circle-outline'}
+                    name={step === 'awaiting_return' && idx === currentIdx ? 'circle' : done ? 'check-circle' : 'circle-outline'}
                     size={18}
-                    color={done ? colors.success.main : colors.text.disabled}
+                    color={step === 'awaiting_return' && idx === currentIdx ? '#0A4FB5' : done ? colors.success.main : colors.text.disabled}
                   />
-                  <Text
-                    style={[
-                      typography.body2,
-                      {
-                        marginLeft: spacing.sm,
-                        color: done ? colors.text.primary : colors.text.disabled,
-                        fontWeight: done && idx === currentIdx ? '700' : '400',
-                      },
-                    ]}
-                  >
-                    {t(labelKey, DETAIL_STATUS_DEFAULTS[labelKey] ?? step)}
-                  </Text>
+                  <View style={{ marginLeft: spacing.sm, flex: 1 }}>
+                    <Text
+                      style={[
+                        typography.body2,
+                        {
+                          color: done ? colors.text.primary : colors.text.disabled,
+                          fontWeight: done && idx === currentIdx ? '700' : '400',
+                        },
+                      ]}
+                    >
+                      {t(labelKey, DETAIL_STATUS_DEFAULTS[labelKey] ?? step)}
+                    </Text>
+                    {step === 'awaiting_return' && (returnPhase === 'waiting' || returnPhase === 'escalated') ? (
+                      <Text style={[typography.caption, { color: '#0A4FB5' }]}>
+                        {returnPhase === 'escalated'
+                          ? t('rentals.returnReport.escalatedStepper', 'Support is checking')
+                          : t('rentals.returnReport.waitingStepper', 'Waiting for confirmation')}
+                      </Text>
+                    ) : null}
+                    {step === 'awaiting_return' && returnPhase === 'overdue' ? (
+                      <Text style={[typography.caption, { color: colors.error.main }]}>
+                        {t('rentals.returnReport.overdue', 'Overdue')}
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
               );
             })
@@ -707,6 +764,9 @@ export default function RentalBookingDetailScreen() {
                 marginTop: spacing.md,
               },
             ]}
+            onLayout={(event) => {
+              messagesY.current = event.nativeEvent.layout.y;
+            }}
           >
             <Text style={[typography.subtitle2, { color: colors.text.primary, marginBottom: spacing.sm }]}>
               {t('rentals.messages.title', 'Messages')}

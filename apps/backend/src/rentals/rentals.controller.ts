@@ -38,6 +38,7 @@ import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
+import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { RentalsService } from './rentals.service';
 
@@ -50,7 +51,8 @@ export class RentalsController {
     private readonly rentalsService: RentalsService,
     private readonly rentalBookingMessaging: RentalBookingMessagingService,
     private readonly rentalStartPinShare: RentalStartPinShareService,
-    private readonly notReceived: RentalNotReceivedService
+    private readonly notReceived: RentalNotReceivedService,
+    private readonly renterReturns: RentalRenterReturnService
   ) {}
 
   @Public()
@@ -634,6 +636,25 @@ export class RentalsController {
     return this.notReceived.report(bookingId);
   }
 
+  @Post('bookings/:id/report-returned')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Renter reports the item was handed back. Notifies the business. Does not change status or the deposit.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Report stored. alreadyReported on a repeat.' })
+  @ApiResponse({ status: 403, description: 'Only the renter' })
+  @ApiResponse({ status: 404, description: 'Not the renter, or the flag is off' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'RENTAL_RETURN_REPORT_NOT_OUT, RENTAL_RETURN_REPORT_NOT_STARTED, or RENTAL_RETURN_ALREADY_CONFIRMED',
+  })
+  reportReturned(@Param('id') bookingId: string) {
+    return this.renterReturns.report(bookingId);
+  }
+
   @Get('bookings/:id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -648,6 +669,7 @@ export class RentalsController {
   async getBooking(@Param('id') bookingId: string) {
     const booking = await this.rentalsService.getBookingDetailForViewer(bookingId);
     const report = await this.notReceived.findForBooking(bookingId);
+    const returnPlace = await this.renterReturns.placeFor(bookingId);
     return {
       success: true,
       data: {
@@ -656,6 +678,7 @@ export class RentalsController {
           not_received_report: report
             ? { id: report.id, reported_at: report.reported_at }
             : null,
+          return_place: returnPlace,
         },
       },
     };

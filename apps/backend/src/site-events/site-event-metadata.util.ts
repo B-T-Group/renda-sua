@@ -92,6 +92,7 @@ const MAX_SHOWN_PRICE = 99_999_999;
 const ASSISTANT_UUID_ID_KEYS: ReadonlySet<string> = new Set(['thread_id', 'target_id', 'order_id']);
 // Client reorder events (mobile sends metadata.orderId; web uses subject_id).
 const REORDER_UUID_ID_KEYS: ReadonlySet<string> = new Set(['orderId']);
+const RENTAL_RETURN_UUID_KEYS: ReadonlySet<string> = new Set(['booking_id']);
 const NO_UUID_ID_KEYS: ReadonlySet<string> = new Set();
 
 function validateAssistantValue(key: string, value: unknown): unknown | null {
@@ -194,6 +195,7 @@ export function isReorderSiteEventType(eventType: string): boolean {
 export function uuidIdKeysForEventType(eventType: string): ReadonlySet<string> {
   if (isAssistantSiteEventType(eventType)) return ASSISTANT_UUID_ID_KEYS;
   if (isReorderSiteEventType(eventType)) return REORDER_UUID_ID_KEYS;
+  if (eventType === 'rental_renter_reported_returned') return RENTAL_RETURN_UUID_KEYS;
   return NO_UUID_ID_KEYS;
 }
 
@@ -260,6 +262,7 @@ export function valueLooksLikePii(
   if (uuidIdKeys.has(key)) {
     return !isUuidValue(value);
   }
+  if (key === 'reported_at' && !Number.isNaN(Date.parse(value))) return false;
   if (looksLikeEmail(value)) return true;
   if (looksLikePhone(value)) return true;
   if (looksLikeShortCode(value)) return true;

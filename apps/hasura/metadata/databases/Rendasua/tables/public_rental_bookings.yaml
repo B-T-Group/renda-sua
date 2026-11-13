@@ -65,6 +65,8 @@ select_permissions:
         - period_ended_notified_at
         - actual_start_at
         - actual_end_at
+        - renter_reported_returned_at
+        - renter_return_escalated_at
         - contract_expires_at
         - inspection_policy_version
         - return_handed_back_at
@@ -104,6 +106,8 @@ select_permissions:
         - period_ended_notified_at
         - actual_start_at
         - actual_end_at
+        - renter_reported_returned_at
+        - renter_return_escalated_at
         - contract_expires_at
         - inspection_policy_version
         - return_handed_back_at

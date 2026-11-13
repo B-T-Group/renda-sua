@@ -189,6 +189,8 @@ export interface ClientRentalBookingRow {
   rental_pricing_snapshot?: unknown;
   payment_timing?: RentalPaymentTiming | string | null;
   payment_status?: RentalBookingPaymentState | string | null;
+  renter_reported_returned_at?: string | null;
+  renter_return_escalated_at?: string | null;
   rental_location_listing?: {
     id: string;
     business_location?: { name: string } | null;
@@ -222,6 +224,9 @@ export interface RentalBookingDetail {
   units_booked?: number | null;
   inspection_policy_version?: number | null;
   not_received_report?: { id: string; reported_at: string } | null;
+  renter_reported_returned_at?: string | null;
+  renter_return_escalated_at?: string | null;
+  return_place?: { name: string; address: string | null; phone: string | null } | null;
   accept_start_preview?: {
     payment_rail: 'card' | 'wallet' | 'mobile_money';
     amount_due_at_pickup: number;

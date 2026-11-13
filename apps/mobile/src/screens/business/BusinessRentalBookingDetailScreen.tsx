@@ -15,7 +15,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusPill } from '../../components/common/StatusPill';
 import { OrderMessageComposer } from '../../components/messaging/OrderMessageComposer';
+import { BusinessReturnedBanner } from '../../components/rentals/BusinessReturnedBanner';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
 import { unpaidCancelMinutesLeft } from '../../utils/rentals/rentalInspection';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -26,11 +28,13 @@ import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import type { RentalBookingDetail } from '../../types/rentals';
 import {
+  bookingDetailStatusLabelKey,
   parseRentalSelectionWindows,
   rentalBookingStatusColors,
   resolveBookingPhase,
 } from '../../utils/rentals';
 import { bookingRequestedPeriodLines, formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
+import { formatDoualaStamp } from '../../utils/rentals/renterReturnPhase';
 import {
   businessCanReplaceReport,
   classifyInspectionError,
@@ -45,6 +49,7 @@ export default function BusinessRentalBookingDetailScreen() {
   const { t, i18n } = useTranslation();
   const { colors, spacing, typography, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
+  const { flags, loading: flagsLoading } = useClientFlags();
   const route = useRoute<Route>();
   const navigation = useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
   const bookingId = route.params.bookingId;
@@ -296,6 +301,10 @@ export default function BusinessRentalBookingDetailScreen() {
   const canVerify = gate.showStart && !snapshot.loading;
   const canReturn = showLegacyReturnPicker(snapshot.enrolled, booking.status);
   const showReturnInspection = showEnrolledReturn(snapshot.enrolled, booking.status);
+  const showRenterReport =
+    !flagsLoading &&
+    flags.rentals_renter_return_report_enabled &&
+    Boolean(booking.renter_reported_returned_at);
   const isReserved = booking.status === 'reserved';
   const showCollectPayment = gate.showCollectPayment && !snapshot.loading;
   const canCancel =
@@ -338,7 +347,12 @@ export default function BusinessRentalBookingDetailScreen() {
           </Text>
           <StatusPill
             compact
-            label={t(phaseInfo.labelKey, booking.status)}
+            label={t(
+              booking.status === 'awaiting_return'
+                ? bookingDetailStatusLabelKey(booking.status)
+                : phaseInfo.labelKey,
+              booking.status === 'awaiting_return' ? 'Return due' : booking.status
+            )}
             backgroundColor={sc.backgroundColor}
             textColor={sc.textColor}
             borderColor={sc.borderColor}
@@ -380,6 +394,7 @@ export default function BusinessRentalBookingDetailScreen() {
         ) : null}
       </View>
 
+      {showRenterReport ? null : (
       <View style={{ marginTop: spacing.md }}>
         <RentalPhaseBanner
           bookingStatus={booking.status}
@@ -419,7 +434,7 @@ export default function BusinessRentalBookingDetailScreen() {
               >
                 {t('rentals.actions.verifyStartPin', 'Verify start PIN')}
               </Button>
-            ) : canReturn ? (
+            ) : canReturn && !showRenterReport ? (
               <Button
                 mode="contained"
                 disabled={busy}
@@ -432,6 +447,7 @@ export default function BusinessRentalBookingDetailScreen() {
           }
         />
       </View>
+      )}
 
       {isReserved && !snapshot.enrolled ? (
         <View
@@ -482,6 +498,27 @@ export default function BusinessRentalBookingDetailScreen() {
         ) : null}
       </View>
 
+      {showRenterReport && booking.renter_reported_returned_at ? (
+        <BusinessReturnedBanner
+          title={t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
+            time: formatDoualaStamp(booking.renter_reported_returned_at, i18n.language),
+          })}
+          body={t(
+            'rentals.returnReport.businessBody',
+            'Please check the item, then confirm the return. The {{amount}} deposit is released only after you confirm.',
+            { amount: formatRequestAmount(Number(booking.security_deposit_amount) || 0, booking.currency || 'XAF', i18n.language) }
+          )}
+          onConfirm={() => {
+            if (showReturnInspection) {
+              navigation.navigate('BusinessInspection', { bookingId, stage: 'return' });
+              return;
+            }
+            openReturnDialog();
+          }}
+          onProblem={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'return' })}
+        />
+      ) : null}
+
       {snapshot.enrolled ? (
         <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
           <BusinessAcceptStartHero
@@ -500,7 +537,7 @@ export default function BusinessRentalBookingDetailScreen() {
               {t('rentalInspection.pickupTitle', 'Pickup condition')}
             </Button>
           ) : null}
-          {showReturnInspection ? (
+          {showReturnInspection && !showRenterReport ? (
             <Button
               mode="contained"
               buttonColor={colors.cta.main}

@@ -84,8 +84,73 @@ function inspectionFor() {
   };
 }
 
+function applyReturn<T extends Record<string, unknown>>(row: T): T {
+  const state = captureParams().get('return');
+  if (!state) return row;
+  const reported = state === 'waiting' || state === 'escalated' || state === 'business';
+  return {
+    ...row,
+    booking_number: 'RB-27251416',
+    status: 'awaiting_return',
+    end_at: '2026-11-12T19:00:00.000Z',
+    actual_start_at: '2026-11-12T12:00:00.000Z',
+    security_deposit_amount: 45000,
+    currency: 'XAF',
+    renter_reported_returned_at: reported ? '2026-11-12T18:42:00.000Z' : null,
+    renter_return_escalated_at: state === 'escalated' ? '2026-11-13T18:42:00.000Z' : null,
+    return_place: {
+      name: "Stripe Rail - L'Assomption",
+      address: "Stripe Rail - L'Assomption",
+      phone: '+237600000000',
+    },
+    inspection_policy_version: null,
+    rental_location_listing: {
+      rental_item: {
+        name: 'JBL PartyBox 310',
+        rental_item_images: [{ id: 'img', image_url: '/hero.png', alt_text: 'JBL PartyBox 310' }],
+      },
+      business_location: { name: "Stripe Rail - L'Assomption" },
+    },
+  };
+}
+
 export async function getBooking() {
-  return bookingFor(scene());
+  return applyReturn(bookingFor(scene()));
+}
+
+export async function getClientBookings() {
+  if (captureParams().get('return') !== 'list') return [];
+  const base = applyReturn(bookingFor('started'));
+  return [
+    { ...base, id: 'overdue', renter_reported_returned_at: null, renter_return_escalated_at: null },
+    {
+      ...base,
+      id: 'waiting',
+      renter_reported_returned_at: '2026-11-12T18:42:00.000Z',
+      renter_return_escalated_at: null,
+    },
+  ];
+}
+
+export async function getClientRequests() {
+  return [];
+}
+
+export async function cancelRequest() {
+  return { success: true };
+}
+
+export async function createBooking() {
+  return { success: true };
+}
+
+export async function reportReturned() {
+  return {
+    success: true as const,
+    alreadyReported: false,
+    wasOverdue: false,
+    report: { rentalBookingId: 'b1', reportedAt: '2026-11-12T18:42:00.000Z' },
+  };
 }
 
 export async function cancelBooking() {
@@ -171,6 +236,11 @@ export const rentalsApi = {
   initiatePickupPayment: async () => ({ success: true }),
   verifyStartPin: async () => ({ success: true }),
   confirmReturn: async () => ({ success: true }),
+  reportReturned,
+  getClientBookings,
+  getClientRequests,
+  cancelRequest,
+  createBooking,
   getBookingMessages: asyncOk,
   getBookingMentionableParticipants: asyncOk,
   sendBookingMessage: async () => ({ success: true }),
@@ -221,11 +291,22 @@ function reportEnabled(): boolean {
   return captureParams().get('report') === '1';
 }
 
+export function useStore() {
+  return {
+    auth: { isAuthenticated: false },
+    persona: { showMainApp: false, activePersona: 'client' },
+  };
+}
+
 export function useClientFlags() {
   return useMemo(
     () => ({
       loaded: true,
-      flags: { rentals_not_received_report_enabled: reportEnabled() },
+      loading: false,
+      flags: {
+        rentals_not_received_report_enabled: reportEnabled(),
+        rentals_renter_return_report_enabled: Boolean(captureParams().get('return')),
+      },
     }),
     []
   );
@@ -296,7 +377,7 @@ export default function Icon({
   color?: string;
   size?: number;
 }) {
-  const filled = (name ?? '').includes('check');
+  const filled = (name ?? '').includes('check') || name === 'circle';
   const px = size ?? 18;
   return (
     <span
