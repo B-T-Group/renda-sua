@@ -47,26 +47,54 @@ const COUNT_WORDS: Record<string, number> = {
   six: 6,
 };
 
-const NONE_AVAILABLE = /\b(none|nothing|aucun|aucune|rien)\b[^.!?]{0,40}\b(available|disponible)\b/i;
+const COUNT = '(?:none|zero|no|nothing|rien|aucun|aucune|one|un|une|two|deux|three|trois|four|quatre|five|cinq|six|\\d+)';
+const BARE_COUNT = '(?:none|zero|no|nothing|rien|aucun|aucune|one|two|deux|three|trois|four|quatre|five|cinq|six|\\d+)';
+const NOUN = '(?:rentals?|options?|listings?|results?|cars?|voitures?|locations?|vehicules?|annonces?|resultats?)';
+const FOUND = new RegExp(`\\b(?:i found|j'ai trouve)\\s+(?:only |juste )?(${COUNT})\\b`);
+const THERE = new RegExp(`\\b(?:there\\s+(?:are|is)|il y a)\\s+(?:only |juste )?(${COUNT})\\b`);
+const LISTED = new RegExp(`\\b(${BARE_COUNT})\\s+${NOUN}\\s+(?:are |est |sont )?(?:available|disponibles?)\\b`);
+const NONE_AVAILABLE = /\b(?:none|nothing|aucun|aucune|rien)\b[^.!?]{0,40}\b(?:available|disponible)\b/;
 
-/** The rental count the reply states, or null when it states none. */
+/** The total rental count the reply states, or null when it states none. */
 export function claimedRentalCount(text: string): number | null {
-  const folded = foldClaim(text);
-  const claim = new RegExp(
-    `\\b(${Object.keys(COUNT_WORDS).join('|')}|\\d+)\\b(?:\\s+\\w+){0,3}\\s+(options?|rentals?|listings?|results?|cars?|voitures?|locations?|vehicules?|annonces?|resultats?)\\b`,
-    'gi'
-  );
-  let claimed: number | null = null;
-  for (const match of folded.matchAll(claim)) claimed = countToken(match[1]);
-  if (claimed != null) return claimed;
+  const claims = sentenceClaims(text).filter((claim): claim is number => claim != null);
+  return claims.length ? claims[claims.length - 1] : null;
+}
+
+/** Rewrite a total-count sentence that disagrees with the rental cards. */
+export function alignRentalCountClaim(text: string, rentalCardCount: number, locale: 'en' | 'fr'): string {
+  const sentences = splitSentences(text);
+  const claims = sentences.map(totalClaim);
+  if (!claims.some((claim) => claim != null && claim !== rentalCardCount)) return text;
+  if (rentalCardCount <= 0 && claims.some((claim) => (claim ?? 0) > 0)) return rentalCountSentence(0, locale);
+  return sentences.map((sentence, index) => rewriteSentence(sentence, claims[index], rentalCardCount, locale)).join(' ');
+}
+
+function sentenceClaims(text: string): Array<number | null> {
+  return splitSentences(text).map(totalClaim);
+}
+
+function totalClaim(sentence: string): number | null {
+  const folded = foldClaim(sentence);
+  return readCount(folded.match(FOUND)) ?? readCount(folded.match(THERE)) ?? readCount(folded.match(LISTED)) ?? noneCount(folded);
+}
+
+function rewriteSentence(sentence: string, claim: number | null, rentalCardCount: number, locale: 'en' | 'fr'): string {
+  if (claim == null || claim === rentalCardCount) return sentence;
+  return rentalCountSentence(rentalCardCount, locale);
+}
+
+function readCount(match: RegExpMatchArray | null): number | null {
+  return match ? countToken(match[1]) : null;
+}
+
+function noneCount(folded: string): number | null {
   return NONE_AVAILABLE.test(folded) ? 0 : null;
 }
 
-/** Rewrite a reply whose rental count is not the number of rental cards. */
-export function alignRentalCountClaim(text: string, rentalCardCount: number, locale: 'en' | 'fr'): string {
-  const claimed = claimedRentalCount(text);
-  if (claimed == null || claimed === rentalCardCount) return text;
-  return rentalCountSentence(rentalCardCount, locale);
+function splitSentences(text: string): string[] {
+  const parts = text.split(/(?<=[.!?])\s+/).map((part) => part.trim()).filter(Boolean);
+  return parts.length ? parts : [text];
 }
 
 function rentalCountSentence(count: number, locale: 'en' | 'fr'): string {
@@ -85,7 +113,7 @@ function countToken(token: string): number {
 }
 
 function foldClaim(value: string): string {
-  return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[’]/g, "'");
 }
 
 export function sanitizeRentalModelText(
