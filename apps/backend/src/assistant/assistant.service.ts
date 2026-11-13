@@ -9,7 +9,7 @@ import { guestAsksForPersonalData, staticKnowledgeTopic } from './assistant-inte
 import { needsKnowledgeGrounding } from './needs-knowledge-grounding';
 import { sanitizeAssistantReply } from './sanitize-assistant-reply';
 import { rentalPromptAddendum } from './assistant-rental-prompt';
-import { sanitizeRentalModelText } from './assistant-rental-guard';
+import { alignRentalCountClaim, sanitizeRentalModelText } from './assistant-rental-guard';
 import { AssistantToolsService } from './assistant-tools.service';
 import type { AssistantRentalTurn } from './assistant-rental.service';
 import type {
@@ -515,10 +515,9 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
     rentalIntent = false
   ): AssistantReply {
     const beside = replyBesideCards(text, channel, cards, locale);
-    const rentalCards = cards.some((card) => card.kind === 'rental' || card.rental);
-    const cleaned = sanitizeAssistantReply(
-      sanitizeRentalModelText(beside, { rentalCards, rentalGrounded: rentalIntent, rentalIntent })
-    );
+    const rentalCardCount = cards.filter((card) => card.kind === 'rental' || card.rental).length;
+    const counted = alignRentalReply(beside, rentalCardCount, locale, rental, rentalIntent);
+    const cleaned = sanitizeAssistantReply(counted);
     if (!cleaned || this.isNoReplyToken(cleaned)) {
       if (channel === 'whatsapp') {
         return { reply: '', handoff, locale, silent: true };
@@ -573,6 +572,19 @@ const GUEST_SIGN_IN: Record<AssistantLocale, string> = {
   en: 'Sign in to see your orders, credits, addresses, and the rest of your account. I can still help with what Rendasua offers, how to pay, and what you can buy or rent.',
   fr: 'Connectez-vous pour voir vos commandes, crédits, adresses et le reste de votre compte. Je peux quand même expliquer ce que Rendasua propose, comment payer, et ce que vous pouvez acheter ou louer.',
 };
+
+function alignRentalReply(
+  text: string,
+  rentalCardCount: number,
+  locale: AssistantLocale,
+  rental: AssistantRentalMeta | undefined,
+  rentalIntent: boolean
+): string {
+  const rentalCards = rentalCardCount > 0;
+  const sanitized = sanitizeRentalModelText(text, { rentalCards, rentalGrounded: rentalIntent, rentalIntent });
+  if (!rental && !rentalCards) return sanitized;
+  return alignRentalCountClaim(sanitized, rentalCardCount, locale);
+}
 
 function latestUserText(messages: AssistantChatInput['messages']): string {
   return [...messages].reverse().find((item) => item.role === 'user')?.content || '';

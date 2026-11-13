@@ -1,5 +1,7 @@
 import {
+  alignRentalCountClaim,
   assertModelCannotCreateRentalRequests,
+  claimedRentalCount,
   listedToolNames,
   sanitizeRentalModelText,
 } from './assistant-rental-guard';
@@ -26,6 +28,19 @@ describe('rental model guardrail', () => {
     expect(cleaned).not.toMatch(/FCFA/);
     expect(cleaned).toContain('17 Nov');
     expect(cleaned.split(/[.!?]/).filter((part) => part.trim()).length).toBeLessThanOrEqual(2);
+  });
+
+  it('rewrites a rental count that does not match the attached cards', () => {
+    expect(claimedRentalCount('There are three options.')).toBe(3);
+    expect(claimedRentalCount('None were available.')).toBe(0);
+    expect(claimedRentalCount('Il y a trois options.')).toBe(3);
+    expect(alignRentalCountClaim('There are three options.', 2, 'en')).toBe('There are 2 rentals.');
+    expect(alignRentalCountClaim('None were available.', 2, 'en')).toBe('There are 2 rentals.');
+    expect(alignRentalCountClaim('Il y a trois options.', 0, 'fr')).toBe(
+      'Aucune location n’est disponible pour ces dates.'
+    );
+    expect(alignRentalCountClaim('There are 2 rentals.', 2, 'en')).toBe('There are 2 rentals.');
+    expect(alignRentalCountClaim('I can help with the dates.', 2, 'en')).toBe('I can help with the dates.');
   });
 
   it('removes an availability claim that no rental tool grounded', () => {

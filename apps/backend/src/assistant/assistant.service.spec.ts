@@ -485,6 +485,51 @@ describe('AssistantService', () => {
     expect(result.handoff).toBe(true);
   });
 
+  it('replaces a rental count that does not match the attached rental cards', async () => {
+    const card = {
+      kind: 'rental' as const,
+      id: 'r1',
+      title: 'Tesla Model Y',
+      href: '/rentals/a',
+      rental: { listingId: 'a', availability: 'available' as const, unitsRequested: 1, currency: 'XAF', canRequest: true, cta: 'request' as const, businessName: 'Centre Ville' },
+    };
+    bedrock.converseWithTools
+      .mockResolvedValueOnce({
+        stopReason: 'tool_use',
+        text: '',
+        toolUses: [{ toolUseId: 't1', name: 'search_rentals', input: { query: 'tesla' } }],
+        assistantContent: [{ toolUse: { toolUseId: 't1', name: 'search_rentals', input: {} } }],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: 'There are three options.',
+        toolUses: [],
+        assistantContent: [],
+      });
+    tools.executeTool.mockResolvedValue({
+      content: '{"rental_count":2}',
+      cards: [card, { ...card, id: 'r2' }],
+      rental: { status: 'ok' },
+    });
+    const result = await service.runTurn({
+      channel: 'app',
+      messages: [{ role: 'user', content: 'rent a Tesla 17 to 18 Nov' }],
+      identity: {
+        isVerified: true,
+        userId: 'u1',
+        firstName: 'Ada',
+        preferredLanguage: 'en',
+        market: { country_code: 'GA' },
+        country: 'GA',
+        phoneE164: null,
+        accountType: 'client',
+        clientId: 'c1',
+      },
+    });
+    expect(result.cards).toHaveLength(2);
+    expect(result.reply).toBe('There are 2 rentals.');
+  });
+
   it('keeps tool cards when the model reply is empty', async () => {
     const card = { kind: 'order' as const, id: 'o1', title: 'Rice', href: '/orders/o1' };
     bedrock.converseWithTools

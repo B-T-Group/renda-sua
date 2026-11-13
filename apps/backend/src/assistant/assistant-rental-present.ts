@@ -165,6 +165,7 @@ function modelPayload(input: RentalPresentInput, refs: Record<string, string>) {
         }
       : null,
     counts: { shown: Math.min(input.hits.length, CARD_CAP), total: input.total },
+    rental_count: Math.min(input.hits.length, CARD_CAP),
     results: input.hits.slice(0, CARD_CAP).map((hit, index) => ({
       ref: `r${index + 1}`,
       name: hit.listing.rental_item.name,
