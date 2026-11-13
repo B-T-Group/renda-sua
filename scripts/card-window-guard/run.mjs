@@ -10,7 +10,7 @@ import { chromium } from 'playwright';
 import { buildMobile } from '../capture-accept-start/build-mobile.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
-const out = '/opt/cursor/artifacts/card-window-guard-v1';
+const out = '/opt/cursor/artifacts/card-window-guard-v2';
 const inter = '/tmp/card-mocks/card-window-guard/Inter-Variable.ttf';
 const icons = path.join(
   root,
@@ -36,8 +36,7 @@ await esbuild.build({
 });
 
 const css = `@font-face{font-family:Inter;src:url(/inter.ttf) format('truetype');font-weight:100 900;}
-@font-face{font-family:'Material Design Icons';src:url(/icons.ttf) format('truetype');font-weight:normal;font-style:normal;}
-@font-face{font-family:MaterialCommunityIcons;src:url(/icons.ttf) format('truetype');}
+@font-face{font-family:material-community;src:url(/icons.ttf) format('truetype');font-weight:normal;font-style:normal;font-display:block;}
 html,body,#root{margin:0;height:100%;font-family:Inter,sans-serif;background:#FAF9F7}`;
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>`;
 
@@ -73,19 +72,12 @@ const webPort = web.address().port;
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true });
 
 const shots = [
-  ['01-datepicker-stripe-en', 'phone', '01', 'en', 390, 844],
-  ['01-datepicker-stripe-fr', 'phone', '01', 'fr', 390, 844],
-  ['01-datepicker-stripe-en-360', 'phone', '01', 'en', 360, 640],
   ['02-datepicker-momo-en', 'phone', '02', 'en', 390, 844],
   ['02-datepicker-momo-fr', 'phone', '02', 'fr', 390, 844],
   ['03-summary-unfit-en', 'phone', '03', 'en', 390, 844],
   ['03-summary-unfit-fr', 'phone', '03', 'fr', 390, 844],
   ['04-fallback-en', 'phone', '04', 'en', 390, 844],
   ['04-fallback-fr', 'phone', '04', 'fr', 390, 844],
-  ['05-web-datepicker-stripe-en', 'web', '05', 'en', 1280, 800],
-  ['05-web-datepicker-stripe-fr', 'web', '05', 'fr', 1280, 800],
-  ['06-web-datepicker-momo-en', 'web', '06', 'en', 1280, 800],
-  ['06-web-datepicker-momo-fr', 'web', '06', 'fr', 1280, 800],
   ['07-web-summary-unfit-en', 'web', '07', 'en', 1280, 800],
   ['07-web-summary-unfit-fr', 'web', '07', 'fr', 1280, 800],
   ['08-assistant-unfit-en', 'phone', '08', 'en', 390, 844],
@@ -97,8 +89,8 @@ for (const [name, kind, scene, lang, width, height] of shots) {
   const port = kind === 'web' ? webPort : phonePort;
   await page.goto(`http://127.0.0.1:${port}/?scene=${scene}&lang=${lang}`, { waitUntil: 'networkidle' });
   const fontReady = await page.evaluate(async () => {
-    await document.fonts.load("20px MaterialCommunityIcons");
-    return document.fonts.check("20px MaterialCommunityIcons");
+    await document.fonts.load("20px material-community");
+    return document.fonts.check("20px material-community");
   });
   if (!fontReady && name.endsWith('-en')) console.log('font missing', name);
   await page.screenshot({ path: path.join(out, `${name}.png`) });

@@ -18,7 +18,7 @@ import type { ClientRootStackParamList, GuestRootStackParamList, RentalRequestPa
 import { useStore } from '../../stores/RootStore';
 import {
   cardEndMisses,
-  cardWindowNote,
+  cardWindowSendReason,
   cardWindowWarning,
   effectiveCardEnd,
   formatCardCutoff,
@@ -118,7 +118,7 @@ export default function RentalRequestScreen() {
           onEditDates={openDates}
           unavailableLabel={dates.unavailableLabel}
           cardSendDisabled={unfit}
-          blockedReason={unfit ? cardWindowNote(cutoff, i18n.language) : undefined}
+          blockedReason={unfit ? t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language)) : undefined}
           notice={
             unfit ? (
               <CardWindowNotice

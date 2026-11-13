@@ -36,7 +36,7 @@ import { CardWindowBanner, CardWindowCalendar } from './CardWindowCalendar';
 import {
   cardEndMisses,
   cardWindowErrorMessage,
-  cardWindowNote,
+  cardWindowSendReason,
   cardWindowWarning,
   effectiveCardEnd,
   calendarDay,
@@ -139,6 +139,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   const cardOn = payingByCard ?? cardWindow?.payment_rail === 'stripe';
   const latest = guardOn ? effectiveCardEnd(cardWindow, cardOn) : null;
   const navigate = useNavigate();
+  const dateRef = useRef<HTMLInputElement | null>(null);
   const { createRequest, fetchListingBookedWindows } = useRentalApi();
   const { trackSiteEvent } = useTrackSiteEvent();
   const [booked, setBooked] = useState<RentalTakenWindow[]>([]);
@@ -326,7 +327,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   const cardUnfit = cardEndMisses(selectionEnd, latest);
 
   const validateBeforeSubmit = useCallback((): string | null => {
-    if (cardUnfit) return cardWindowNote(cutoff, i18n.language);
+    if (cardUnfit) return t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language));
     if (selections.length === 0) {
       return t('rentals.requestForm.addOneRange', 'Add at least one time range.');
     }
@@ -371,7 +372,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     t,
     unitsRequested,
     cardUnfit,
-    cutoff,
     i18n.language,
   ]);
 
@@ -438,9 +438,10 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
       setCardFallback(friendly);
       const http = e as { response?: { data?: { message?: string } } };
       setMsg(
-        friendly ||
-          http?.response?.data?.message ||
-          (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'))
+        friendly
+          ? null
+          : http?.response?.data?.message ||
+              (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'))
       );
     } finally {
       setSubmitting(false);
@@ -517,7 +518,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                     tone="warn"
                     body={cardWindowWarning(cutoff, i18n.language)}
                     action={i18n.language.startsWith('fr') ? 'Modifier les dates' : 'Change dates'}
-                    onAction={() => setMsg(cardWindowNote(cutoff, i18n.language))}
+                    onAction={() => dateRef.current?.focus()}
                   />
                 ) : null}
                 {cardFallback ? (
@@ -542,6 +543,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                       value={dateStr}
                       onChange={(e) => setDateStr(e.target.value)}
                       InputLabelProps={{ shrink: true }}
+                      inputRef={dateRef}
                       inputProps={{
                         min: todayDateInputValue(),
                         max: latest && cardWindow?.timezone ? calendarDay(new Date(latest), cardWindow.timezone) : undefined,
@@ -727,12 +729,17 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                   helperText={t('rentals.requestForm.optionalNotesHelper', 'Max 2000 characters')}
                 />
 
+                {cardUnfit || cardFallback ? (
+                  <Typography sx={{ color: '#B45309', fontWeight: 600 }}>
+                    {t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language))}
+                  </Typography>
+                ) : null}
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
                   <Button
                     variant="contained"
                     size="large"
                     onClick={() => openConfirm()}
-                    disabled={selections.length === 0}
+                    disabled={selections.length === 0 || cardUnfit || Boolean(cardFallback)}
                     sx={{
                       minHeight: 48,
                       fontWeight: 700,
@@ -844,7 +851,12 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
           <Button onClick={() => setConfirmOpen(false)} disabled={submitting}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button variant="contained" onClick={() => void submitRequest()} disabled={submitting || cardUnfit}>
+          {cardUnfit || cardFallback ? (
+            <Typography sx={{ color: '#B45309', fontWeight: 600, mr: 'auto' }}>
+              {t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language))}
+            </Typography>
+          ) : null}
+          <Button variant="contained" onClick={() => void submitRequest()} disabled={submitting || cardUnfit || Boolean(cardFallback)}>
             {submitting ? t('common.loading', 'Loading...') : t('rentals.requestForm.confirmSend', 'Send request')}
           </Button>
         </DialogActions>

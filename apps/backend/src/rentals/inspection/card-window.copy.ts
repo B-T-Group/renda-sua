@@ -1,3 +1,5 @@
+import { parseSearchDateRange, type SearchDateRange } from '../rental-search.dates';
+
 const CODES = new Set([
   'RENTAL_INSPECTION_STRIPE_WINDOW',
   'RENTAL_STRIPE_BOOKING_WINDOW_EXCEEDED',
@@ -40,19 +42,36 @@ function monthLabel(date: Date, timeZone: string, locale: string): string {
   return locale.toLowerCase().startsWith('fr') ? month.toLocaleLowerCase('fr') : month;
 }
 
-/** Earlier stay that ends on the card cutoff day. Does not offer a later end. */
+/** Customer sentence. The cutoff is the formatted listing instant, not a fixed date. */
+export function assistantCardWindowCopy(cutoff: string, locale: string): string {
+  if (locale.toLowerCase().startsWith('fr')) {
+    return `Avec une carte, cette location doit se terminer le ${cutoff}. Voici des dates possibles :`;
+  }
+  return `With a card, this rental must end by ${cutoff}. Here are dates that work:`;
+}
+
+/** `13 Nov → 15 Nov · 2 days`. Day count comes from the rental search duration. */
+export function formatAssistantStay(
+  stay: { start: string; end: string; dayCount: number },
+  locale: string
+): string {
+  const french = locale.toLowerCase().startsWith('fr');
+  const unit = french ? (stay.dayCount > 1 ? 'jours' : 'jour') : stay.dayCount > 1 ? 'days' : 'day';
+  return `${stayDayLabel(stay.start, locale)} → ${stayDayLabel(stay.end, locale)} · ${stay.dayCount} ${unit}`;
+}
+
+/** Earlier stay whose exclusive end is on or before the cutoff. Day count is the search duration. */
 export function suggestedCardStay(
   latestIso: string,
   timeZone: string,
   now: Date
 ): { start: string; end: string; dayCount: number } | null {
-  const latest = new Date(latestIso);
-  if (!Number.isFinite(latest.getTime()) || latest.getTime() <= now.getTime()) return null;
-  const today = calendarDay(now, timeZone);
-  const end = calendarDay(latest, timeZone);
-  const start = addIsoDays(today, 1);
+  const latestMs = Date.parse(latestIso);
+  if (!Number.isFinite(latestMs) || latestMs <= now.getTime()) return null;
+  const end = calendarDay(new Date(latestIso), timeZone);
+  const start = addIsoDays(calendarDay(now, timeZone), 1);
   const from = start <= end ? start : end;
-  return { start: from, end, dayCount: isoDaySpan(from, end) };
+  return stayOnOrBefore(from, end, latestMs);
 }
 
 function calendarDay(date: Date, timeZone: string): string {
@@ -71,8 +90,33 @@ function addIsoDays(iso: string, days: number): string {
   return next.toISOString().slice(0, 10);
 }
 
-function isoDaySpan(start: string, end: string): number {
-  const from = Date.parse(`${start}T00:00:00Z`);
-  const to = Date.parse(`${end}T00:00:00Z`);
-  return Math.round((to - from) / 86400000) + 1;
+function stayOnOrBefore(from: string, end: string, latestMs: number) {
+  let cursor = end;
+  while (cursor > from) {
+    const range = searchRange(from, cursor);
+    if (range && range.endMs <= latestMs) return pickedStay(range);
+    cursor = addIsoDays(cursor, -1);
+  }
+  return null;
+}
+
+function searchRange(start: string, end: string): SearchDateRange | null {
+  try {
+    return parseSearchDateRange(start, end);
+  } catch {
+    return null;
+  }
+}
+
+function pickedStay(range: SearchDateRange) {
+  return { start: range.startDate, end: range.endDate, dayCount: range.dayCount };
+}
+
+function stayDayLabel(iso: string, locale: string): string {
+  const date = new Date(`${iso}T12:00:00Z`);
+  const french = locale.toLowerCase().startsWith('fr');
+  const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', timeZone: 'UTC' }).format(date);
+  const month = new Intl.DateTimeFormat(french ? 'fr' : 'en-GB', { month: 'short', timeZone: 'UTC' }).format(date);
+  const label = french ? month.toLocaleLowerCase('fr') : month.replace(/\./g, '');
+  return `${day} ${label}`;
 }

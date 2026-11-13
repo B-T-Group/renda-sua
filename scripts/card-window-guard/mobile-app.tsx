@@ -2,7 +2,13 @@ import { createRoot } from 'react-dom/client';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CardWindowDateSheet } from '../../apps/mobile/src/components/rentals/request/CardWindowDateSheet';
 import { CardWindowNotice } from '../../apps/mobile/src/components/rentals/request/CardWindowNotice';
-import { cardWindowNote, cardWindowWarning } from '../../apps/mobile/src/utils/rentals/cardWindow';
+import { cardWindowNote, cardWindowSendReason, cardWindowWarning } from '../../apps/mobile/src/utils/rentals/cardWindow';
+import {
+  assistantCardWindowCopy,
+  formatAssistantStay,
+  formatCardCutoff,
+  suggestedCardStay,
+} from '../../apps/backend/src/rentals/inspection/card-window.copy';
 
 const NOW = new Date('2026-11-12T19:00:00.000Z');
 const LATEST = '2026-11-15T19:00:00.000Z';
@@ -10,7 +16,7 @@ const params = new URLSearchParams(location.search);
 const scene = params.get('scene') || '01';
 const french = params.get('lang') === 'fr';
 const locale = french ? 'fr' : 'en';
-const cutoff = french ? '15 nov. · 20:00' : '15 Nov · 20:00';
+const cutoff = formatCardCutoff(LATEST, 'Africa/Douala', locale);
 
 function App() {
   if (scene === '01' || scene === '02') {
@@ -70,7 +76,7 @@ function Summary({ french, cutoff, fallback }: { french: boolean; cutoff: string
       </View>
       <Text style={styles.line}>{french ? '1 jour × 45 000 FCFA / jour' : '1 day × 45 000 FCFA / day'}</Text>
       <Text style={styles.total}>45 000 FCFA</Text>
-      <Text style={styles.reason}>{cardWindowNote(cutoff, french ? 'fr' : 'en')}</Text>
+      <Text style={styles.reason}>{cardWindowSendReason(french ? 'fr' : 'en')}</Text>
       <Pressable disabled style={styles.send}>
         <Text style={styles.sendText}>{french ? 'Envoyer la demande' : 'Send request'}</Text>
       </Pressable>
@@ -79,19 +85,20 @@ function Summary({ french, cutoff, fallback }: { french: boolean; cutoff: string
 }
 
 function Assistant({ french, cutoff }: { french: boolean; cutoff: string }) {
+  const locale = french ? 'fr' : 'en';
   const ask = french
     ? 'Je veux louer un marteau du 17 au 18 novembre'
     : 'I want to rent a hammer from 17th – 18th of November';
-  const reply = french
-    ? `Ces dates dépassent la limite d’une location payée par carte. Avec une carte, cette location doit se terminer le ${cutoff}. Voici des dates plus tôt :`
-    : `Those dates are past the card limit for an inspected rental. With a card, this rental must end by ${cutoff}. Here are earlier dates you can try:`;
+  const stay = suggestedCardStay(LATEST, 'Africa/Douala', NOW);
+  const reply = assistantCardWindowCopy(cutoff, locale);
+  const chip = stay ? formatAssistantStay(stay, locale) : '';
   return (
     <View style={styles.page}>
       <Text style={styles.clock}>20:00</Text>
       <Text style={styles.heading}>Rendasua</Text>
       <View style={styles.user}><Text style={styles.userText}>{ask}</Text></View>
       <View style={styles.bot}><Text style={styles.botText}>{reply}</Text></View>
-      <View style={styles.chip}><Text style={styles.chipText}>{french ? '13 nov. → 15 nov. · 3 jours' : '13 Nov → 15 Nov · 3 days'}</Text></View>
+      <View style={styles.chip}><Text style={styles.chipText}>{chip}</Text></View>
     </View>
   );
 }

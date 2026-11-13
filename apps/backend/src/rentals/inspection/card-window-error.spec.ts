@@ -1,7 +1,15 @@
 import { HttpException } from '@nestjs/common';
 import { cardWindowRejected } from './rental-inspection.errors';
 import { resolveCardPaymentPolicy } from '../rental-card-window';
-import { friendlyCardWindowCopy, isCardWindowCode, suggestedCardStay } from './card-window.copy';
+import { parseSearchDateRange } from '../rental-search.dates';
+import {
+  assistantCardWindowCopy,
+  formatAssistantStay,
+  formatCardCutoff,
+  friendlyCardWindowCopy,
+  isCardWindowCode,
+  suggestedCardStay,
+} from './card-window.copy';
 
 const NOW = new Date('2026-11-12T19:00:00.000Z');
 const fields = {
@@ -53,9 +61,23 @@ describe('card window error mapping', () => {
     expect(friendlyCardWindowCopy({ code: 'OTHER', latestCardEndAt: null, timezone: 'UTC', locale: 'en' })).toBeNull();
   });
 
-  it('offers a stay that ends on the cutoff and not 17–18 Nov', () => {
-    const stay = suggestedCardStay('2026-11-15T19:00:00.000Z', 'Africa/Douala', NOW);
-    expect(stay).toEqual({ start: '2026-11-13', end: '2026-11-15', dayCount: 3 });
-    expect(stay?.end < '2026-11-17').toBe(true);
+  it('counts the suggested stay with the rental search duration and ends by the cutoff', () => {
+    const latest = '2026-11-15T19:00:00.000Z';
+    const stay = suggestedCardStay(latest, 'Africa/Douala', NOW);
+    const range = parseSearchDateRange(stay?.start, stay?.end);
+    expect(parseSearchDateRange('2026-11-17', '2026-11-18')?.dayCount).toBe(1);
+    expect(stay).toEqual({ start: '2026-11-13', end: '2026-11-15', dayCount: 2 });
+    expect(stay?.dayCount).toBe(range?.dayCount);
+    expect(range && range.endMs <= Date.parse(latest)).toBe(true);
+    const cutoff = formatCardCutoff(latest, 'Africa/Douala', 'en');
+    expect(cutoff).toBe('15 Nov · 20:00');
+    expect(assistantCardWindowCopy(cutoff, 'en')).toBe(
+      'With a card, this rental must end by 15 Nov · 20:00. Here are dates that work:'
+    );
+    expect(assistantCardWindowCopy(formatCardCutoff(latest, 'Africa/Douala', 'fr'), 'fr')).toBe(
+      'Avec une carte, cette location doit se terminer le 15 nov. · 20:00. Voici des dates possibles :'
+    );
+    expect(formatAssistantStay(stay!, 'en')).toBe('13 Nov → 15 Nov · 2 days');
+    expect(formatAssistantStay(stay!, 'en')).not.toContain('inspected');
   });
 });

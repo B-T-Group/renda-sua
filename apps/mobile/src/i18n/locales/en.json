@@ -6201,12 +6201,12 @@
       "note": "With a card, this rental must end by {{cutoff}}. Choose earlier dates.",
       "warning": "These dates no longer fit a card payment. This rental must end by {{cutoff}}.",
       "payingByCard": "Paying by card",
-      "payingWithCardMomo": "Paying with Card · Mobile Money is also available",
       "payWithMomo": "Pay with Mobile Money instead",
       "changeDates": "Change dates",
+      "sendReason": "Change dates to send your request.",
       "cannotContinue": "Can’t continue with these dates",
       "applyDates": "Apply dates",
-      "assistant": "Those dates are past the card limit for an inspected rental. With a card, this rental must end by {{cutoff}}. Here are earlier dates you can try:"
+      "assistant": "With a card, this rental must end by {{cutoff}}. Here are dates that work:"
     },
     "start": "Start",
     "end": "End",

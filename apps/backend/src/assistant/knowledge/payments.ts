@@ -60,7 +60,7 @@ Un petit frais de service forfaitaire est inclus dans le total : 100 XAF au Came
 
 Frais d'annulation client : un pourcentage du prix des articles après réductions (livraison, taxes et frais de service exclus). Cameroun et Gabon 30 pour cent, Canada 0. La moitié va au magasin et la moitié à Rendasua. Ils s'appliquent quand le client annule après confirmation du magasin et, pour le paiement après confirmation, seulement une fois le client a payé.
 
-Une location inspectée payée par carte doit se terminer assez tôt pour que la vérification tienne dans l'autorisation de la carte. L'annonce indique l'heure limite dans le fuseau du magasin. Mobile Money n'est pas proposé dans un pays où seule la carte est disponible.`
+Avec une carte, une location doit se terminer à l'heure limite indiquée sur l'annonce, dans le fuseau du magasin. Proposez des dates possibles qui se terminent à cette heure ou avant. Mobile Money n'est pas proposé dans un pays où seule la carte est disponible.`
       : `Rendasua supports mobile money in Africa and card payments (Stripe) in Canada, the United States, and the Philippines.
 
 - Cameroon: MTN Mobile Money, Orange Money
@@ -79,7 +79,7 @@ A small flat service fee is included in the order total: 100 XAF in Cameroon, Ga
 
 Client cancellation fee: a percentage of the item price after discounts (delivery, tax, and the service fee are not included). Cameroon and Gabon 30 percent, Canada 0. Half of the fee is paid to the store and half to Rendasua. It applies when the client cancels after the store has confirmed and, for pay-after-confirm, only after the client has paid.
 
-An inspected rental paid by card must end early enough for the review to fit the card authorization. The listing gives the latest end time in the shop's time zone. Mobile Money is not offered in a card-only country.`;
+With a card, a rental must end by the latest end time on the listing, in the shop's time zone. Offer dates that work and that end by that time. Mobile Money is not offered in a card-only country.`;
 
   const credits =
     locale === 'fr'

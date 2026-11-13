@@ -67,6 +67,12 @@ export function cardWindowNote(cutoff: string, locale: string): string {
     : `With a card, this rental must end by ${cutoff}. Choose earlier dates.`;
 }
 
+export function cardWindowSendReason(locale: string): string {
+  return locale.toLowerCase().startsWith('fr')
+    ? 'Modifiez les dates pour envoyer votre demande.'
+    : 'Change dates to send your request.';
+}
+
 export function cardWindowWarning(cutoff: string, locale: string): string {
   return locale.toLowerCase().startsWith('fr')
     ? `Ces dates ne conviennent plus pour un paiement par carte. Cette location doit se terminer le ${cutoff}.`

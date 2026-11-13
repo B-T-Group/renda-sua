@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   calendarDay,
   cardDayBlocked,
@@ -193,26 +194,22 @@ function Note(props: { french: boolean; momo: boolean; text: string; onMomo?: ()
     <View style={styles.note}>
       <Text style={styles.info}>i</Text>
       <View style={styles.noteBody}>
-        <Text style={styles.payline}>
-          {props.momo
-            ? props.french
-              ? 'Paiement : Carte · Mobile Money est aussi disponible'
-              : 'Paying with Card · Mobile Money is also available'
-            : props.french
-              ? 'Paiement par carte'
-              : 'Paying by card'}
-        </Text>
+        <Text style={styles.payline}>{props.french ? 'Paiement par carte' : 'Paying by card'}</Text>
         <Text style={styles.noteText}>{props.text}</Text>
-        {props.momo ? (
-          <Pressable accessibilityRole="button" onPress={props.onMomo} style={styles.momo}>
-            <Text style={styles.info}>▣</Text>
-            <Text style={styles.momoText}>
-              {props.french ? 'Payer plutôt avec Mobile Money' : 'Pay with Mobile Money instead'}
-            </Text>
-          </Pressable>
-        ) : null}
+        {props.momo ? <MomoButton french={props.french} onPress={props.onMomo} /> : null}
       </View>
     </View>
+  );
+}
+
+function MomoButton({ french, onPress }: { french: boolean; onPress?: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.momo}>
+      <MaterialCommunityIcons name="cellphone" size={18} color={BLUE} />
+      <Text style={styles.momoText}>
+        {french ? 'Payer plutôt avec Mobile Money' : 'Pay with Mobile Money instead'}
+      </Text>
+    </Pressable>
   );
 }
 

@@ -64,9 +64,7 @@ export function CardWindowCalendar(props: {
           <InfoOutlinedIcon sx={{ color: '#0A4FB5', fontSize: 18 }} />
           <Box>
             <Typography variant="caption" sx={{ color: '#0A4FB5', fontWeight: 700, display: 'block' }}>
-              {props.fields.momo_available
-                ? french ? 'Paiement : Carte · Mobile Money est aussi disponible' : 'Paying with Card · Mobile Money is also available'
-                : french ? 'Paiement par carte' : 'Paying by card'}
+              {french ? 'Paiement par carte' : 'Paying by card'}
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F2744' }}>{cardWindowNote(cutoff, props.locale)}</Typography>
             {props.fields.momo_available && props.onPayWithMomo ? (

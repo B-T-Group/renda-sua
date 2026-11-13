@@ -1,14 +1,15 @@
 import { createRoot } from 'react-dom/client';
 import { Box, Button, Typography } from '@mui/material';
 import { CardWindowBanner, CardWindowCalendar } from '../../apps/frontend/src/components/rentals/CardWindowCalendar';
-import { cardWindowNote, cardWindowWarning } from '../../apps/frontend/src/utils/rentals/cardWindow';
+import { cardWindowSendReason, cardWindowWarning } from '../../apps/frontend/src/utils/rentals/cardWindow';
+import { formatCardCutoff } from '../../apps/backend/src/rentals/inspection/card-window.copy';
 
 const NOW = new Date('2026-11-12T19:00:00.000Z');
 const params = new URLSearchParams(location.search);
 const scene = params.get('scene') || '05';
 const french = params.get('lang') === 'fr';
 const locale = french ? 'fr' : 'en';
-const cutoff = french ? '15 nov. · 20:00' : '15 Nov · 20:00';
+const cutoff = formatCardCutoff('2026-11-15T19:00:00.000Z', 'Africa/Douala', locale);
 const momo = scene === '06';
 const fields = {
   mode: 'authorize_upfront' as const,
@@ -58,7 +59,7 @@ function WebSummary({ french, cutoff }: { french: boolean; cutoff: string }) {
       />
       <Typography sx={{ mt: 2 }}>{french ? '1 jour × 45 000 FCFA / jour' : '1 day × 45 000 FCFA / day'}</Typography>
       <Typography sx={{ fontWeight: 800, color: '#0A4FB5', fontSize: 22 }}>45 000 FCFA</Typography>
-      <Typography sx={{ color: '#B45309', fontWeight: 600, mb: 1 }}>{cardWindowNote(cutoff, french ? 'fr' : 'en')}</Typography>
+      <Typography sx={{ color: '#B45309', fontWeight: 600, mb: 1 }}>{cardWindowSendReason(locale)}</Typography>
       <Button disabled fullWidth sx={{ bgcolor: '#E7E5E4', color: '#A8A29E' }}>{french ? 'Envoyer la demande' : 'Send request'}</Button>
     </Box>
   );

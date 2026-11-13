@@ -3,6 +3,7 @@ import {
   cardEndMisses,
   cardWindowErrorMessage,
   cardWindowNote,
+  cardWindowSendReason,
   effectiveCardEnd,
   formatCardCutoff,
 } from './cardWindow';
@@ -62,6 +63,9 @@ describe('card window client', () => {
     expect(cardWindowErrorMessage({ message: 'raw' }, 'en')).toBeNull();
     expect(formatCardCutoff(LATEST, 'Africa/Douala', 'en')).toBe('15 Nov · 20:00');
     expect(cardWindowNote('15 Nov · 20:00', 'en')).toContain('15 Nov · 20:00');
+    expect(cardWindowSendReason('en')).toBe('Change dates to send your request.');
+    expect(cardWindowSendReason('fr')).toBe('Modifiez les dates pour envoyer votre demande.');
+    expect(cardWindowSendReason('en')).not.toContain('15 Nov');
     expect(cardEndMisses('2026-11-17T19:00:00.000Z', LATEST)).toBe(true);
     expect(cardEndMisses('2026-11-15T19:00:00.000Z', LATEST)).toBe(false);
     expect(cardEndMisses('2026-11-20T00:00:00.000Z', null)).toBe(false);
