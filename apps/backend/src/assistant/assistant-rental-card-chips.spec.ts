@@ -51,12 +51,18 @@ describe('assistant date chips past the card cutoff', () => {
     expect(result.cards?.[0].rental?.availability).toBe('unavailable');
     expect(result.cards?.[0].rental?.endDate).toBe('2026-11-16');
     const suggestion = result.rental?.chips?.find((chip) => chip.id === 'suggested-range');
-    expect(suggestion).toMatchObject({ startDate: '2026-11-13', endDate: '2026-11-15', action: 'dates' });
+    expect(suggestion).toMatchObject({
+      startDate: '2026-11-13',
+      endDate: '2026-11-15',
+      action: 'dates',
+      label: '13 nov. → 15 nov. · 2 jours',
+    });
     expect(result.rental?.chips?.some((chip) => chip.id === 'weekend')).toBe(false);
     const payload = JSON.parse(result.content);
     expect(payload.card_window.asked).toEqual({ startDate: '2026-11-14', endDate: '2026-11-16' });
     expect(payload.card_window.offered).toEqual({ startDate: '2026-11-13', endDate: '2026-11-15', dayCount: 2 });
-    expect(payload.card_window.say).toMatch(/Avec une carte/);
+    expect(payload.card_window.say).toBeNull();
+    expect(payload.card_window.suggestion_note).toMatch(/Ces dates conviennent à la place/);
     expect(payload.card_window.fits).toBe(false);
     const searched = search.search.mock.calls.map((entry) => entry[0].end_date);
     expect(searched).toContain('2026-11-16');

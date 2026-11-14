@@ -15,7 +15,7 @@ import type {
   AssistantRentalCta,
   AssistantRentalMeta,
 } from './assistant.types';
-import { cardWindowCutoffOnly, cardWindowUnfitReply, formatCardCutoff } from './assistant-rental-card-copy';
+import { cardWindowCutoffOnly, cardWindowInsteadReply, cardWindowUnfitReply, formatCardCutoff, formatSuggestedRange } from './assistant-rental-card-copy';
 import { rentalArea } from './assistant-rental-questions';
 import { addCalendarDays, exclusiveDayCount, marketCalendarDate } from './assistant-rental-dates';
 import { perDayPriceLabel } from './assistant-rental-format';
@@ -109,6 +109,7 @@ function found(input: RentalPresentInput) {
       showAllHref: input.total > 0 ? showAll(input) : undefined,
       showAllCount: input.total > 0 ? input.total : undefined,
       refs,
+      suggestionNote: suggestionNote(input) ?? undefined,
       ...windowFields(input),
     },
   };
@@ -164,6 +165,7 @@ function modelPayload(input: RentalPresentInput, refs: Record<string, string>, c
           asked: input.cardWindow.asked ?? null,
           offered: input.cardWindow.offered ?? null,
           say: cardWindowSay(input),
+          suggestion_note: suggestionNote(input),
           ...windowFields(input),
         }
       : null,
@@ -341,11 +343,21 @@ function cardCap(hit: RentalSearchHit): string | undefined {
 }
 
 function cardWindowSay(input: RentalPresentInput): string | null {
+  if (suggestionNote(input)) return null;
   const window = input.cardWindow;
   if (!window || window.fits !== false || !window.latest_card_end_at) return null;
   const cutoff = formatCardCutoff(window.latest_card_end_at, window.timezone, input.locale);
   if (!window.offered) return cardWindowCutoffOnly(input.locale, cutoff);
   return cardWindowUnfitReply(input.locale, cutoff);
+}
+
+function suggestionNote(input: RentalPresentInput): string | null {
+  const offer = input.cardWindow?.offered;
+  const window = input.cardWindow;
+  if (input.dateIssue !== 'card_window' || !offer || !window?.latest_card_end_at) return null;
+  if (offer.startDate === input.startDate && offer.endDate === input.endDate) return null;
+  const cutoff = formatCardCutoff(window.latest_card_end_at, window.timezone, input.locale);
+  return cardWindowInsteadReply(input.locale, cutoff);
 }
 
 function windowFields(input: RentalPresentInput): Partial<CardWindowFields> {
@@ -456,7 +468,7 @@ function rangeChip(
   range: { startDate: string; endDate: string; dayCount: number }
 ): AssistantChip {
   const days = exclusiveDayCount(range.startDate, range.endDate) ?? range.dayCount;
-  const label = locale === 'fr' ? `${range.startDate} → ${range.endDate} · ${days} j` : `${range.startDate} → ${range.endDate} · ${days} days`;
+  const label = formatSuggestedRange(range.startDate, range.endDate, days, locale);
   return {
     id: 'suggested-range',
     label,

@@ -44,6 +44,7 @@ export function AssistantRentalThread({
       {rental?.footnote === 'estimate' ? <EstimateNote /> : null}
       {rental?.showAllCount ? <ShowAll count={rental.showAllCount} onChip={onChip} /> : null}
       {related.length ? <AppText role="body" style={styles.title}>{t('assistant.rental.otherRentals', 'Other things you can rent')}</AppText> : null}
+      {rental?.suggestionNote ? <AppText role="body">{rental.suggestionNote}</AppText> : null}
       <ChipRow chips={rental?.chips || []} onEditDates={onEditDates} onChip={onChip} />
     </View>
   );
@@ -86,17 +87,36 @@ function ChipRow({
   onEditDates: () => void;
   onChip: (message: string, dates?: { startDate?: string; endDate?: string }) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, i18n } = useChipTheme();
   if (!chips.length) return null;
   return (
     <View style={styles.chips}>
-      {chips.map((chip) => (
-        <Pressable key={chip.id} accessibilityRole="button" onPress={() => (chip.action === 'calendar' ? onEditDates() : onChip(chip.message || chip.label, chip))} style={[styles.chip, { borderColor: colors.primary.main, backgroundColor: colors.surface }]}>
-          <AppText role="bodySmall" color={colors.primary.main}>{chip.label}</AppText>
-        </Pressable>
-      ))}
+      {chips.map((chip) => {
+        const label = chipLabel(chip, i18n.language);
+        return (
+          <Pressable key={chip.id} accessibilityRole="button" onPress={() => (chip.action === 'calendar' ? onEditDates() : onChip(label, chip))} style={[styles.chip, { borderColor: colors.primary.main, backgroundColor: colors.surface }]}>
+            <AppText role="bodySmall" color={colors.primary.main}>{label}</AppText>
+          </Pressable>
+        );
+      })}
     </View>
   );
+}
+
+function useChipTheme() {
+  const { i18n } = useTranslation();
+  const { colors } = useTheme();
+  return { colors, i18n };
+}
+
+function chipLabel(chip: AssistantRentalChip, locale: string): string {
+  if (chip.id !== 'suggested-range' || !chip.startDate || !chip.endDate) return chip.label;
+  return formatRange({ startDate: chip.startDate, endDate: chip.endDate, dayCount: stayDays(chip.startDate, chip.endDate) }, locale);
+}
+
+function stayDays(start: string, end: string): number {
+  const days = Math.round((Date.parse(`${end}T00:00:00.000Z`) - Date.parse(`${start}T00:00:00.000Z`)) / 86_400_000);
+  return days > 0 ? days : 1;
 }
 
 function RentalCard({

@@ -105,7 +105,8 @@ function ThreadBody({
       {rental?.footnote === 'estimate' ? <Typography variant="caption" color="text.secondary">{footnote}</Typography> : null}
       {rental?.showAllCount ? <Button variant="text" onClick={onShowAll} sx={{ alignSelf: 'flex-start' }}>{showAllLabel}</Button> : null}
       {related.length ? <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>{otherLabel}</Typography> : null}
-      <ChipRow chips={rental?.chips || []} onEditDates={onEditDates} onChip={onChip} />
+      {rental?.suggestionNote ? <Typography variant="body2" sx={{ fontSize: 15, lineHeight: '22px' }}>{rental.suggestionNote}</Typography> : null}
+      <ChipRow chips={rental?.chips || []} locale={locale} onEditDates={onEditDates} onChip={onChip} />
     </Stack>
   );
 }
@@ -143,21 +144,34 @@ function DateChip({ label, onEdit }: { label: string; onEdit: () => void }) {
 
 function ChipRow({
   chips,
+  locale,
   onEditDates,
   onChip,
 }: {
   chips: AssistantRentalChip[];
+  locale: string;
   onEditDates: () => void;
   onChip: (message: string, dates?: { startDate?: string; endDate?: string }) => void;
 }) {
   if (!chips.length) return null;
   return (
     <Stack direction="row" flexWrap="wrap" gap={1}>
-      {chips.map((chip) => (
-        <Chip key={chip.id} label={chip.label} variant="outlined" onClick={() => (chip.action === 'calendar' ? onEditDates() : onChip(chip.message || chip.label, chip))} sx={{ height: 40 }} />
-      ))}
+      {chips.map((chip) => {
+        const label = chipLabel(chip, locale);
+        return <Chip key={chip.id} label={label} variant="outlined" onClick={() => (chip.action === 'calendar' ? onEditDates() : onChip(label, chip))} sx={{ height: 40 }} />;
+      })}
     </Stack>
   );
+}
+
+function chipLabel(chip: AssistantRentalChip, locale: string): string {
+  if (chip.id !== 'suggested-range' || !chip.startDate || !chip.endDate) return chip.label;
+  return formatRange({ startDate: chip.startDate, endDate: chip.endDate, dayCount: stayDays(chip.startDate, chip.endDate) }, locale);
+}
+
+function stayDays(start: string, end: string): number {
+  const days = Math.round((Date.parse(`${end}T00:00:00.000Z`) - Date.parse(`${start}T00:00:00.000Z`)) / 86_400_000);
+  return days > 0 ? days : 1;
 }
 
 function RentalCard({
@@ -229,10 +243,20 @@ function MetaLine({ icon, text }: { icon: ReactNode; text: string }) {
 }
 
 function StatusChip({ booked, availability, label }: { booked: boolean; availability?: string; label: string }) {
-  const warning = booked || availability === 'no_dates' || availability === 'unavailable';
+  if (availability === 'unavailable' && !booked) return <UnavailableStatus label={label} />;
+  const warning = booked || availability === 'no_dates';
   const icon = warning ? <Event sx={{ fontSize: 14 }} /> : <CheckCircle sx={{ fontSize: 14 }} />;
   return (
     <Chip size="small" icon={icon} label={label} sx={{ alignSelf: 'flex-start', height: 24, my: 0.25, color: warning ? 'warning.dark' : 'success.dark', bgcolor: warning ? 'warning.light' : 'success.light', '& .MuiChip-icon': { color: warning ? 'warning.main' : 'success.main' } }} />
+  );
+}
+
+function UnavailableStatus({ label }: { label: string }) {
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ alignSelf: 'flex-start', my: 0.25, color: 'warning.main' }}>
+      <Event sx={{ fontSize: 14, color: 'warning.main' }} />
+      <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 600 }}>{label}</Typography>
+    </Stack>
   );
 }
 
