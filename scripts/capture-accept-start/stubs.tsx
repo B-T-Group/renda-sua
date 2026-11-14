@@ -7,7 +7,13 @@ type Scene =
   | 'handed'
   | 'momo'
   | 'conflict'
-  | 'legacy';
+  | 'legacy'
+  | 'clientReview'
+  | 'businessWait'
+  | 'reportSent'
+  | 'rentalStarted'
+  | 'momoStarted'
+  | 'push';
 
 interface CaptureWindow extends Window {
   __scene?: Scene;
@@ -21,7 +27,51 @@ function scene(): Scene {
 const clientId = 'client-1';
 const businessId = 'biz-1';
 
+function reviewBooking(current: Scene) {
+  return {
+    id: 'b1',
+    booking_number: 'RB-25496259',
+    status: 'reserved',
+    start_at: '2026-11-17T15:00:00.000Z',
+    end_at: '2026-11-19T01:00:00.000Z',
+    total_amount: 45,
+    currency: 'CAD',
+    payment_timing: 'pay_now',
+    payment_status: 'authorized',
+    actual_start_at: null,
+    not_received_report: null,
+    units_booked: 1,
+    inspection_policy_version: 1,
+    client_id: clientId,
+    business_id: businessId,
+    client: { user: { first_name: 'Amina', last_name: 'N.' } },
+    rental_location_listing: {
+      rental_item: {
+        name: 'JBL PartyBox 310',
+        rental_item_images: [{ id: 'img', image_url: '/hero-jbl.png', alt_text: 'JBL PartyBox 310' }],
+      },
+      business_location: { name: "Stripe Rail – L'Assomption" },
+    },
+    accept_start_preview: null,
+    rental_request: {
+      rental_selection_windows: [
+        {
+          billing: 'daily',
+          calendar_date: '2026-11-17',
+          start_at: '2026-11-17T15:00:00.000Z',
+          end_at: '2026-11-19T01:00:00.000Z',
+        },
+      ],
+    },
+    security_deposit_amount: 20,
+    authorized_amount: 45,
+    overtime_amount: 0,
+    _business: current === 'businessWait',
+  };
+}
+
 function bookingFor(current: Scene) {
+  if (current === 'clientReview' || current === 'businessWait') return reviewBooking(current);
   const active = current === 'started' || current === 'handed';
   const legacy = current === 'legacy';
   const business = current === 'waiting' || current === 'handed';
@@ -95,7 +145,7 @@ export function useSessionAuth() {
 
 export function useUserProfileContext() {
   const current = scene();
-  const business = current === 'waiting' || current === 'handed';
+  const business = current === 'waiting' || current === 'handed' || current === 'businessWait';
   return useMemo(
     () => ({
       loading: false,
@@ -131,6 +181,17 @@ function reportEnabled(): boolean {
   return captureParams().get('report') === '1';
 }
 
+function confirmationsScene(): boolean {
+  const current = scene();
+  return (
+    current === 'clientReview' ||
+    current === 'businessWait' ||
+    current === 'reportSent' ||
+    current === 'rentalStarted' ||
+    current === 'momoStarted'
+  );
+}
+
 export function useClientFlags() {
   return useMemo(
     () => ({
@@ -138,6 +199,7 @@ export function useClientFlags() {
       flags: {
         rentals_not_received_report_enabled: reportEnabled(),
         rentals_renter_return_report_enabled: Boolean(captureParams().get('return')),
+        rentals_inspection_confirmations_enabled: confirmationsScene(),
       },
     }),
     []
@@ -372,7 +434,9 @@ export function useRentalInspection() {
   const french = document.documentElement.lang === 'fr';
   return useMemo(() => {
   const labels: [string, string] = french ? ['Unité 1', 'Unité 2'] : ['Unit 1', 'Unit 2'];
-  const pickup = current === 'legacy' ? null : viewFor(labels);
+  const one = current === 'clientReview' || current === 'businessWait';
+  const full = viewFor(labels);
+  const pickup = current === 'legacy' ? null : one ? { ...full, units: [full.units[0]] } : full;
   const enrolled = current !== 'legacy' && !captureParams().get('return');
   return {
     api: {
@@ -393,7 +457,10 @@ export function useRentalInspection() {
     gate: enrolled
       ? { mode: 'waiting' as const, showCollectPayment: false, showStart: false, showOverwrite: false }
       : { mode: 'legacy' as const, showCollectPayment: false, showStart: true, showOverwrite: true },
-    reviewStage: current === 'review' || current === 'momo' || current === 'conflict' ? 'pickup' : null,
+    reviewStage:
+      current === 'review' || current === 'momo' || current === 'conflict' || current === 'clientReview'
+        ? 'pickup'
+        : null,
     showLegacyReturn: captureParams().get('return') === 'business',
     showEnrolledReturn: false,
   };
