@@ -135,6 +135,19 @@ export class PresignInspectionEvidenceDto {
   @IsString()
   @Matches(/^(overview|other_side|accessories|extra:[1-9]\d{0,2})$/)
   slotKey?: string;
+
+  @ApiPropertyOptional({
+    description: 'EXIF DateTimeOriginal. A value with no offset is read in the listing timezone.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  exifDateTime?: string;
+
+  @ApiPropertyOptional({ enum: ['camera', 'gallery', 'web'] })
+  @IsOptional()
+  @IsIn(['camera', 'gallery', 'web'])
+  captureSource?: 'camera' | 'gallery' | 'web';
 }
 
 export class ApplyPickupGuideDto {

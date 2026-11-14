@@ -267,11 +267,22 @@ export default function ClientInspectionScreen() {
             total: ids.length,
           })}
         </Text>
+        {unit.photos.some((photo) => photo.reused) ? (
+          <Text style={{ color: colors.text.secondary }}>
+            {t('rentalInspection.reuseTransparency', 'Some photos come from an earlier rental. Each photo shows the date it was taken.')}
+          </Text>
+        ) : null}
         <View style={styles.photos}>
           {unit.photos.map((photo) => (
             <View key={photo.id} style={[styles.photo, { backgroundColor: colors.surfaceInput }]}>
               {photo.url ? <Image source={{ uri: photo.url }} style={styles.image} /> : null}
-              <Text style={{ color: colors.text.secondary }}>{photoRoleLabel(photo.role, t)}</Text>
+              <Text style={{ color: colors.text.secondary }}>
+                {photoRoleLabel(photo.role, t)}
+                {photo.captureSource || photo.reused
+                  ? ` · ${photo.reused ? t('rentalInspection.reusedBadge', 'Reused') : t('rentalInspection.newBadge', 'New')}`
+                  : ''}
+                {photo.capturedAt ? ` · ${photo.capturedAt.slice(0, 10)}` : ''}
+              </Text>
             </View>
           ))}
         </View>

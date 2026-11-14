@@ -80,6 +80,10 @@ export async function recordHandback(bookingId: string): Promise<{ handedBack: b
   return apiRequest(`${root(bookingId)}/return/handback`, { method: 'POST' });
 }
 
+export async function reusePickupPhotos(bookingId: string): Promise<{ copied: number }> {
+  return apiRequest(`${root(bookingId)}/pickup/reuse`, { method: 'POST' });
+}
+
 export async function getPickupPhotoRules(bookingId: string): Promise<PickupPhotoRules> {
   return apiRequest(`${root(bookingId)}/pickup/photo-rules`);
 }
@@ -116,7 +120,15 @@ export async function skipPickupSlot(
 
 export async function presignInspectionPhoto(
   bookingId: string,
-  body: { unitId: string; role: PhotoRole; contentType: string; fileSize: number; slotKey?: string }
+  body: {
+    unitId: string;
+    role: PhotoRole;
+    contentType: string;
+    fileSize: number;
+    slotKey?: string;
+    exifDateTime?: string;
+    captureSource?: 'camera' | 'gallery' | 'web';
+  }
 ): Promise<InspectionPresign> {
   return apiRequest(`${root(bookingId)}/evidence/presign`, {
     method: 'POST',
@@ -148,6 +160,8 @@ export async function uploadInspectionPhoto(input: {
   contentType: string;
   fileSize: number;
   slotKey?: string;
+  exifDateTime?: string;
+  captureSource?: 'camera' | 'gallery' | 'web';
 }): Promise<{ mediaId: string; capturedAt?: string }> {
   const signed = await presignInspectionPhoto(input.bookingId, {
     unitId: input.unitId,
@@ -155,6 +169,8 @@ export async function uploadInspectionPhoto(input: {
     contentType: input.contentType,
     fileSize: input.fileSize,
     slotKey: input.slotKey,
+    exifDateTime: input.exifDateTime,
+    captureSource: input.captureSource,
   });
   const file = await fetch(input.uri);
   const blob = await file.blob();

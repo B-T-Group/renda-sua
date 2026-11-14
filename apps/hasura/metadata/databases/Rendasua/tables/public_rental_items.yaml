@@ -9,6 +9,13 @@ object_relationships:
     using:
       foreign_key_constraint_on: rental_category_id
 array_relationships:
+  - name: rental_item_baseline_photos
+    using:
+      foreign_key_constraint_on:
+        column: rental_item_id
+        table:
+          name: rental_item_baseline_photos
+          schema: public
   - name: rental_item_images
     using:
       foreign_key_constraint_on:
@@ -77,6 +84,8 @@ select_permissions:
         - currency
         - operation_mode
         - is_active
+        - inspection_opt_in
+        - inspection_opted_in_at
         - deleted_at
         - created_at
         - updated_at
@@ -120,6 +129,8 @@ update_permissions:
         - currency
         - operation_mode
         - is_active
+        - inspection_opt_in
+        - inspection_opted_in_at
         - deleted_at
       filter:
         business:

@@ -6,6 +6,7 @@ import {
   applyPickupGuide,
   getInspection,
   getPickupPhotoRules,
+  reusePickupPhotos,
   hydrateInspectionPhotos,
   openInspectionDraft,
   recordHandback,
@@ -43,6 +44,7 @@ export interface LocalPhoto {
   uri?: string;
   ghostUri?: string;
   capturedAt?: string | null;
+  reused?: boolean;
   failed?: boolean;
   pending?: boolean;
 }
@@ -63,7 +65,7 @@ export interface LocalUnit {
   returnChoice: '' | 'same' | 'damage';
 }
 
-const PICKER = { ...IMAGE_LIBRARY_PICKER_OPTIONS, quality: 1 };
+const PICKER = { ...IMAGE_LIBRARY_PICKER_OPTIONS, quality: 1, exif: true };
 
 function slotsFor(minPhotos: number, existing: InspectionUnit['photos']): LocalPhoto[] {
   const roles = photoRolesForMinimum(minPhotos);
@@ -71,7 +73,7 @@ function slotsFor(minPhotos: number, existing: InspectionUnit['photos']): LocalP
   return roles.map((role, index) => {
     const photo = existing.find((row) => row.role === role && !used.has(row.id));
     if (photo) used.add(photo.id);
-    return { key: `${role}-${index}`, role, mediaId: photo?.id, uri: photo?.url };
+    return { key: `${role}-${index}`, role, mediaId: photo?.id, uri: photo?.url, reused: photo?.reused === true, capturedAt: photo?.capturedAt };
   });
 }
 
@@ -87,6 +89,7 @@ function guidePhotos(slots: PickupGuideSlot[], existing: InspectionUnit['photos'
       uri: photo?.url,
       ghostUri: photo?.url ? undefined : slot.url ?? undefined,
       capturedAt: photo?.capturedAt ?? null,
+      reused: photo?.reused === true,
     };
   });
 }
@@ -221,12 +224,15 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     }));
   };
 
-  const addPhoto = async (role: PhotoRole, slotIndex: number, cameraOnly = false) => {
+  const addPhoto = async (role: PhotoRole, slotIndex: number, cameraOnly = false, picked?: 'camera' | 'gallery') => {
     if (!current) return 'cancel' as const;
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    const source = pickupCaptureSource(cameraOnly, permission.granted);
-    if (source === 'denied') {
-      setCameraDenied(true);
+    const gallery = picked === 'gallery';
+    const permission = gallery
+      ? await ImagePicker.requestMediaLibraryPermissionsAsync()
+      : await ImagePicker.requestCameraPermissionsAsync();
+    const source = gallery ? 'library' : pickupCaptureSource(cameraOnly || picked === 'camera', permission.granted);
+    if (source === 'denied' || !permission.granted) {
+      if (!gallery) setCameraDenied(true);
       return 'denied' as const;
     }
     const result = source === 'camera'
@@ -255,6 +261,8 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
       role,
       unitId: current.unitId,
       slotKey: current.photos[slotIndex]?.slotKey,
+      exifDateTime: typeof asset.exif?.DateTimeOriginal === 'string' ? asset.exif.DateTimeOriginal : undefined,
+      captureSource: source === 'camera' ? 'camera' : 'gallery',
     });
     return 'added' as const;
   };
@@ -262,7 +270,16 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
   const sendPhoto = async (
     unitIndex: number,
     slotIndex: number,
-    photo: { uri: string; contentType: string; fileSize: number; role: PhotoRole; unitId: string; slotKey?: string }
+    photo: {
+      uri: string;
+      contentType: string;
+      fileSize: number;
+      role: PhotoRole;
+      unitId: string;
+      slotKey?: string;
+      exifDateTime?: string;
+      captureSource?: 'camera' | 'gallery' | 'web';
+    }
   ) => {
     try {
       const saved = await uploadInspectionPhoto({ bookingId, ...photo });
@@ -433,6 +450,18 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     }
   };
 
+  const reuseLast = async () => {
+    setBusy(true);
+    try {
+      await reusePickupPhotos(bookingId);
+      await load();
+    } catch (err: unknown) {
+      setError(classifyInspectionError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const confirmField = (field: string) => {
     setUnits((prev) => prev.map((unit, unitIndex) => {
       if (unitIndex !== index) return unit;
@@ -467,6 +496,7 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     skipAngle,
     clearSkip,
     addPhoto,
+    reuseLast,
     retryPhoto,
     saveAndNext,
     submit,

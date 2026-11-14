@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -26,7 +27,8 @@ import { Public } from '../auth/public.decorator';
 import { CreateBusinessRentalItemDto } from './dto/create-business-rental-item.dto';
 import { CreateBusinessRentalListingDto } from './dto/create-business-rental-listing.dto';
 import { CreateRentalCategoryDto } from './dto/create-rental-category.dto';
-import { UpdateBusinessRentalItemDto } from './dto/update-business-rental-item.dto';
+import { PresignBaselinePhotoDto, SetInspectionOptInDto, UpdateBusinessRentalItemDto } from './dto/update-business-rental-item.dto';
+import { InspectionOptInService } from './inspection/inspection-optin.service';
 import { UpdateBusinessRentalListingDto } from './dto/update-business-rental-listing.dto';
 import { CreateRentalBookingDto } from './dto/create-rental-booking.dto';
 import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment.dto';
@@ -54,7 +56,8 @@ export class RentalsController {
     private readonly rentalBookingMessaging: RentalBookingMessagingService,
     private readonly rentalStartPinShare: RentalStartPinShareService,
     private readonly notReceived: RentalNotReceivedService,
-    private readonly renterReturns: RentalRenterReturnService
+    private readonly renterReturns: RentalRenterReturnService,
+    private readonly inspectionOptIn: InspectionOptInService
   ) {}
 
   @Public()
@@ -266,8 +269,15 @@ export class RentalsController {
       throw new NotFoundException('Listing not found');
     }
     const country = listing.business_location?.address?.country;
-    const card = await this.rentalsService.cardWindowFieldsFor(country, readLatestCardEndAt(listing));
-    const inspection_policy_version = await this.rentalsService.listingInspectionPolicy(country);
+    const inspection_policy_version = await this.rentalsService.listingInspectionPolicy(
+      country,
+      listing.rental_item?.id
+    );
+    const card = await this.rentalsService.cardWindowFieldsFor(
+      country,
+      readLatestCardEndAt(listing),
+      inspection_policy_version != null
+    );
     return {
       success: true,
       data: { listing: Object.assign(listing, card, { inspection_policy_version }) },
@@ -414,6 +424,42 @@ export class RentalsController {
   ) {
     await this.rentalsService.updateBusinessRentalItem(itemId, dto);
     return { success: true };
+  }
+
+  @Post('business/items/:itemId/inspection')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Turn inspection on or off for a rental item. On requires a full baseline.' })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiBody({ type: SetInspectionOptInDto })
+  @ApiResponse({ status: 200, description: 'Opt-in saved' })
+  @ApiResponse({ status: 400, description: 'Baseline photos are incomplete' })
+  setInspectionOptIn(@Param('itemId') itemId: string, @Body() dto: SetInspectionOptInDto) {
+    return this.inspectionOptIn.setOptIn(itemId, dto.enabled);
+  }
+
+  @Post('business/items/:itemId/baseline/presign')
+  @ApiOperation({ summary: 'Presign a private baseline photo for an item' })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiBody({ type: PresignBaselinePhotoDto })
+  @ApiResponse({ status: 201, description: 'Upload URL returned' })
+  presignBaseline(
+    @Param('itemId') itemId: string,
+    @Body() dto: PresignBaselinePhotoDto,
+    @Headers('x-rendasua-platform') platform?: string,
+    @Headers('x-client-platform') clientPlatform?: string
+  ) {
+    return this.inspectionOptIn.presignBaseline(itemId, { ...dto, platform: platform ?? clientPlatform });
+  }
+
+  @Post('business/items/:itemId/baseline/:photoId/finalize')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark a baseline photo ready after the upload' })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiParam({ name: 'photoId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Baseline photo ready' })
+  @ApiResponse({ status: 404, description: 'Photo not found' })
+  finalizeBaseline(@Param('itemId') itemId: string, @Param('photoId') photoId: string) {
+    return this.inspectionOptIn.finalizeBaseline(itemId, photoId);
   }
 
   @Patch('business/listings/:listingId')

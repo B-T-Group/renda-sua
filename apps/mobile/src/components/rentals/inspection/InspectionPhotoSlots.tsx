@@ -16,6 +16,7 @@ export interface SlotPhoto {
   stamp?: string;
   fromLabel?: string;
   tileLabel?: string;
+  origin?: string;
   failed?: boolean;
   pending?: boolean;
 }
@@ -33,11 +34,15 @@ export function InspectionPhotoSlots({
   minPhotos,
   onAdd,
   onRetry,
+  galleryLabel,
+  onGallery,
 }: {
   slots: SlotPhoto[];
   minPhotos: number | null;
   onAdd: (role: PhotoRole, index: number) => void;
   onRetry: (index: number) => void;
+  galleryLabel?: string;
+  onGallery?: (role: PhotoRole, index: number) => void;
 }) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
@@ -85,8 +90,13 @@ export function InspectionPhotoSlots({
                 </View>
               ) : null}
               <Text numberOfLines={1} style={[typography.caption, styles.tileName, { color: slot.uri ? '#fff' : colors.text.primary }]}>
-                {slot.failed ? t('rentalInspection.photoUploadFailed', 'Photo upload failed. Retry.') : label}
+                {slot.failed ? t('rentalInspection.photoUploadFailed', 'Photo upload failed. Retry.') : `${label}${slot.origin ? ` · ${slot.origin}` : ''}`}
               </Text>
+              {onGallery && galleryLabel ? (
+                <Pressable accessibilityRole="button" onPress={() => onGallery(slot.role, index)}>
+                  <Text style={[typography.caption, { color: colors.primary.main }]}>{galleryLabel}</Text>
+                </Pressable>
+              ) : null}
               {slot.stamp && slot.uri ? (
                 <Text numberOfLines={1} style={[typography.caption, styles.tileStamp, { color: '#fff' }]}>{slot.stamp}</Text>
               ) : null}

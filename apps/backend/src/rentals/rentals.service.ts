@@ -56,6 +56,7 @@ import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
 import type { ListingCardWindow } from './rental-card-window';
+import { InspectionOptInService } from './inspection/inspection-optin.service';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
   acceptStartConflict,
@@ -430,6 +431,7 @@ export class RentalsService {
     private readonly rentalListingAiReviewService: RentalListingAiReviewService,
     private readonly rentalStartPinShare: RentalStartPinShareService,
     private readonly inspectionFlags: RentalInspectionFlags,
+    private readonly inspectionOptIn: InspectionOptInService,
     private readonly cardWindow: RentalCardWindowService
   ) {}
 
@@ -963,7 +965,7 @@ export class RentalsService {
 
   private async requestPolicyVersion(listing: any): Promise<number | null> {
     const country = listing?.business_location?.address?.country ?? null;
-    return this.listingInspectionPolicy(country);
+    return this.listingInspectionPolicy(country, listing?.rental_item?.id);
   }
 
   private assertModifyVersion(
@@ -1865,7 +1867,9 @@ export class RentalsService {
     if (!r.rental_items_by_pk) {
       throw new HttpException('Rental item not found', HttpStatus.NOT_FOUND);
     }
-    return this.attachListingRejectionReasons(r.rental_items_by_pk);
+    const item = await this.attachListingRejectionReasons(r.rental_items_by_pk);
+    item.inspection = await this.inspectionOptIn.summary(itemId);
+    return item;
   }
 
   async updateBusinessRentalItem(
@@ -5157,6 +5161,11 @@ export class RentalsService {
     const country = resolveItemCountry(
       req.rental_location_listing?.business_location?.address?.country
     );
+    if (await this.inspectionFlags.optInEnabled(country)) {
+      const itemId = req.rental_location_listing?.rental_item?.id;
+      if (!(await this.inspectionOptIn.stampsNewBooking(itemId))) return null;
+      return this.enrolOrReject(req, country);
+    }
     const enabled = await this.inspectionFlags.isEnabled(country);
     if (!enabled) return null;
     return this.enrolOrReject(req, country);
@@ -5174,7 +5183,10 @@ export class RentalsService {
   }
 
   /** 1 when a new booking in this country would be inspected. Does not reject the listing. */
-  async listingInspectionPolicy(country?: string | null): Promise<number | null> {
+  async listingInspectionPolicy(country?: string | null, itemId?: string | null): Promise<number | null> {
+    if (await this.inspectionFlags.optInEnabled(country)) {
+      return (await this.inspectionOptIn.stampsNewBooking(itemId)) ? 1 : null;
+    }
     const enabled = await this.inspectionFlags.isEnabled(country);
     return enabled ? 1 : null;
   }

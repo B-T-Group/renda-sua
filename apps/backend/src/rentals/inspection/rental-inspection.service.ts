@@ -952,11 +952,13 @@ export class RentalInspectionService {
         byte_size: number;
         slot_key?: string | null;
         captured_at?: string | null;
+        reused?: boolean | null;
+        capture_source?: string | null;
       }>;
     }>(
       `query ReadyMedia($id: uuid!) {
         rental_inspection_media(where: { inspection_id: { _eq: $id }, version_id: { _is_null: true }, status: { _eq: "ready" } }) {
-          id unit_id role sha256 byte_size slot_key captured_at
+          id unit_id role sha256 byte_size slot_key captured_at reused capture_source captured_at_source
         }
       }`,
       { id: inspectionId }
@@ -1011,6 +1013,8 @@ export class RentalInspectionService {
           role: row.role,
           slotKey: row.slot_key ?? null,
           capturedAt: row.captured_at ?? null,
+          reused: row.reused === true,
+          captureSource: row.capture_source ?? null,
         })),
       };
     });
@@ -1047,11 +1051,13 @@ export class RentalInspectionService {
         byte_size: number;
         slot_key?: string | null;
         captured_at?: string | null;
+        reused?: boolean | null;
+        capture_source?: string | null;
       }>;
     }>(
       `query VersionMedia($id: uuid!) {
         rental_inspection_media(where: { version_id: { _eq: $id } }) {
-          id unit_id role sha256 byte_size slot_key captured_at
+          id unit_id role sha256 byte_size slot_key captured_at reused capture_source captured_at_source
         }
       }`,
       { id: versionId }

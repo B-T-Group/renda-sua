@@ -171,6 +171,7 @@
 - "!include public_rental_not_received_reports.yaml"
 - "!include public_rental_categories.yaml"
 - "!include public_rental_holds.yaml"
+- "!include public_rental_item_baseline_photos.yaml"
 - "!include public_rental_item_images.yaml"
 - "!include public_rental_items.yaml"
 - "!include public_rental_listing_ai_proposed_images.yaml"

@@ -31,6 +31,7 @@ import {
   type FormOption,
 } from '../../components/business/item-form/ItemFormOptionDialog';
 import { RentalWeeklyHoursEditor } from '../../components/business/rentals/RentalWeeklyHoursEditor';
+import { InspectionOptInCard } from '../../components/business/rentals/InspectionOptInCard';
 import type { RentalWeeklyAvailabilityRow } from '../../types/rentals';
 import { defaultWeeklyAvailability } from '../../utils/rentals';
 
@@ -295,6 +296,7 @@ export default function BusinessRentalItemEditScreen() {
         </Text>
         <Switch value={isActive} onValueChange={setIsActive} />
       </View>
+      <InspectionOptInCard itemId={itemId} itemName={name} />
 
       <Text style={{ color: colors.text.primary, fontWeight: '600', marginTop: 16, marginBottom: 8 }}>
         {t('business.rentals.listings', 'Listings')}

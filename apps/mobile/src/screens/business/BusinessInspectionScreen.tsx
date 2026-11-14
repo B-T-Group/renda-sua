@@ -44,6 +44,7 @@ export default function BusinessInspectionScreen() {
   const overtime = model.booking ? derivedOvertime(model.booking) : null;
 
   const rulesOn = stage === 'pickup' && model.rules?.enabled === true;
+  const optIn = rulesOn && model.rules?.optIn === true;
   const guideDate = model.rules?.guide
     ? formatListingDay(model.rules.guide.submittedAt, model.rules.timezone, i18n.language)
     : '';
@@ -162,7 +163,18 @@ export default function BusinessInspectionScreen() {
             <ComparePhoto label={t('rentalInspection.returnColumn', 'Return')} uri={unit.photos[0]?.uri} />
           </View>
         ) : null}
-        {rulesOn && !model.rules?.pickupDay ? (
+        {optIn && model.rules?.reuse ? (
+          <Button
+            mode="outlined"
+            disabled={model.busy || model.rules.reuse.blocked || !model.rules.reuse.available}
+            onPress={() => void model.reuseLast()}
+          >
+            {model.rules.reuse.blocked
+              ? t('rentalInspection.reuseBlocked', 'The last return reported damage.')
+              : t('rentalInspection.reuseAction', 'Reuse photos from last rental')}
+          </Button>
+        ) : null}
+        {rulesOn && !optIn && !model.rules?.pickupDay ? (
           <InspectionBanner tone="info">
             {t('rentalInspection.earlyPrepareBody', 'You can prepare the checklist now; photos are taken on pickup day.')}
           </InspectionBanner>
@@ -188,16 +200,23 @@ export default function BusinessInspectionScreen() {
                 stamp: photo.capturedAt && model.rules?.timezone
                   ? formatListingStamp(photo.capturedAt, model.rules.timezone, i18n.language)
                   : undefined,
+                origin: optIn && photo.mediaId
+                  ? (photo.reused
+                    ? t('rentalInspection.reusedBadge', 'Reused')
+                    : t('rentalInspection.newBadge', 'New'))
+                  : undefined,
               }))}
               minPhotos={rulesOn ? null : model.minPhotos}
+              galleryLabel={optIn ? t('rentalInspection.gallery', 'Gallery') : undefined}
+              onGallery={optIn ? (role, slot) => void model.addPhoto(role, slot, false, 'gallery') : undefined}
               onAdd={(role, slot) => {
                 const photo = unit.photos[slot];
-                if (rulesOn) {
+                if (rulesOn && !optIn) {
                   setCameraLabel(angleLabel(photo?.slotKey ?? role, t));
                   void model.addPhoto(role, slot, true);
                   return;
                 }
-                void model.addPhoto(role, slot);
+                void model.addPhoto(role, slot, false, optIn ? 'camera' : undefined);
               }}
               onRetry={(slot) => void model.retryPhoto(slot)}
             />
@@ -309,7 +328,8 @@ export default function BusinessInspectionScreen() {
           disabled={
             model.busy
             || (needsClaim && !(Number(claim) > 0))
-            || (rulesOn && !model.rules?.pickupDay)
+            || (rulesOn && !optIn && !model.rules?.pickupDay)
+            || (optIn && model.rules?.beforeStart === false)
             || (!model.canSubmit && model.guideGaps.length === 0)
           }
           onPress={() => {

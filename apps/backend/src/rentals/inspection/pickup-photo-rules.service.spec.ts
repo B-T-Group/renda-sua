@@ -33,7 +33,11 @@ function service(nowEnabled: boolean, rows: Record<string, unknown>, persona: { 
     }),
     executeMutation: jest.fn(async () => ({ update_rental_inspection_items: { affected_rows: 1 } })),
   };
-  const flags = { pickupPhotoRulesEnabled: jest.fn(async () => nowEnabled) };
+  const flags = {
+    pickupPhotoRulesEnabled: jest.fn(async () => nowEnabled),
+    optInEnabled: jest.fn(async () => false),
+  };
+  const optIn = { reuseStatus: jest.fn(async () => ({ available: false, blocked: false, source: null, submittedAt: null, photoCount: 0 })) };
   const users = {
     getUser: jest.fn(async () => ({
       id: 'user-1',
@@ -42,7 +46,7 @@ function service(nowEnabled: boolean, rows: Record<string, unknown>, persona: { 
     })),
   };
   const aws = { generatePresignedDownloadUrl: jest.fn(async () => ({ url: 'https://signed.example/photo', expiresAt: new Date() })) };
-  const rules = new PickupPhotoRulesService(hasura as any, users as any, flags as any, aws as any);
+  const rules = new PickupPhotoRulesService(hasura as any, users as any, flags as any, aws as any, optIn as any);
   return { rules, hasura };
 }
 

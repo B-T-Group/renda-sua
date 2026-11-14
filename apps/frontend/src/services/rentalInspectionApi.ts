@@ -41,6 +41,8 @@ export function createRentalInspectionApi(api: AxiosInstance) {
       api.post(`${root(bookingId)}/return/handback`).then((res) => res.data),
     photoRules: (bookingId: string) =>
       api.get<PickupPhotoRules>(`${root(bookingId)}/pickup/photo-rules`).then((res) => res.data),
+    reusePickup: (bookingId: string) =>
+      api.post(`${root(bookingId)}/pickup/reuse`).then((res) => res.data),
     skipSlot: (bookingId: string, body: { unitId: string; slotKey: string; reason: string }) =>
       api.post(`${root(bookingId)}/pickup/slot-skips`, body).then((res) => res.data),
     clearSlot: (bookingId: string, body: { unitId: string; slotKey: string }) =>
@@ -54,6 +56,8 @@ export function createRentalInspectionApi(api: AxiosInstance) {
       unitId: string;
       role: PhotoRole;
       file: File;
+      exifDateTime?: string;
+      captureSource?: 'camera' | 'gallery' | 'web';
     }) => {
       const contentType = input.file.type === 'image/jpg' ? 'image/jpeg' : input.file.type;
       const signed = await api
@@ -64,6 +68,8 @@ export function createRentalInspectionApi(api: AxiosInstance) {
             role: input.role,
             contentType,
             fileSize: input.file.size,
+            exifDateTime: input.exifDateTime,
+            captureSource: input.captureSource ?? 'web',
           }
         )
         .then((res) => res.data);

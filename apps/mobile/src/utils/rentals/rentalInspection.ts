@@ -11,6 +11,8 @@ export interface InspectionPhoto {
   expiresAt?: string;
   slotKey?: string | null;
   capturedAt?: string | null;
+  reused?: boolean;
+  captureSource?: string | null;
 }
 
 export interface InspectionAccessory {
@@ -54,8 +56,21 @@ export interface PickupGuideSlot {
   mediaId?: string;
 }
 
+export interface PickupReuseStatus {
+  available: boolean;
+  blocked: boolean;
+  reason?: string | null;
+  source?: 'return' | 'baseline' | null;
+  submittedAt?: string | null;
+  photoCount?: number;
+}
+
 export interface PickupPhotoRules {
   enabled: boolean;
+  optIn?: boolean;
+  beforeStart?: boolean;
+  webUpload?: boolean;
+  reuse?: PickupReuseStatus | null;
   pickupDay: boolean;
   timezone: string;
   startAt: string | null;

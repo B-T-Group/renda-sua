@@ -162,8 +162,10 @@ export function RentalInspectionPanel({
 
   const unit = view?.units[index];
   const rulesOn = role === 'business' && stage === 'pickup' && photoRules?.enabled === true;
+  const optIn = rulesOn && photoRules?.optIn === true;
+  const rulesFlag = flags.rentals_pickup_photo_rules_enabled || flags.rentals_inspection_optin_enabled;
   useEffect(() => {
-    if (role !== 'business' || stage !== 'pickup' || !flags.rentals_pickup_photo_rules_enabled) {
+    if (role !== 'business' || stage !== 'pickup' || !rulesFlag) {
       setPhotoRules(null);
       return;
     }
@@ -176,7 +178,7 @@ export function RentalInspectionPanel({
     return () => {
       live = false;
     };
-  }, [bookingId, flags.rentals_pickup_photo_rules_enabled, model.api, role, stage]);
+  }, [bookingId, model.api, role, rulesFlag, stage]);
   useEffect(() => {
     if (!unit) return;
     setDraft(draftFrom(unit, rulesOn));
@@ -260,7 +262,15 @@ export function RentalInspectionPanel({
       if (role === 'business' && view?.status !== 'draft' && view?.status !== 'correction_requested') {
         await model.api.openDraft(bookingId, stage);
       }
-      await model.api.upload({ bookingId, unitId: unit.unitId, role: roleName, file });
+      const exifDateTime = await readJpegDateTime(file);
+      await model.api.upload({
+        bookingId,
+        unitId: unit.unitId,
+        role: roleName,
+        file,
+        exifDateTime,
+        captureSource: 'web',
+      });
     });
   };
 
@@ -329,7 +339,8 @@ export function RentalInspectionPanel({
         return;
       }
     }
-    if (rulesOn && photoRules && !photoRules.pickupDay) return;
+    if (rulesOn && photoRules && !photoRules.optIn && !photoRules.pickupDay) return;
+    if (optIn && photoRules?.beforeStart === false) return;
     if (!reportReadyToSubmit(view.units, minPhotos)) {
       setBanner('incomplete');
       return;
@@ -461,7 +472,18 @@ export function RentalInspectionPanel({
           {role === 'business' && minPhotos != null ? (
             <Chip sx={{ mb: 1 }} label={t('rentalInspection.minPhotos', 'Min {{count}}', { count: minPhotos })} />
           ) : null}
-          {rulesOn && photoRules ? (
+          {optIn && photoRules?.reuse ? (
+            <Button
+              variant="outlined"
+              disabled={busy || photoRules.reuse.blocked || !photoRules.reuse.available}
+              onClick={() => void model.api.reusePickup(bookingId).then(() => model.reload())}
+            >
+              {photoRules.reuse.blocked
+                ? t('rentalInspection.reuseBlocked', 'The last return reported damage.')
+                : t('rentalInspection.reuseAction', 'Reuse photos from last rental')}
+            </Button>
+          ) : null}
+          {rulesOn && photoRules && !optIn ? (
             <PickupWebNotice
               rules={photoRules}
               blocked={photoBlocked}
@@ -469,13 +491,18 @@ export function RentalInspectionPanel({
               progress={photoProgress(view.units, photoRules.guide?.slots ?? [])}
             />
           ) : null}
+          {role === 'client' && unit.photos.some((photo) => photo.reused) ? (
+            <Typography variant="body2" color="text.secondary">
+              {t('rentalInspection.reuseTransparency', 'Some photos come from an earlier rental. Each photo shows the date it was taken.')}
+            </Typography>
+          ) : null}
           <PhotoRow
             unit={unit}
             minPhotos={minPhotos}
             guideSlots={rulesOn && photoRules?.guideMode === 'guide' ? photoRules.guide?.slots : undefined}
             stampZone={photoRules?.timezone}
             guideDate={photoRules?.guide ? formatListingDay(photoRules.guide.submittedAt, photoRules.timezone, i18n.language) : undefined}
-            readOnly={role === 'client' || view.status === 'submitted' || rulesOn}
+            readOnly={role === 'client' || view.status === 'submitted' || (rulesOn && !optIn)}
             submittedAt={view.submittedAt}
             timeZone={confirmationTimeZone(
               booking.rental_location_listing?.business_location?.address?.country,
@@ -1059,6 +1086,12 @@ function PhotoTile({
         <UploadTile label={label} role={role} readOnly={readOnly} onFile={onFile} thumb={thumb} />
       )}
       {photo?.url ? <Typography variant="caption" color="text.secondary" align="center">{label}</Typography> : null}
+      {photo?.captureSource || photo?.reused ? (
+        <Typography variant="caption" color="text.secondary" align="center">
+          {photo.reused ? t('rentalInspection.reusedBadge', 'Reused') : t('rentalInspection.newBadge', 'New')}
+          {photo.capturedAt ? ` · ${photo.capturedAt.slice(0, 10)}` : ''}
+        </Typography>
+      ) : null}
     </Stack>
   );
 }
@@ -1381,4 +1414,12 @@ function classifyMessage(
   if (status === 426 || code === 'RENTAL_INSPECTION_UPDATE_REQUIRED') return 'update_required';
   if (typeof err.response?.data?.message === 'string') return err.response.data.message;
   return t('rentalInspection.loadFailed', 'Could not load the inspection.');
+}
+
+async function readJpegDateTime(file: File): Promise<string | undefined> {
+  if (!file.type.includes('jpeg') && !file.type.includes('jpg')) return undefined;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const text = new TextDecoder('latin1').decode(bytes);
+  const match = text.match(/(\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2})/);
+  return match?.[1];
 }

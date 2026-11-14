@@ -4,6 +4,8 @@ import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { HasuraUserService } from '../../hasura/hasura-user.service';
 import { isoCountryCode } from '../../orders/delivery-pricing.util';
 import { isActivePersona } from '../../users/persona.util';
+import { InspectionOptInService } from './inspection-optin.service';
+import { PICKUP_PHOTO_AFTER_START, isBeforeRentalStart, optInCaptureColumns } from './inspection-optin';
 import { inspectionRejected } from './rental-inspection.errors';
 import { RentalInspectionFlags } from './rental-inspection-flags.service';
 import {
@@ -26,6 +28,7 @@ import {
   isPickupPhotoDay,
   listingTimeZone,
   missingGuideSlots,
+  pendingMediaColumns,
   skipDecision,
   slotMatchesRole,
   uploadPlatform,
@@ -74,12 +77,14 @@ export class PickupPhotoRulesService {
     private readonly hasura: HasuraSystemService,
     private readonly users: HasuraUserService,
     private readonly flags: RentalInspectionFlags,
-    private readonly aws: AwsService
+    private readonly aws: AwsService,
+    private readonly optIn: InspectionOptInService
   ) {}
 
   async assertUpload(input: UploadGate, now = new Date()): Promise<void> {
     if (input.role === 'counter') return;
     const booking = await this.loadBooking(input.bookingId);
+    if (await this.optInOn(booking)) return this.rejectOptInUpload(booking, input, now);
     if (!this.pickupOpen(booking.status)) return;
     if (!(await this.enabled(booking))) return;
     this.rejectClosedUpload(booking, input, now);
@@ -88,6 +93,7 @@ export class PickupPhotoRulesService {
   async assertSubmit(bookingId: string, stage: string, now = new Date()): Promise<void> {
     if (stage !== 'pickup') return;
     const booking = await this.loadBooking(bookingId);
+    if (await this.optInOn(booking)) return this.rejectOptInClosed(booking, now);
     if (!(await this.enabled(booking))) return;
     const start = this.startAt(booking);
     const zone = listingTimeZone(booking.country);
@@ -95,8 +101,28 @@ export class PickupPhotoRulesService {
     await this.assertFresh(booking, start!, zone);
   }
 
+  async mediaColumns(
+    bookingId: string,
+    role: string,
+    input: { slotKey?: string | null; exifDateTime?: string | null; captureSource?: string | null; platform?: string | string[] },
+    clock: Date
+  ) {
+    if (role === 'counter') return pendingMediaColumns(input.slotKey, clock);
+    const booking = await this.loadBooking(bookingId);
+    if (!(await this.optInOn(booking))) return pendingMediaColumns(input.slotKey, clock);
+    return optInCaptureColumns({
+      slotKey: input.slotKey,
+      clock,
+      timeZone: listingTimeZone(booking.country),
+      exif: input.exifDateTime,
+      source: input.captureSource,
+      platform: input.platform,
+    });
+  }
+
   async getRules(bookingId: string, now = new Date()) {
     const booking = await this.requireBusiness(bookingId);
+    if (await this.optInOn(booking)) return this.optInRules(booking, now);
     if (!(await this.enabled(booking))) return this.disabledRules(booking);
     return this.enabledRules(booking, now);
   }
@@ -238,6 +264,42 @@ export class PickupPhotoRulesService {
       guideMode: null,
       guide: null,
     };
+  }
+
+  private async optInRules(booking: BookingContext, now: Date) {
+    const reuse = await this.optIn.reuseStatus(booking.id);
+    const start = this.startAt(booking);
+    return {
+      enabled: true,
+      optIn: true,
+      beforeStart: !!start && isBeforeRentalStart(start, now),
+      webUpload: true,
+      pickupDay: this.onPickupDay(booking, now),
+      timezone: listingTimeZone(booking.country),
+      startAt: booking.start_at,
+      guideMode: null,
+      guide: null,
+      reuse,
+    };
+  }
+
+  private async optInOn(booking: BookingContext): Promise<boolean> {
+    return this.flags.optInEnabled(isoCountryCode(booking.country));
+  }
+
+  private rejectOptInUpload(booking: BookingContext, input: UploadGate, now: Date): void {
+    if (!this.pickupOpen(booking.status)) return;
+    this.rejectOptInClosed(booking, now);
+    if (input.slotKey && !slotMatchesRole(input.slotKey, input.role)) this.rejectSlotPhoto();
+  }
+
+  private rejectOptInClosed(booking: BookingContext, now: Date): void {
+    const start = this.startAt(booking);
+    if (!start || !isBeforeRentalStart(start, now)) this.rejectAfterStart();
+  }
+
+  private rejectAfterStart(): never {
+    throw inspectionRejected(PICKUP_PHOTO_AFTER_START, 'Pickup photos can be added only before the rental starts');
   }
 
   private async guidePayload(booking: BookingContext, versionId: string | null) {

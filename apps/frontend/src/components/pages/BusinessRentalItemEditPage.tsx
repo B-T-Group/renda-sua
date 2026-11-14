@@ -17,6 +17,7 @@ import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { InspectionOptInCard } from '../rentals/InspectionOptInCard';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import {
@@ -535,6 +536,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
               }
               label={t('business.rentals.itemActive', 'Active in catalog')}
             />
+            {itemId ? <InspectionOptInCard itemId={itemId} itemName={name} /> : null}
             <Button
               variant="contained"
               onClick={() => void saveItem()}

@@ -24,6 +24,7 @@ import {
   SubmitInspectionDto,
 } from './dto/rental-inspection.dto';
 import { RentalInspectionEvidenceService } from './inspection/rental-inspection-evidence.service';
+import { InspectionOptInService } from './inspection/inspection-optin.service';
 import { PickupPhotoRulesService } from './inspection/pickup-photo-rules.service';
 import {
   type InspectionStage,
@@ -38,13 +39,25 @@ export class RentalInspectionsController {
   constructor(
     private readonly inspections: RentalInspectionService,
     private readonly evidence: RentalInspectionEvidenceService,
-    private readonly photoRules: PickupPhotoRulesService
+    private readonly photoRules: PickupPhotoRulesService,
+    private readonly optIn: InspectionOptInService
   ) {}
 
   @Get('pickup/photo-rules')
   @ApiOperation({ summary: 'Pickup-day window and last-return guide. Does not open a draft.' })
   photoRulesFor(@Param('bookingId', ParseUUIDPipe) bookingId: string) {
     return this.photoRules.getRules(bookingId);
+  }
+
+  @Post('pickup/reuse')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Copy the last accepted return, or the item baseline, into the pickup draft' })
+  @ApiResponse({ status: 200, description: 'Photos copied into the pickup draft' })
+  @ApiResponse({ status: 409, description: 'Reuse blocked or the rental has already started' })
+  reusePhotos(
+    @Param('bookingId', ParseUUIDPipe) bookingId: string
+  ) {
+    return this.optIn.reuse(bookingId, () => this.inspections.openDraft(bookingId, 'pickup'));
   }
 
   @Post('pickup/guide')
