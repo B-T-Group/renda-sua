@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir =
-  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v6';
+  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v7';
 const heroSrc =
   '/cursor/stores/bot/handoffs/pickup-photo-prefill/hero-jbl.png';
 
@@ -212,6 +212,14 @@ const css = `
 .phase h3{margin:0 0 6px;font-size:16px}
 .sheet{margin-top:auto;background:#fff;border-radius:20px 20px 0 0;padding:16px;box-shadow:0 -8px 24px rgba(15,23,42,.12)}
 .web{width:1100px;min-height:720px;background:#F4F2EE;border-radius:16px;border:10px solid #0b1220;overflow:hidden;display:flex;flex-direction:column}
+.web.snap{min-height:0}
+.web.snap .web-body{flex:none}
+.web.snap .main{align-items:start}
+.web.snap .panel{gap:8px;padding:14px 16px}
+.web.snap .phase{padding:10px 12px}
+.web.snap .card{padding:10px 12px}
+.web.snap .note,.web.snap .info{padding:8px 12px}
+.web.snap h2{margin:0;font-size:20px}
 .chrome{height:40px;background:#1e293b;display:flex;align-items:center;padding:0 14px;gap:8px}
 .dots i{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}
 .r{background:#f87171}.y{background:#fbbf24}.g{background:#34d399}
@@ -261,10 +269,18 @@ function head(c) {
   return `<div class="row"><div><p class="h5">${c.item}</p><p class="cap">${c.ref}</p><p class="loc">${c.loc}</p></div><span class="pill">${c.status}</span></div>`;
 }
 
-function web(shot, c, panel) {
-  return `<article class="web" data-shot="${shot}"><div class="chrome"><span class="dots"><i class="r"></i><i class="y"></i><i class="g"></i></span><div class="url">business.rendasua.com/rentals/bookings/RB-25496259</div></div><div class="web-body"><aside class="nav"><b>Rendasua</b>${c.nav
+function web(shot, c, panel, snap = false) {
+  return `<article class="web${snap ? ' snap' : ''}" data-shot="${shot}"><div class="chrome"><span class="dots"><i class="r"></i><i class="y"></i><i class="g"></i></span><div class="url">business.rendasua.com/rentals/bookings/RB-25496259</div></div><div class="web-body"><aside class="nav"><b>Rendasua</b>${c.nav
     .map((n, i) => `<span class="${i === 2 ? 'on' : ''}">${n}</span>`)
     .join('')}</aside><div class="main"><div><img class="hero" src="hero-jbl.png" alt="" style="height:180px"/>${head(c)}</div><section class="panel">${panel}</section></div></div></article>`;
+}
+
+function webToday(lang, c) {
+  const status = `<section class="phase today">${cameraIcon}<p>${c.today}</p></section>`;
+  const guide = `<section class="card guide"><img class="thumb" src="hero-jbl.png" alt=""/><div><h3>${c.start}</h3><p>${c.summary}</p></div></section>`;
+  const note = `<p class="note">${c.noteShort}</p>`;
+  const app = `<p class="info">${phoneIcon}<span>${c.web}</span></p>`;
+  return web(`${lang}-05-today-web`, c, `<h2>${c.title}</h2>${status}${guide}${note}${app}`, true);
 }
 
 function missingAngles(c) {
@@ -351,7 +367,7 @@ function pages(lang, c) {
   ].join('');
 }
 
-const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>${css}</style></head><body><div class="board">${pages('en', copy.en)}${pages('fr', copy.fr)}</div></body></html>`;
+const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>${css}</style></head><body><div class="board">${webToday('en', copy.en)}${webToday('fr', copy.fr)}</div></body></html>`;
 
 mkdirSync(outDir, { recursive: true });
 mkdirSync(here, { recursive: true });
@@ -376,7 +392,7 @@ const names = [];
 for (let i = 0; i < count; i += 1) {
   const node = shots.nth(i);
   const name = await node.getAttribute('data-shot');
-  if (!name || !/-(03-blocked-web|03-skipped-web|05-today-web)$/.test(name)) continue;
+  if (!name || !/-05-today-web$/.test(name)) continue;
   const file = join(outDir, `${name}.png`);
   await node.screenshot({ path: file });
   names.push(file);
