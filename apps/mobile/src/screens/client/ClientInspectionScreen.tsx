@@ -17,6 +17,7 @@ import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { acceptAndStart, getBooking, getPaymentStatus } from '../../services/rentalsApi';
 import { formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
 import {
+  confirmationDepositHeld,
   confirmationTimeZone,
   confirmationZoneDefault,
   confirmationZoneKey,
@@ -163,6 +164,7 @@ export default function ClientInspectionScreen() {
         zone={t(confirmationZoneKey(country, model.booking.currency), confirmationZoneDefault(country, model.booking.currency, i18n.language))}
         paid={paid}
         deposit={deposit}
+        depositHeld={confirmationDepositHeld(model.booking.payment_status)}
         title={model.booking.rental_location_listing?.rental_item?.name || t('rentals.booking', 'Rental')}
         startAt={model.booking.start_at}
         endAt={model.booking.end_at}

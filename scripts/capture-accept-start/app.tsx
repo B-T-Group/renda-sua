@@ -96,6 +96,7 @@ function WebConfirmation({ scene, language }: { scene: string; language: string 
       zone={scene === 'momoStarted' ? douala : zone}
       paid={formatConfirmationMoney(scene === 'momoStarted' ? 45000 : 45, scene === 'momoStarted' ? 'XAF' : 'CAD', language)}
       deposit={formatConfirmationMoney(scene === 'momoStarted' ? 10000 : 20, scene === 'momoStarted' ? 'XAF' : 'CAD', language)}
+      depositHeld={scene !== 'momoStarted'}
       title="JBL PartyBox 310"
       startAt="2026-11-17T15:00:00.000Z"
       endAt={scene === 'momoStarted' ? '2026-11-18T19:00:00.000Z' : '2026-11-19T01:00:00.000Z'}

@@ -13,6 +13,7 @@ export function RentalStartedConfirmation({
   zone,
   paid,
   deposit,
+  depositHeld,
   title,
   startAt,
   endAt,
@@ -24,6 +25,7 @@ export function RentalStartedConfirmation({
   zone: string;
   paid: string;
   deposit: string;
+  depositHeld: boolean;
   title: string;
   startAt?: string | null;
   endAt?: string | null;
@@ -46,7 +48,7 @@ export function RentalStartedConfirmation({
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{lead}</Typography>
       <Fact label={t('rentalInspection.confirm.returnDue', 'Return due')} value={due} />
       <Fact label={t('rentalInspection.confirm.paid', 'Paid')} value={paid} />
-      {deposit ? <Fact label={t('rentalInspection.confirm.deposit', 'Deposit held')} value={deposit} /> : null}
+      {depositRow(deposit, depositHeld, t)}
       <Button variant="contained" onClick={onBack} sx={{ mt: 3, bgcolor: ACCENT, minHeight: 48, '&:hover': { bgcolor: ACCENT } }}>
         {t('rentalInspection.confirm.backToRental', 'Back to rental')}
       </Button>
@@ -87,11 +89,26 @@ function Tick({ title, sub }: { title: string; sub: string }) {
   );
 }
 
+function depositRow(
+  amount: string,
+  held: boolean,
+  t: (key: string, fallback: string, options?: { amount: string }) => string
+) {
+  if (!amount) return null;
+  if (held) return <Fact label={t('rentalInspection.confirm.deposit', 'Deposit held')} value={amount} />;
+  return (
+    <Fact
+      label={t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
+      value={t('rentalInspection.confirm.depositRecorded', '{{amount}}, retained only if there is damage', { amount })}
+    />
+  );
+}
+
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <Stack direction="row" justifyContent="space-between" sx={{ mt: 1.5 }}>
-      <Typography variant="body2" color="text.secondary">{label}</Typography>
-      <Typography variant="body2" fontWeight={700}>{value}</Typography>
+    <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ mt: 1.5 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>{label}</Typography>
+      <Typography variant="body2" fontWeight={700} sx={{ textAlign: 'right' }}>{value}</Typography>
     </Stack>
   );
 }

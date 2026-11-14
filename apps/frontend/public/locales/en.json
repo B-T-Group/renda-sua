@@ -9584,6 +9584,7 @@
       "momoLead": "Mobile Money payment succeeded. Return is due by {{due}} ({{zone}}).",
       "paid": "Paid",
       "deposit": "Deposit held",
+      "depositRecorded": "{{amount}}, retained only if there is damage",
       "returnDue": "Return due",
       "backToRental": "Back to rental",
       "addCalendar": "Add to calendar",

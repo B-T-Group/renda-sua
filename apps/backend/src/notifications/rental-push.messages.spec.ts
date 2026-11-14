@@ -140,8 +140,7 @@ describe('rental push copy', () => {
     expect(formatRentalNoticeDue(iso, 'America/Toronto', 'en')).toBe('18 Nov · 15:00');
     expect(formatRentalNoticeDue('2026-11-19T01:00:00.000Z', 'America/Toronto', 'en')).toBe('18 Nov · 20:00');
     const fr = formatRentalNoticeDue('2026-11-19T01:00:00.000Z', 'America/Toronto', 'fr');
-    expect(fr.startsWith('18 nov')).toBe(true);
-    expect(fr.endsWith('20:00')).toBe(true);
+    expect(fr).toBe('18 nov. · 20:00');
     expect(fr).not.toContain('h');
   });
 });

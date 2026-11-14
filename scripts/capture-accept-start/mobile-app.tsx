@@ -91,6 +91,7 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
       zone={scene === 'momoStarted' ? douala : zone}
       paid={formatConfirmationMoney(scene === 'momoStarted' ? 45000 : 45, scene === 'momoStarted' ? 'XAF' : 'CAD', language)}
       deposit={formatConfirmationMoney(scene === 'momoStarted' ? 10000 : 20, scene === 'momoStarted' ? 'XAF' : 'CAD', language)}
+      depositHeld={scene !== 'momoStarted'}
       title="JBL PartyBox 310"
       startAt="2026-11-17T15:00:00.000Z"
       endAt={scene === 'momoStarted' ? '2026-11-18T19:00:00.000Z' : '2026-11-19T01:00:00.000Z'}
@@ -112,15 +113,15 @@ function StartedNotice({ language, due }: { language: string; due: string }) {
     : `Amina accepted the condition report. JBL PartyBox 310 is now in progress until ${due}.`;
   return (
     <View style={{ padding: 20, gap: 16 }}>
-      <Text variant="labelSmall" style={{ color: '#5C6570' }}>{french ? "À l'acceptation" : 'On accept'}</Text>
+      <Text variant="labelSmall" style={{ color: '#5C6570', fontFamily: 'Inter_600SemiBold' }}>{french ? "À l'acceptation" : 'On accept'}</Text>
       <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E6E1D8' }}>
-        <Text variant="titleMedium" style={{ color: '#0B7A3B', fontWeight: '800' }}>{acceptedTitle}</Text>
-        <Text variant="bodyMedium" style={{ marginTop: 6, color: '#1C1B1F' }}>{acceptedBody}</Text>
+        <Text variant="titleMedium" style={{ color: '#0B7A3B', fontWeight: '800', fontFamily: 'Inter_600SemiBold' }}>{acceptedTitle}</Text>
+        <Text variant="bodyMedium" style={{ marginTop: 6, color: '#1C1B1F', fontFamily: 'Inter_400Regular' }}>{acceptedBody}</Text>
       </View>
-      <Text variant="labelSmall" style={{ color: '#5C6570' }}>{french ? "Quand la location est active" : 'When the rental is active'}</Text>
+      <Text variant="labelSmall" style={{ color: '#5C6570', fontFamily: 'Inter_600SemiBold' }}>{french ? "Quand la location est active" : 'When the rental is active'}</Text>
       <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E6E1D8' }}>
-        <Text variant="titleMedium" style={{ fontWeight: '800' }}>{startedTitle}</Text>
-        <Text variant="bodyMedium" style={{ marginTop: 6 }}>{startedBody}</Text>
+        <Text variant="titleMedium" style={{ fontWeight: '800', fontFamily: 'Inter_600SemiBold' }}>{startedTitle}</Text>
+        <Text variant="bodyMedium" style={{ marginTop: 6, fontFamily: 'Inter_400Regular' }}>{startedBody}</Text>
       </View>
     </View>
   );

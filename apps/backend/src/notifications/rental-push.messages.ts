@@ -29,7 +29,7 @@ export function formatRentalNoticeDue(
     hourCycle: 'h23',
   }).formatToParts(date);
   const month = part(parts, 'month').replace(/\.$/, '');
-  const label = fr ? month.toLowerCase() : month;
+  const label = fr ? `${month.toLowerCase()}.` : month;
   return `${part(parts, 'day')} ${label} · ${part(parts, 'hour')}:${part(parts, 'minute')}`;
 }
 

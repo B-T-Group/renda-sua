@@ -9592,6 +9592,7 @@
       "momoLead": "Le paiement Mobile Money a réussi. Le retour est dû le {{due}} ({{zone}}).",
       "paid": "Payé",
       "deposit": "Caution bloquée",
+      "depositRecorded": "{{amount}}, retenue uniquement en cas de dommage",
       "returnDue": "Retour dû",
       "backToRental": "Retour à la location",
       "addCalendar": "Ajouter au calendrier",

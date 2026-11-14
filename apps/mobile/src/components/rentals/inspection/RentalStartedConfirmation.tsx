@@ -13,6 +13,7 @@ export function RentalStartedConfirmation({
   zone,
   paid,
   deposit,
+  depositHeld,
   title,
   startAt,
   endAt,
@@ -24,6 +25,7 @@ export function RentalStartedConfirmation({
   zone: string;
   paid: string;
   deposit: string;
+  depositHeld: boolean;
   title: string;
   startAt?: string | null;
   endAt?: string | null;
@@ -54,7 +56,7 @@ export function RentalStartedConfirmation({
       <Text style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}>{lead}</Text>
       <Fact label={t('rentalInspection.confirm.returnDue', 'Return due')} value={due} />
       <Fact label={t('rentalInspection.confirm.paid', 'Paid')} value={paid} />
-      {deposit ? <Fact label={t('rentalInspection.confirm.deposit', 'Deposit held')} value={deposit} /> : null}
+      {depositRow(deposit, depositHeld, t)}
       <Button mode="contained" buttonColor={accent} style={{ marginTop: spacing.lg, minHeight: 48 }} onPress={onBack}>
         {t('rentalInspection.confirm.backToRental', 'Back to rental')}
       </Button>
@@ -100,12 +102,27 @@ function MomoTicks({ accent }: { accent: string }) {
   );
 }
 
+function depositRow(
+  amount: string,
+  held: boolean,
+  t: (key: string, fallback: string, options?: { amount: string }) => string
+) {
+  if (!amount) return null;
+  if (held) return <Fact label={t('rentalInspection.confirm.deposit', 'Deposit held')} value={amount} />;
+  return (
+    <Fact
+      label={t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
+      value={t('rentalInspection.confirm.depositRecorded', '{{amount}}, retained only if there is damage', { amount })}
+    />
+  );
+}
+
 function Fact({ label, value }: { label: string; value: string }) {
   const { colors, spacing, typography } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm }}>
-      <Text style={[typography.body2, { color: colors.text.secondary }]}>{label}</Text>
-      <Text style={[typography.body2, { color: colors.text.primary, fontWeight: '700' }]}>{value}</Text>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: spacing.sm, gap: spacing.sm }}>
+      <Text style={[typography.body2, { color: colors.text.secondary, flexShrink: 0 }]}>{label}</Text>
+      <Text style={[typography.body2, { color: colors.text.primary, fontWeight: '700', flex: 1, textAlign: 'right' }]}>{value}</Text>
     </View>
   );
 }

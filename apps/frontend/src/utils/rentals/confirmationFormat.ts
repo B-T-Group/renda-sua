@@ -47,8 +47,16 @@ export function formatConfirmationDue(
     minute: '2-digit',
     hourCycle: 'h23',
   }).formatToParts(date);
-  const month = part(parts, 'month').replace(/\.$/, '');
-  return `${part(parts, 'day')} ${fr ? month.toLowerCase() : month} · ${part(parts, 'hour')}:${part(parts, 'minute')}`;
+  return `${part(parts, 'day')} ${shortMonth(parts, fr)} · ${part(parts, 'hour')}:${part(parts, 'minute')}`;
+}
+
+function shortMonth(parts: Intl.DateTimeFormatPart[], fr: boolean): string {
+  const raw = part(parts, 'month').replace(/\.$/, '');
+  return fr ? `${raw.toLowerCase()}.` : raw;
+}
+
+export function confirmationDepositHeld(paymentStatus?: string | null): boolean {
+  return paymentStatus === 'authorized';
 }
 
 export function formatConfirmationStamp(

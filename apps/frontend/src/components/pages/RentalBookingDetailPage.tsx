@@ -57,6 +57,7 @@ import {
 } from '../../utils/rentalPhase';
 import { businessCanReplaceReport, reportReadyToReview, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
 import {
+  confirmationDepositHeld,
   confirmationTimeZone,
   confirmationZoneDefault,
   confirmationZoneKey,
@@ -1410,6 +1411,7 @@ function BookingConfirmation({
             zone={zone}
             paid={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, language)}
             deposit={depositLabel(booking, language)}
+            depositHeld={confirmationDepositHeld(booking.payment_status)}
             title={booking.rental_location_listing?.rental_item?.name || 'Rental'}
             startAt={booking.start_at}
             endAt={booking.end_at}
