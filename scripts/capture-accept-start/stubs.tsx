@@ -7,7 +7,13 @@ type Scene =
   | 'handed'
   | 'momo'
   | 'conflict'
-  | 'legacy';
+  | 'legacy'
+  | 'clientReview'
+  | 'businessWait'
+  | 'reportSent'
+  | 'rentalStarted'
+  | 'momoStarted'
+  | 'push';
 
 interface CaptureWindow extends Window {
   __scene?: Scene;
@@ -21,7 +27,51 @@ function scene(): Scene {
 const clientId = 'client-1';
 const businessId = 'biz-1';
 
+function reviewBooking(current: Scene) {
+  return {
+    id: 'b1',
+    booking_number: 'RB-25496259',
+    status: 'reserved',
+    start_at: '2026-11-17T20:00:00.000Z',
+    end_at: '2026-11-19T01:00:00.000Z',
+    total_amount: 45,
+    currency: 'CAD',
+    payment_timing: 'pay_now',
+    payment_status: 'authorized',
+    actual_start_at: null,
+    not_received_report: null,
+    units_booked: 1,
+    inspection_policy_version: 1,
+    client_id: clientId,
+    business_id: businessId,
+    client: { user: { first_name: 'Amina', last_name: 'N.' } },
+    rental_location_listing: {
+      rental_item: {
+        name: 'JBL PartyBox 310',
+        rental_item_images: [{ id: 'img', image_url: '/hero-jbl.png', alt_text: 'JBL PartyBox 310' }],
+      },
+      business_location: { name: 'Atelier Nord, Toronto', address: { country: 'CA' } },
+    },
+    accept_start_preview: null,
+    rental_request: {
+      rental_selection_windows: [
+        {
+          billing: 'daily',
+          calendar_date: '2026-11-17',
+          start_at: '2026-11-17T20:00:00.000Z',
+          end_at: '2026-11-19T01:00:00.000Z',
+        },
+      ],
+    },
+    security_deposit_amount: 20,
+    authorized_amount: 65,
+    overtime_amount: 0,
+    _business: current === 'businessWait',
+  };
+}
+
 function bookingFor(current: Scene) {
+  if (current === 'clientReview' || current === 'businessWait') return reviewBooking(current);
   const active = current === 'started' || current === 'handed';
   const legacy = current === 'legacy';
   const business = current === 'waiting' || current === 'handed';
@@ -72,9 +122,9 @@ const unit = (id: string, label: string) => ({
   wear: 'none',
   accessories: id === 'u2' ? [{ name: 'Battery + charger', count: 2 }] : [],
   photos: [
-    { id: `${id}-1`, role: 'overview', url: '' },
-    { id: `${id}-2`, role: 'other_side', url: '' },
-    { id: `${id}-3`, role: 'accessories', url: '' },
+    { id: `${id}-1`, role: 'overview', url: '/hero-jbl.png' },
+    { id: `${id}-2`, role: 'other_side', url: '/hero-jbl.png' },
+    { id: `${id}-3`, role: 'accessories', url: '/hero-jbl.png' },
   ],
 });
 
@@ -95,7 +145,7 @@ export function useSessionAuth() {
 
 export function useUserProfileContext() {
   const current = scene();
-  const business = current === 'waiting' || current === 'handed';
+  const business = current === 'waiting' || current === 'handed' || current === 'businessWait';
   return useMemo(
     () => ({
       loading: false,
@@ -131,6 +181,17 @@ function reportEnabled(): boolean {
   return captureParams().get('report') === '1';
 }
 
+function confirmationsScene(): boolean {
+  const current = scene();
+  return (
+    current === 'clientReview' ||
+    current === 'businessWait' ||
+    current === 'reportSent' ||
+    current === 'rentalStarted' ||
+    current === 'momoStarted'
+  );
+}
+
 export function useClientFlags() {
   return useMemo(
     () => ({
@@ -138,6 +199,7 @@ export function useClientFlags() {
       flags: {
         rentals_not_received_report_enabled: reportEnabled(),
         rentals_renter_return_report_enabled: Boolean(captureParams().get('return')),
+        rentals_inspection_confirmations_enabled: confirmationsScene(),
       },
     }),
     []
@@ -159,7 +221,7 @@ export function useApiClient() {
                 renter_return_escalated_at: null,
                 rental_location_listing: {
                   rental_item: { name: 'JBL PartyBox 310' },
-                  business_location: { name: "Stripe Rail - L'Assomption" },
+                  business_location: { name: "Atelier Nord, Toronto" },
                 },
               },
               {
@@ -170,7 +232,7 @@ export function useApiClient() {
                 renter_return_escalated_at: '2026-11-12T18:42:00.000Z',
                 rental_location_listing: {
                   rental_item: { name: 'JBL PartyBox 310' },
-                  business_location: { name: "Stripe Rail - L'Assomption" },
+                  business_location: { name: "Atelier Nord, Toronto" },
                 },
               },
             ],
@@ -227,8 +289,8 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
     renter_reported_returned_at: reported ? '2026-11-12T18:42:00.000Z' : null,
     renter_return_escalated_at: state === 'escalated' ? '2026-11-13T18:42:00.000Z' : null,
     return_place: {
-      name: "Stripe Rail - L'Assomption",
-      address: "Stripe Rail - L'Assomption",
+      name: "Atelier Nord, Toronto",
+      address: "Atelier Nord, Toronto",
       phone: '+237600000000',
     },
     inspection_policy_version: null,
@@ -237,13 +299,14 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
         name: 'JBL PartyBox 310',
         rental_item_images: [{ id: 'img', image_url: '/hero.png', alt_text: 'JBL PartyBox 310' }],
       },
-      business_location: { name: "Stripe Rail - L'Assomption" },
+      business_location: { name: "Atelier Nord, Toronto" },
     },
   };
 }
 
 export function useRentalApi() {
   return useMemo(() => ({
+    fetchRequestInspectionPolicy: async () => 1,
     fetchBookingDetail: async () => {
       const row = applyReturn(bookingFor(scene()));
       const { _business: _ignored, ...booking } = row;
@@ -260,7 +323,7 @@ export function useRentalApi() {
           rental_location_listing: {
             id: 'loc',
             base_price_per_hour: 1000,
-            business_location: { name: "Stripe Rail - L'Assomption" },
+            business_location: { name: "Atelier Nord, Toronto" },
             rental_item: { name: 'JBL PartyBox 310', currency: 'XAF' },
           },
           rental_booking: {
@@ -278,7 +341,7 @@ export function useRentalApi() {
           rental_location_listing: {
             id: 'loc',
             base_price_per_hour: 1000,
-            business_location: { name: "Stripe Rail - L'Assomption" },
+            business_location: { name: "Atelier Nord, Toronto" },
             rental_item: { name: 'JBL PartyBox 310', currency: 'XAF' },
           },
           rental_booking: {
@@ -372,7 +435,13 @@ export function useRentalInspection() {
   const french = document.documentElement.lang === 'fr';
   return useMemo(() => {
   const labels: [string, string] = french ? ['Unité 1', 'Unité 2'] : ['Unit 1', 'Unit 2'];
-  const pickup = current === 'legacy' ? null : viewFor(labels);
+  const one = current === 'clientReview' || current === 'businessWait';
+  const full = viewFor(labels);
+  const pickup = current === 'legacy'
+    ? null
+    : one
+      ? { ...full, units: [full.units[0]], submittedAt: '2026-11-17T15:32:00.000Z' }
+      : full;
   const enrolled = current !== 'legacy' && !captureParams().get('return');
   return {
     api: {
@@ -393,7 +462,10 @@ export function useRentalInspection() {
     gate: enrolled
       ? { mode: 'waiting' as const, showCollectPayment: false, showStart: false, showOverwrite: false }
       : { mode: 'legacy' as const, showCollectPayment: false, showStart: true, showOverwrite: true },
-    reviewStage: current === 'review' || current === 'momo' || current === 'conflict' ? 'pickup' : null,
+    reviewStage:
+      current === 'review' || current === 'momo' || current === 'conflict' || current === 'clientReview'
+        ? 'pickup'
+        : null,
     showLegacyReturn: captureParams().get('return') === 'business',
     showEnrolledReturn: false,
   };

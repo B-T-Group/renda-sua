@@ -1,9 +1,47 @@
 import { HttpException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+import type { HasuraSystemService } from '../../hasura/hasura-system.service';
+import type { NotificationsService as NotificationsServiceType } from '../../notifications/notifications.service';
 import { RentalsService } from '../rentals.service';
+
+const { NotificationsService } = jest.requireActual<{
+  NotificationsService: new (...args: unknown[]) => NotificationsServiceType;
+}>('../../notifications/notifications.service');
 import {
   acceptStartPaymentRail,
   didntReceiveWindowOpen,
 } from './rental-inspection.policy';
+
+function pickupNoticeService(pushes: string[]) {
+  const rows = new Set<string>();
+  const none = {} as never;
+  const notices = new NotificationsService(
+    { get: jest.fn(() => ({ enabled: true })) } as unknown as ConfigService,
+    {
+      executeMutation: jest.fn(async (_query: string, vars: { object?: { notice_idempotency_key?: string } }) => {
+        const key = vars?.object?.notice_idempotency_key ?? '';
+        if (rows.has(key)) return { insert_user_messages_one: null };
+        rows.add(key);
+        return { insert_user_messages_one: { id: 'row-1' } };
+      }),
+      executeQuery: jest.fn(),
+    } as unknown as HasuraSystemService,
+    none,
+    none,
+    none,
+    none,
+    none,
+    none,
+    none
+  );
+  jest.spyOn(notices as unknown as { languageFor: () => Promise<string> }, 'languageFor').mockResolvedValue('en');
+  jest
+    .spyOn(notices as unknown as { sendPushNotificationByUserId: () => Promise<void> }, 'sendPushNotificationByUserId')
+    .mockImplementation(async () => {
+      pushes.push('pickup_accepted');
+    });
+  return notices;
+}
 
 describe('accept and start', () => {
   const svc: any = Object.create(RentalsService.prototype);
@@ -48,7 +86,10 @@ describe('accept and start', () => {
     svc.deliveryPinService = { getPinForClient: jest.fn().mockResolvedValue('1234') };
     svc.notificationsService = {
       sendRentalInspectionNotice: jest.fn().mockResolvedValue(undefined),
+      sendBusinessRentalStarted: jest.fn().mockResolvedValue(undefined),
+      sendRentalStartedClientPush: jest.fn().mockResolvedValue(undefined),
     };
+    svc.inspectionFlags = { confirmationsEnabled: jest.fn().mockResolvedValue(false) };
     svc.hasuraUserService = {
       getUser: jest.fn().mockResolvedValue({
         id: 'client-user',
@@ -103,6 +144,224 @@ describe('accept and start', () => {
     expect(svc.confirmWalletContract).not.toHaveBeenCalled();
     expect(svc.pushMomoPickupPayment).not.toHaveBeenCalled();
     expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalStartedClientPush).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted' })
+    );
+  });
+
+  it('sends nothing new on activation when confirmations are off', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(false);
+    await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalStartedClientPush).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted', paymentPending: false })
+    );
+  });
+
+  it('tells the business the rental started only after activation when the flag is on', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalStartedClientPush).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalInspectionNotice).not.toHaveBeenCalled();
+  });
+
+  it('sends the pending notice when the start falls through to Mobile Money', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    svc.hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc', available_balance: 0 });
+    const result = await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(result).toMatchObject({
+      started: false,
+      paymentPending: true,
+      payment_rail: 'mobile_money',
+    });
+    expect(svc.confirmWalletContract).not.toHaveBeenCalled();
+    expect(svc.pushMomoPickupPayment).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted', paymentPending: true })
+    );
+  });
+
+  it('sends the pending notice when the hold throws and a payment is already pending', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({
+        status: 'reserved',
+        payment_status: 'pending',
+        payment_timing: 'pay_at_pickup',
+        booking_number: 'RB-1',
+      })
+    );
+    svc.hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc', available_balance: 760 });
+    svc.confirmWalletContract.mockRejectedValue(new HttpException('hold failed', 409));
+    svc.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment.mockResolvedValue(true);
+    await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toBeInstanceOf(HttpException);
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted', paymentPending: true })
+    );
+  });
+
+  it('sends the plain accept notice once when the wallet hold throws', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    svc.hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc', available_balance: 760 });
+    svc.confirmWalletContract.mockRejectedValue(new HttpException('hold failed', 409));
+    await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toBeInstanceOf(HttpException);
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted', paymentPending: false })
+    );
+  });
+
+  it('does not send a second accept notice when a failed start is retried', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    const pushes: string[] = [];
+    const notices = pickupNoticeService(pushes);
+    svc.notificationsService.sendRentalInspectionNotice = (params: unknown) =>
+      notices.sendRentalInspectionNotice(params as never);
+    let accepted = false;
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({
+        status: 'reserved',
+        payment_status: 'pending',
+        payment_timing: 'pay_at_pickup',
+        booking_number: 'RB-1',
+      })
+    );
+    svc.hasuraSystemService.executeQuery.mockImplementation(async () =>
+      gate({
+        pickup_ack_current: accepted,
+        pickup_accepted_version_id: accepted ? 'ver-1' : null,
+      })
+    );
+    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
+      if (String(query).includes('rental_accept_pickup_version')) {
+        accepted = true;
+        return { rental_accept_pickup_version: [{ id: 'b1' }] };
+      }
+      return { rental_mark_started: [] };
+    });
+    svc.hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc', available_balance: 760 });
+    svc.confirmWalletContract.mockRejectedValue(new HttpException('hold failed', 409));
+    await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toBeInstanceOf(HttpException);
+    await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toBeInstanceOf(HttpException);
+    expect(pushes).toEqual(['pickup_accepted']);
+    expect(acceptCalls()).toHaveLength(1);
+  });
+
+  it('starts on retry after a failed start without a second accept notice', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    let accepted = false;
+    let phase: 'fail' | 'retry' | 'paid' = 'fail';
+    svc.fetchBooking.mockImplementation(async () =>
+      enrolled({
+        status: phase === 'paid' ? 'confirmed' : 'reserved',
+        payment_status: phase === 'paid' ? 'paid' : 'pending',
+        payment_timing: 'pay_at_pickup',
+      })
+    );
+    svc.hasuraSystemService.executeQuery.mockImplementation(async () =>
+      gate({
+        pickup_ack_current: accepted,
+        pickup_accepted_version_id: accepted ? 'ver-1' : null,
+      })
+    );
+    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
+      if (String(query).includes('rental_accept_pickup_version')) {
+        accepted = true;
+        return { rental_accept_pickup_version: [{ id: 'b1' }] };
+      }
+      return { rental_mark_started: [{ id: 'b1' }] };
+    });
+    svc.hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc', available_balance: 760 });
+    svc.confirmWalletContract.mockImplementation(async () => {
+      if (phase === 'fail') {
+        phase = 'retry';
+        throw new HttpException('hold failed', 409);
+      }
+      phase = 'paid';
+      return true;
+    });
+    await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toBeInstanceOf(HttpException);
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted', paymentPending: false })
+    );
+    const result = await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(result).toMatchObject({ started: true, payment_rail: 'wallet' });
+    expect(acceptCalls()).toHaveLength(1);
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalStartedClientPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('rethrows the start error when the failure notice throws', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockRejectedValue(new Error('notice down'));
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    svc.hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc', available_balance: 760 });
+    svc.confirmWalletContract.mockRejectedValue(new HttpException('hold failed', 409));
+    await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toMatchObject({
+      message: 'hold failed',
+    });
+    expect(svc.logger.warn).toHaveBeenCalledWith(expect.stringContaining('notifyAcceptFailure'));
+  });
+
+  it('skips the accept notice when a paid wallet start succeeds', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    let paid = false;
+    svc.confirmWalletContract.mockImplementation(async () => {
+      paid = true;
+      return true;
+    });
+    svc.fetchBooking.mockImplementation(async () =>
+      enrolled({
+        status: paid ? 'confirmed' : 'reserved',
+        payment_status: paid ? 'paid' : 'pending',
+        payment_timing: 'pay_at_pickup',
+      })
+    );
+    svc.hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc', available_balance: 760 });
+    const result = await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(result).toMatchObject({ started: true, payment_rail: 'wallet' });
+    expect(svc.notificationsService.sendRentalInspectionNotice).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the accept notice, then the started notice, when Mobile Money waits', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    const result = await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(result).toMatchObject({ started: false, paymentPending: true, payment_rail: 'mobile_money' });
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted', paymentPending: true })
+    );
+    svc.fetchBookingByBookingNumber.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'confirmed', payment_status: 'paid', payment_timing: 'pay_at_pickup' })
+    );
+    svc.hasuraSystemService.executeQuery.mockResolvedValue(
+      gate({ pickup_ack_current: true, pickup_accepted_version_id: 'ver-1' })
+    );
+    await svc.processRentalBookingPayment({ entity_id: 'RB-1' });
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalStartedClientPush).toHaveBeenCalledTimes(1);
   });
 
   it('charges the wallet and then starts', async () => {
@@ -158,6 +417,68 @@ describe('accept and start', () => {
     expect(svc.confirmWalletContract).toHaveBeenCalled();
     expect(markCalls()).toHaveLength(1);
     expect(markCalls()[0][1].at).toEqual(expect.any(String));
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+  });
+
+  it('writes one row and sends one push when a flagged Mobile Money webhook is replayed', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    const rows = new Set<string>();
+    const pushes: string[] = [];
+    const none = {} as never;
+    const notices = new NotificationsService(
+      { get: jest.fn(() => ({ enabled: true })) } as unknown as ConfigService,
+      {
+        executeMutation: jest.fn(async (_query: string, vars: { object?: { notice_idempotency_key?: string } }) => {
+          const key = vars?.object?.notice_idempotency_key ?? '';
+          if (rows.has(key)) return { insert_user_messages_one: null };
+          rows.add(key);
+          return { insert_user_messages_one: { id: 'row-1' } };
+        }),
+        executeQuery: jest.fn(),
+      } as unknown as HasuraSystemService,
+      none,
+      none,
+      none,
+      none,
+      none,
+      none,
+      none
+    );
+    jest.spyOn(notices as unknown as { languageFor: () => Promise<string> }, 'languageFor').mockResolvedValue('en');
+    jest
+      .spyOn(notices as unknown as { sendPushNotificationByUserId: () => Promise<void> }, 'sendPushNotificationByUserId')
+      .mockImplementation(async () => {
+        pushes.push('business');
+      });
+    svc.notificationsService.sendBusinessRentalStarted = (params: unknown) =>
+      notices.sendBusinessRentalStarted(params as never);
+    let marks = 0;
+    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
+      if (!String(query).includes('rental_mark_started')) {
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      marks += 1;
+      return marks === 1 ? { rental_mark_started: [{ id: 'b1' }] } : { rental_mark_started: [] };
+    });
+    svc.fetchBookingByBookingNumber.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'confirmed', payment_status: 'paid', payment_timing: 'pay_at_pickup' })
+    );
+    svc.hasuraSystemService.executeQuery.mockResolvedValue(
+      gate({ pickup_ack_current: true, pickup_accepted_version_id: 'ver-1' })
+    );
+    await svc.processRentalBookingPayment({ entity_id: 'RB-1' });
+    await svc.processRentalBookingPayment({ entity_id: 'RB-1' });
+    await notices.sendBusinessRentalStarted({
+      businessUserId: 'biz-user',
+      rentalItemName: 'Canon EOS R50',
+      bookingId: 'b1',
+    });
+    expect(pushes).toEqual(['business']);
+    expect(rows).toEqual(new Set(['b1:rental_started']));
+    expect(svc.notificationsService.sendRentalStartedClientPush).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the accept when Mobile Money fails, then retries without accepting again', async () => {
@@ -198,6 +519,10 @@ describe('accept and start', () => {
     expect(acceptCalls()).toHaveLength(1);
     expect(markCalls()).toHaveLength(0);
     expect(svc.pushMomoPickupPayment).toHaveBeenCalledTimes(2);
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    const notice = svc.notificationsService.sendRentalInspectionNotice.mock.calls[0][0];
+    expect(notice.kind).toBe('pickup_accepted');
+    expect(JSON.stringify(notice)).not.toMatch(/started|in progress|démarrée|en cours/i);
   });
 
   it('does not charge or accept again when the rental already started', async () => {

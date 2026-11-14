@@ -23,7 +23,8 @@ export type ClientFlagKey =
   | 'rentals_client_tab_enabled'
   | 'rentals_not_received_report_enabled'
   | 'rentals_renter_return_report_enabled'
-  | 'rentals_card_window_guard_enabled';
+  | 'rentals_card_window_guard_enabled'
+  | 'rentals_inspection_confirmations_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -55,6 +56,8 @@ const DEFAULT_FLAGS: ClientFlags = {
   rentals_renter_return_report_enabled: false,
   /** Card date guard. Off until a config row turns it on. No NODE_ENV override. */
   rentals_card_window_guard_enabled: false,
+  /** Inspection confirmation screens. Off until a config row turns it on. No NODE_ENV override. */
+  rentals_inspection_confirmations_enabled: false,
 };
 
 /**

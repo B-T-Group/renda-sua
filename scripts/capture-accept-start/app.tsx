@@ -5,14 +5,21 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Box, Typography } from '@mui/material';
 import { theme } from '../../apps/frontend/src/theme/theme';
 import RentalBookingDetailPage from '../../apps/frontend/src/components/pages/RentalBookingDetailPage';
+import RentalRequestSubmittedPage from '../../apps/frontend/src/components/pages/RentalRequestSubmittedPage';
+import { ReportSentConfirmation } from '../../apps/frontend/src/components/rentals/ReportSentConfirmation';
+import { RentalStartedConfirmation } from '../../apps/frontend/src/components/rentals/RentalStartedConfirmation';
+import { formatConfirmationDue, formatConfirmationMoney } from '../../apps/frontend/src/utils/rentals/confirmationFormat';
 import en from '../../apps/frontend/public/locales/en.json';
 import fr from '../../apps/frontend/public/locales/fr.json';
 
+const bootLang = new URLSearchParams(window.location.search).get('lang') === 'fr' ? 'fr' : 'en';
+
 void i18n.use(initReactI18next).init({
   resources: { en: { translation: en }, fr: { translation: fr } },
-  lng: 'en',
+  lng: bootLang,
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
 });
@@ -24,17 +31,97 @@ function CaptureApp() {
   (window as Window & { __scene?: string }).__scene = scene;
   document.documentElement.lang = language;
   if (i18n.language !== language) void i18n.changeLanguage(language);
+  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush';
   return (
     <I18nextProvider i18n={i18n}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <MemoryRouter initialEntries={['/rentals/bookings/b1']}>
-          <Routes>
-            <Route path="/rentals/bookings/:bookingId" element={<RentalBookingDetailPage />} />
-          </Routes>
-        </MemoryRouter>
+        {direct ? (
+          <Box sx={{ bgcolor: '#FAF9F7', minHeight: '100vh', py: 4 }}>
+            <Box sx={{ maxWidth: 720, mx: 'auto', px: 3 }}>
+              <WebConfirmation scene={scene} language={language} />
+            </Box>
+          </Box>
+        ) : (
+          <MemoryRouter
+            initialEntries={[
+              scene === 'requestSubmitted'
+                ? '/rentals/request-submitted?requestId=req-1'
+                : '/rentals/bookings/b1',
+            ]}
+          >
+            <Routes>
+              <Route path="/rentals/bookings/:bookingId" element={<RentalBookingDetailPage />} />
+              <Route path="/rentals/request-submitted" element={<RentalRequestSubmittedPage />} />
+            </Routes>
+          </MemoryRouter>
+        )}
       </ThemeProvider>
     </I18nextProvider>
+  );
+}
+
+const PHOTOS = [
+  { id: '1', role: 'overview', url: '/hero-jbl.png' },
+  { id: '2', role: 'other_side', url: '/hero-jbl.png' },
+  { id: '3', role: 'accessories', url: '/hero-jbl.png' },
+];
+
+function WebConfirmation({ scene, language }: { scene: string; language: string }) {
+  const when = formatConfirmationDue('2026-11-17T15:32:00.000Z', 'America/Toronto', language);
+  const due = formatConfirmationDue('2026-11-19T01:00:00.000Z', 'America/Toronto', language);
+  const momoDue = formatConfirmationDue('2026-11-18T19:00:00.000Z', 'Africa/Douala', language);
+  const zone = language === 'fr' ? 'heure de Montréal' : 'Montréal time';
+  const douala = language === 'fr' ? 'heure de Douala' : 'Douala time';
+  if (scene === 'reportSent') {
+    return (
+      <ReportSentConfirmation
+        stage="pickup"
+        renterName="Amina"
+        unitCount={1}
+        versionNo={1}
+        when={when}
+        photos={PHOTOS}
+        canEdit
+        onBack={() => undefined}
+        onEdit={() => undefined}
+      />
+    );
+  }
+  if (scene === 'push' || scene === 'clientPush') return <WebNotice language={language} due={due} zone={zone} kind={scene} />;
+  return (
+    <RentalStartedConfirmation
+      momo={scene === 'momoStarted'}
+      due={scene === 'momoStarted' ? momoDue : due}
+      zone={scene === 'momoStarted' ? douala : zone}
+      paid={formatConfirmationMoney(scene === 'momoStarted' ? 45000 : 45, scene === 'momoStarted' ? 'XAF' : 'CAD', language)}
+      deposit={formatConfirmationMoney(scene === 'momoStarted' ? 10000 : 20, scene === 'momoStarted' ? 'XAF' : 'CAD', language)}
+      depositHeld={scene !== 'momoStarted'}
+      title="JBL PartyBox 310"
+      startAt="2026-11-17T15:00:00.000Z"
+      endAt={scene === 'momoStarted' ? '2026-11-18T19:00:00.000Z' : '2026-11-19T01:00:00.000Z'}
+      location={scene === 'momoStarted' ? 'Sono Akwa – Akwa, Douala' : 'Atelier Nord, Toronto'}
+      onBack={() => undefined}
+    />
+  );
+}
+
+function WebNotice({ language, due, zone, kind }: { language: string; due: string; zone: string; kind: string }) {
+  const french = language === 'fr';
+  const when = `${due} (${zone})`;
+  const startedTitle = french ? 'Location démarrée' : 'Rental started';
+  const startedBody = kind === 'clientPush'
+    ? french
+      ? `Votre location de JBL PartyBox 310 a commencé. Le retour est dû le ${when}.`
+      : `Your rental of JBL PartyBox 310 has started. Return is due by ${when}.`
+    : french
+      ? `Amina a accepté l'état des lieux. JBL PartyBox 310 est désormais en cours jusqu'au ${when}.`
+      : `Amina accepted the condition report. JBL PartyBox 310 is now in progress until ${when}.`;
+  return (
+    <Box sx={{ bgcolor: '#fff', borderRadius: 2, p: 2, border: '1px solid #E6E1D8', maxWidth: 420 }}>
+      <Typography variant="h6" fontWeight={800}>{startedTitle}</Typography>
+      <Typography variant="body1" sx={{ mt: 1 }}>{startedBody}</Typography>
+    </Box>
   );
 }
 

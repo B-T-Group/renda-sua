@@ -351,7 +351,7 @@ interface InstructionBlockProps {
   body: string;
 }
 
-const HowItWorksNotes: React.FC = () => {
+const HowItWorksNotes: React.FC<{ inspected?: boolean }> = ({ inspected }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const steps = [
@@ -363,10 +363,15 @@ const HowItWorksNotes: React.FC = () => {
       'rentals.detail.howItWorksStep2',
       'When the business accepts, book and pay (or reserve to pay at pickup).'
     ),
-    t(
-      'rentals.detail.howItWorksStep3',
-      'At pickup, send your start PIN in chat. Return by the booked end time.'
-    ),
+    inspected
+      ? t(
+          'rentals.detail.howItWorksStep3Inspected',
+          'At pickup, review and accept the condition report to start. Return by the booked end time.'
+        )
+      : t(
+          'rentals.detail.howItWorksStep3',
+          'At pickup, send your start PIN in chat. Return by the booked end time.'
+        ),
   ];
 
   return (
@@ -731,8 +736,12 @@ const RentalListingDetailPage: React.FC = () => {
                       </Typography>
                       <Typography variant="caption" color="text.secondary" display="block">
                         {t(
-                          'rentals.detail.securityDepositHint',
-                          'Held on your card with the rental total and only used for extra hours past your booked end time.'
+                          row.inspection_policy_version != null
+                            ? 'rentals.detail.securityDepositHintInspected'
+                            : 'rentals.detail.securityDepositHint',
+                          row.inspection_policy_version != null
+                            ? 'Held on your card with the rental total. The rental is charged at return. The deposit is released unless there\'s damage or a late return.'
+                            : 'Held on your card with the rental total and only used for extra hours past your booked end time.'
                         )}
                       </Typography>
                     </>
@@ -873,7 +882,7 @@ const RentalListingDetailPage: React.FC = () => {
             </Grid>
 
             <Grid item xs={12}>
-              <HowItWorksNotes />
+              <HowItWorksNotes inspected={row.inspection_policy_version != null} />
             </Grid>
 
             <Grid item xs={12}>
@@ -901,6 +910,7 @@ const RentalListingDetailPage: React.FC = () => {
               {listingId ? (
                 <RentalListingRequestSection
                   listingId={listingId}
+                  inspectionPolicyVersion={row.inspection_policy_version}
                   isAuthenticated={isAuthenticated}
                   merchantCanAcceptOrders={
                     row.rental_item.business.can_accept_orders ??

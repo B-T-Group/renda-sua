@@ -37,6 +37,7 @@ import { AcceptAndStartRentalDto } from './dto/accept-and-start-rental.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
+import { requestPolicyIdPipe } from './rental-request-policy';
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
@@ -264,11 +265,13 @@ export class RentalsController {
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
-    const card = await this.rentalsService.cardWindowFieldsFor(
-      listing.business_location?.address?.country,
-      readLatestCardEndAt(listing)
-    );
-    return { success: true, data: { listing: Object.assign(listing, card) } };
+    const country = listing.business_location?.address?.country;
+    const card = await this.rentalsService.cardWindowFieldsFor(country, readLatestCardEndAt(listing));
+    const inspection_policy_version = await this.rentalsService.listingInspectionPolicy(country);
+    return {
+      success: true,
+      data: { listing: Object.assign(listing, card, { inspection_policy_version }) },
+    };
   }
 
   @Get('business/items')
@@ -515,6 +518,19 @@ export class RentalsController {
     @Body() body?: RetryRentalBookingPaymentDto
   ) {
     return this.rentalsService.retryBookingPayment(bookingId, body);
+  }
+
+  @Get('requests/:id/inspection-policy')
+  @ApiOperation({ summary: 'Whether this client request would use a condition report' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Policy version, or null for the start-PIN flow' })
+  @ApiResponse({
+    status: 404,
+    description: 'Missing, unauthorized, or malformed request id',
+  })
+  async getRequestInspectionPolicy(@Param('id', requestPolicyIdPipe) requestId: string) {
+    const inspection_policy_version = await this.rentalsService.getRequestInspectionPolicy(requestId);
+    return { success: true, inspection_policy_version };
   }
 
   @Post('requests')

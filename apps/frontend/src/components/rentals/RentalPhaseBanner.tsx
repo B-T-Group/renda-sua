@@ -47,8 +47,17 @@ const NEXT_STEP_DEFAULTS: Record<string, string> = {
   'rentalInspection.bannerReview':
     'Review the condition report, then accept it to start the rental.',
   'rentalInspection.bannerWaiting':
-    'Waiting for the renter to accept the condition. No PIN is needed.',
+    'Waiting for the renter to accept the condition report. No PIN is needed.',
 };
+
+const REVIEW_CHIP = { bgcolor: '#0A4FB518', color: '#0A4FB5', borderColor: '#0A4FB544' };
+const WAITING_CHIP = { bgcolor: '#B4530918', color: '#B45309', borderColor: '#B4530944' };
+
+function inspectionChipTone(nextStepKey?: string): 'review' | 'waiting' | null {
+  if (nextStepKey === 'rentalInspection.bannerWaiting') return 'waiting';
+  if (nextStepKey === 'rentalInspection.bannerReview') return 'review';
+  return null;
+}
 
 interface Props {
   bookingStatus?: string | null;
@@ -78,6 +87,7 @@ export const RentalPhaseBanner: React.FC<Props> = ({
       : resolveRentalPhase({ requestStatus, bookingStatus }, role);
 
   const stepKey = nextStepKey ?? info.nextStepKey;
+  const tone = inspectionChipTone(nextStepKey);
   if (!stepKey && info.phase === 'done' && !bookingStatus) {
     return null;
   }
@@ -97,9 +107,9 @@ export const RentalPhaseBanner: React.FC<Props> = ({
         <Chip
           size="small"
           label={chipLabel || t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
-          color="info"
+          color={tone ? undefined : 'info'}
           variant="outlined"
-          sx={{ fontWeight: 700 }}
+          sx={{ fontWeight: 700, ...(tone === 'waiting' ? WAITING_CHIP : {}), ...(tone === 'review' ? REVIEW_CHIP : {}) }}
         />
         <Typography variant="caption" color="info.main" fontWeight={700}>
           {t('rentals.nextStep.label', 'Next step')}
