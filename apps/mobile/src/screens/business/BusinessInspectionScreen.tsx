@@ -14,7 +14,7 @@ import {
   PickupSubmitBlocked,
   SkipReasonField,
 } from '../../components/rentals/inspection/PickupPhotoChrome';
-import { blockedGuideRows } from '../../utils/rentals/blockedGuideRows';
+import { blockedScreenRows, submitLeftCount } from '../../utils/rentals/blockedGuideRows';
 import { formatListingDay, formatListingStamp } from '../../utils/rentals/pickupPhotoTime';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInspectionCapture } from '../../hooks/useInspectionCapture';
@@ -34,6 +34,7 @@ export default function BusinessInspectionScreen() {
   const [blocked, setBlocked] = useState(false);
   const [source, setSource] = useState<{ role: 'overview' | 'other_side' | 'accessories' | 'wear' | 'counter'; index: number } | null>(null);
   const [skipKey, setSkipKey] = useState<string | null>(null);
+  const [reasonFor, setReasonFor] = useState<number | null>(null);
   const unit = model.current;
   const needsClaim = stage === 'return' && model.units.some((row) => row.returnChoice === 'damage' || row.condition === 'damaged');
   const overtime = model.booking ? derivedOvertime(model.booking) : null;
@@ -57,10 +58,8 @@ export default function BusinessInspectionScreen() {
 
   if (blocked && rulesOn) {
     const thumbs = model.units.flatMap((row) => row.photos);
-    const rows = blockedGuideRows(model.guideGaps, thumbs.map((photo) => ({
-      slotKey: photo.slotKey ?? '',
-      url: photo.ghostUri ?? photo.uri ?? null,
-    }))).map((row) => ({
+    const slots = thumbs.map((photo) => ({ slotKey: photo.slotKey ?? '', url: photo.ghostUri ?? photo.uri ?? null }));
+    const rows = blockedScreenRows(model.guideGaps, model.view?.slotSkips ?? [], slots).map((row) => ({
       ...row,
       label: angleLabel(row.slotKey, t),
       thumbUri: row.thumbUrl,
@@ -70,6 +69,7 @@ export default function BusinessInspectionScreen() {
         <PickupSubmitBlocked
           rows={rows}
           date={guideDate}
+          left={submitLeftCount(model.guideGaps)}
           onRetake={(row) => openRetake(model, row, setBlocked, setSource)}
           onSkip={(row, reason) => void model.skipAngle(row.slotKey, reason, row.unitId)}
         />
@@ -154,6 +154,9 @@ export default function BusinessInspectionScreen() {
             <InspectionPhotoSlots
               slots={unit.photos.map((photo) => ({
                 ...photo,
+                fromLabel: photo.ghostUri && guideDate
+                  ? t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })
+                  : undefined,
                 stamp: photo.capturedAt && model.rules?.timezone
                   ? formatListingStamp(photo.capturedAt, model.rules.timezone, i18n.language)
                   : undefined,
@@ -161,22 +164,39 @@ export default function BusinessInspectionScreen() {
               minPhotos={rulesOn ? null : model.minPhotos}
               onAdd={(role, slot) => {
                 if (rulesOn) {
-                  setSource({ role, index: slot });
+                  setSkipKey(`${slot}`);
                   return;
                 }
                 void model.addPhoto(role, slot);
               }}
               onRetry={(slot) => void model.retryPhoto(slot)}
             />
-            {rulesOn && model.rules?.guideMode === 'guide' ? (
-              <Button mode="text" onPress={() => {
-                const extra = unit.photos.find((photo) => photo.slotKey?.startsWith('extra:') && !photo.mediaId);
-                setSkipKey(extra?.slotKey ?? null);
-              }}>
-                {t('rentalInspection.skipAngle', 'Skip this angle')}
-              </Button>
+            {rulesOn && skipKey != null && unit.photos[Number(skipKey)] ? (
+              <View style={{ gap: spacing.sm }}>
+                <Button mode="contained" buttonColor={colors.cta.main} onPress={() => {
+                  const index = Number(skipKey);
+                  const photo = unit.photos[index];
+                  setSkipKey(null);
+                  setReasonFor(null);
+                  setSource({ role: photo.role, index });
+                }}>
+                  {t('rentalInspection.retake', 'Retake')}
+                </Button>
+                {unit.photos[Number(skipKey)]?.slotKey?.startsWith('extra:') ? (
+                  <Button mode="text" onPress={() => setReasonFor(Number(skipKey))}>
+                    {t('rentalInspection.skipAngle', 'Skip this angle')}
+                  </Button>
+                ) : null}
+                {reasonFor === Number(skipKey) ? (
+                  <SkipReasonField onSave={(reason) => {
+                    const photo = unit.photos[Number(skipKey)];
+                    setSkipKey(null);
+                    setReasonFor(null);
+                    if (photo?.slotKey) void model.skipAngle(photo.slotKey, reason);
+                  }} />
+                ) : null}
+              </View>
             ) : null}
-            {skipKey ? <SkipReasonField onSave={(reason) => void model.skipAngle(skipKey, reason)} /> : null}
           </>
         )}
         {stage === 'return' ? (
@@ -260,6 +280,12 @@ export default function BusinessInspectionScreen() {
           value={unit.physicalLabel}
           onChangeText={(physicalLabel) => model.update({ physicalLabel })}
         />
+        {unit.guideUnconfirmed.includes('notes') ? (
+          <ChecklistTag
+            label={t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })}
+            onConfirm={() => model.confirmField('notes')}
+          />
+        ) : null}
         <TextInput
           mode="outlined"
           label={t('rentalInspection.notesOptional', 'Notes (optional)')}
@@ -291,7 +317,9 @@ export default function BusinessInspectionScreen() {
         >
           {stage === 'return'
             ? t('rentalInspection.submitReturn', 'Submit return report')
-            : t('rentalInspection.submitReport', 'Submit report')}
+            : rulesOn && submitLeftCount(model.guideGaps) > 0
+              ? t('rentalInspection.submitLeft', 'Submit report · {{count}} left', { count: submitLeftCount(model.guideGaps) })
+              : t('rentalInspection.submitReport', 'Submit report')}
         </Button>
         {stage === 'return' ? (
           <Button mode="outlined" style={styles.action} disabled={!model.canHandback || model.busy} onPress={() => void model.handback()}>

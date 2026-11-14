@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir =
-  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v2';
+  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v3';
 const heroSrc =
   '/cursor/stores/bot/handoffs/pickup-photo-prefill/hero-jbl.png';
 
@@ -18,10 +18,12 @@ const copy = {
     title: 'Pickup photos',
     item: 'JBL PartyBox 310',
     ref: 'RB-25496259',
-    loc: "Stripe Rail – L'Assomption",
+    loc: 'Atelier Nord, Toronto',
+    status: 'Reserved',
     start: 'Start from last report',
     summary: 'Last return · 10 Nov · 12 photos · 4 checks',
     note: 'The last return photos are a guide only. You must retake every photo today, ideally with the renter there.',
+    noteLater: 'The last return photos are a guide only. You must retake every photo on pickup day, ideally with the renter there.',
     guide: 'Use as guide',
     blank: 'Start blank',
     progress: '5 of 12 retaken',
@@ -31,7 +33,8 @@ const copy = {
     retake: 'Retake',
     blocked: "Can't send yet",
     submit: 'Submit report',
-    blockedBody: 'Retake all photos before sending',
+    submitLeft: (count) => `Submit report · ${count} left`,
+    blockedBody: 'Retake or skip the missing angles',
     missing:
       '7 angles from the 10 Nov guide are still missing. Retake them, or skip an extra angle with a reason.',
     retakeMissing: 'Retake missing photos',
@@ -42,9 +45,9 @@ const copy = {
     libraryOff: 'Disabled for this report.',
     libraryNote: 'Gallery photos stay off for this report. Take the photo in the app.',
     take: 'Take photo',
-    today: 'Pickup today, take the condition photos with the renter.',
+    today: 'Pickup today: take the condition photos, ideally with the renter.',
     takePhotos: 'Take pickup photos',
-    early: 'You can prepare the checklist now; photos are taken on pickup day.',
+    early: 'Photos are taken on pickup day, 17 Nov (Toronto time). You can prepare the checklist now.',
     prepare: 'Prepare checklist',
     web: 'Take pickup photos in the Rendasua app',
     enable: 'Enable the camera',
@@ -53,11 +56,14 @@ const copy = {
     settings: 'Open Settings',
     extra: (n) => `Extra angle ${n}`,
     roles: ['Overview', 'Other side', 'Accessories'],
+    stamp: '17 Nov · 10:14',
     checks: [
       ['Condition', 'Overall good'],
       ['Accessories', 'Cable and mic'],
       ['Wear', 'Light scuff on the grille'],
+      ['Notes', 'Handle scuff, works normally'],
     ],
+    presets: ['Not on this unit', 'Accessory not included', "Can't reach this angle", 'Other'],
     missingLine: (count) => `${count} angles from the 10 Nov guide are still missing. Retake them, or skip an extra angle with a reason.`,
     skip: 'Skip this angle',
     reason: 'Angle not on this unit',
@@ -69,20 +75,23 @@ const copy = {
     title: 'Photos de départ',
     item: 'JBL PartyBox 310',
     ref: 'RB-25496259',
-    loc: "Stripe Rail – L'Assomption",
+    loc: 'Atelier Nord, Toronto',
+    status: 'Réservée',
     start: 'Reprendre le dernier rapport',
     summary: 'Dernier retour · 10 nov. · 12 photos · 4 contrôles',
     note: "Les photos du dernier retour servent de repère. Vous devez toutes les reprendre aujourd'hui, avec le locataire si possible.",
+    noteLater: 'Les photos du dernier retour servent de repère. Vous devez toutes les reprendre le jour du départ, avec le locataire si possible.',
     guide: 'Utiliser comme guide',
     blank: 'Partir de zéro',
     progress: '5 sur 12 reprises',
     retakeNote: 'Les anciennes photos sont un guide. Chaque case doit être reprise.',
-    from: 'depuis le 10 nov.',
+    from: 'du 10 nov.',
     confirm: 'Confirmer',
     retake: 'Reprendre',
     blocked: 'Envoi bloqué',
     submit: 'Envoyer le constat',
-    blockedBody: "Reprenez toutes les photos avant l'envoi",
+    submitLeft: (count) => `Envoyer le constat · ${count} restantes`,
+    blockedBody: 'Reprenez ou ignorez les angles manquants',
     missing:
       '7 angles du guide du 10 nov. manquent encore. Reprenez-les, ou ignorez un angle supplémentaire avec un motif.',
     retakeMissing: 'Reprendre les photos manquantes',
@@ -94,10 +103,9 @@ const copy = {
     libraryNote:
       "La galerie reste fermée pour ce rapport. Prenez la photo dans l'application.",
     take: 'Prendre la photo',
-    today: "Départ aujourd'hui, prenez les photos d'état avec le locataire.",
+    today: "Départ aujourd'hui : prenez les photos d'état, idéalement avec le locataire.",
     takePhotos: 'Prendre les photos de départ',
-    early:
-      'Vous pouvez préparer la liste maintenant ; les photos se prennent le jour du départ.',
+    early: 'Les photos se prennent le jour du départ, le 17 nov. (heure de Toronto). Vous pouvez préparer la liste dès maintenant.',
     prepare: 'Préparer la liste',
     web: "Prenez les photos de départ dans l'application Rendasua",
     enable: "Activez l'appareil photo",
@@ -106,11 +114,14 @@ const copy = {
     settings: 'Ouvrir les réglages',
     extra: (n) => `Angle supplémentaire ${n}`,
     roles: ['Vue d’ensemble', 'Autre côté', 'Accessoires'],
+    stamp: '17 nov. · 10:14',
     checks: [
       ['État', 'Bon état général'],
       ['Accessoires', 'Câble et micro'],
       ['Usure', 'Léger frottement sur la grille'],
+      ['Notes', 'Poignée marquée, fonctionne'],
     ],
+    presets: ['Absent sur cette unité', 'Accessoire non inclus', 'Angle inaccessible', 'Autre'],
     missingLine: (count) => `${count} angles du guide du 10 nov. manquent encore. Reprenez-les, ou ignorez un angle supplémentaire avec un motif.`,
     skip: 'Ignorer cet angle',
     reason: 'Angle absent sur cette unité',
@@ -125,12 +136,12 @@ const css = `
 :root{--green:#0B7A3B;--green-dark:#085C2C;--green-soft:#DCF5E5;--bg:#FAF9F7;--line:#E6E1D8;--text:#0F172A;--muted:#64748B;--warn-tint:#FEF3C7;--err:#B91C1C;--err-tint:#fee2e2;--info-tint:#e6f7fb}
 *{box-sizing:border-box} body{margin:0;background:#0f172a;font-family:Inter,system-ui,sans-serif;color:var(--text)}
 .board{display:flex;flex-direction:column;gap:28px;padding:24px}
-.phone{width:390px;height:844px;background:var(--bg);border-radius:36px;border:10px solid #0b1220;overflow:hidden;display:flex;flex-direction:column}
+.phone{width:390px;min-height:844px;background:var(--bg);border-radius:36px;border:10px solid #0b1220;overflow:hidden;display:flex;flex-direction:column}
 .status{height:28px;display:flex;justify-content:space-between;padding:8px 18px 0;font-size:12px;font-weight:700}
 .hdr{min-height:52px;display:flex;align-items:center;padding:4px 12px;gap:8px}
 .back{background:#fff;border:0;border-radius:999px;padding:8px 12px;font:inherit;font-weight:700;color:var(--green-dark)}
 .hdr h2{flex:1;text-align:center;font-size:17px;margin:0}
-.body{flex:1;overflow:hidden;padding:4px 16px 8px;display:flex;flex-direction:column;gap:10px}
+.body{flex:1;overflow:visible;padding:4px 16px 8px;display:flex;flex-direction:column;gap:10px}
 .footer{padding:10px 16px 14px;background:#fff;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .hero{width:100%;height:120px;object-fit:cover;border-radius:16px}
 .h5{font-size:20px;font-weight:800;margin:0}
@@ -162,12 +173,17 @@ const css = `
 .angle button{border:1px solid var(--green);background:#fff;color:var(--green-dark);border-radius:10px;font-weight:700;padding:6px 10px;font-family:inherit}
 .from{font-size:10px;font-weight:800;color:#92400e;background:var(--warn-tint);border-radius:999px;padding:3px 7px}
 .err{background:var(--err-tint);color:#9F1239;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600}
+.info{background:#F4F7F5;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600;display:flex;gap:8px}
+.cam{width:36px;height:36px;border-radius:50%;background:var(--green);color:#fff;border:0;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.phase h3,.panel h2{display:flex;align-items:center;gap:8px}
+.presets{display:flex;flex-direction:column;gap:6px;margin-left:48px}
+.presets button{text-align:left;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;font:inherit;font-weight:650}
 .lock{display:flex;gap:12px;align-items:center;padding:12px;border:1.5px dashed #D0C9BE;border-radius:14px;background:#fff}
 .lock.off{opacity:.55}
 .phase{background:#0E749014;border:1px solid #0E749055;border-radius:16px;padding:12px}
 .phase h3{margin:0 0 6px;font-size:16px}
 .sheet{margin-top:auto;background:#fff;border-radius:20px 20px 0 0;padding:16px;box-shadow:0 -8px 24px rgba(15,23,42,.12)}
-.web{width:1280px;height:800px;background:#F4F2EE;border-radius:16px;border:10px solid #0b1220;overflow:hidden;display:flex;flex-direction:column}
+.web{width:1100px;min-height:720px;background:#F4F2EE;border-radius:16px;border:10px solid #0b1220;overflow:hidden;display:flex;flex-direction:column}
 .chrome{height:40px;background:#1e293b;display:flex;align-items:center;padding:0 14px;gap:8px}
 .dots i{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}
 .r{background:#f87171}.y{background:#fbbf24}.g{background:#34d399}
@@ -190,7 +206,8 @@ function slots(c, freshCount) {
   return labels
     .map((label, i) => {
       const fresh = i < freshCount;
-      return `<div class="slot ${fresh ? 'fresh' : 'ghost'}"><img src="hero-jbl.png" alt=""/><span class="tag">${fresh ? '17 Nov · 10:14' : `${label} · ${c.from}`}</span></div>`;
+      const tag = fresh ? `${label} ✓<br/>${c.stamp}` : `${label}<br/>${c.from}`;
+      return `<div class="slot ${fresh ? 'fresh' : 'ghost'}"><img src="hero-jbl.png" alt=""/><span class="tag">${tag}</span></div>`;
     })
     .join('');
 }
@@ -209,7 +226,7 @@ function phone(shot, c, body, footer = '') {
 }
 
 function head(c) {
-  return `<div class="row"><div><p class="h5">${c.item}</p><p class="cap">${c.ref}</p><p class="loc">${c.loc}</p></div><span class="pill">Reserved</span></div>`;
+  return `<div class="row"><div><p class="h5">${c.item}</p><p class="cap">${c.ref}</p><p class="loc">${c.loc}</p></div><span class="pill">${c.status}</span></div>`;
 }
 
 function web(shot, c, panel) {
@@ -222,42 +239,64 @@ function missingAngles(c) {
   return [3, 4, 5, 6, 7, 8, 9].map((n) => c.extra(n));
 }
 
-function blockedList(c) {
-  const rows = missingAngles(c);
-  const items = rows
-    .map(
-      (label) =>
-        `<div class="angle"><img src="hero-jbl.png" alt=""/><b>${label}</b><button>${c.skip}</button></div>`
-    )
-    .join('');
-  return `<section class="card"><h3>${c.blocked}</h3><p>${c.blockedBody}</p><p class="err">${c.missingLine(rows.length)}</p>${items}</section>`;
+function angleRow(c, label, mode) {
+  if (mode === 'skipped') {
+    return `<div class="angle"><img src="hero-jbl.png" alt=""/><b>${label}</b><span class="cap">${c.presets[0]}</span></div>`;
+  }
+  const skip = `<button>${c.skip}</button>`;
+  const cam = `<button class="cam" aria-label="${c.take}">${camera}</button>`;
+  const presets = mode === 'reason'
+    ? `<div class="presets">${c.presets.map((item) => `<button>${item}</button>`).join('')}</div>`
+    : '';
+  return `<div class="angle"><img src="hero-jbl.png" alt=""/><b>${label}</b>${cam}${skip}</div>${presets}`;
 }
 
+function blockedList(c, variant = 'list') {
+  const rows = missingAngles(c);
+  const open = variant === 'skipped' ? rows.slice(1) : rows;
+  const skipped = variant === 'skipped' ? angleRow(c, rows[0], 'skipped') : '';
+  const items = open
+    .map((label, index) => angleRow(c, label, variant === 'reason' && index === 0 ? 'reason' : 'buttons'))
+    .join('');
+  return `<section class="card"><h3>${c.blocked}</h3><p>${c.blockedBody}</p><p>${c.missingLine(open.length)}</p>${items}${skipped}</section>`;
+}
+
+const cameraOff = '<svg width="56" height="56" viewBox="0 0 72 72" aria-hidden="true"><rect x="16" y="26" width="34" height="24" rx="4" fill="#DCF5E5" stroke="#0B7A3B" stroke-width="2"/><circle cx="33" cy="38" r="6" fill="none" stroke="#0B7A3B" stroke-width="2"/><path d="M50 32l8-5v18l-8-5z" fill="#0B7A3B"/><path d="M18 54L54 18" stroke="#B45309" stroke-width="3"/></svg>';
+const calendar = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="#0B7A3B" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" fill="none" stroke="#0B7A3B" stroke-width="2"/></svg>';
+const camera = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="13" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+const phoneIcon = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" fill="none" stroke="#0B7A3B" stroke-width="2"/><path d="M11 18h2" stroke="#0B7A3B" stroke-width="2"/></svg>';
+
 function pages(lang, c) {
-  const startBody = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}<section class="card guide"><img class="thumb" src="hero-jbl.png" alt=""/><div><h3>${c.start}</h3><p>${c.summary}</p></div></section><p class="note">${c.note}</p>`;
+  const startCard = `<section class="card guide"><img class="thumb" src="hero-jbl.png" alt=""/><div><h3>${c.start}</h3><p>${c.summary}</p></div></section><p class="note">${c.note}</p>`;
+  const startBody = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}${startCard}`;
   const startFoot = `<footer class="footer"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></footer>`;
-  const gridBody = `<p class="progress">${c.progress}</p><div class="bar"><i></i></div><p class="note">${c.retakeNote}</p><div class="grid">${slots(c, 5)}</div><section class="card">${checks(c)}<button class="btn btn-outline" style="margin-top:8px">${c.skip}</button><p class="cap">${c.reason}</p></section>`;
-  const blocked = blockedList(c);
-  const camera = `${head(c)}<div class="sheet"><h3>${c.source}</h3><div class="lock"><div><b>${c.camera}</b><div class="cap">${c.cameraReq}</div></div></div><div class="lock off"><div><b>${c.library}</b><div class="cap">${c.libraryOff}</div></div></div><p class="note">${c.libraryNote}</p><button class="btn btn-green">${c.take}</button></div>`;
-  const today = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}<section class="phase"><h3>${c.title}</h3><p>${c.today}</p></section>`;
-  const early = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}<section class="phase"><h3>${c.title}</h3><p>${c.early}</p><p class="note">${c.note}</p></section><section class="card">${checks(c)}</section>`;
-  const denied = `<section class="card" style="margin-top:80px;text-align:center"><h3>${c.enable}</h3><p>${c.denied}</p></section>`;
+  const left = c.submitLeft(7);
+  const gridBody = `<p class="progress">${c.progress}</p><div class="bar"><i></i></div><p class="note">${c.retakeNote}</p><div class="grid">${slots(c, 5)}</div><section class="card">${checks(c)}</section>`;
+  const camera = `${head(c)}<div class="sheet"><h3>${c.source}</h3><div class="lock"><div><b>${c.camera}</b><div class="cap">${c.cameraReq}</div></div></div><p class="note">${c.libraryNote}</p><button class="btn btn-green">${c.take}</button></div>`;
+  const today = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}<section class="phase"><h3>${camera} ${c.title}</h3><p>${c.today}</p></section>${startCard}`;
+  const early = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}<section class="phase"><h3>${calendar} ${c.title}</h3><p>${c.early}</p></section><p class="note">${c.noteLater}</p><section class="card">${checks(c)}</section>`;
+  const denied = `<section class="card" style="margin-top:80px;text-align:center">${cameraOff}<h3>${c.enable}</h3><p>${c.denied}</p></section>`;
   const deniedFoot = `<footer class="footer"><button class="btn btn-green">${c.settings}</button></footer>`;
-  const webNotice = `<p class="err">${c.web}</p>`;
+  const webInfo = `<p class="info">${phoneIcon}<span>${c.web}</span></p>`;
+  const foot = (label) => `<footer class="footer"><button class="btn btn-green" disabled style="opacity:.45">${label}</button></footer>`;
   return [
     phone(`${lang}-01-start`, c, startBody, startFoot),
-    phone(`${lang}-02-grid`, c, gridBody, `<footer class="footer"><button class="btn btn-green" disabled style="opacity:.45">${c.blockedBody}</button></footer>`),
-    phone(`${lang}-03-blocked`, c, blocked, `<footer class="footer"><button class="btn btn-green" disabled style="opacity:.45">${c.submit}</button></footer>`),
+    phone(`${lang}-02-grid`, c, gridBody, foot(left)),
+    phone(`${lang}-03-blocked`, c, blockedList(c), foot(left)),
+    phone(`${lang}-03-skip-reason`, c, blockedList(c, 'reason'), foot(left)),
+    phone(`${lang}-03-skipped`, c, blockedList(c, 'skipped'), foot(c.submitLeft(6))),
     phone(`${lang}-04-camera`, c, camera),
     phone(`${lang}-05-today`, c, today, `<footer class="footer"><button class="btn btn-green">${c.takePhotos}</button></footer>`),
     phone(`${lang}-05-early`, c, early, `<footer class="footer"><button class="btn btn-outline">${c.prepare}</button></footer>`),
     phone(`${lang}-camera-denied`, c, denied, deniedFoot),
-    web(`${lang}-01-start-web`, c, `<h2>${c.start}</h2><p>${c.summary}</p><p class="note">${c.note}</p>${webNotice}<div class="btns"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></div>`),
-    web(`${lang}-02-grid-web`, c, `<h2>${c.title}</h2><p class="progress">${c.progress}</p>${webNotice}<div class="grid">${slots(c, 5)}</div><div>${checks(c)}</div>`),
-    web(`${lang}-03-blocked-web`, c, `<h2>${c.blocked}</h2>${blockedList(c)}${webNotice}`),
-    web(`${lang}-04-readonly-web`, c, `<h2>${c.title}</h2>${webNotice}<p class="note">${c.note}</p><div class="lock off"><div><b>${c.library}</b><div class="cap">${c.libraryOff}</div></div></div>`),
-    web(`${lang}-05-today-web`, c, `<h2>${c.title}</h2><p>${c.today}</p>${webNotice}<button class="btn btn-outline">${c.checklist}</button>`),
-    web(`${lang}-05-early-web`, c, `<h2>${c.prepare}</h2><p>${c.early}</p><div>${checks(c)}</div><button class="btn btn-green">${c.prepare}</button>`),
+    web(`${lang}-01-start-web`, c, `<h2>${c.start}</h2><p>${c.summary}</p><p class="note">${c.note}</p>${webInfo}<div class="btns"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></div>`),
+    web(`${lang}-02-grid-web`, c, `<h2>${c.title}</h2><p class="progress">${c.progress}</p>${webInfo}<div class="grid">${slots(c, 5)}</div><div>${checks(c)}</div><button class="btn btn-green" disabled style="opacity:.45">${left}</button>`),
+    web(`${lang}-03-blocked-web`, c, `<h2>${c.blocked}</h2>${blockedList(c)}${webInfo}`),
+    web(`${lang}-03-skip-reason-web`, c, `<h2>${c.blocked}</h2>${blockedList(c, 'reason')}`),
+    web(`${lang}-03-skipped-web`, c, `<h2>${c.blocked}</h2>${blockedList(c, 'skipped')}`),
+    web(`${lang}-04-readonly-web`, c, `<h2>${c.title}</h2>${webInfo}<p class="progress">${c.progress}</p><div>${checks(c)}</div>`),
+    web(`${lang}-05-today-web`, c, `<h2>${camera} ${c.title}</h2><p>${c.today}</p><h3>${c.start}</h3><p>${c.summary}</p><p class="note">${c.note}</p>${webInfo}`),
+    web(`${lang}-05-early-web`, c, `<h2>${calendar} ${c.prepare}</h2><p class="info">${calendar}<span>${c.early}</span></p><p class="note">${c.noteLater}</p><div>${checks(c)}</div><button class="btn btn-green">${c.prepare}</button>`),
   ].join('');
 }
 
@@ -278,7 +317,7 @@ const browser = await chromium.launch({
   executablePath: '/usr/bin/google-chrome',
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
-const page = await browser.newPage({ deviceScaleFactor: 2 });
+const page = await browser.newPage({ deviceScaleFactor: 1 });
 await page.goto(`file://${pagePath}`, { waitUntil: 'networkidle' });
 const shots = page.locator('[data-shot]');
 const count = await shots.count();
@@ -286,7 +325,7 @@ const names = [];
 for (let i = 0; i < count; i += 1) {
   const node = shots.nth(i);
   const name = await node.getAttribute('data-shot');
-  if (!name?.includes('-03-')) continue;
+  if (!name) continue;
   const file = join(outDir, `${name}.png`);
   await node.screenshot({ path: file });
   names.push(file);

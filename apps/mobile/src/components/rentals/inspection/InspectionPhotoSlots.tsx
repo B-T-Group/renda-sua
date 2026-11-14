@@ -14,6 +14,7 @@ export interface SlotPhoto {
   uri?: string;
   ghostUri?: string;
   stamp?: string;
+  fromLabel?: string;
   failed?: boolean;
   pending?: boolean;
 }
@@ -78,15 +79,17 @@ export function InspectionPhotoSlots({
             >
               {slot.uri ? <Image source={{ uri: slot.uri }} style={styles.image} /> : null}
               {ghost ? <Image source={{ uri: slot.ghostUri }} style={styles.ghost} /> : null}
-              <Text style={[typography.caption, { color: colors.text.primary, textAlign: 'center' }]}>
+              <Text style={[typography.caption, { color: slot.uri ? '#fff' : colors.text.primary, textAlign: 'center' }]}>
                 {slot.failed
                   ? t('rentalInspection.photoUploadFailed', 'Photo upload failed. Retry.')
-                  : ghost
-                    ? t('rentalInspection.retake', 'Retake')
-                    : label}
+                  : slot.uri
+                    ? `${label} ✓`
+                    : ghost && slot.fromLabel
+                      ? `${label} · ${slot.fromLabel}`
+                      : label}
               </Text>
               {slot.stamp && slot.uri ? (
-                <Text style={[typography.caption, { color: colors.text.secondary }]}>{slot.stamp}</Text>
+                <Text style={[typography.caption, { color: '#fff' }]}>{slot.stamp}</Text>
               ) : null}
               {slot.pending ? (
                 <Text style={[typography.caption, { color: colors.warning.dark }]}>

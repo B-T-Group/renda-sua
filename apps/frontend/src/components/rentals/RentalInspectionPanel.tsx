@@ -21,8 +21,8 @@ import type { useRentalInspection } from '../../hooks/useRentalInspection';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { PickupWebNotice } from './PickupWebNotice';
-import { blockedGuideRows } from '../../utils/rentals/blockedGuideRows';
-import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
+import { blockedScreenRows, submitLeftCount } from '../../utils/rentals/blockedGuideRows';
+import { formatListingDay, formatListingStamp } from '../../utils/rentals/pickupPhotoTime';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { formatListingDue } from '../../utils/rentalRequestFormat';
@@ -432,6 +432,7 @@ export function RentalInspectionPanel({
               busy={busy}
               blocked={photoBlocked}
               rows={noticeRows(view.units, photoRules.guide?.slots ?? [], view.slotSkips ?? [], t)}
+              progress={photoProgress(view.units, photoRules.guide?.slots ?? [])}
               onChoose={(mode) => void run(async () => {
                 await model.api.applyGuide(bookingId, mode);
                 const next = await model.api.photoRules(bookingId);
@@ -448,6 +449,8 @@ export function RentalInspectionPanel({
             unit={unit}
             minPhotos={minPhotos}
             guideSlots={rulesOn && photoRules?.guideMode === 'guide' ? photoRules.guide?.slots : undefined}
+            stampZone={photoRules?.timezone}
+            guideDate={photoRules?.guide ? formatListingDay(photoRules.guide.submittedAt, photoRules.timezone, i18n.language) : undefined}
             readOnly={role === 'client' || view.status === 'submitted' || rulesOn}
             onFile={(photoRole, file) => void upload(photoRole, file)}
           />
@@ -525,9 +528,7 @@ export function RentalInspectionPanel({
                   {t('rentalInspection.saveUnitNext', 'Save unit · next')}
                 </Button>
                 <Button variant="contained" sx={{ minHeight: 48 }} disabled={busy || minPhotos == null || offline || view.status === 'submitted' || (stage === 'return' && returnHasDamage(view) && !(Number(claim) > 0))} onClick={() => void submit()}>
-                  {stage === 'return'
-                    ? t('rentalInspection.submitReturn', 'Submit return report')
-                    : t('rentalInspection.submitReport', 'Submit report')}
+                  {submitLabel(stage, rulesOn, photoRules, view, t)}
                 </Button>
                 {stage === 'return' ? (
                   <Button variant="outlined" sx={{ minHeight: 48 }} disabled={busy || !canHandback} onClick={() => void run(() => model.api.handback(bookingId).then(() => undefined), 'handed')}>
@@ -846,16 +847,41 @@ function guideGaps(
   return missing;
 }
 
+function submitLabel(
+  stage: string,
+  rulesOn: boolean,
+  rules: PickupPhotoRules | null,
+  view: { units: InspectionUnit[]; slotSkips?: Array<{ unitId: string; slotKey: string; reason: string }> },
+  t: (key: string, fallback: string, options?: Record<string, unknown>) => string
+): string {
+  if (stage === 'return') return t('rentalInspection.submitReturn', 'Submit return report');
+  const left = rulesOn && rules?.guide
+    ? submitLeftCount(guideGaps(view.units, rules.guide.slots, view.slotSkips ?? []))
+    : 0;
+  if (left > 0) return t('rentalInspection.submitLeft', 'Submit report · {{count}} left', { count: left });
+  return t('rentalInspection.submitReport', 'Submit report');
+}
+
 function noticeRows(
   units: InspectionUnit[],
   slots: Array<{ slotKey: string; required: boolean; url?: string | null }>,
   skips: Array<{ unitId: string; slotKey: string; reason: string }>,
   t: (key: string, fallback: string, options?: Record<string, string>) => string
 ) {
-  return blockedGuideRows(guideGaps(units, slots, skips), slots).map((row) => ({
+  const gaps = guideGaps(units, slots, skips);
+  return blockedScreenRows(gaps, skips, slots).map((row) => ({
     ...row,
     label: angleLabel(row.slotKey, t),
   }));
+}
+
+function photoProgress(units: InspectionUnit[], slots: Array<{ slotKey: string }>) {
+  if (!slots.length) return null;
+  const done = units.reduce(
+    (count, unit) => count + unit.photos.filter((photo) => slots.some((slot) => slot.slotKey === photo.slotKey && photo.url)).length,
+    0
+  );
+  return { done, total: slots.length * Math.max(units.length, 1) };
 }
 
 function angleLabel(slotKey: string, t: (key: string, fallback: string, options?: Record<string, string>) => string) {
@@ -869,15 +895,19 @@ function PhotoRow({
   minPhotos,
   readOnly,
   guideSlots,
+  stampZone,
+  guideDate,
   onFile,
 }: {
   unit: InspectionUnit;
   minPhotos: number | null;
   readOnly: boolean;
   guideSlots?: Array<{ slotKey: string; role: PhotoRole; url: string | null; required: boolean }>;
+  stampZone?: string;
+  guideDate?: string;
   onFile: (role: PhotoRole, file: File) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const roles = guideSlots?.length
     ? guideSlots
     : (minPhotos == null ? REQUIRED_PHOTO_ROLES : photoRolesForMinimum(minPhotos)).map((role) => ({
@@ -896,11 +926,19 @@ function PhotoRow({
         const label = extra
           ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: extra })
           : t(ROLE_KEY[role][0], ROLE_KEY[role][1]);
+        const stamp = photo?.capturedAt && stampZone
+          ? formatListingStamp(photo.capturedAt, stampZone, i18n.language)
+          : '';
+        const caption = photo?.url
+          ? `${label} ✓${stamp ? ` ${stamp}` : ''}`
+          : ghost && guideDate
+            ? `${label} · ${t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })}`
+            : label;
         return (
-          <Button key={slot.slotKey} component="label" variant="outlined" sx={{ minHeight: 96, minWidth: 96 }}>
+          <Button key={slot.slotKey} component="label" variant="outlined" sx={{ minHeight: 96, minWidth: 96, display: 'flex', flexDirection: 'column' }}>
             {photo?.url ? <Box component="img" src={photo.url} alt={label} sx={{ width: 72, height: 72, objectFit: 'cover' }} /> : null}
             {ghost ? <Box component="img" src={slot.url ?? ''} alt="" sx={{ width: 72, height: 72, objectFit: 'cover', opacity: 0.35 }} /> : null}
-            {photo?.url || ghost ? null : label}
+            <Typography variant="caption">{caption}</Typography>
             {readOnly ? null : (
               <input
                 hidden

@@ -1,4 +1,5 @@
-import { blockedGuideRows } from './blockedGuideRows';
+import { blockedGuideRows, checklistCount, submitLeftCount } from './blockedGuideRows';
+import { formatListingStamp } from './pickupPhotoTime';
 
 describe('blocked guide rows', () => {
   it('lists every missing slot and uses that list for the count', () => {
@@ -14,5 +15,10 @@ describe('blocked guide rows', () => {
     expect(rows).toHaveLength(gaps.length);
     expect(rows.map((row) => row.slotKey)).toEqual(gaps.map((gap) => gap.slotKey));
     expect(rows.every((row) => row.action === 'skip' && row.thumbUrl)).toBe(true);
+    expect(submitLeftCount(gaps)).toBe(checklistCount(rows));
+  });
+
+  it('formats a French listing stamp as 17 nov. · 10:14', () => {
+    expect(formatListingStamp('2026-11-17T15:14:00.000Z', 'America/Toronto', 'fr')).toBe('17 nov. · 10:14');
   });
 });
