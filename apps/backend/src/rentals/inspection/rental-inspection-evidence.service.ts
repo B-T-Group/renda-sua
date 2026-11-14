@@ -18,6 +18,8 @@ import {
   isInspectionPendingKey,
   validateInspectionUpload,
 } from './rental-inspection-evidence';
+import { pendingMediaColumns } from './pickup-photo-rules';
+import { PickupPhotoRulesService } from './pickup-photo-rules.service';
 
 export interface EvidencePresignInput {
   unitId: string;
@@ -25,6 +27,7 @@ export interface EvidencePresignInput {
   contentType: string;
   fileSize: number;
   sha256?: string;
+  slotKey?: string;
 }
 
 @Injectable()
@@ -34,18 +37,26 @@ export class RentalInspectionEvidenceService {
   constructor(
     private readonly hasura: HasuraSystemService,
     private readonly users: HasuraUserService,
-    private readonly aws: AwsService
+    private readonly aws: AwsService,
+    private readonly photoRules: PickupPhotoRulesService
   ) {}
 
-  async presign(bookingId: string, input: EvidencePresignInput) {
+  async presign(bookingId: string, input: EvidencePresignInput, platform?: string | string[]) {
     const upload = validateInspectionUpload(input.contentType, input.fileSize);
     const checksum = resolveInspectionChecksum(input.sha256);
     const actor = await this.actorForUpload(bookingId, input.role);
     const inspection = await this.draftInspection(bookingId, input.role);
+    await this.photoRules.assertUpload({
+      bookingId,
+      role: input.role,
+      platform,
+      slotKey: input.slotKey,
+    });
     await this.assertUnit(bookingId, input.unitId);
     const mediaId = randomUUID();
+    const capturedAt = new Date();
     const objectKey = inspectionPendingObjectKey(bookingId, mediaId, upload.ext);
-    await this.insertPending(bookingId, mediaId, inspection.id, input, objectKey, upload, actor.userId);
+    await this.insertPending(bookingId, mediaId, inspection.id, input, objectKey, upload, actor.userId, capturedAt);
     const signed = await this.aws.generateStrictUploadUrl({
       bucketName: this.bucket(),
       key: objectKey,
@@ -64,6 +75,7 @@ export class RentalInspectionEvidenceService {
         'Content-Length': String(upload.size),
         ...(checksum ? { 'x-amz-checksum-sha256': checksum } : {}),
       },
+      capturedAt: capturedAt.toISOString(),
     };
   }
 
@@ -192,7 +204,8 @@ export class RentalInspectionEvidenceService {
     input: EvidencePresignInput,
     objectKey: string,
     upload: { contentType: string; size: number },
-    userId: string
+    userId: string,
+    capturedAt: Date
   ) {
     if (!isInspectionPendingKey(objectKey, bookingId) || isInspectionEvidenceKey(objectKey, bookingId)) {
       throw new HttpException('Invalid evidence key', HttpStatus.BAD_REQUEST);
@@ -212,6 +225,7 @@ export class RentalInspectionEvidenceService {
           expected_byte_size: upload.size,
           status: 'pending',
           created_by: userId,
+          ...pendingMediaColumns(input.slotKey, capturedAt),
         },
       }
     );

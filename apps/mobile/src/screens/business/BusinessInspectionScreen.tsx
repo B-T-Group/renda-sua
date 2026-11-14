@@ -6,6 +6,15 @@ import { useRoute, type RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
+import {
+  ChecklistTag,
+  PickupCameraDenied,
+  PickupCameraSheet,
+  PickupGuideStart,
+  PickupSubmitBlocked,
+  SkipReasonField,
+} from '../../components/rentals/inspection/PickupPhotoChrome';
+import { formatListingDay, formatListingStamp } from '../../utils/rentals/pickupPhotoTime';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInspectionCapture } from '../../hooks/useInspectionCapture';
 import { derivedOvertime } from '../../utils/rentals/rentalInspection';
@@ -14,16 +23,47 @@ import type { BusinessRootStackParamList } from '../../navigation/types';
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessInspection'>;
 
 export default function BusinessInspectionScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const route = useRoute<Route>();
   const stage = route.params.stage;
   const model = useInspectionCapture(route.params.bookingId, stage);
   const [claim, setClaim] = useState('');
+  const [blocked, setBlocked] = useState(false);
+  const [source, setSource] = useState<{ role: 'overview' | 'other_side' | 'accessories' | 'wear' | 'counter'; index: number } | null>(null);
+  const [skipKey, setSkipKey] = useState<string | null>(null);
   const unit = model.current;
   const needsClaim = stage === 'return' && model.units.some((row) => row.returnChoice === 'damage' || row.condition === 'damaged');
   const overtime = model.booking ? derivedOvertime(model.booking) : null;
+
+  const rulesOn = stage === 'pickup' && model.rules?.enabled === true;
+  const guideDate = model.rules?.guide
+    ? formatListingDay(model.rules.guide.submittedAt, model.rules.timezone, i18n.language)
+    : '';
+
+  if (model.cameraDenied && rulesOn) {
+    return <PickupCameraDenied onClose={model.dismissCameraDenied} />;
+  }
+
+  if (rulesOn && model.rules?.guide && !model.rules.guideMode && !model.loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.pageBackground, padding: spacing.md }}>
+        <PickupGuideStart rules={model.rules} busy={model.busy} onChoose={(mode) => void model.chooseGuide(mode)} />
+      </View>
+    );
+  }
+
+  if (blocked && rulesOn) {
+    const labels = model.guideGaps.map((gap) => gap.slotKey.startsWith('extra:')
+      ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: gap.slotKey.slice(6) })
+      : gap.slotKey);
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
+        <PickupSubmitBlocked missing={labels} date={guideDate} onRetake={() => setBlocked(false)} />
+      </View>
+    );
+  }
 
   if (model.loading || !unit) {
     return (
@@ -83,12 +123,50 @@ export default function BusinessInspectionScreen() {
             <ComparePhoto label={t('rentalInspection.returnColumn', 'Return')} uri={unit.photos[0]?.uri} />
           </View>
         ) : null}
-        <InspectionPhotoSlots
-          slots={unit.photos}
-          minPhotos={model.minPhotos}
-          onAdd={(role, slot) => void model.addPhoto(role, slot)}
-          onRetry={(slot) => void model.retryPhoto(slot)}
-        />
+        {rulesOn && !model.rules?.pickupDay ? (
+          <InspectionBanner tone="info">
+            {t('rentalInspection.earlyPrepareBody', 'You can prepare the checklist now; photos are taken on pickup day.')}
+          </InspectionBanner>
+        ) : (
+          <>
+            {rulesOn && model.rules?.guideMode === 'guide' ? (
+              <Text style={{ color: colors.text.secondary }}>
+                {t('rentalInspection.retakenProgress', '{{done}} of {{total}} retaken', {
+                  done: unit.photos.filter((photo) => photo.mediaId).length,
+                  total: unit.photos.length,
+                })}
+                {'\n'}
+                {t('rentalInspection.guideRetakeNote', 'Old photos are a guide. Every slot must be retaken.')}
+              </Text>
+            ) : null}
+            <InspectionPhotoSlots
+              slots={unit.photos.map((photo) => ({
+                ...photo,
+                stamp: photo.capturedAt && model.rules?.timezone
+                  ? formatListingStamp(photo.capturedAt, model.rules.timezone, i18n.language)
+                  : undefined,
+              }))}
+              minPhotos={rulesOn ? null : model.minPhotos}
+              onAdd={(role, slot) => {
+                if (rulesOn) {
+                  setSource({ role, index: slot });
+                  return;
+                }
+                void model.addPhoto(role, slot);
+              }}
+              onRetry={(slot) => void model.retryPhoto(slot)}
+            />
+            {rulesOn && model.rules?.guideMode === 'guide' ? (
+              <Button mode="text" onPress={() => {
+                const extra = unit.photos.find((photo) => photo.slotKey?.startsWith('extra:') && !photo.mediaId);
+                setSkipKey(extra?.slotKey ?? null);
+              }}>
+                {t('rentalInspection.skipAngle', 'Skip this angle')}
+              </Button>
+            ) : null}
+            {skipKey ? <SkipReasonField onSave={(reason) => void model.skipAngle(skipKey, reason)} /> : null}
+          </>
+        )}
         {stage === 'return' ? (
           <View style={styles.row}>
             <Choice
@@ -104,6 +182,12 @@ export default function BusinessInspectionScreen() {
           </View>
         ) : (
           <View style={styles.row}>
+            {unit.guideUnconfirmed.includes('condition') ? (
+              <ChecklistTag
+                label={t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })}
+                onConfirm={() => model.confirmField('condition')}
+              />
+            ) : null}
             <Choice label={t('rentalInspection.overallGood', 'Overall good')} selected={unit.condition === 'good'} onPress={() => model.update({ condition: 'good' })} />
             <Choice label={t('rentalInspection.overallFair', 'Fair condition')} selected={unit.condition === 'fair'} onPress={() => model.update({ condition: 'fair' })} />
             <Choice label={t('rentalInspection.overallDamaged', 'Damaged')} selected={unit.condition === 'damaged'} onPress={() => model.update({ condition: 'damaged' })} />
@@ -175,7 +259,24 @@ export default function BusinessInspectionScreen() {
         <Button mode="contained" buttonColor={colors.cta.main} style={styles.action} disabled={model.busy} loading={model.busy} onPress={() => void model.saveAndNext()}>
           {t('rentalInspection.saveUnitNext', 'Save unit · next')}
         </Button>
-        <Button mode="contained" buttonColor={colors.cta.dark} style={styles.action} disabled={!model.canSubmit || model.busy || (needsClaim && !(Number(claim) > 0))} onPress={() => void model.submit(needsClaim ? Number(claim) : undefined)}>
+        <Button
+          mode="contained"
+          buttonColor={colors.cta.dark}
+          style={styles.action}
+          disabled={
+            model.busy
+            || (needsClaim && !(Number(claim) > 0))
+            || (rulesOn && !model.rules?.pickupDay)
+            || (!model.canSubmit && model.guideGaps.length === 0)
+          }
+          onPress={() => {
+            if (rulesOn && model.rules?.guideMode === 'guide' && model.guideGaps.length) {
+              setBlocked(true);
+              return;
+            }
+            void model.submit(needsClaim ? Number(claim) : undefined);
+          }}
+        >
           {stage === 'return'
             ? t('rentalInspection.submitReturn', 'Submit return report')
             : t('rentalInspection.submitReport', 'Submit report')}
@@ -186,6 +287,16 @@ export default function BusinessInspectionScreen() {
           </Button>
         ) : null}
       </View>
+      {source ? (
+        <PickupCameraSheet
+          onClose={() => setSource(null)}
+          onTake={() => {
+            const pending = source;
+            setSource(null);
+            void model.addPhoto(pending.role, pending.index, true);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

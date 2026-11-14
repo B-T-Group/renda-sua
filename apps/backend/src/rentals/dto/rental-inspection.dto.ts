@@ -64,6 +64,17 @@ export class InspectionItemDto {
   @IsString()
   @MaxLength(120)
   physicalLabel?: string;
+
+  @ApiPropertyOptional({
+    enum: ['condition', 'accessories', 'wear', 'notes'],
+    isArray: true,
+    description: 'Checklist fields still showing the last-report tag.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4)
+  @IsIn(['condition', 'accessories', 'wear', 'notes'], { each: true })
+  guideUnconfirmed?: Array<'condition' | 'accessories' | 'wear' | 'notes'>;
 }
 
 export class SaveInspectionItemsDto {
@@ -116,6 +127,37 @@ export class PresignInspectionEvidenceDto {
   @IsString()
   @Matches(/^[0-9a-f]{64}$/i)
   sha256?: string;
+
+  @ApiPropertyOptional({
+    description: 'Angle slot. Required roles use the role name. Extra angles use extra:N. The server sets the capture time.',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(overview|other_side|accessories|extra:[1-9]\d{0,2})$/)
+  slotKey?: string;
+}
+
+export class ApplyPickupGuideDto {
+  @ApiProperty({ enum: ['guide', 'blank'] })
+  @IsIn(['guide', 'blank'])
+  mode!: 'guide' | 'blank';
+}
+
+export class SkipPickupSlotDto {
+  @ApiProperty()
+  @IsUUID()
+  unitId!: string;
+
+  @ApiProperty()
+  @IsString()
+  @Matches(/^extra:[1-9]\d{0,2}$/)
+  slotKey!: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(280)
+  reason!: string;
 }
 
 export class SubmitInspectionDto {

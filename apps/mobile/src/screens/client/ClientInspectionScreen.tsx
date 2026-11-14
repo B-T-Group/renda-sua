@@ -228,6 +228,18 @@ export default function ClientInspectionScreen() {
         </View>
         <Text style={{ color: colors.text.primary }}>{conditionLine(unit.condition, t)}</Text>
         <Text style={{ color: colors.text.primary }}>{wearLine(unit.wear, t)}</Text>
+        {(model.view?.slotSkips ?? [])
+          .filter((row) => row.unitId === unit.unitId)
+          .map((row) => (
+            <Text key={row.slotKey} style={{ color: colors.text.secondary }}>
+              {t('rentalInspection.skippedAngle', 'Skipped {{angle}}: {{reason}}', {
+                angle: row.slotKey.startsWith('extra:')
+                  ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: row.slotKey.slice(6) })
+                  : row.slotKey,
+                reason: row.reason,
+              })}
+            </Text>
+          ))}
         {unit.accessories.map((row) => (
           <Text key={row.name} style={{ color: colors.text.primary }}>{row.name} · {row.count}</Text>
         ))}

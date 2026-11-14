@@ -167,6 +167,7 @@
 - "!include public_rental_inspection_media.yaml"
 - "!include public_rental_inspection_versions.yaml"
 - "!include public_rental_inspections.yaml"
+- "!include public_rental_inspection_slot_skips.yaml"
 - "!include public_rental_not_received_reports.yaml"
 - "!include public_rental_categories.yaml"
 - "!include public_rental_holds.yaml"

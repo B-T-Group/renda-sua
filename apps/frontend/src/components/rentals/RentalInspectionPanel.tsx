@@ -18,7 +18,11 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
 import type { useRentalInspection } from '../../hooks/useRentalInspection';
+import { useClientFlags } from '../../hooks/useClientFlags';
 import { useRentalApi } from '../../hooks/useRentalApi';
+import { PickupWebNotice } from './PickupWebNotice';
+import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
+import type { PickupPhotoRules } from '../../utils/rentalInspection';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { formatListingDue } from '../../utils/rentalRequestFormat';
 import {
@@ -84,10 +88,13 @@ export function RentalInspectionPanel({
   model: Model;
   onChanged: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { acceptAndStart, fetchBookingDetail, getBookingPaymentStatus } = useRentalApi();
   const { trackSiteEvent } = useTrackSiteEvent();
+  const { flags } = useClientFlags();
+  const [photoRules, setPhotoRules] = useState<PickupPhotoRules | null>(null);
+  const [photoBlocked, setPhotoBlocked] = useState(false);
   const stage: InspectionStage | null =
     role === 'client'
       ? model.reviewStage
@@ -131,11 +138,27 @@ export function RentalInspectionPanel({
   }, [bookingId, model.api, model.loading, model.reload, role, stage, view]);
 
   const unit = view?.units[index];
+  const rulesOn = role === 'business' && stage === 'pickup' && photoRules?.enabled === true;
+  useEffect(() => {
+    if (role !== 'business' || stage !== 'pickup' || !flags.rentals_pickup_photo_rules_enabled) {
+      setPhotoRules(null);
+      return;
+    }
+    let live = true;
+    void model.api.photoRules(bookingId).then((row) => {
+      if (live) setPhotoRules(row);
+    }).catch(() => {
+      if (live) setPhotoRules(null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [bookingId, flags.rentals_pickup_photo_rules_enabled, model.api, role, stage]);
   useEffect(() => {
     if (!unit) return;
-    setDraft(draftFrom(unit));
+    setDraft(draftFrom(unit, rulesOn));
     setSeen((prev) => new Set(prev).add(unit.unitId));
-  }, [unit]);
+  }, [rulesOn, unit]);
 
   const minPhotos = view?.minPhotos ?? null;
   const labels = useMemo(
@@ -273,6 +296,14 @@ export function RentalInspectionPanel({
 
   const submit = async () => {
     if (!stage || minPhotos == null || !view) return;
+    if (rulesOn && photoRules?.guideMode === 'guide' && photoRules.guide) {
+      const missing = guideGaps(view.units, photoRules.guide.slots, view.slotSkips ?? []);
+      if (missing.length) {
+        setPhotoBlocked(true);
+        return;
+      }
+    }
+    if (rulesOn && photoRules && !photoRules.pickupDay) return;
     if (!reportReadyToSubmit(view.units, minPhotos)) {
       setBanner('incomplete');
       return;
@@ -394,14 +425,53 @@ export function RentalInspectionPanel({
           {minPhotos != null ? (
             <Chip sx={{ mb: 1 }} label={t('rentalInspection.minPhotos', 'Min {{count}}', { count: minPhotos })} />
           ) : null}
+          {rulesOn && photoRules ? (
+            <PickupWebNotice
+              rules={photoRules}
+              busy={busy}
+              blocked={photoBlocked}
+              missing={(photoRules.guide?.slots ?? [])
+                .filter((slot) => guideGaps(view.units, photoRules.guide?.slots ?? [], view.slotSkips ?? []).includes(slot.slotKey))
+                .map((slot) => slot.slotKey)}
+              onChoose={(mode) => void run(async () => {
+                await model.api.applyGuide(bookingId, mode);
+                const next = await model.api.photoRules(bookingId);
+                setPhotoRules(next);
+              })}
+              onRetake={() => setPhotoBlocked(false)}
+            />
+          ) : null}
           <PhotoRow
             unit={unit}
             minPhotos={minPhotos}
-            readOnly={role === 'client' || view.status === 'submitted'}
+            guideSlots={rulesOn && photoRules?.guideMode === 'guide' ? photoRules.guide?.slots : undefined}
+            readOnly={role === 'client' || view.status === 'submitted' || rulesOn}
             onFile={(photoRole, file) => void upload(photoRole, file)}
           />
+          {role === 'client'
+            ? (view.slotSkips ?? [])
+                .filter((row) => row.unitId === unit.unitId)
+                .map((row) => (
+                  <Typography key={row.slotKey} variant="body2">
+                    {t('rentalInspection.skippedAngle', 'Skipped {{angle}}: {{reason}}', {
+                      angle: row.slotKey,
+                      reason: row.reason,
+                    })}
+                  </Typography>
+                ))
+            : null}
           {role === 'business' && !(stage === 'pickup' && view.status === 'submitted') ? (
-            <BusinessFields stage={stage} draft={draft} setDraft={setDraft} />
+            <>
+              {rulesOn && draft.guideUnconfirmed.length && photoRules?.guide ? (
+                <Chip
+                  label={t('rentalInspection.fromDate', 'from {{date}}', {
+                    date: formatListingDay(photoRules.guide.submittedAt, photoRules.timezone, i18n.language),
+                  })}
+                  onClick={() => setDraft((prev) => (prev ? { ...prev, guideUnconfirmed: [] } : prev))}
+                />
+              ) : null}
+              <BusinessFields stage={stage} draft={draft} setDraft={setDraft} />
+            </>
           ) : (
             <ClientFacts unit={unit} />
           )}
@@ -705,10 +775,12 @@ interface Draft {
   noWear: boolean;
   note: string;
   label: string;
+  guideUnconfirmed: string[];
+  trackGuide: boolean;
   returnChoice: '' | 'same' | 'damage';
 }
 
-function draftFrom(unit: InspectionUnit): Draft {
+function draftFrom(unit: InspectionUnit, keepNote: boolean): Draft {
   return {
     condition: unit.condition === 'good' || unit.condition === 'fair' || unit.condition === 'damaged' ? unit.condition : '',
     accessoryName: unit.accessories[0]?.name ?? '',
@@ -716,8 +788,10 @@ function draftFrom(unit: InspectionUnit): Draft {
     noAccessories: unit.accessories.length === 0 && !!unit.condition,
     wear: unit.wear === 'none' ? '' : unit.wear ?? '',
     noWear: unit.wear === 'none',
-    note: '',
+    note: keepNote ? unit.checklistNote ?? '' : '',
     label: unit.physicalLabel ?? '',
+    guideUnconfirmed: keepNote && Array.isArray(unit.guideUnconfirmed) ? unit.guideUnconfirmed : [],
+    trackGuide: keepNote,
     returnChoice: unit.condition === 'damaged' ? 'damage' : '',
   };
 }
@@ -749,30 +823,63 @@ function itemFromDraft(draft: Draft, unitId: string, stage: InspectionStage, pic
     wear,
     checklistNote: draft.note.trim() || undefined,
     physicalLabel: draft.label.trim() || undefined,
+    guideUnconfirmed: draft.trackGuide ? draft.guideUnconfirmed : undefined,
   };
+}
+
+function guideGaps(
+  units: InspectionUnit[],
+  slots: Array<{ slotKey: string; required: boolean }>,
+  skips: Array<{ unitId: string; slotKey: string; reason: string }>
+): string[] {
+  const missing: string[] = [];
+  for (const unit of units) {
+    for (const slot of slots) {
+      const taken = unit.photos.some((photo) => photo.slotKey === slot.slotKey);
+      const skipped = !slot.required && skips.some((row) => row.unitId === unit.unitId && row.slotKey === slot.slotKey);
+      if (!taken && !skipped && !missing.includes(slot.slotKey)) missing.push(slot.slotKey);
+    }
+  }
+  return missing;
 }
 
 function PhotoRow({
   unit,
   minPhotos,
   readOnly,
+  guideSlots,
   onFile,
 }: {
   unit: InspectionUnit;
   minPhotos: number | null;
   readOnly: boolean;
+  guideSlots?: Array<{ slotKey: string; role: PhotoRole; url: string | null; required: boolean }>;
   onFile: (role: PhotoRole, file: File) => void;
 }) {
   const { t } = useTranslation();
-  const roles = minPhotos == null ? REQUIRED_PHOTO_ROLES : photoRolesForMinimum(minPhotos);
+  const roles = guideSlots?.length
+    ? guideSlots
+    : (minPhotos == null ? REQUIRED_PHOTO_ROLES : photoRolesForMinimum(minPhotos)).map((role) => ({
+        slotKey: role,
+        role,
+        url: null as string | null,
+        required: true,
+      }));
   return (
     <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
-      {roles.map((role) => {
-        const photo = unit.photos.find((row) => row.role === role);
-        const label = t(ROLE_KEY[role][0], ROLE_KEY[role][1]);
+      {roles.map((slot) => {
+        const role = slot.role;
+        const photo = unit.photos.find((row) => (row.slotKey ? row.slotKey === slot.slotKey : row.role === role));
+        const ghost = !photo?.url && slot.url;
+        const extra = slot.slotKey.startsWith('extra:') ? slot.slotKey.slice(6) : '';
+        const label = extra
+          ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: extra })
+          : t(ROLE_KEY[role][0], ROLE_KEY[role][1]);
         return (
-          <Button key={role} component="label" variant="outlined" sx={{ minHeight: 96, minWidth: 96 }}>
-            {photo?.url ? <Box component="img" src={photo.url} alt={label} sx={{ width: 72, height: 72, objectFit: 'cover' }} /> : label}
+          <Button key={slot.slotKey} component="label" variant="outlined" sx={{ minHeight: 96, minWidth: 96 }}>
+            {photo?.url ? <Box component="img" src={photo.url} alt={label} sx={{ width: 72, height: 72, objectFit: 'cover' }} /> : null}
+            {ghost ? <Box component="img" src={slot.url ?? ''} alt="" sx={{ width: 72, height: 72, objectFit: 'cover', opacity: 0.35 }} /> : null}
+            {photo?.url || ghost ? null : label}
             {readOnly ? null : (
               <input
                 hidden
@@ -801,7 +908,14 @@ function BusinessFields({
   setDraft: React.Dispatch<React.SetStateAction<Draft | null>>;
 }) {
   const { t } = useTranslation();
-  const patch = (partial: Partial<Draft>) => setDraft((prev) => (prev ? { ...prev, ...partial } : prev));
+  const patch = (partial: Partial<Draft>) => setDraft((prev) => {
+    if (!prev) return prev;
+    const next = { ...prev, ...partial };
+    const drop = Object.keys(partial).map((key) => (
+      key === 'note' ? 'notes' : key === 'noAccessories' || key === 'accessoryName' ? 'accessories' : key === 'noWear' ? 'wear' : key
+    ));
+    return { ...next, guideUnconfirmed: next.guideUnconfirmed.filter((tag) => !drop.includes(tag)) };
+  });
   return (
     <Stack spacing={1}>
       {stage === 'return' ? (

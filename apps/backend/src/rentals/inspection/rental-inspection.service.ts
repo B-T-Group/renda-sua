@@ -5,6 +5,7 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { isActivePersona } from '../../users/persona.util';
 import { RentalsService } from '../rentals.service';
 import { RentalInspectionEvidenceService } from './rental-inspection-evidence.service';
+import { PickupPhotoRulesService } from './pickup-photo-rules.service';
 import { RentalInspectionFlags } from './rental-inspection-flags.service';
 import {
   inspectionRejected,
@@ -73,6 +74,7 @@ interface ItemInput {
   wear: string;
   checklistNote?: string;
   physicalLabel?: string;
+  guideUnconfirmed?: string[];
 }
 
 @Injectable()
@@ -83,7 +85,8 @@ export class RentalInspectionService {
     private readonly flags: RentalInspectionFlags,
     private readonly notices: NotificationsService,
     private readonly rentals: RentalsService,
-    private readonly evidence: RentalInspectionEvidenceService
+    private readonly evidence: RentalInspectionEvidenceService,
+    private readonly photoRules?: PickupPhotoRulesService
   ) {}
 
   async openDraft(bookingId: string, stage: InspectionStage) {
@@ -113,6 +116,7 @@ export class RentalInspectionService {
     const inspection = await this.inspectionFor(bookingId, stage);
     if (!inspection) throw new HttpException('Open the draft first', HttpStatus.CONFLICT);
     this.assertSubmitOpen(booking, stage);
+    if (this.photoRules) await this.photoRules.assertSubmit(bookingId, stage);
     // Validate the claim before the version exists, but only store it once the version is created,
     // so a failed or repeated submit cannot change the amount behind the report the client is reviewing.
     const claim =
@@ -140,8 +144,9 @@ export class RentalInspectionService {
     const presented = presentInspection(body, viewer.audience);
     const minPhotos = await this.minPhotoCount();
     const claimedDamageAmount = await this.claimedDamage(bookingId);
-    if (viewer.audience === 'client') return { ...presented, minPhotos, claimedDamageAmount };
-    return { ...presented, minPhotos, claimedDamageAmount, correctionReason: body.correctionReason };
+    const extra = this.photoRules ? await this.photoRules.viewerExtras(bookingId, viewer.audience) : {};
+    if (viewer.audience === 'client') return { ...presented, minPhotos, claimedDamageAmount, ...extra };
+    return { ...presented, minPhotos, claimedDamageAmount, correctionReason: body.correctionReason, ...extra };
   }
 
   async acknowledge(bookingId: string, stage: InspectionStage, versionId: string, decision: Decision, reason?: string) {
@@ -454,7 +459,13 @@ export class RentalInspectionService {
       throw new HttpException('Each accessory needs a name and a count', HttpStatus.BAD_REQUEST);
     }
     if (item.physicalLabel != null) await this.relabel(booking.id, item.unitId, item.physicalLabel);
-    const set = { condition: item.condition, accessories, wear, checklist_note: item.checklistNote?.trim() || null };
+    const set: Record<string, unknown> = {
+      condition: item.condition,
+      accessories,
+      wear,
+      checklist_note: item.checklistNote?.trim() || null,
+    };
+    if (item.guideUnconfirmed) set.guide_unconfirmed = item.guideUnconfirmed;
     const updated = await this.hasura.executeMutation<{ update_rental_inspection_items: { affected_rows: number } }>(
       `mutation SaveDraftItem($inspectionId: uuid!, $unitId: uuid!, $set: rental_inspection_items_set_input!) {
         update_rental_inspection_items(
@@ -866,11 +877,18 @@ export class RentalInspectionService {
 
   private async draftItems(inspectionId: string) {
     const result = await this.hasura.executeQuery<{
-      rental_inspection_items: Array<{ unit_id: string; condition: string; accessories: unknown; wear: string }>;
+      rental_inspection_items: Array<{
+        unit_id: string;
+        condition: string;
+        accessories: unknown;
+        wear: string;
+        checklist_note?: string | null;
+        guide_unconfirmed?: unknown;
+      }>;
     }>(
       `query DraftItems($id: uuid!) {
         rental_inspection_items(where: { inspection_id: { _eq: $id }, version_id: { _is_null: true } }) {
-          unit_id condition accessories wear
+          unit_id condition accessories wear checklist_note guide_unconfirmed
         }
       }`,
       { id: inspectionId }
@@ -880,11 +898,19 @@ export class RentalInspectionService {
 
   private async readyMedia(inspectionId: string) {
     const result = await this.hasura.executeQuery<{
-      rental_inspection_media: Array<{ id: string; unit_id: string; role: string; sha256: string; byte_size: number }>;
+      rental_inspection_media: Array<{
+        id: string;
+        unit_id: string;
+        role: string;
+        sha256: string;
+        byte_size: number;
+        slot_key?: string | null;
+        captured_at?: string | null;
+      }>;
     }>(
       `query ReadyMedia($id: uuid!) {
         rental_inspection_media(where: { inspection_id: { _eq: $id }, version_id: { _is_null: true }, status: { _eq: "ready" } }) {
-          id unit_id role sha256 byte_size
+          id unit_id role sha256 byte_size slot_key captured_at
         }
       }`,
       { id: inspectionId }
@@ -932,17 +958,33 @@ export class RentalInspectionService {
         condition: item?.condition ?? '',
         accessories: item?.accessories ?? [],
         wear: item?.wear ?? '',
-        photos: media.filter((row) => row.unit_id === unit.id).map((row) => ({ id: row.id, role: row.role })),
+        checklistNote: item?.checklist_note ?? null,
+        guideUnconfirmed: Array.isArray(item?.guide_unconfirmed) ? item.guide_unconfirmed : [],
+        photos: media.filter((row) => row.unit_id === unit.id).map((row) => ({
+          id: row.id,
+          role: row.role,
+          slotKey: row.slot_key ?? null,
+          capturedAt: row.captured_at ?? null,
+        })),
       };
     });
   }
 
   private async versionItems(versionId: string) {
     const result = await this.hasura.executeQuery<{
-      rental_inspection_items: Array<{ unit_id: string; condition: string; accessories: unknown; wear: string }>;
+      rental_inspection_items: Array<{
+        unit_id: string;
+        condition: string;
+        accessories: unknown;
+        wear: string;
+        checklist_note?: string | null;
+        guide_unconfirmed?: unknown;
+      }>;
     }>(
       `query VersionItems($id: uuid!) {
-        rental_inspection_items(where: { version_id: { _eq: $id } }) { unit_id condition accessories wear }
+        rental_inspection_items(where: { version_id: { _eq: $id } }) {
+          unit_id condition accessories wear checklist_note guide_unconfirmed
+        }
       }`,
       { id: versionId }
     );
@@ -951,10 +993,20 @@ export class RentalInspectionService {
 
   private async versionMedia(versionId: string) {
     const result = await this.hasura.executeQuery<{
-      rental_inspection_media: Array<{ id: string; unit_id: string; role: string; sha256: string; byte_size: number }>;
+      rental_inspection_media: Array<{
+        id: string;
+        unit_id: string;
+        role: string;
+        sha256: string;
+        byte_size: number;
+        slot_key?: string | null;
+        captured_at?: string | null;
+      }>;
     }>(
       `query VersionMedia($id: uuid!) {
-        rental_inspection_media(where: { version_id: { _eq: $id } }) { id unit_id role sha256 byte_size }
+        rental_inspection_media(where: { version_id: { _eq: $id } }) {
+          id unit_id role sha256 byte_size slot_key captured_at
+        }
       }`,
       { id: versionId }
     );

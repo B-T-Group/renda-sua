@@ -10,7 +10,10 @@ const TARGET = 48;
 export interface SlotPhoto {
   key: string;
   role: PhotoRole;
+  slotKey?: string;
   uri?: string;
+  ghostUri?: string;
+  stamp?: string;
   failed?: boolean;
   pending?: boolean;
 }
@@ -52,10 +55,12 @@ export function InspectionPhotoSlots({
       </View>
       <View style={[styles.grid, { gap: spacing.sm }]}>
         {slots.map((slot, index) => {
-          const [key, fallback] = ROLE_KEY[slot.role];
-          const label = slot.role === 'wear' && index > 2
-            ? t('rentalInspection.addMore', 'Add more')
+          const [key, fallback] = ROLE_KEY[slot.role] ?? ROLE_KEY.wear;
+          const extra = slot.slotKey?.startsWith('extra:') ? slot.slotKey.slice(6) : '';
+          const label = extra
+            ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: extra })
             : t(key, fallback);
+          const ghost = !slot.uri && !!slot.ghostUri;
           return (
             <Pressable
               key={slot.key}
@@ -72,9 +77,17 @@ export function InspectionPhotoSlots({
               ]}
             >
               {slot.uri ? <Image source={{ uri: slot.uri }} style={styles.image} /> : null}
+              {ghost ? <Image source={{ uri: slot.ghostUri }} style={styles.ghost} /> : null}
               <Text style={[typography.caption, { color: colors.text.primary, textAlign: 'center' }]}>
-                {slot.failed ? t('rentalInspection.photoUploadFailed', 'Photo upload failed. Retry.') : label}
+                {slot.failed
+                  ? t('rentalInspection.photoUploadFailed', 'Photo upload failed. Retry.')
+                  : ghost
+                    ? t('rentalInspection.retake', 'Retake')
+                    : label}
               </Text>
+              {slot.stamp && slot.uri ? (
+                <Text style={[typography.caption, { color: colors.text.secondary }]}>{slot.stamp}</Text>
+              ) : null}
               {slot.pending ? (
                 <Text style={[typography.caption, { color: colors.warning.dark }]}>
                   {t('rentalInspection.photosNotSynced', 'Photos not synced. Connect to submit.')}
@@ -102,6 +115,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   image: { ...StyleSheet.absoluteFillObject, opacity: 0.85 },
+  ghost: { ...StyleSheet.absoluteFillObject, opacity: 0.35 },
 });
 
 export const inspectionTouch = { minHeight: TARGET };

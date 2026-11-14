@@ -15,6 +15,7 @@ import { RentalsController } from './rentals.controller';
 import { RentalSearchController } from './rental-search.controller';
 import { RentalsCronService } from './rentals-cron.service';
 import { RentalInspectionEvidenceService } from './inspection/rental-inspection-evidence.service';
+import { PickupPhotoRulesService } from './inspection/pickup-photo-rules.service';
 import { RentalCardWindowModule } from './inspection/rental-card-window.module';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
@@ -44,6 +45,7 @@ import { RentalAvailabilityService } from './rental-availability.service';
     RentalStartPinShareService,
     RentalBookingMessagingService,
     RentalInspectionService,
+    PickupPhotoRulesService,
     RentalNotReceivedService,
     RentalRenterReturnService,
     RentalInspectionEvidenceService,
