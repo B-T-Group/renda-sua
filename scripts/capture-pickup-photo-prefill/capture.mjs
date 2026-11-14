@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir =
-  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v4';
+  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v5';
 const heroSrc =
   '/cursor/stores/bot/handoffs/pickup-photo-prefill/hero-jbl.png';
 
@@ -23,6 +23,7 @@ const copy = {
     start: 'Start from last report',
     summary: 'Last return · 10 Nov · 12 photos · 4 checks',
     note: 'The last return photos are a guide only. You must retake every photo today, ideally with the renter there.',
+    noteShort: 'The last return photos are a guide only.',
     noteLater: 'The last return photos are a guide only. You must retake every photo on pickup day, ideally with the renter there.',
     guide: 'Use as guide',
     blank: 'Start blank',
@@ -69,6 +70,7 @@ const copy = {
     extraShort: (n) => `Extra ${n}`,
     skipShort: 'Skip',
     save: 'Save reason',
+    reasonHint: 'Describe the reason',
     skipped: 'Skipped',
     change: 'Change',
     skip: 'Skip this angle',
@@ -86,6 +88,7 @@ const copy = {
     start: 'Reprendre le dernier rapport',
     summary: 'Dernier retour · 10 nov. · 12 photos · 4 contrôles',
     note: "Les photos du dernier retour servent de repère. Vous devez toutes les reprendre aujourd'hui, avec le locataire si possible.",
+    noteShort: 'Les photos du dernier retour servent de repère.',
     noteLater: 'Les photos du dernier retour servent de repère. Vous devez toutes les reprendre le jour du départ, avec le locataire si possible.',
     guide: 'Utiliser comme guide',
     blank: 'Partir de zéro',
@@ -133,6 +136,7 @@ const copy = {
     extraShort: (n) => `Supp. ${n}`,
     skipShort: 'Ignorer',
     save: 'Enregistrer le motif',
+    reasonHint: 'Précisez le motif',
     skipped: 'Ignorés',
     change: 'Modifier',
     skip: 'Ignorer cet angle',
@@ -199,6 +203,7 @@ const css = `
 .phase h3,.panel h2{display:flex;align-items:center;gap:8px}
 .presets{display:flex;flex-direction:column;gap:6px;margin-left:48px}
 .presets button{text-align:left;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;font:inherit;font-weight:650}
+.presets button.on{border-color:var(--green);background:#E7F6EC}
 .lock{display:flex;gap:12px;align-items:center;padding:12px;border:1.5px dashed #D0C9BE;border-radius:14px;background:#fff}
 .lock.off{opacity:.55}
 .phase{background:#0E749014;border:1px solid #0E749055;border-radius:16px;padding:12px}
@@ -267,7 +272,7 @@ function angleRow(c, label, mode) {
   }
   const skip = `<button class="skip-link">${c.skipShort}</button>`;
   const other = mode === 'other'
-    ? `<div class="presets">${c.presets.map((item) => `<button>${item}</button>`).join('')}<input aria-label="${c.presets[3]}" placeholder="${c.presets[3]}" style="min-height:40px;border:1px solid var(--line);border-radius:10px;padding:8px"/><button class="btn btn-outline" disabled style="opacity:.45">${c.save}</button></div>`
+    ? `<div class="presets">${c.presets.slice(0, 3).map((item) => `<button>${item}</button>`).join('')}<button class="on">${c.presets[3]}</button><input aria-label="${c.reasonHint}" placeholder="${c.reasonHint}" style="min-height:40px;border:1px solid var(--line);border-radius:10px;padding:8px"/><button class="btn btn-outline" disabled style="opacity:.45">${c.save}</button></div>`
     : '';
   return `<div class="angle"><img src="hero-jbl.png" alt=""/><div class="label"><b>${label}</b></div>${skip}${cam}</div>${other}`;
 }
@@ -289,14 +294,28 @@ const calendar = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="t
 const cameraIcon = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="13" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
 const phoneIcon = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" fill="none" stroke="#0B7A3B" stroke-width="2"/><path d="M11 18h2" stroke="#0B7A3B" stroke-width="2"/></svg>';
 
+function startCard(c, note) {
+  return `<section class="card guide"><img class="thumb" src="hero-jbl.png" alt=""/><div><h3>${c.start}</h3><p>${c.summary}</p></div></section><p class="note">${note}</p>`;
+}
+
+function webAngles(c, variant) {
+  const rows = missingAngles(c);
+  const open = variant === 'skipped' ? rows.slice(1) : rows;
+  const items = open.map((label) => `<p class="plain"><b>${label}</b></p>`).join('');
+  const skipped = variant === 'skipped'
+    ? `<h4 style="margin:12px 0 4px">${c.skipped}</h4><p class="plain"><b>${rows[0]}</b><br/><span class="cap">${c.presets[0]}</span></p>`
+    : '';
+  const phone = `<p class="info">${phoneIcon}<span>${c.web}</span></p>`;
+  return `<h2>${c.blocked}</h2><p class="progress">${c.progress}</p><p>${c.missingLine(open.length)}</p>${items}${skipped}<div>${checks(c)}</div>${phone}`;
+}
+
 function pages(lang, c) {
-  const startCard = `<section class="card guide"><img class="thumb" src="hero-jbl.png" alt=""/><div><h3>${c.start}</h3><p>${c.summary}</p></div></section><p class="note">${c.note}</p>`;
-  const startBody = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}${startCard}`;
+  const startBody = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}${startCard(c, c.note)}`;
   const startFoot = `<footer class="footer"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></footer>`;
   const left = c.submitLeft(7);
   const gridBody = `<p class="progress">${c.progress}</p><div class="bar"><i></i></div><p class="note">${c.retakeNote}</p><div class="grid">${slots(c, 5)}</div><section class="card">${checks(c)}</section>`;
   const todayCard = `<section class="phase today">${cameraIcon}<p>${c.today}</p></section>`;
-  const today = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}${todayCard}${startCard}`;
+  const today = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}${todayCard}${startCard(c, c.noteShort)}`;
   const early = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}<section class="phase"><h3>${calendar} ${c.title}</h3><p>${c.early}</p></section><p class="note">${c.noteLater}</p><section class="card">${checks(c)}</section>`;
   const denied = `<section class="card" style="margin-top:80px;text-align:center">${cameraOff}<h3>${c.enable}</h3><p>${c.denied}</p></section>`;
   const deniedFoot = `<footer class="footer"><button class="btn btn-green">${c.settings}</button></footer>`;
@@ -312,12 +331,11 @@ function pages(lang, c) {
     phone(`${lang}-05-early`, c, early, `<footer class="footer"><button class="btn btn-outline">${c.prepare}</button></footer>`),
     phone(`${lang}-camera-denied`, c, denied, deniedFoot),
     web(`${lang}-01-start-web`, c, `<h2>${c.start}</h2><p>${c.summary}</p><p class="note">${c.note}</p>${webInfo}<div class="btns"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></div>`),
-    web(`${lang}-02-grid-web`, c, `<h2>${c.title}</h2><p class="progress">${c.progress}</p>${webInfo}<div class="grid">${slots(c, 5)}</div><div>${checks(c)}</div><button class="btn btn-green" disabled style="opacity:.45">${left}</button>`),
-    web(`${lang}-03-blocked-web`, c, `<h2>${c.blocked}</h2>${blockedList(c)}${webInfo}`),
-    web(`${lang}-03-other-web`, c, `<h2>${c.blocked}</h2>${blockedList(c, 'other')}`),
-    web(`${lang}-03-skipped-web`, c, `<h2>${c.blocked}</h2>${blockedList(c, 'skipped')}`),
+    web(`${lang}-02-grid-web`, c, `<h2>${c.title}</h2><p class="progress">${c.progress}</p>${webInfo}<div class="grid">${slots(c, 5)}</div><div>${checks(c)}</div>`),
+    web(`${lang}-03-blocked-web`, c, webAngles(c)),
+    web(`${lang}-03-skipped-web`, c, webAngles(c, 'skipped')),
     web(`${lang}-04-readonly-web`, c, `<h2>${c.title}</h2>${webInfo}<p class="progress">${c.progress}</p><div>${checks(c)}</div>`),
-    web(`${lang}-05-today-web`, c, `${todayCard}<h3>${c.start}</h3><p>${c.summary}</p><p class="note">${c.note}</p>${webInfo}`),
+    web(`${lang}-05-today-web`, c, `<p>${c.today}</p><h3>${c.start}</h3><p>${c.summary}</p><p class="note">${c.noteShort}</p><div class="btns"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></div>${webInfo}`),
     web(`${lang}-05-early-web`, c, `<h2>${calendar} ${c.prepare}</h2><p class="info">${calendar}<span>${c.early}</span></p><p class="note">${c.noteLater}</p><div>${checks(c)}</div><button class="btn btn-green">${c.prepare}</button>`),
   ].join('');
 }
@@ -347,7 +365,7 @@ const names = [];
 for (let i = 0; i < count; i += 1) {
   const node = shots.nth(i);
   const name = await node.getAttribute('data-shot');
-  if (!name || !/-(02-grid|03-blocked|03-skipped|03-other|05-today)(-web)?$/.test(name)) continue;
+  if (!name || !/-(02-grid-web|03-blocked-web|03-skipped-web|05-today-web|05-today|03-other)$/.test(name)) continue;
   const file = join(outDir, `${name}.png`);
   await node.screenshot({ path: file });
   names.push(file);

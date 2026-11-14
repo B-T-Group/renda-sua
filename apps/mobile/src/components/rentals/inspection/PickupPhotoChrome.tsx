@@ -40,16 +40,26 @@ export function CameraOffArt({ label }: { label: string }) {
   );
 }
 
+function guideNote(pickupDay: boolean, brief: boolean, t: (key: string, fallback: string) => string): string {
+  if (brief) return t('rentalInspection.guideOnlyShort', 'The last return photos are a guide only.');
+  if (!pickupDay) {
+    return t('rentalInspection.guideOnlyNoteLater', 'The last return photos are a guide only. You must retake every photo on pickup day, ideally with the renter there.');
+  }
+  return t('rentalInspection.guideOnlyNote', 'The last return photos are a guide only. You must retake every photo today, ideally with the renter there.');
+}
+
 export function PickupGuideStart({
   rules,
   busy,
   onChoose,
   showTitle = true,
+  brief = false,
 }: {
   rules: PickupPhotoRules;
   busy: boolean;
   onChoose: (mode: 'guide' | 'blank') => void;
   showTitle?: boolean;
+  brief?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
@@ -68,11 +78,7 @@ export function PickupGuideStart({
             checks: guide.checkCount,
           })}
         </Text>
-        <Text style={{ color: colors.text.primary }}>
-          {rules.pickupDay
-            ? t('rentalInspection.guideOnlyNote', 'The last return photos are a guide only. You must retake every photo today, ideally with the renter there.')
-            : t('rentalInspection.guideOnlyNoteLater', 'The last return photos are a guide only. You must retake every photo on pickup day, ideally with the renter there.')}
-        </Text>
+        <Text style={{ color: colors.text.primary }}>{guideNote(rules.pickupDay, brief, t)}</Text>
         <Button mode="contained" buttonColor={colors.cta.main} disabled={busy} onPress={() => onChoose('guide')}>
           {t('rentalInspection.useAsGuide', 'Use as guide')}
         </Button>
@@ -259,7 +265,7 @@ export function PickupDayCallout({ bookingId, onOpen }: { bookingId: string; onO
             : t('rentalInspection.pickupTodayBody', 'Pickup today: take the condition photos, ideally with the renter.')}
         </Text>
       </View>
-      {!early && rules.guide && !rules.guideMode ? <PickupGuideStart rules={rules} busy={false} showTitle={false} onChoose={() => onOpen()} /> : null}
+      {!early && rules.guide && !rules.guideMode ? <PickupGuideStart rules={rules} busy={false} showTitle={false} brief onChoose={() => onOpen()} /> : null}
       <Button mode="contained" buttonColor={colors.cta.main} style={{ minHeight: 48 }} onPress={onOpen}>
         {early
           ? t('rentalInspection.prepareChecklist', 'Prepare checklist')
@@ -288,7 +294,7 @@ export function SkipReasonField({ onSave }: { onSave: (reason: string) => void }
       <Button mode="text" onPress={() => setOther(true)}>{t('rentalInspection.skipOther', 'Other')}</Button>
       {other ? (
         <>
-          <TextInput mode="outlined" label={t('rentalInspection.skipReason', 'Reason')} value={reason} onChangeText={setReason} maxLength={280} />
+          <TextInput mode="outlined" placeholder={t('rentalInspection.skipReasonHint', 'Describe the reason')} value={reason} onChangeText={setReason} maxLength={280} />
           <Button mode="outlined" disabled={!otherReasonReady(reason)} buttonColor={colors.surface} onPress={() => onSave(reason.trim())}>
             {t('rentalInspection.skipSave', 'Save reason')}
           </Button>

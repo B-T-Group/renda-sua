@@ -438,15 +438,6 @@ export function RentalInspectionPanel({
                 const next = await model.api.photoRules(bookingId);
                 setPhotoRules(next);
               })}
-              onRetake={(row) => void run(async () => {
-                if (row.reason) await model.api.clearSlot(bookingId, { unitId: row.unitId, slotKey: row.slotKey });
-                setPhotoBlocked(false);
-                await model.reload();
-              })}
-              onSkip={(row, reason) => void run(async () => {
-                await model.api.skipSlot(bookingId, { unitId: row.unitId, slotKey: row.slotKey, reason });
-                await model.reload();
-              })}
             />
           ) : null}
           <PhotoRow

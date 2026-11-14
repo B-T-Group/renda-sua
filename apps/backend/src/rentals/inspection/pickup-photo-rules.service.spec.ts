@@ -158,7 +158,7 @@ describe('guide retake gate and skip reason', () => {
       LatestReturnGuide: { rental_inspection_versions: [version] },
     });
     await expect(
-      built.rules.skipSlot('11111111-1111-4111-8111-111111111111', 'unit-1', 'extra:1', 'Same as the overview')
+      built.rules.skipSlot('11111111-1111-4111-8111-111111111111', 'unit-1', 'extra:1', 'Same as the overview', 'ios')
     ).resolves.toEqual({ saved: true });
     const queries = built.hasura.executeMutation.mock.calls.map((call) => String(call[0]));
     expect(queries.some((query) => query.includes('insert_rental_inspection_media'))).toBe(false);
@@ -167,11 +167,11 @@ describe('guide retake gate and skip reason', () => {
 
   it('rejects a required slot and a blank reason', async () => {
     const rules = service(true, rows(ready, [])).rules;
-    await expect(rules.skipSlot('11111111-1111-4111-8111-111111111111', 'unit-1', 'overview', 'no')).rejects.toMatchObject({
+    await expect(rules.skipSlot('11111111-1111-4111-8111-111111111111', 'unit-1', 'overview', 'no', 'ios')).rejects.toMatchObject({
       response: expect.objectContaining({ code: PICKUP_GUIDE_SLOT_REQUIRED }),
     });
     const blank = service(true, rows(ready, [])).rules;
-    await expect(blank.skipSlot('11111111-1111-4111-8111-111111111111', 'unit-1', 'extra:1', '   ')).rejects.toMatchObject({
+    await expect(blank.skipSlot('11111111-1111-4111-8111-111111111111', 'unit-1', 'extra:1', '   ', 'ios')).rejects.toMatchObject({
       response: expect.objectContaining({ code: PICKUP_GUIDE_SKIP_REASON }),
     });
   });
@@ -236,20 +236,20 @@ describe('guide retake gate and skip reason', () => {
     const id = '11111111-1111-4111-8111-111111111111';
     const client = service(true, rows(ready, []), { active_persona: 'client', businessId: 'biz-1' });
     const other = service(true, rows(ready, []), { active_persona: 'business', businessId: 'biz-2' });
-    await expect(client.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same view')).rejects.toBeInstanceOf(HttpException);
+    await expect(client.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same view', 'ios')).rejects.toBeInstanceOf(HttpException);
     await expect(other.rules.getRules(id)).rejects.toBeInstanceOf(HttpException);
     const own = service(true, rows(ready, [])).rules;
-    await expect(own.skipSlot(id, 'unit-9', 'extra:1', 'Same view')).rejects.toBeInstanceOf(HttpException);
-    await expectStatus(client.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same view'), 403);
+    await expect(own.skipSlot(id, 'unit-9', 'extra:1', 'Same view', 'ios')).rejects.toBeInstanceOf(HttpException);
+    await expectStatus(client.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same view', 'ios'), 403);
     await expectStatus(other.rules.getRules(id), 403);
-    await expectStatus(own.skipSlot(id, 'unit-9', 'extra:1', 'Same view'), 404);
+    await expectStatus(own.skipSlot(id, 'unit-9', 'extra:1', 'Same view', 'ios'), 404);
   });
 
   it('stores a cleaned reason and updates it on a repeat skip', async () => {
     const built = service(true, rows(ready, []));
     const id = '11111111-1111-4111-8111-111111111111';
-    await built.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same\u0000 as the overview');
-    await built.rules.skipSlot(id, 'unit-1', 'extra:1', 'Covered by the front');
+    await built.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same\u0000 as the overview', 'ios');
+    await built.rules.skipSlot(id, 'unit-1', 'extra:1', 'Covered by the front', 'ios');
     const writes = built.hasura.executeMutation.mock.calls.filter((call) => String(call[0]).includes('InsertSlotSkip'));
     expect(writes).toHaveLength(2);
     expect(String(writes[0][0])).toContain('on_conflict');
@@ -257,10 +257,27 @@ describe('guide retake gate and skip reason', () => {
     expect(writes[1][1].object.reason).toBe('Covered by the front');
   });
 
+  it('rejects a web skip and a web clear', async () => {
+    const built = service(true, rows(ready, []));
+    const id = '11111111-1111-4111-8111-111111111111';
+    await expect(built.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same view', 'web')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_APP_ONLY }),
+    });
+    await expect(built.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same view')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_APP_ONLY }),
+    });
+    await expect(built.rules.clearSlot(id, 'unit-1', 'extra:1', 'web')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_APP_ONLY }),
+    });
+    await expect(built.rules.clearSlot(id, 'unit-1', 'extra:1')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_APP_ONLY }),
+    });
+  });
+
   it('deletes a skip when that angle is taken instead', async () => {
     const built = service(true, rows(ready, []));
     const id = '11111111-1111-4111-8111-111111111111';
-    await built.rules.clearSlot(id, 'unit-1', 'extra:1');
+    await built.rules.clearSlot(id, 'unit-1', 'extra:1', 'ios');
     const writes = built.hasura.executeMutation.mock.calls.filter((call) => String(call[0]).includes('ClearSlotSkip'));
     expect(writes).toHaveLength(1);
     expect(writes[0][1]).toEqual({ inspectionId: 'ins-1', unitId: 'unit-1', slotKey: 'extra:1' });

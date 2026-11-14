@@ -63,9 +63,12 @@ export class RentalInspectionsController {
   @ApiOperation({ summary: 'Skip an extra guide angle with a reason shown to the renter' })
   skipSlot(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
-    @Body() body: SkipPickupSlotDto
+    @Body() body: SkipPickupSlotDto,
+    @Headers('x-rendasua-platform') platform?: string | string[],
+    @Headers('x-client-platform') clientPlatform?: string | string[]
   ) {
-    return this.photoRules.skipSlot(bookingId, body.unitId, body.slotKey, body.reason);
+    // Same spoofable UX gate as presign. A missing header is web.
+    return this.photoRules.skipSlot(bookingId, body.unitId, body.slotKey, body.reason, platform ?? clientPlatform);
   }
 
   @Post('pickup/slot-skips/clear')
@@ -73,9 +76,11 @@ export class RentalInspectionsController {
   @ApiOperation({ summary: 'Remove a skipped extra angle so it can be retaken' })
   clearSlot(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
-    @Body() body: ClearPickupSlotDto
+    @Body() body: ClearPickupSlotDto,
+    @Headers('x-rendasua-platform') platform?: string | string[],
+    @Headers('x-client-platform') clientPlatform?: string | string[]
   ) {
-    return this.photoRules.clearSlot(bookingId, body.unitId, body.slotKey);
+    return this.photoRules.clearSlot(bookingId, body.unitId, body.slotKey, platform ?? clientPlatform);
   }
 
   @Post(':stage/draft')

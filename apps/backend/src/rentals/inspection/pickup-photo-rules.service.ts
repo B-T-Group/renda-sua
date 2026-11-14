@@ -110,9 +110,10 @@ export class PickupPhotoRulesService {
     return this.storeGuide(booking, inspection.id);
   }
 
-  async skipSlot(bookingId: string, unitId: string, slotKey: string, reason: string) {
+  async skipSlot(bookingId: string, unitId: string, slotKey: string, reason: string, platform?: string | string[]) {
     const booking = await this.requireBusiness(bookingId);
     if (!(await this.enabled(booking))) this.rejectOff();
+    this.assertApp(platform);
     const inspection = await this.inspection(bookingId);
     if (!inspection || inspection.pickup_guide_mode !== 'guide') this.rejectSlot();
     const allowed = await this.extraKeys(booking, inspection.pickup_guide_version_id);
@@ -124,9 +125,10 @@ export class PickupPhotoRulesService {
     return { saved: true };
   }
 
-  async clearSlot(bookingId: string, unitId: string, slotKey: string) {
+  async clearSlot(bookingId: string, unitId: string, slotKey: string, platform?: string | string[]) {
     const booking = await this.requireBusiness(bookingId);
     if (!(await this.enabled(booking))) this.rejectOff();
+    this.assertApp(platform);
     const inspection = await this.inspection(bookingId);
     if (!inspection) return { cleared: false };
     await this.assertUnit(bookingId, unitId);
@@ -525,6 +527,10 @@ export class PickupPhotoRulesService {
 
   private rejectDay(): never {
     throw inspectionRejected(PICKUP_PHOTO_NOT_PICKUP_DAY, 'Pickup photos can be taken only on pickup day');
+  }
+
+  private assertApp(platform?: string | string[]): void {
+    if (uploadPlatform(platform) !== 'app') this.rejectApp();
   }
 
   private rejectApp(): never {
