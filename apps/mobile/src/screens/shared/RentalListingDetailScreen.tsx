@@ -467,6 +467,11 @@ export default function RentalListingDetailScreen() {
                 {`${n}. `}
                 {n === 4
                   ? t(step4Key, step4Default)
+                  : n === 3 && listing.inspection_policy_version != null
+                    ? t(
+                        'rentals.detail.howItWorksStep3Inspected',
+                        'At pickup, review and accept the condition report to start. Return by the booked end time.'
+                      )
                   : t(
                       `rentals.detail.howItWorksStep${n}`,
                       n === 1

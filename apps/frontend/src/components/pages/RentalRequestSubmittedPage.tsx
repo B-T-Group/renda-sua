@@ -9,7 +9,7 @@ import { Box, Button, Container, Paper, Stack, Typography } from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import SEOHead from '../seo/SEOHead';
 
 interface InfoBlockProps {
@@ -42,6 +42,9 @@ const RentalRequestSubmittedPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+  const inspected =
+    (location.state as { inspectionPolicyVersion?: number | null } | null)?.inspectionPolicyVersion != null;
   const pageTitle = t('rentals.requestSubmitted.pageTitle', 'Request sent');
 
   return (
@@ -109,10 +112,17 @@ const RentalRequestSubmittedPage: React.FC = () => {
                 <InfoBlock
                   icon={<PinIcon />}
                   title={t('rentals.requestSubmitted.pinTitle', 'Starting the rental')}
-                  body={t(
-                    'rentals.requestSubmitted.pinBody',
-                    'When you meet the owner to begin the rental, you will need to give them your start PIN so they can confirm the handover in the app.'
-                  )}
+                  body={
+                    inspected
+                      ? t(
+                          'rentals.requestSubmitted.pinBodyInspected',
+                          'At pickup, the business will share a condition report. Review and accept it to start the rental. No PIN is needed.'
+                        )
+                      : t(
+                          'rentals.requestSubmitted.pinBody',
+                          'When you meet the owner to begin the rental, you will need to give them your start PIN so they can confirm the handover in the app.'
+                        )
+                  }
                 />
                 <InfoBlock
                   icon={<PayoutIcon />}

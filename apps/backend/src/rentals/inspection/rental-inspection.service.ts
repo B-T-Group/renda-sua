@@ -53,9 +53,13 @@ interface BookingRow {
   return_resolution?: string | null;
   settlement_claimed_at?: string | null;
   booking_number: string;
-  client: { user_id: string };
+  end_at?: string | null;
+  client: { user_id: string; user?: { first_name?: string | null } | null };
   business: { user_id: string };
-  rental_location_listing?: { rental_item?: { name?: string } | null } | null;
+  rental_location_listing?: {
+    rental_item?: { name?: string } | null;
+    business_location?: { address?: { country?: string | null } | null } | null;
+  } | null;
 }
 
 interface UnitRow {
@@ -130,6 +134,7 @@ export class RentalInspectionService {
       booking.client.user_id,
       'client'
     );
+    if (stage === 'pickup') await this.notifyReportSent(booking);
     return { versionId: version.id, versionNo: version.version_no };
   }
 
@@ -332,6 +337,7 @@ export class RentalInspectionService {
       'That report changed. Review it again.'
     );
     await this.rentals.settleEnrolledRental(booking.id);
+    await this.notifyReturnAccepted(booking);
     return { accepted: true };
   }
 
@@ -711,7 +717,42 @@ export class RentalInspectionService {
       persona,
       rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
       bookingId: booking.id,
+      renterName: booking.client.user?.first_name,
+      endAt: booking.end_at,
+      countryCode: this.bookingCountry(booking),
     });
+  }
+
+  private bookingCountry(booking: BookingRow): string | null | undefined {
+    return booking.rental_location_listing?.business_location?.address?.country;
+  }
+
+  private async notifyReportSent(booking: BookingRow): Promise<void> {
+    try {
+      if (!(await this.flags.confirmationsEnabled(this.bookingCountry(booking)))) return;
+      await this.notices.sendReportSentInApp({
+        businessUserId: booking.business.user_id,
+        rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+        bookingId: booking.id,
+        renterName: booking.client.user?.first_name,
+      });
+    } catch (error: any) {
+      void error;
+    }
+  }
+
+  private async notifyReturnAccepted(booking: BookingRow): Promise<void> {
+    try {
+      if (!(await this.flags.confirmationsEnabled(this.bookingCountry(booking)))) return;
+      await this.notices.sendReturnAcceptedPush({
+        businessUserId: booking.business.user_id,
+        rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+        bookingId: booking.id,
+        renterName: booking.client.user?.first_name,
+      });
+    } catch (error: any) {
+      void error;
+    }
   }
 
   private assertStageOpen(booking: BookingRow, stage: InspectionStage) {
@@ -825,10 +866,13 @@ export class RentalInspectionService {
           id status business_id client_id units_booked allocation_version
           inspection_policy_version pickup_current_version_id pickup_ack_current
           pickup_accepted_version_id return_current_version_id return_resolution
-          settlement_claimed_at booking_number
-          client { user_id }
+          settlement_claimed_at booking_number end_at
+          client { user_id user { first_name } }
           business { user_id }
-          rental_location_listing { rental_item { name } }
+          rental_location_listing {
+            rental_item { name }
+            business_location { address { country } }
+          }
         }
       }`,
       { id }

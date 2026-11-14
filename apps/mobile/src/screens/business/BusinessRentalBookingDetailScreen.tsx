@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
@@ -28,7 +29,11 @@ import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import type { RentalBookingDetail } from '../../types/rentals';
 import {
+  REPORT_REVIEW_STEP,
   bookingDetailStatusLabelKey,
+  bookingDetailStepLabelKey,
+  bookingDetailTimeline,
+  bookingDetailTimelineIndex,
   parseRentalSelectionWindows,
   rentalBookingStatusColors,
   resolveBookingPhase,
@@ -37,6 +42,7 @@ import { bookingRequestedPeriodLines, formatListingDue, formatRequestAmount } fr
 import { formatDoualaStamp } from '../../utils/rentals/renterReturnPhase';
 import {
   businessCanReplaceReport,
+  reportReadyToReview,
   classifyInspectionError,
   pickupGate,
   showEnrolledReturn,
@@ -84,6 +90,7 @@ export default function BusinessRentalBookingDetailScreen() {
   } = useActiveRentalStartPin(bookingId, pinDialog);
   const [showManualPin, setShowManualPin] = useState(false);
   const snapshot = useInspectionSnapshot(bookingId, booking);
+  const confirmationsOn = !flagsLoading && flags.rentals_inspection_confirmations_enabled;
 
   const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (!opts?.soft) setLoading(true);
@@ -94,6 +101,15 @@ export default function BusinessRentalBookingDetailScreen() {
       if (!opts?.soft) setLoading(false);
     }
   }, [bookingId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!confirmationsOn) return undefined;
+      void load({ soft: true });
+      void snapshot.reload();
+      return undefined;
+    }, [confirmationsOn, load, snapshot.reload])
+  );
 
   useEffect(() => {
     void load();
@@ -292,6 +308,16 @@ export default function BusinessRentalBookingDetailScreen() {
   );
   const client = booking.client?.user;
   const clientName = [client?.first_name, client?.last_name].filter(Boolean).join(' ');
+  const reviewReady =
+    confirmationsOn &&
+    snapshot.enrolled &&
+    reportReadyToReview({ status: booking.status, pickup: snapshot.pickup });
+  const waitingSteps = reviewReady
+    ? bookingDetailTimeline(booking.status, { includeReview: true })
+    : [];
+  const waitingIndex = reviewReady
+    ? bookingDetailTimelineIndex(waitingSteps, booking.status, { reviewCurrent: true })
+    : 0;
   const gate = pickupGate({
     enrolled: snapshot.enrolled,
     status: booking.status,
@@ -347,15 +373,19 @@ export default function BusinessRentalBookingDetailScreen() {
           </Text>
           <StatusPill
             compact
-            label={t(
-              booking.status === 'awaiting_return'
-                ? bookingDetailStatusLabelKey(booking.status)
-                : phaseInfo.labelKey,
-              booking.status === 'awaiting_return' ? 'Return due' : booking.status
-            )}
-            backgroundColor={sc.backgroundColor}
-            textColor={sc.textColor}
-            borderColor={sc.borderColor}
+            label={
+              reviewReady
+                ? t('rentalInspection.phase.waitingRenter', 'Waiting for renter')
+                : t(
+                    booking.status === 'awaiting_return'
+                      ? bookingDetailStatusLabelKey(booking.status)
+                      : phaseInfo.labelKey,
+                    booking.status === 'awaiting_return' ? 'Return due' : booking.status
+                  )
+            }
+            backgroundColor={reviewReady ? '#0B7A3B18' : sc.backgroundColor}
+            textColor={reviewReady ? '#0B7A3B' : sc.textColor}
+            borderColor={reviewReady ? '#0B7A3B44' : sc.borderColor}
           />
         </View>
         {booking.booking_number ? (
@@ -394,10 +424,20 @@ export default function BusinessRentalBookingDetailScreen() {
         ) : null}
       </View>
 
+      {reviewReady ? (
+        <View style={{ marginTop: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider }}>
+          <Text style={[typography.subtitle2, { color: colors.text.primary }]}>{t('rentals.status', 'Status')}</Text>
+          {waitingSteps.map((step, idx) => (
+            <WaitingStep key={step} step={step} idx={idx} current={waitingIndex} />
+          ))}
+        </View>
+      ) : null}
+
       {showRenterReport ? null : (
       <View style={{ marginTop: spacing.md }}>
         <RentalPhaseBanner
           bookingStatus={booking.status}
+          chipLabel={reviewReady ? t('rentalInspection.phase.waitingRenter', 'Waiting for renter') : undefined}
           role="business"
           nextStepKey={
             snapshot.enrolled &&
@@ -901,6 +941,26 @@ function BusinessAcceptStartHero({
           {t('rentalInspection.updateReport', 'Update report')}
         </Button>
       ) : null}
+    </View>
+  );
+}
+
+function WaitingStep({ step, idx, current }: { step: string; idx: number; current: number }) {
+  const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
+  const reviewNow = step === REPORT_REVIEW_STEP && idx === current;
+  const done = current > idx;
+  const labelKey = bookingDetailStepLabelKey(step, 'business');
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs }}>
+      <MaterialCommunityIcons
+        name={reviewNow ? 'circle' : done ? 'check-circle' : 'circle-outline'}
+        size={18}
+        color={reviewNow ? colors.cta.main : done ? colors.success.main : colors.text.disabled}
+      />
+      <Text style={[typography.body2, { marginLeft: spacing.sm, color: done || reviewNow ? colors.text.primary : colors.text.disabled, fontWeight: reviewNow ? '700' : '400' }]}>
+        {t(labelKey, step === REPORT_REVIEW_STEP ? 'Waiting for renter' : step)}
+      </Text>
     </View>
   );
 }

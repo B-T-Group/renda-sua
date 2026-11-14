@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ClientRootStackParamList } from '../../navigation/types';
 
-type Params = { RentalRequestSubmitted: { requestId?: string } };
+type Params = { RentalRequestSubmitted: { requestId?: string; inspectionPolicyVersion?: number | null } };
 
 const STEPS = [
   {
@@ -49,7 +49,8 @@ export default function RentalRequestSubmittedScreen() {
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
-  useRoute<RouteProp<Params, 'RentalRequestSubmitted'>>();
+  const route = useRoute<RouteProp<Params, 'RentalRequestSubmitted'>>();
+  const inspected = route.params?.inspectionPolicyVersion != null;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -150,7 +151,12 @@ export default function RentalRequestSubmittedScreen() {
                 { color: colors.text.secondary, marginTop: spacing.xs },
               ]}
             >
-              {t(step.bodyKey, step.bodyDefault)}
+              {step.bodyKey === 'rentals.requestSubmitted.pinBody' && inspected
+                ? t(
+                    'rentals.requestSubmitted.pinBodyInspected',
+                    'At pickup, the business will share a condition report. Review and accept it to start the rental. No PIN is needed.'
+                  )
+                : t(step.bodyKey, step.bodyDefault)}
             </Text>
           </View>
         ))}

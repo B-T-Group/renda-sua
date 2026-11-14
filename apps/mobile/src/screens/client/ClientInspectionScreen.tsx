@@ -8,12 +8,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MobileMoneyConfirmIllustration } from '../../components/illustrations/MobileMoneyConfirmIllustration';
 import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
+import { RentalStartedConfirmation } from '../../components/rentals/inspection/RentalStartedConfirmation';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useClientInspection } from '../../hooks/useClientInspection';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { acceptAndStart, getBooking, getPaymentStatus } from '../../services/rentalsApi';
 import { formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
+import {
+  confirmationTimeZone,
+  confirmationZoneKey,
+  formatConfirmationDue,
+  formatConfirmationMoney,
+} from '../../utils/rentals/confirmationFormat';
 import { CORRECTION_REASON_CODES, allUnitsReviewed, classifyInspectionError, damageRail, returnHasDamage } from '../../utils/rentals/rentalInspection';
 
 type Route = RouteProp<ClientRootStackParamList, 'ClientInspection'>;
@@ -21,6 +29,10 @@ type Route = RouteProp<ClientRootStackParamList, 'ClientInspection'>;
 export default function ClientInspectionScreen() {
   const { t, i18n } = useTranslation();
   const { colors, spacing, typography, borderRadius } = useTheme();
+  const { flags, loading: flagsLoading } = useClientFlags();
+  const confirmationsOn = !flagsLoading && flags.rentals_inspection_confirmations_enabled;
+  const [started, setStarted] = useState<null | { momo: boolean }>(null);
+  const [startRail, setStartRail] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
   const { bookingId, stage } = useRoute<Route>().params;
@@ -63,6 +75,11 @@ export default function ClientInspectionScreen() {
       const row = await getBooking(bookingId);
       if (stop || !row) return;
       if (row.status === 'active' || row.actual_start_at) {
+        if (confirmationsOn) {
+          setMomoPhase(null);
+          setStarted({ momo: startRail === 'mobile_money' });
+          return;
+        }
         navigation.goBack();
         return;
       }
@@ -82,7 +99,7 @@ export default function ClientInspectionScreen() {
       stop = true;
       clearInterval(timer);
     };
-  }, [bookingId, momoPhase, navigation]);
+  }, [bookingId, confirmationsOn, momoPhase, navigation, startRail]);
 
   const confirmStart = async () => {
     if (!model.view?.versionId) return;
@@ -102,7 +119,12 @@ export default function ClientInspectionScreen() {
       setConfirmOpen(false);
       setNotice(null);
       if (result.paymentPending) {
+        setStartRail(result.payment_rail ?? 'mobile_money');
         setMomoPhase('waiting');
+        return;
+      }
+      if (confirmationsOn) {
+        setStarted({ momo: false });
         return;
       }
       navigation.goBack();
@@ -124,6 +146,30 @@ export default function ClientInspectionScreen() {
       setStarting(false);
     }
   };
+
+  if (started && model.booking) {
+    const country = noticeCountry(model.booking.currency);
+    const due = formatConfirmationDue(model.booking.end_at, confirmationTimeZone(country), i18n.language);
+    const paid = formatConfirmationMoney(Number(model.booking.total_amount) || 0, model.booking.currency, i18n.language);
+    const depositAmount = Number(model.booking.security_deposit_amount) || 0;
+    const deposit = depositAmount > 0
+      ? formatConfirmationMoney(depositAmount, model.booking.currency, i18n.language)
+      : '';
+    return (
+      <RentalStartedConfirmation
+        momo={started.momo}
+        due={due}
+        zone={t(confirmationZoneKey(country), country === 'CM' ? 'Douala time' : 'Montréal time')}
+        paid={paid}
+        deposit={deposit}
+        title={model.booking.rental_location_listing?.rental_item?.name || t('rentals.booking', 'Rental')}
+        startAt={model.booking.start_at}
+        endAt={model.booking.end_at}
+        location={model.booking.rental_location_listing?.business_location?.name}
+        onBack={() => navigation.goBack()}
+      />
+    );
+  }
 
   if (momoPhase) {
     return (
@@ -382,6 +428,11 @@ function noticeText(notice: string, t: (key: string, fallback: string) => string
   if (notice === 'correction') return t('rentalInspection.correctionSent', 'Correction sent. The business will update the report.');
   if (notice === 'disputed') return t('rentalInspection.returnRecorded', 'Return recorded. Financial review pending.');
   return notice;
+}
+
+function noticeCountry(currency?: string | null): string {
+  const code = (currency || '').toUpperCase();
+  return code === 'XAF' || code === 'XOF' ? 'CM' : 'CA';
 }
 
 const styles = StyleSheet.create({

@@ -578,7 +578,7 @@ export const GET_RENTAL_BOOKING_FULL = `
       rental_start_overwrite_code_hash
       rental_start_overwrite_code_used_at
       period_ended_notified_at
-      client { id user_id }
+      client { id user_id user { first_name } }
       business { id user_id name }
       rental_location_listing {
         business_location_id

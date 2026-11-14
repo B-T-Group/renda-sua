@@ -264,11 +264,13 @@ export class RentalsController {
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
-    const card = await this.rentalsService.cardWindowFieldsFor(
-      listing.business_location?.address?.country,
-      readLatestCardEndAt(listing)
-    );
-    return { success: true, data: { listing: Object.assign(listing, card) } };
+    const country = listing.business_location?.address?.country;
+    const card = await this.rentalsService.cardWindowFieldsFor(country, readLatestCardEndAt(listing));
+    const inspection_policy_version = await this.rentalsService.listingInspectionPolicy(country);
+    return {
+      success: true,
+      data: { listing: Object.assign(listing, card, { inspection_policy_version }) },
+    };
   }
 
   @Get('business/items')

@@ -101,6 +101,8 @@ export interface RentalListingRow {
   units_available?: number;
   pickup_instructions: string;
   dropoff_instructions: string;
+  /** 1 when new bookings in this country are inspected. Null keeps the start PIN. */
+  inspection_policy_version?: number | null;
   weekly_availability: RentalWeeklyAvailabilityRow[];
   updated_at?: string;
   rental_item: {

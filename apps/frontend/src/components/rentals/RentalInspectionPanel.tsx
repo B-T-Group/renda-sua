@@ -77,12 +77,24 @@ export function RentalInspectionPanel({
   booking,
   model,
   onChanged,
+  confirmationsEnabled,
+  onReportSent,
+  onRentalStarted,
 }: {
   bookingId: string;
   role: 'client' | 'business';
   booking: PanelBooking;
   model: Model;
   onChanged: () => void;
+  confirmationsEnabled?: boolean;
+  onReportSent?: (summary: {
+    stage: 'pickup' | 'return';
+    versionNo: number;
+    submittedAt: string;
+    unitCount: number;
+    photos: Array<{ id: string; role: string; url?: string }>;
+  }) => void;
+  onRentalStarted?: (input: { momo: boolean }) => void;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -108,6 +120,7 @@ export function RentalInspectionPanel({
   const [claim, setClaim] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [momoPhase, setMomoPhase] = useState<'waiting' | 'failed' | 'stalled' | null>(null);
+  const [startRail, setStartRail] = useState<string | null>(null);
   const waitingSince = useRef<number | null>(null);
   const [offline, setOffline] = useState(!navigator.onLine);
   const draftOpened = useRef(false);
@@ -160,7 +173,8 @@ export function RentalInspectionPanel({
       if (stop || !row) return;
       if (row.status === 'active' || row.actual_start_at) {
         setMomoPhase(null);
-        onChanged();
+        if (confirmationsEnabled) onRentalStarted?.({ momo: startRail === 'mobile_money' });
+        else onChanged();
         return;
       }
       const pay = await getBookingPaymentStatus(bookingId).catch(() => null);
@@ -179,7 +193,7 @@ export function RentalInspectionPanel({
       stop = true;
       window.clearInterval(timer);
     };
-  }, [bookingId, fetchBookingDetail, getBookingPaymentStatus, momoPhase, onChanged]);
+  }, [bookingId, confirmationsEnabled, fetchBookingDetail, getBookingPaymentStatus, momoPhase, onChanged, onRentalStarted, startRail]);
 
   if (!model.enrolled) return null;
 
@@ -248,11 +262,13 @@ export function RentalInspectionPanel({
       const result = await acceptAndStart(bookingId, view.versionId);
       setConfirmOpen(false);
       if (result.paymentPending) {
+        setStartRail(result.payment_rail ?? 'mobile_money');
         setMomoPhase('waiting');
         return;
       }
       setMomoPhase(null);
-      onChanged();
+      if (confirmationsEnabled) onRentalStarted?.({ momo: false });
+      else onChanged();
     } catch (error: unknown) {
       setConfirmOpen(false);
       const kind = classifyInspectionError(error);
@@ -280,7 +296,16 @@ export function RentalInspectionPanel({
     await run(async () => {
       const amount = Number(claim);
       await model.api.submit(bookingId, stage, stage === 'return' && amount > 0 ? amount : undefined);
-    }, 'submitted');
+    }, confirmationsEnabled ? undefined : 'submitted');
+    if (confirmationsEnabled && view) {
+      onReportSent?.({
+        stage,
+        versionNo: view.versionNo || 1,
+        submittedAt: new Date().toISOString(),
+        unitCount: view.units.length || booking.units_booked || 1,
+        photos: view.units[0]?.photos ?? [],
+      });
+    }
   };
 
   return (

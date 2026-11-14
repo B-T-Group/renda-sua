@@ -5,6 +5,7 @@ const FLAG_KEY = 'rental_inspection_enabled';
 const ALLOW_SELF_BOOKING_KEY = 'rentals_inspection_allow_self_booking';
 export const CARD_WINDOW_GUARD_KEY = 'rentals_card_window_guard_enabled';
 export const CARD_CHARGE_AT_PICKUP_KEY = 'rentals_card_charge_at_pickup_enabled';
+export const INSPECTION_CONFIRMATIONS_KEY = 'rentals_inspection_confirmations_enabled';
 
 /**
  * Country row wins over the global row. Missing or unreadable config stays off.
@@ -40,6 +41,11 @@ export class RentalInspectionFlags {
    */
   async cardChargeAtPickupEnabled(countryCode?: string | null): Promise<boolean> {
     return this.booleanConfig(CARD_CHARGE_AT_PICKUP_KEY, countryCode, false);
+  }
+
+  /** Confirmation screens and the three new notices. Seeded false. No NODE_ENV override. */
+  async confirmationsEnabled(countryCode?: string | null): Promise<boolean> {
+    return this.booleanConfig(INSPECTION_CONFIRMATIONS_KEY, countryCode, false);
   }
 
   async numberConfig(key: string, countryCode: string | null | undefined, fallback: number): Promise<number> {

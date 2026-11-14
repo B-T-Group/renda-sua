@@ -2,25 +2,33 @@ import React, { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text, TextInput } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
+import { ReportSentConfirmation } from '../../components/rentals/inspection/ReportSentConfirmation';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInspectionCapture } from '../../hooks/useInspectionCapture';
-import { derivedOvertime } from '../../utils/rentals/rentalInspection';
+import { businessCanReplaceReport, derivedOvertime } from '../../utils/rentals/rentalInspection';
+import { confirmationTimeZone, formatConfirmationDue } from '../../utils/rentals/confirmationFormat';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessInspection'>;
 
 export default function BusinessInspectionScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
   const route = useRoute<Route>();
   const stage = route.params.stage;
   const model = useInspectionCapture(route.params.bookingId, stage);
+  const { flags, loading: flagsLoading } = useClientFlags();
+  const confirmationsOn = !flagsLoading && flags.rentals_inspection_confirmations_enabled;
   const [claim, setClaim] = useState('');
+  const [editing, setEditing] = useState(false);
   const unit = model.current;
   const needsClaim = stage === 'return' && model.units.some((row) => row.returnChoice === 'damage' || row.condition === 'damaged');
   const overtime = model.booking ? derivedOvertime(model.booking) : null;
@@ -33,7 +41,26 @@ export default function BusinessInspectionScreen() {
     );
   }
 
-  const message = messageFor(model.error, model.notice, model.isOffline || model.unsynced, t);
+  const showSent = confirmationsOn && model.notice === 'submitted' && !editing && !!model.view;
+  if (showSent && model.view && model.booking) {
+    const country = noticeCountry(model.booking.currency);
+    const when = formatConfirmationDue(model.view.submittedAt || new Date().toISOString(), confirmationTimeZone(country), i18n.language);
+    return (
+      <ReportSentConfirmation
+        stage={stage}
+        renterName={model.booking.client?.user?.first_name || t('rentals.client', 'the renter')}
+        unitCount={model.booking.units_booked || model.view.units.length || 1}
+        versionNo={model.view.versionNo || 1}
+        when={when}
+        photos={model.view.units[0]?.photos ?? []}
+        canEdit={businessCanReplaceReport(model.view)}
+        onBack={() => navigation.goBack()}
+        onEdit={() => setEditing(true)}
+      />
+    );
+  }
+
+  const message = messageFor(model.error, model.notice, model.isOffline || model.unsynced, confirmationsOn, t);
   const pickup = model.pickupView?.units.find((row) => row.unitId === unit.unitId);
 
   return (
@@ -175,7 +202,7 @@ export default function BusinessInspectionScreen() {
         <Button mode="contained" buttonColor={colors.cta.main} style={styles.action} disabled={model.busy} loading={model.busy} onPress={() => void model.saveAndNext()}>
           {t('rentalInspection.saveUnitNext', 'Save unit · next')}
         </Button>
-        <Button mode="contained" buttonColor={colors.cta.dark} style={styles.action} disabled={!model.canSubmit || model.busy || (needsClaim && !(Number(claim) > 0))} onPress={() => void model.submit(needsClaim ? Number(claim) : undefined)}>
+        <Button mode="contained" buttonColor={colors.cta.dark} style={styles.action} disabled={!model.canSubmit || model.busy || (needsClaim && !(Number(claim) > 0))} onPress={() => void submitReport(model, needsClaim ? Number(claim) : undefined, setEditing)}>
           {stage === 'return'
             ? t('rentalInspection.submitReturn', 'Submit return report')
             : t('rentalInspection.submitReport', 'Submit report')}
@@ -190,10 +217,25 @@ export default function BusinessInspectionScreen() {
   );
 }
 
+function noticeCountry(currency?: string | null): string {
+  const code = (currency || '').toUpperCase();
+  return code === 'XAF' || code === 'XOF' ? 'CM' : 'CA';
+}
+
+async function submitReport(
+  model: { submit: (claim?: number) => Promise<void> },
+  claim: number | undefined,
+  setEditing: (value: boolean) => void
+): Promise<void> {
+  await model.submit(claim);
+  setEditing(false);
+}
+
 function messageFor(
   error: string | null,
   notice: string | null,
   offline: boolean,
+  hideSubmitted: boolean,
   t: (key: string, fallback: string) => string
 ): string | null {
   if (offline) return t('rentalInspection.photosNotSynced', 'Photos not synced. Connect to submit.');
@@ -202,7 +244,7 @@ function messageFor(
     return t('rentalInspection.updateRequired', 'This rental uses condition inspections. Review the report here, or update the app if this screen is missing.');
   }
   if (error === 'photo-minimum') return t('rentalInspection.photoRequirementMissing', 'The photo minimum could not be loaded. Connect and try again.');
-  if (notice === 'submitted') return t('rentalInspection.reportUpdated', 'Report updated. Please review it again.');
+  if (notice === 'submitted' && !hideSubmitted) return t('rentalInspection.reportUpdated', 'Report updated. Please review it again.');
   if (notice === 'handed') return t('rentalInspection.handbackRecorded', 'Physical handback recorded.');
   if (error) return t('rentalInspection.loadFailed', 'Could not load the inspection.');
   return null;

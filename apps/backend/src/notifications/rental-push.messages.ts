@@ -1,7 +1,40 @@
+import { marketTimeZone } from '../common/market-timezones';
+
 export type RentalPushLocale = 'en' | 'fr';
 
 function normalizeLocale(lang?: string | null): RentalPushLocale {
   return (lang || '').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+}
+
+function part(parts: Intl.DateTimeFormatPart[], type: string): string {
+  return parts.find((row) => row.type === type)?.value ?? '';
+}
+
+/** Compact due clock in the listing time zone. fr-CA stays `18 nov. · 20:00`. */
+export function formatRentalNoticeDue(
+  iso: string | null | undefined,
+  timeZone: string | null | undefined,
+  language?: string | null
+): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const fr = normalizeLocale(language) === 'fr';
+  const parts = new Intl.DateTimeFormat(fr ? 'fr-CA' : 'en-CA', {
+    timeZone: timeZone || 'UTC',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const month = part(parts, 'month').replace(/\.$/, '');
+  const label = fr ? month.toLowerCase() : month;
+  return `${part(parts, 'day')} ${label} · ${part(parts, 'hour')}:${part(parts, 'minute')}`;
+}
+
+export function rentalNoticeZone(countryCode?: string | null): string | null {
+  return marketTimeZone(countryCode);
 }
 
 export function buildRentalRequestAcceptedPush(params: {
@@ -34,13 +67,24 @@ export function buildRentalBookingConfirmedPush(params: {
   rentalItemName: string;
   bookingNumber: string;
   preferredLanguage?: string | null;
+  /** Inspected bookings have no start PIN. Legacy copy stays when this is false. */
+  inspected?: boolean;
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const item = `${params.rentalItemName} (${params.bookingNumber})`;
+  if (params.inspected) {
+    return {
+      title: fr ? 'Location confirmée' : 'Rental confirmed',
+      body: fr
+        ? `${item} est confirmée. Au retrait, l'entreprise partagera un état des lieux à accepter.`
+        : `${item} is confirmed. At pickup, the business will share a condition report for you to accept.`,
+    };
+  }
   return {
     title: fr ? 'Location confirmée' : 'Rental confirmed',
     body: fr
-      ? `${params.rentalItemName} (${params.bookingNumber}) est confirmée. Votre code PIN est prêt.`
-      : `${params.rentalItemName} (${params.bookingNumber}) is confirmed. Your start PIN is ready.`,
+      ? `${item} est confirmée. Votre code PIN est prêt.`
+      : `${item} is confirmed. Your start PIN is ready.`,
   };
 }
 
@@ -71,21 +115,32 @@ export function buildRentalBookingReservedPush(params: {
   bookingNumber: string;
   forBusiness: boolean;
   preferredLanguage?: string | null;
+  /** Client copy only. Business reserved copy does not change. */
+  inspected?: boolean;
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const item = `${params.rentalItemName} (${params.bookingNumber})`;
   if (params.forBusiness) {
     return {
       title: fr ? 'Location réservée' : 'Rental reserved',
       body: fr
-        ? `${params.rentalItemName} (${params.bookingNumber}) est réservé. Le client paiera au retrait.`
-        : `${params.rentalItemName} (${params.bookingNumber}) is reserved. The client will pay at pickup.`,
+        ? `${item} est réservé. Le client paiera au retrait.`
+        : `${item} is reserved. The client will pay at pickup.`,
+    };
+  }
+  if (params.inspected) {
+    return {
+      title: fr ? 'Location réservée' : 'Rental reserved',
+      body: fr
+        ? `${item} est réservée. Payez lorsque vous acceptez l'état des lieux au retrait.`
+        : `${item} is reserved. Pay when you accept the condition report at pickup.`,
     };
   }
   return {
     title: fr ? 'Location réservée' : 'Rental reserved',
     body: fr
-      ? `${params.rentalItemName} (${params.bookingNumber}) est réservé. Payez au retrait pour commencer.`
-      : `${params.rentalItemName} (${params.bookingNumber}) is reserved. Pay at pickup to start.`,
+      ? `${item} est réservé. Payez au retrait pour commencer.`
+      : `${item} is reserved. Pay at pickup to start.`,
   };
 }
 
@@ -226,6 +281,19 @@ export function buildRentalNotReceivedSupportNotice(params: {
   };
 }
 
+function rentalStartedBody(fr: boolean, renter: string, item: string, due?: string | null): string {
+  const until = due?.trim()
+    ? fr
+      ? `jusqu'au ${due.trim()}`
+      : `until ${due.trim()}`
+    : fr
+      ? "jusqu'à la fin prévue"
+      : 'until the booked end';
+  return fr
+    ? `${renter} a accepté l'état des lieux. ${item} est désormais en cours ${until}.`
+    : `${renter} accepted the condition report. ${item} is now in progress ${until}.`;
+}
+
 export function buildRentalInspectionNotice(params: {
   kind:
     | 'review_pickup'
@@ -238,9 +306,12 @@ export function buildRentalInspectionNotice(params: {
     | 'decided';
   rentalItemName: string;
   preferredLanguage?: string | null;
+  renterName?: string | null;
+  returnDue?: string | null;
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
   const item = params.rentalItemName;
+  const renter = params.renterName?.trim() || (fr ? 'Le client' : 'The renter');
   const copy: Record<typeof params.kind, { title: string; body: string }> = {
     review_pickup: {
       title: fr ? "Vérifiez l'état des lieux" : 'Review item condition',
@@ -261,10 +332,8 @@ export function buildRentalInspectionNotice(params: {
         : `The renter asked for a correction on ${item}.`,
     },
     pickup_accepted: {
-      title: fr ? 'État des lieux accepté' : 'Condition report accepted',
-      body: fr
-        ? `Le client a accepté l'état des lieux de ${item}.`
-        : `The renter accepted the condition report for ${item}.`,
+      title: fr ? 'Location démarrée' : 'Rental started',
+      body: rentalStartedBody(fr, renter, item, params.returnDue),
     },
     return_reminder: {
       title: fr ? 'Retour en attente de votre avis' : 'Please review the return',
@@ -292,6 +361,58 @@ export function buildRentalInspectionNotice(params: {
     },
   };
   return copy[params.kind];
+}
+
+export function buildRentalStartedClientPush(params: {
+  rentalItemName: string;
+  returnDue?: string | null;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const due = params.returnDue?.trim();
+  const when = due
+    ? fr
+      ? `Le retour est dû le ${due}.`
+      : `Return is due by ${due}.`
+    : fr
+      ? 'Le retour est dû à la fin prévue.'
+      : 'Return is due by the booked end.';
+  return {
+    title: fr ? 'Location démarrée' : 'Rental started',
+    body: fr
+      ? `Votre location de ${params.rentalItemName} a commencé. ${when}`
+      : `Your rental of ${params.rentalItemName} has started. ${when}`,
+  };
+}
+
+export function buildReturnAcceptedPush(params: {
+  rentalItemName: string;
+  renterName?: string | null;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const renter = params.renterName?.trim() || (fr ? 'Le client' : 'The renter');
+  return {
+    title: fr ? 'Retour accepté' : 'Return accepted',
+    body: fr
+      ? `${renter} a accepté le rapport de retour pour ${params.rentalItemName}.`
+      : `${renter} accepted the return report for ${params.rentalItemName}.`,
+  };
+}
+
+export function buildReportSentInApp(params: {
+  rentalItemName: string;
+  renterName?: string | null;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const renter = params.renterName?.trim() || (fr ? 'le client' : 'the renter');
+  return {
+    title: fr ? 'État des lieux envoyé' : 'Condition report sent',
+    body: fr
+      ? `Nous avons demandé à ${renter} de vérifier l'état des lieux de ${params.rentalItemName}.`
+      : `We asked ${renter} to review the pickup report for ${params.rentalItemName}.`,
+  };
 }
 
 export function buildRentalAvailablePush(params: {

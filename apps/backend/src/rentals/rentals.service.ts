@@ -2475,6 +2475,7 @@ export class RentalsService {
           booking?.rental_location_listing?.rental_item?.name ?? 'Rental',
         bookingId,
         bookingNumber: booking?.booking_number ?? '',
+        inspected: booking?.inspection_policy_version != null,
       });
     } catch (error: any) {
       this.logger.warn(
@@ -2750,6 +2751,7 @@ export class RentalsService {
         rentalItemName: itemName,
         bookingId,
         bookingNumber,
+        inspected: policy != null,
       });
     } catch (error: any) {
       this.logger.warn(
@@ -3400,6 +3402,7 @@ export class RentalsService {
     } else {
       await this.startBlockedOrConflict(booking.id);
     }
+    if (won) await this.notifyRentalStartedIfEnabled(booking);
     return this.acceptStartBody(booking, rail, due, true, false);
   }
 
@@ -3451,9 +3454,30 @@ export class RentalsService {
         persona: 'business',
         rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
         bookingId: booking.id,
+        renterName: booking.client?.user?.first_name,
+        endAt: booking.end_at,
+        countryCode: booking.rental_location_listing?.business_location?.address?.country,
       });
     } catch (error: any) {
       this.logger?.warn(`notifyPickupAccepted ${booking.id}: ${error?.message ?? error}`);
+    }
+  }
+
+  private async notifyRentalStartedIfEnabled(booking: any): Promise<void> {
+    const userId = booking.client?.user_id as string | undefined;
+    if (!userId) return;
+    try {
+      const country = booking.rental_location_listing?.business_location?.address?.country;
+      if (!(await this.inspectionFlags.confirmationsEnabled(country))) return;
+      await this.notificationsService.sendRentalStartedClientPush({
+        clientUserId: userId,
+        rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+        bookingId: booking.id,
+        endAt: booking.end_at,
+        countryCode: country,
+      });
+    } catch (error: any) {
+      this.logger?.warn(`notifyRentalStarted ${booking.id}: ${error?.message ?? error}`);
     }
   }
 
@@ -3509,6 +3533,7 @@ export class RentalsService {
       'system',
       'Started after Mobile Money'
     );
+    await this.notifyRentalStartedIfEnabled(fresh);
   }
 
   async verifyRentalStartPin(bookingId: string, body: VerifyRentalStartPinDto) {
@@ -5026,6 +5051,12 @@ export class RentalsService {
       throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country));
     }
     throw inspectionRejected(decision.code, decision.message);
+  }
+
+  /** 1 when a new booking in this country would be inspected. Does not reject the listing. */
+  async listingInspectionPolicy(country?: string | null): Promise<number | null> {
+    const enabled = await this.inspectionFlags.isEnabled(country);
+    return enabled ? 1 : null;
   }
 
   async cardWindowFieldsFor(country?: string | null, latest?: string | null, inspected?: boolean) {

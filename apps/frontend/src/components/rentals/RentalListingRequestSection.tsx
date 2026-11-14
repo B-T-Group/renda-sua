@@ -114,6 +114,7 @@ export interface RentalListingRequestSectionProps {
   initialStartDate?: string;
   initialEndDate?: string;
   cardWindow?: CardWindowFields | null;
+  inspectionPolicyVersion?: number | null;
 }
 
 export const RentalListingRequestSection: React.FC<RentalListingRequestSectionProps> = ({
@@ -130,6 +131,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   initialStartDate,
   initialEndDate,
   cardWindow = null,
+  inspectionPolicyVersion = null,
 }) => {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -432,7 +434,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
       }
       setConfirmOpen(false);
       void loadBooked();
-      navigate('/rentals/request-submitted');
+      navigate('/rentals/request-submitted', { state: { inspectionPolicyVersion } });
     } catch (e: unknown) {
       const friendly = cardWindowErrorMessage(e, i18n.language);
       setCardFallback(friendly);
