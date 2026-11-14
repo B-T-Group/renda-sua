@@ -256,25 +256,7 @@ export class AssistantRentalService {
     if (!guard || !checked || window.payment_rail !== 'stripe' || window.latest_card_end_at == null) {
       return { ...openCardDates(checked, window), guard };
     }
-    const clamped = clampExclusiveRange({
-      startDate: checked.startDate,
-      endDate: checked.endDate,
-      dayCount: checked.dayCount,
-      latestCardEndAt: window.latest_card_end_at,
-      zone: window.timezone,
-      today: marketCalendarDate(new Date(), window.timezone),
-    });
-    if (clamped.fits) return { ...openCardDates(checked, window), guard };
-    return {
-      start: clamped.offer?.startDate,
-      end: clamped.offer?.endDate,
-      dayCount: clamped.offer?.dayCount,
-      issue: 'card_window' as const,
-      window,
-      asked: { startDate: checked.startDate, endDate: checked.endDate },
-      offer: clamped.offer,
-      guard,
-    };
+    return clampedCardDates(checked, window, guard);
   }
 
   private async unitsFree(listing: PublicRentalListingRow, range: { startDate: string; endDate: string }): Promise<number> {
@@ -559,6 +541,32 @@ function emptySearchPage(): RentalSearchPage {
     momo_available: true,
     stripe_review_hours: 72,
     timezone: 'Africa/Douala',
+  };
+}
+
+function clampedCardDates(
+  checked: { startDate: string; endDate: string; dayCount: number },
+  window: CardWindowFields,
+  guard: boolean
+): CardDateChoice {
+  const clamped = clampExclusiveRange({
+    startDate: checked.startDate,
+    endDate: checked.endDate,
+    dayCount: checked.dayCount,
+    latestCardEndAt: window.latest_card_end_at,
+    zone: window.timezone,
+    today: marketCalendarDate(new Date(), window.timezone),
+  });
+  if (clamped.fits) return { ...openCardDates(checked, window), guard };
+  return {
+    start: clamped.offer?.startDate,
+    end: clamped.offer?.endDate,
+    dayCount: clamped.offer?.dayCount,
+    issue: 'card_window',
+    window,
+    asked: { startDate: checked.startDate, endDate: checked.endDate },
+    offer: clamped.offer,
+    guard,
   };
 }
 
