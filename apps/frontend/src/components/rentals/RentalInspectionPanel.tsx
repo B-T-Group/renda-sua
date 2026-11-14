@@ -18,6 +18,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
@@ -931,9 +932,11 @@ function PhotoLightbox({
   onClose: () => void;
   onMove: (index: number) => void;
 }) {
+  const [root, setRoot] = useState<HTMLElement | null>(null);
   const slide = index == null ? null : slides[index] ?? null;
   return (
     <Dialog
+      ref={setRoot}
       open={index != null}
       onClose={onClose}
       maxWidth="md"
@@ -946,14 +949,39 @@ function PhotoLightbox({
         paper: { sx: { bgcolor: '#0B0B0D', backgroundImage: 'none', color: '#fff', position: 'relative' } },
       }}
     >
-      <LightboxBody slide={slide} submittedAt={submittedAt} timeZone={timeZone} index={index ?? 0} count={slides.length} onClose={onClose} onMove={onMove} />
+      <LightboxBody slide={slide} submittedAt={submittedAt} timeZone={timeZone} index={index ?? 0} count={slides.length} onMove={onMove} />
+      {root ? <LightboxClose root={root} onClose={onClose} /> : null}
     </Dialog>
+  );
+}
+
+function LightboxClose({ root, onClose }: { root: HTMLElement; onClose: () => void }) {
+  const { t } = useTranslation();
+  return createPortal(<CloseButton label={t('common.close', 'Close')} onClose={onClose} />, root);
+}
+
+function CloseButton({ label, onClose }: { label: string; onClose: () => void }) {
+  return (
+    <IconButton aria-label={label} onClick={onClose} sx={CLOSE_BUTTON_SX}>
+      <CloseIcon sx={{ fontSize: 24 }} />
+    </IconButton>
   );
 }
 
 const LIGHTBOX_SX = {
   '& .MuiBackdrop-root': { backgroundColor: '#0B0B0D', opacity: 1 },
   '& .MuiDialog-paper': { backgroundColor: '#0B0B0D', backgroundImage: 'none', color: '#fff' },
+};
+
+const CLOSE_BUTTON_SX = {
+  position: 'fixed',
+  top: 0,
+  right: 0,
+  zIndex: 1,
+  width: 44,
+  height: 44,
+  p: 0,
+  color: '#fff',
 };
 
 function moveLightbox(event: React.KeyboardEvent, index: number | null, count: number, onMove: (index: number) => void) {
@@ -968,7 +996,6 @@ function LightboxBody({
   timeZone,
   index,
   count,
-  onClose,
   onMove,
 }: {
   slide: PhotoSlide | null;
@@ -976,7 +1003,6 @@ function LightboxBody({
   timeZone: string;
   index: number;
   count: number;
-  onClose: () => void;
   onMove: (index: number) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -984,9 +1010,6 @@ function LightboxBody({
   const when = formatConfirmationDue(submittedAt, timeZone, i18n.language);
   return (
     <DialogContent sx={{ p: 2, color: '#fff' }}>
-      <IconButton aria-label={t('common.close', 'Close')} onClick={onClose} sx={{ position: 'absolute', top: 8, right: 8, color: '#fff' }}>
-        <CloseIcon />
-      </IconButton>
       {slide ? <Box component="img" src={slide.url} alt={label} sx={{ width: '100%', maxHeight: '70vh', objectFit: 'contain' }} /> : null}
       <Typography align="center" sx={{ mt: 1.5, color: '#fff' }}>{when ? `${label} · ${when}` : label}</Typography>
       <LightboxArrows index={index} count={count} onMove={onMove} />
