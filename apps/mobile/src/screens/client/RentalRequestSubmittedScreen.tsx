@@ -1,4 +1,4 @@
-import { useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -8,8 +8,23 @@ import { Button, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ClientRootStackParamList } from '../../navigation/types';
+import { getRequestInspectionPolicy } from '../../services/rentalsApi';
 
 type Params = { RentalRequestSubmitted: { requestId?: string; inspectionPolicyVersion?: number | null } };
+
+function loadRequestPolicy(
+  requestId: string | undefined,
+  setPolicy: (value: number | null | undefined) => void
+): () => void {
+  if (!requestId) return () => undefined;
+  let stop = false;
+  void getRequestInspectionPolicy(requestId).then((version) => {
+    if (!stop && version !== undefined) setPolicy(version);
+  });
+  return () => {
+    stop = true;
+  };
+}
 
 const STEPS = [
   {
@@ -50,7 +65,12 @@ export default function RentalRequestSubmittedScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
   const route = useRoute<RouteProp<Params, 'RentalRequestSubmitted'>>();
-  const inspected = route.params?.inspectionPolicyVersion != null;
+  const requestId = route.params?.requestId;
+  const [policy, setPolicy] = useState<number | null | undefined>(
+    requestId ? undefined : route.params?.inspectionPolicyVersion
+  );
+  useEffect(() => loadRequestPolicy(requestId, setPolicy), [requestId]);
+  const noPin = policy !== null;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -151,7 +171,7 @@ export default function RentalRequestSubmittedScreen() {
                 { color: colors.text.secondary, marginTop: spacing.xs },
               ]}
             >
-              {step.bodyKey === 'rentals.requestSubmitted.pinBody' && inspected
+              {step.bodyKey === 'rentals.requestSubmitted.pinBody' && noPin
                 ? t(
                     'rentals.requestSubmitted.pinBodyInspected',
                     'At pickup, the business will share a condition report. Review and accept it to start the rental. No PIN is needed.'

@@ -2,6 +2,7 @@ import {
   buildRentalBookingConfirmedPush,
   buildRentalBookingReservedPush,
   buildRentalInspectionNotice,
+  buildRentalStartedBusinessNotice,
   buildRentalStartedClientPush,
   buildReportSentInApp,
   buildReturnAcceptedPush,
@@ -92,28 +93,32 @@ describe('rental push copy', () => {
     ).toBe(`${item} (${number}) est réservée. Payez lorsque vous acceptez l'état des lieux au retrait.`);
   });
 
-  it('rewrites pickup accepted to Rental started', () => {
-    const due = '18 Nov · 20:00';
+  it('keeps pickup accepted neutral until the rental is active', () => {
     expect(
       buildRentalInspectionNotice({
         kind: 'pickup_accepted',
         rentalItemName: item,
         renterName: 'Amina',
-        returnDue: due,
+        returnDue: '18 Nov · 20:00',
       })
     ).toEqual({
-      title: 'Rental started',
-      body: `Amina accepted the condition report. ${item} is now in progress until ${due}.`,
+      title: 'Condition report accepted',
+      body: `The renter accepted the condition report for ${item}.`,
     });
     expect(
       buildRentalInspectionNotice({
         kind: 'pickup_accepted',
         rentalItemName: item,
-        renterName: 'Amina',
-        returnDue: '18 nov · 20:00',
         preferredLanguage: 'fr',
       }).body
-    ).toBe(`Amina a accepté l'état des lieux. ${item} est désormais en cours jusqu'au 18 nov · 20:00.`);
+    ).toBe(`Le client a accepté l'état des lieux de ${item}.`);
+    const started = buildRentalStartedBusinessNotice({
+      rentalItemName: item,
+      renterName: 'Amina',
+      returnDue: '18 Nov · 20:00',
+    });
+    expect(started.title).toBe('Rental started');
+    expect(started.body).toContain('is now in progress');
   });
 
   it('builds the flagged client, return, and report-sent notices', () => {

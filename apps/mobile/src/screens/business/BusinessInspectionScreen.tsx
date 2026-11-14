@@ -43,8 +43,12 @@ export default function BusinessInspectionScreen() {
 
   const showSent = confirmationsOn && model.notice === 'submitted' && !editing && !!model.view;
   if (showSent && model.view && model.booking) {
-    const country = noticeCountry(model.booking.currency);
-    const when = formatConfirmationDue(model.view.submittedAt || new Date().toISOString(), confirmationTimeZone(country), i18n.language);
+    const country = model.booking.rental_location_listing?.business_location?.address?.country;
+    const when = formatConfirmationDue(
+      model.view.submittedAt || new Date().toISOString(),
+      confirmationTimeZone(country, model.booking.currency),
+      i18n.language
+    );
     return (
       <ReportSentConfirmation
         stage={stage}
@@ -215,11 +219,6 @@ export default function BusinessInspectionScreen() {
       </View>
     </View>
   );
-}
-
-function noticeCountry(currency?: string | null): string {
-  const code = (currency || '').toUpperCase();
-  return code === 'XAF' || code === 'XOF' ? 'CM' : 'CA';
 }
 
 async function submitReport(

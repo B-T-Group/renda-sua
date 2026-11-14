@@ -265,7 +265,7 @@ export interface RentalBookingDetail {
         alt_text?: string | null;
       }>;
     } | null;
-    business_location?: { name?: string | null } | null;
+    business_location?: { name?: string | null; address?: { country?: string | null } | null } | null;
   } | null;
   rental_hold?: {
     client_hold_amount: number;
@@ -587,6 +587,7 @@ export interface CreateRentalRequestBody {
 export interface CreateRentalRequestResult {
   success: boolean;
   requestId: string;
+  inspection_policy_version?: number | null;
 }
 
 export interface CreateRentalBookingResult {

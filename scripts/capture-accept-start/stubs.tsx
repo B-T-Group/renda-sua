@@ -306,6 +306,7 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
 
 export function useRentalApi() {
   return useMemo(() => ({
+    fetchRequestInspectionPolicy: async () => 1,
     fetchBookingDetail: async () => {
       const row = applyReturn(bookingFor(scene()));
       const { _business: _ignored, ...booking } = row;

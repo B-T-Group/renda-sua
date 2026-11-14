@@ -29,7 +29,9 @@ const StripeReturnPage: React.FC = () => {
 
   const reference = searchParams.get('reference') ?? '';
   const bookingId = searchParams.get('booking') ?? '';
-  const [inspected, setInspected] = useState<boolean | null>(bookingId ? null : false);
+  const [policy, setPolicy] = useState<'loading' | 'inspected' | 'legacy' | 'unknown'>(
+    bookingId ? 'loading' : 'legacy'
+  );
   const initialStatus = searchParams.get('status');
   const [state, setState] = useState<ResultState>(
     initialStatus === 'cancel' ? 'cancelled' : 'pending'
@@ -41,10 +43,10 @@ const StripeReturnPage: React.FC = () => {
     let stop = false;
     void fetchBookingDetail(bookingId)
       .then((row) => {
-        if (!stop) setInspected(row?.inspection_policy_version != null);
+        if (!stop) setPolicy(row?.inspection_policy_version != null ? 'inspected' : 'legacy');
       })
       .catch(() => {
-        if (!stop) setInspected(false);
+        if (!stop) setPolicy('unknown');
       });
     return () => {
       stop = true;
@@ -107,19 +109,19 @@ const StripeReturnPage: React.FC = () => {
                 )
               : isSuccess
                 ? bookingId
-                  ? inspected == null
+                  ? policy === 'loading'
                     ? t(
                         'stripe.return.pendingBody',
                         'Please wait while we confirm your payment with Stripe.'
                       )
-                    : inspected
+                    : policy === 'legacy'
                       ? t(
-                          'stripe.return.rentalSuccessBodyInspected',
-                          'Your rental payment was received. Open your booking to see the confirmation.'
-                        )
-                      : t(
                           'stripe.return.rentalSuccessBody',
                           'Your rental payment was received. You can open your booking to see confirmation and your start PIN.'
+                        )
+                      : t(
+                          'stripe.return.rentalSuccessBodyNeutral',
+                          'Your rental payment was received. Open your booking to see the confirmation.'
                         )
                   : t(
                       'stripe.return.successBody',

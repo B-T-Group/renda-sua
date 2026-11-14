@@ -22,6 +22,8 @@ describe('rentals inspection confirmations flag', () => {
     expect(up).not.toMatch(/'boolean', true/);
     expect(up).not.toContain('NODE_ENV');
     expect(down).toContain('rentals_inspection_confirmations_enabled');
+    expect(down).not.toMatch(/DELETE\s+FROM\s+public\.message_types/i);
+    expect(down).not.toMatch(/DELETE\s+FROM\s+public\.user_messages/i);
   });
 
   it('does not turn the flag on from Hasura apply', () => {

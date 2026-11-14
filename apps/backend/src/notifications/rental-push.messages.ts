@@ -311,7 +311,6 @@ export function buildRentalInspectionNotice(params: {
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
   const item = params.rentalItemName;
-  const renter = params.renterName?.trim() || (fr ? 'Le client' : 'The renter');
   const copy: Record<typeof params.kind, { title: string; body: string }> = {
     review_pickup: {
       title: fr ? "Vérifiez l'état des lieux" : 'Review item condition',
@@ -332,8 +331,10 @@ export function buildRentalInspectionNotice(params: {
         : `The renter asked for a correction on ${item}.`,
     },
     pickup_accepted: {
-      title: fr ? 'Location démarrée' : 'Rental started',
-      body: rentalStartedBody(fr, renter, item, params.returnDue),
+      title: fr ? 'État des lieux accepté' : 'Condition report accepted',
+      body: fr
+        ? `Le client a accepté l'état des lieux de ${item}.`
+        : `The renter accepted the condition report for ${item}.`,
     },
     return_reminder: {
       title: fr ? 'Retour en attente de votre avis' : 'Please review the return',
@@ -361,6 +362,21 @@ export function buildRentalInspectionNotice(params: {
     },
   };
   return copy[params.kind];
+}
+
+export function buildRentalStartedBusinessNotice(params: {
+  rentalItemName: string;
+  renterName?: string | null;
+  returnDue?: string | null;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const item = params.rentalItemName;
+  const renter = params.renterName?.trim() || (fr ? 'Le client' : 'The renter');
+  return {
+    title: fr ? 'Location démarrée' : 'Rental started',
+    body: rentalStartedBody(fr, renter, item, params.returnDue),
+  };
 }
 
 export function buildRentalStartedClientPush(params: {

@@ -58,6 +58,7 @@ import {
 import { businessCanReplaceReport, reportReadyToReview, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
 import {
   confirmationTimeZone,
+  confirmationZoneDefault,
   confirmationZoneKey,
   formatConfirmationDue,
   formatConfirmationMoney,
@@ -1380,9 +1381,13 @@ function BookingConfirmation({
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
-  const country = noticeCountry(booking.currency);
-  const due = formatConfirmationDue(booking.end_at, confirmationTimeZone(country), language);
-  const zone = t(confirmationZoneKey(country), country === 'CM' ? 'Douala time' : 'Montréal time');
+  const country = booking.rental_location_listing?.business_location?.address?.country;
+  const zoneId = confirmationTimeZone(country, booking.currency);
+  const due = formatConfirmationDue(booking.end_at, zoneId, language);
+  const zone = t(
+    confirmationZoneKey(country, booking.currency),
+    confirmationZoneDefault(country, booking.currency, language)
+  );
   return (
     <Box sx={{ minHeight: '100%', pb: 5, bgcolor: alpha(theme.palette.divider, 0.04) }}>
       <Container maxWidth="md" sx={{ py: 3 }}>
@@ -1392,7 +1397,7 @@ function BookingConfirmation({
             renterName={booking.client?.user?.first_name || t('rentals.client', 'the renter')}
             unitCount={view.unitCount}
             versionNo={view.versionNo}
-            when={formatConfirmationDue(view.submittedAt, confirmationTimeZone(country), language)}
+            when={formatConfirmationDue(view.submittedAt, zoneId, language)}
             photos={view.photos}
             canEdit={canEdit}
             onBack={onBack}
@@ -1423,7 +1428,3 @@ function depositLabel(booking: RentalBookingDetail, language: string): string {
   return formatConfirmationMoney(amount, booking.currency, language);
 }
 
-function noticeCountry(currency?: string | null): string {
-  const code = (currency || '').toUpperCase();
-  return code === 'XAF' || code === 'XOF' ? 'CM' : 'CA';
-}

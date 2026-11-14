@@ -8039,6 +8039,7 @@
       "continue": "Continuer",
       "rentalSuccessBody": "Votre paiement de location a été reçu. Ouvrez votre réservation pour voir la confirmation et votre code PIN.",
       "rentalSuccessBodyInspected": "Votre paiement de location a été reçu. Ouvrez votre réservation pour voir la confirmation.",
+      "rentalSuccessBodyNeutral": "Votre paiement de location a été reçu. Ouvrez votre réservation pour voir la confirmation.",
       "rentalFailedBody": "Le paiement n’a pas été finalisé. Retournez à votre réservation pour réessayer.",
       "viewBooking": "Voir la réservation"
     },
@@ -9596,7 +9597,18 @@
       "paymentConfirmed": "Paiement confirmé",
       "mobileMoney": "Mobile Money",
       "zoneMontreal": "heure de Montréal",
-      "zoneDouala": "heure de Douala"
+      "zoneDouala": "heure de Douala",
+      "zoneLibreville": "heure de Libreville",
+      "zoneLome": "heure de Lomé",
+      "zonePortoNovo": "heure de Porto-Novo",
+      "zoneAbidjan": "heure d'Abidjan",
+      "zoneBrazzaville": "heure de Brazzaville",
+      "zoneKinshasa": "heure de Kinshasa",
+      "zoneNdjamena": "heure de N'Djamena",
+      "zoneBangui": "heure de Bangui",
+      "zoneMalabo": "heure de Malabo",
+      "zoneManila": "heure de Manille",
+      "zoneNewYork": "heure de New York"
     },
     "startedTitle": "Démarrée, remettez l’article",
     "startedBody": "{{name}} a accepté l’état des lieux et la location est en cours. Le retour est dû le {{due}}.",

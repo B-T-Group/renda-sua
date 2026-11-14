@@ -519,6 +519,16 @@ export class RentalsController {
     return this.rentalsService.retryBookingPayment(bookingId, body);
   }
 
+  @Get('requests/:id/inspection-policy')
+  @ApiOperation({ summary: 'Whether this client request would use a condition report' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Policy version, or null for the start-PIN flow' })
+  @ApiResponse({ status: 404, description: 'Request not found' })
+  async getRequestInspectionPolicy(@Param('id') requestId: string) {
+    const inspection_policy_version = await this.rentalsService.getRequestInspectionPolicy(requestId);
+    return { success: true, inspection_policy_version };
+  }
+
   @Post('requests')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a rental request (client)' })

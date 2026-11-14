@@ -48,7 +48,10 @@ describe('accept and start', () => {
     svc.deliveryPinService = { getPinForClient: jest.fn().mockResolvedValue('1234') };
     svc.notificationsService = {
       sendRentalInspectionNotice: jest.fn().mockResolvedValue(undefined),
+      sendBusinessRentalStarted: jest.fn().mockResolvedValue(undefined),
+      sendRentalStartedClientPush: jest.fn().mockResolvedValue(undefined),
     };
+    svc.inspectionFlags = { confirmationsEnabled: jest.fn().mockResolvedValue(false) };
     svc.hasuraUserService = {
       getUser: jest.fn().mockResolvedValue({
         id: 'client-user',
@@ -103,6 +106,10 @@ describe('accept and start', () => {
     expect(svc.confirmWalletContract).not.toHaveBeenCalled();
     expect(svc.pushMomoPickupPayment).not.toHaveBeenCalled();
     expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted' })
+    );
   });
 
   it('charges the wallet and then starts', async () => {
@@ -158,6 +165,7 @@ describe('accept and start', () => {
     expect(svc.confirmWalletContract).toHaveBeenCalled();
     expect(markCalls()).toHaveLength(1);
     expect(markCalls()[0][1].at).toEqual(expect.any(String));
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the accept when Mobile Money fails, then retries without accepting again', async () => {
@@ -198,6 +206,10 @@ describe('accept and start', () => {
     expect(acceptCalls()).toHaveLength(1);
     expect(markCalls()).toHaveLength(0);
     expect(svc.pushMomoPickupPayment).toHaveBeenCalledTimes(2);
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    const notice = svc.notificationsService.sendRentalInspectionNotice.mock.calls[0][0];
+    expect(notice.kind).toBe('pickup_accepted');
+    expect(JSON.stringify(notice)).not.toMatch(/started|in progress|démarrée|en cours/i);
   });
 
   it('does not charge or accept again when the rental already started', async () => {

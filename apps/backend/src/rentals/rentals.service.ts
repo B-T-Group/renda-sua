@@ -953,7 +953,16 @@ export class RentalsService {
       plan.envelopeEndIso,
       user
     );
-    return { success: true, requestId };
+    return {
+      success: true,
+      requestId,
+      inspection_policy_version: await this.requestPolicyVersion(listing),
+    };
+  }
+
+  private async requestPolicyVersion(listing: any): Promise<number | null> {
+    const country = listing?.business_location?.address?.country ?? null;
+    return this.listingInspectionPolicy(country);
   }
 
   private assertModifyVersion(
@@ -1500,6 +1509,15 @@ export class RentalsService {
       rental_bookings: any[];
     }>(Q.GET_BUSINESS_RENTAL_SCHEDULE, { businessId, rentalItemId });
     return r.rental_bookings ?? [];
+  }
+
+  async getRequestInspectionPolicy(requestId: string): Promise<number | null> {
+    const clientId = await this.requireClientId();
+    const req = await this.fetchRequest(requestId);
+    if (!req || req.client_id !== clientId) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+    return this.requestPolicyVersion(req.rental_location_listing);
   }
 
   async getClientRentalRequests(): Promise<ClientRentalRequestRow[]> {
@@ -3402,7 +3420,7 @@ export class RentalsService {
     } else {
       await this.startBlockedOrConflict(booking.id);
     }
-    if (won) await this.notifyRentalStartedIfEnabled(booking);
+    if (won) await this.notifyRentalActivated(booking);
     return this.acceptStartBody(booking, rail, due, true, false);
   }
 
@@ -3460,6 +3478,29 @@ export class RentalsService {
       });
     } catch (error: any) {
       this.logger?.warn(`notifyPickupAccepted ${booking.id}: ${error?.message ?? error}`);
+    }
+  }
+
+  private async notifyRentalActivated(booking: any): Promise<void> {
+    await this.notifyBusinessRentalStarted(booking);
+    await this.notifyRentalStartedIfEnabled(booking);
+  }
+
+  private async notifyBusinessRentalStarted(booking: any): Promise<void> {
+    const userId = booking.business?.user_id as string | undefined;
+    if (!userId) return;
+    try {
+      const country = booking.rental_location_listing?.business_location?.address?.country;
+      await this.notificationsService.sendBusinessRentalStarted({
+        businessUserId: userId,
+        rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+        bookingId: booking.id,
+        renterName: booking.client?.user?.first_name,
+        endAt: booking.end_at,
+        countryCode: country,
+      });
+    } catch (error: any) {
+      this.logger?.warn(`notifyBusinessRentalStarted ${booking.id}: ${error?.message ?? error}`);
     }
   }
 
@@ -3533,7 +3574,7 @@ export class RentalsService {
       'system',
       'Started after Mobile Money'
     );
-    await this.notifyRentalStartedIfEnabled(fresh);
+    await this.notifyRentalActivated(fresh);
   }
 
   async verifyRentalStartPin(bookingId: string, body: VerifyRentalStartPinDto) {

@@ -7,9 +7,10 @@ import {
 } from '@mui/icons-material';
 import { Box, Button, Container, Paper, Stack, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useRentalApi } from '../../hooks/useRentalApi';
 import SEOHead from '../seo/SEOHead';
 
 interface InfoBlockProps {
@@ -42,9 +43,7 @@ const RentalRequestSubmittedPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
-  const location = useLocation();
-  const inspected =
-    (location.state as { inspectionPolicyVersion?: number | null } | null)?.inspectionPolicyVersion != null;
+  const noPin = useNoPinRequestCopy();
   const pageTitle = t('rentals.requestSubmitted.pageTitle', 'Request sent');
 
   return (
@@ -113,7 +112,7 @@ const RentalRequestSubmittedPage: React.FC = () => {
                   icon={<PinIcon />}
                   title={t('rentals.requestSubmitted.pinTitle', 'Starting the rental')}
                   body={
-                    inspected
+                    noPin
                       ? t(
                           'rentals.requestSubmitted.pinBodyInspected',
                           'At pickup, the business will share a condition report. Review and accept it to start the rental. No PIN is needed.'
@@ -170,3 +169,40 @@ const RentalRequestSubmittedPage: React.FC = () => {
 };
 
 export default RentalRequestSubmittedPage;
+
+function useNoPinRequestCopy(): boolean {
+  const location = useLocation();
+  const [params] = useSearchParams();
+  const { fetchRequestInspectionPolicy } = useRentalApi();
+  const stateVersion = (location.state as { inspectionPolicyVersion?: number | null } | null)?.inspectionPolicyVersion;
+  const requestId = params.get('requestId');
+  const [noPin, setNoPin] = useState(stateVersion !== null);
+  useEffect(
+    () => watchRequestPolicy(requestId, stateVersion, fetchRequestInspectionPolicy, setNoPin),
+    [fetchRequestInspectionPolicy, requestId, stateVersion]
+  );
+  return noPin;
+}
+
+function watchRequestPolicy(
+  requestId: string | null,
+  stateVersion: number | null | undefined,
+  fetchPolicy: (id: string) => Promise<number | null>,
+  setNoPin: (value: boolean) => void
+): () => void {
+  if (!requestId) {
+    setNoPin(stateVersion !== null);
+    return () => undefined;
+  }
+  let stop = false;
+  void fetchPolicy(requestId)
+    .then((version) => {
+      if (!stop) setNoPin(version !== null);
+    })
+    .catch(() => {
+      if (!stop) setNoPin(true);
+    });
+  return () => {
+    stop = true;
+  };
+}

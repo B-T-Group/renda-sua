@@ -18,6 +18,7 @@ import { acceptAndStart, getBooking, getPaymentStatus } from '../../services/ren
 import { formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
 import {
   confirmationTimeZone,
+  confirmationZoneDefault,
   confirmationZoneKey,
   formatConfirmationDue,
   formatConfirmationMoney,
@@ -148,8 +149,8 @@ export default function ClientInspectionScreen() {
   };
 
   if (started && model.booking) {
-    const country = noticeCountry(model.booking.currency);
-    const due = formatConfirmationDue(model.booking.end_at, confirmationTimeZone(country), i18n.language);
+    const country = model.booking.rental_location_listing?.business_location?.address?.country;
+    const due = formatConfirmationDue(model.booking.end_at, confirmationTimeZone(country, model.booking.currency), i18n.language);
     const paid = formatConfirmationMoney(Number(model.booking.total_amount) || 0, model.booking.currency, i18n.language);
     const depositAmount = Number(model.booking.security_deposit_amount) || 0;
     const deposit = depositAmount > 0
@@ -159,7 +160,7 @@ export default function ClientInspectionScreen() {
       <RentalStartedConfirmation
         momo={started.momo}
         due={due}
-        zone={t(confirmationZoneKey(country), country === 'CM' ? 'Douala time' : 'Montréal time')}
+        zone={t(confirmationZoneKey(country, model.booking.currency), confirmationZoneDefault(country, model.booking.currency, i18n.language))}
         paid={paid}
         deposit={deposit}
         title={model.booking.rental_location_listing?.rental_item?.name || t('rentals.booking', 'Rental')}
@@ -428,11 +429,6 @@ function noticeText(notice: string, t: (key: string, fallback: string) => string
   if (notice === 'correction') return t('rentalInspection.correctionSent', 'Correction sent. The business will update the report.');
   if (notice === 'disputed') return t('rentalInspection.returnRecorded', 'Return recorded. Financial review pending.');
   return notice;
-}
-
-function noticeCountry(currency?: string | null): string {
-  const code = (currency || '').toUpperCase();
-  return code === 'XAF' || code === 'XOF' ? 'CM' : 'CA';
 }
 
 const styles = StyleSheet.create({

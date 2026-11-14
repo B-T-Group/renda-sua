@@ -649,6 +649,7 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
         }
         business_location {
           name
+          address { country }
         }
       }
       rental_hold {

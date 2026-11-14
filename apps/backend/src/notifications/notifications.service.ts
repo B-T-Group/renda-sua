@@ -131,6 +131,7 @@ import {
   buildRentalBookingReservedPush,
   buildRentalEndingSoonPush,
   buildRentalInspectionNotice,
+  buildRentalStartedBusinessNotice,
   buildRentalStartedClientPush,
   buildReturnAcceptedPush,
   buildReportSentInApp,
@@ -4095,9 +4096,6 @@ export class NotificationsService {
       persona: params.persona ?? '',
       url,
     });
-    if (params.kind === 'pickup_accepted') {
-      await this.insertRentalUserMessage(params.userId, params.bookingId, 'RENTAL_STARTED', msg.body, url);
-    }
   }
 
   private inspectionNoticeUrl(bookingId: string, persona?: 'client' | 'business'): string {
@@ -4115,8 +4113,11 @@ export class NotificationsService {
     bookingId: string,
     messageType: string,
     body: string,
-    path: string
+    path: string,
+    event: string
   ): Promise<void> {
+    const idempotencyKey = `${bookingId}:${event}`;
+    if (await this.rentalNoticeAlreadySent(userId, bookingId, messageType, idempotencyKey)) return;
     await this.hasuraSystemService.executeMutation(
       `mutation InsertRentalNotice($object: user_messages_insert_input!) {
         insert_user_messages_one(object: $object) { id }
@@ -4128,10 +4129,46 @@ export class NotificationsService {
           entity_id: bookingId,
           message_type: messageType,
           message: body,
-          message_payload: { bookingId, path },
+          message_payload: { bookingId, path, idempotencyKey },
         },
       }
     );
+  }
+
+  private async rentalNoticeAlreadySent(
+    userId: string,
+    bookingId: string,
+    messageType: string,
+    idempotencyKey: string
+  ): Promise<boolean> {
+    try {
+      return await this.rentalNoticeExists(userId, bookingId, messageType, idempotencyKey);
+    } catch (error: any) {
+      this.logger.warn(`rentalNoticeExists ${idempotencyKey}: ${error?.message ?? error}`);
+      return false;
+    }
+  }
+
+  private async rentalNoticeExists(
+    userId: string,
+    bookingId: string,
+    messageType: string,
+    idempotencyKey: string
+  ): Promise<boolean> {
+    const found = await this.hasuraSystemService.executeQuery<{
+      user_messages: Array<{ id: string }>;
+    }>(
+      `query RentalNoticeExists($userId: uuid!, $bookingId: uuid!, $type: String!, $key: jsonb!) {
+        user_messages(where: {
+          user_id: { _eq: $userId },
+          entity_id: { _eq: $bookingId },
+          message_type: { _eq: $type },
+          message_payload: { _contains: $key }
+        }, limit: 1) { id }
+      }`,
+      { userId, bookingId, type: messageType, key: { idempotencyKey } }
+    );
+    return (found.user_messages?.length ?? 0) > 0;
   }
 
   async sendRentalBookingConfirmedPush(params: {
@@ -4154,6 +4191,49 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.warn(`sendRentalBookingConfirmedPush: ${error?.message ?? String(error)}`);
     }
+  }
+
+  /** Unflagged. The business hears the rental is active, including the in-app row when push is off. */
+  async sendBusinessRentalStarted(params: {
+    businessUserId: string;
+    rentalItemName: string;
+    bookingId: string;
+    renterName?: string | null;
+    endAt?: string | null;
+    countryCode?: string | null;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    try {
+      await this.deliverBusinessRentalStarted(params);
+    } catch (error: any) {
+      this.logger.warn(`sendBusinessRentalStarted: ${error?.message ?? error}`);
+    }
+  }
+
+  private async deliverBusinessRentalStarted(params: {
+    businessUserId: string;
+    rentalItemName: string;
+    bookingId: string;
+    renterName?: string | null;
+    endAt?: string | null;
+    countryCode?: string | null;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    const preferredLanguage = await this.languageFor(params.businessUserId, params.preferredLanguage);
+    const msg = buildRentalStartedBusinessNotice({
+      rentalItemName: params.rentalItemName,
+      renterName: params.renterName,
+      preferredLanguage,
+      returnDue: formatRentalNoticeDue(params.endAt, rentalNoticeZone(params.countryCode), preferredLanguage),
+    });
+    const url = this.inspectionNoticeUrl(params.bookingId, 'business');
+    await this.insertRentalUserMessage(params.businessUserId, params.bookingId, 'RENTAL_STARTED', msg.body, url, 'rental_started');
+    if (!this.rentalPushEnabled()) return;
+    await this.sendPushNotificationByUserId(params.businessUserId, msg.title, msg.body, {
+      type: 'rental_started',
+      rentalBookingId: params.bookingId,
+      url,
+    });
   }
 
   /** Flagged. The client hears the rental is active after card, wallet, or MoMo. */
@@ -4229,7 +4309,14 @@ export class NotificationsService {
       const preferredLanguage = await this.languageFor(params.businessUserId, params.preferredLanguage);
       const msg = buildReportSentInApp({ ...params, preferredLanguage });
       const url = this.inspectionNoticeUrl(params.bookingId, 'business');
-      await this.insertRentalUserMessage(params.businessUserId, params.bookingId, 'RENTAL_CONDITION_REPORT_SENT', msg.body, url);
+      await this.insertRentalUserMessage(
+        params.businessUserId,
+        params.bookingId,
+        'RENTAL_CONDITION_REPORT_SENT',
+        msg.body,
+        url,
+        'report_sent'
+      );
     } catch (error: any) {
       this.logger.warn(`sendReportSentInApp: ${error?.message ?? error}`);
     }

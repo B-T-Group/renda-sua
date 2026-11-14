@@ -12,6 +12,7 @@ export function useRoute() {
     name: 'capture',
     params: {
       bookingId: 'b1',
+      requestId: params.get('requestId') ?? 'req-1',
       stage: 'pickup' as const,
       segment: segment === 'upcoming' || segment === 'past' || segment === 'action_needed' ? segment : undefined,
     },

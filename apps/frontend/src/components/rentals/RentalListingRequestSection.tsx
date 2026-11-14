@@ -413,7 +413,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     const envS = localPickerInstantToRequestParts(Math.min(...starts));
     const envE = localPickerInstantToRequestParts(Math.max(...ends));
     try {
-      await createRequest({
+      const created = await createRequest({
         rentalLocationListingId: listingId,
         requestedStartAt: requestedSlotUtcIso(envS.dateKey, envS.hour, envS.minute),
         requestedEndAt: requestedSlotUtcIso(envE.dateKey, envE.hour, envE.minute),
@@ -434,7 +434,10 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
       }
       setConfirmOpen(false);
       void loadBooked();
-      navigate('/rentals/request-submitted', { state: { inspectionPolicyVersion } });
+      const version = created.inspection_policy_version ?? inspectionPolicyVersion;
+      navigate(`/rentals/request-submitted?requestId=${encodeURIComponent(created.requestId)}`, {
+        state: { inspectionPolicyVersion: version, requestId: created.requestId },
+      });
     } catch (e: unknown) {
       const friendly = cardWindowErrorMessage(e, i18n.language);
       setCardFallback(friendly);

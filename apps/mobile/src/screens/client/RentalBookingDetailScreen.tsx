@@ -763,10 +763,15 @@ export default function RentalBookingDetailScreen() {
             ]}
           >
             <Text style={[typography.body2, { color: colors.text.primary }]}>
-              {t(
-                'rentals.bookingDetail.reservedClientHint',
-                'Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.'
-              )}
+              {snapshot.enrolled
+                ? t(
+                    'rentals.bookingDetail.reservedClientHintInspected',
+                    'Your reservation is held for free. Pay when you accept the condition report at pickup.'
+                  )
+                : t(
+                    'rentals.bookingDetail.reservedClientHint',
+                    'Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.'
+                  )}
             </Text>
           </View>
         ) : null}

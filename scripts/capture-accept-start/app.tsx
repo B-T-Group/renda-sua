@@ -8,6 +8,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import { theme } from '../../apps/frontend/src/theme/theme';
 import RentalBookingDetailPage from '../../apps/frontend/src/components/pages/RentalBookingDetailPage';
+import RentalRequestSubmittedPage from '../../apps/frontend/src/components/pages/RentalRequestSubmittedPage';
 import { ReportSentConfirmation } from '../../apps/frontend/src/components/rentals/ReportSentConfirmation';
 import { RentalStartedConfirmation } from '../../apps/frontend/src/components/rentals/RentalStartedConfirmation';
 import { formatConfirmationDue, formatConfirmationMoney } from '../../apps/frontend/src/utils/rentals/confirmationFormat';
@@ -42,9 +43,16 @@ function CaptureApp() {
             </Box>
           </Box>
         ) : (
-          <MemoryRouter initialEntries={['/rentals/bookings/b1']}>
+          <MemoryRouter
+            initialEntries={[
+              scene === 'requestSubmitted'
+                ? '/rentals/request-submitted?requestId=req-1'
+                : '/rentals/bookings/b1',
+            ]}
+          >
             <Routes>
               <Route path="/rentals/bookings/:bookingId" element={<RentalBookingDetailPage />} />
+              <Route path="/rentals/request-submitted" element={<RentalRequestSubmittedPage />} />
             </Routes>
           </MemoryRouter>
         )}
@@ -99,21 +107,25 @@ function WebConfirmation({ scene, language }: { scene: string; language: string 
 
 function WebNotice({ language, due }: { language: string; due: string }) {
   const french = language === 'fr';
-  const title = french ? 'Location démarrée' : 'Rental started';
-  const body = french
+  const acceptedTitle = french ? 'État des lieux accepté' : 'Condition report accepted';
+  const acceptedBody = french
+    ? "Le client a accepté l'état des lieux de JBL PartyBox 310."
+    : 'The renter accepted the condition report for JBL PartyBox 310.';
+  const startedTitle = french ? 'Location démarrée' : 'Rental started';
+  const startedBody = french
     ? `Amina a accepté l'état des lieux. JBL PartyBox 310 est désormais en cours jusqu'au ${due}.`
     : `Amina accepted the condition report. JBL PartyBox 310 is now in progress until ${due}.`;
   return (
     <Box sx={{ display: 'grid', gap: 2 }}>
-      <Typography variant="overline" color="text.secondary">Notification</Typography>
+      <Typography variant="overline" color="text.secondary">{french ? "À l'acceptation" : 'On accept'}</Typography>
       <Box sx={{ bgcolor: '#fff', borderRadius: 2, p: 2, border: '1px solid #E6E1D8' }}>
-        <Typography variant="h6" fontWeight={800} color="#0A4FB5">{title}</Typography>
-        <Typography variant="body1" sx={{ mt: 1 }}>{body}</Typography>
+        <Typography variant="h6" fontWeight={800} color="#0B7A3B">{acceptedTitle}</Typography>
+        <Typography variant="body1" sx={{ mt: 1 }}>{acceptedBody}</Typography>
       </Box>
+      <Typography variant="overline" color="text.secondary">{french ? 'Quand la location est active' : 'When the rental is active'}</Typography>
       <Box sx={{ bgcolor: '#fff', borderRadius: 2, p: 2, border: '1px solid #E6E1D8' }}>
-        <Typography variant="overline" color="text.secondary">{french ? "Dans l'application" : 'In the app'}</Typography>
-        <Typography variant="h6" fontWeight={800} sx={{ mt: 0.5 }}>{title}</Typography>
-        <Typography variant="body1" sx={{ mt: 1 }}>{body}</Typography>
+        <Typography variant="h6" fontWeight={800}>{startedTitle}</Typography>
+        <Typography variant="body1" sx={{ mt: 1 }}>{startedBody}</Typography>
       </Box>
     </Box>
   );

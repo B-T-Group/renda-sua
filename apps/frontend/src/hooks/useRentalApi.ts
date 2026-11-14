@@ -360,7 +360,7 @@ export interface RentalBookingDetail {
         alt_text?: string | null;
       }>;
     } | null;
-    business_location?: { name?: string | null } | null;
+    business_location?: { name?: string | null; address?: { country?: string | null } | null } | null;
   } | null;
   rental_hold?: {
     client_hold_amount: number;
@@ -595,6 +595,13 @@ export function useRentalApi() {
     [api]
   );
 
+  const fetchRequestInspectionPolicy = useCallback(async (requestId: string) => {
+    const { data } = await api.get<{ success: boolean; inspection_policy_version: number | null }>(
+      `/rentals/requests/${requestId}/inspection-policy`
+    );
+    return data.inspection_policy_version ?? null;
+  }, [api]);
+
   const createRequest = useCallback(
     async (body: {
       rentalLocationListingId: string;
@@ -610,7 +617,7 @@ export function useRentalApi() {
       clientRequestNote?: string;
     }) => {
       const { data } = await api.post('/rentals/requests', body);
-      return data as { success: boolean; requestId: string };
+      return data as { success: boolean; requestId: string; inspection_policy_version?: number | null };
     },
     [api]
   );
@@ -845,6 +852,7 @@ export function useRentalApi() {
     acceptBusinessAiProposal,
     declineBusinessAiProposal,
     createRequest,
+    fetchRequestInspectionPolicy,
     respondRequest,
     createBooking,
     getBookingPaymentStatus,

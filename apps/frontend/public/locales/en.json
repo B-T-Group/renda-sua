@@ -8319,6 +8319,7 @@
       "continue": "Continue",
       "rentalSuccessBody": "Your rental payment was received. You can open your booking to see confirmation and your start PIN.",
       "rentalSuccessBodyInspected": "Your rental payment was received. Open your booking to see the confirmation.",
+      "rentalSuccessBodyNeutral": "Your rental payment was received. Open your booking to see the confirmation.",
       "rentalFailedBody": "Payment was not completed. Return to your booking to retry.",
       "viewBooking": "View booking"
     },
@@ -9588,7 +9589,18 @@
       "paymentConfirmed": "Payment confirmed",
       "mobileMoney": "Mobile Money",
       "zoneMontreal": "Montréal time",
-      "zoneDouala": "Douala time"
+      "zoneDouala": "Douala time",
+      "zoneLibreville": "Libreville time",
+      "zoneLome": "Lome time",
+      "zonePortoNovo": "Porto-Novo time",
+      "zoneAbidjan": "Abidjan time",
+      "zoneBrazzaville": "Brazzaville time",
+      "zoneKinshasa": "Kinshasa time",
+      "zoneNdjamena": "N'Djamena time",
+      "zoneBangui": "Bangui time",
+      "zoneMalabo": "Malabo time",
+      "zoneManila": "Manila time",
+      "zoneNewYork": "New York time"
     },
     "startedTitle": "Started, hand over the item",
     "startedBody": "{{name}} accepted the condition and the rental is in progress. Return is due by {{due}}.",

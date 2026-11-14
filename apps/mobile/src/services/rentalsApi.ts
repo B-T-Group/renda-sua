@@ -251,6 +251,18 @@ export async function modifyRequest(
   });
 }
 
+export async function getRequestInspectionPolicy(requestId: string): Promise<number | null | undefined> {
+  try {
+    const res = await apiRequest<{ success: boolean; inspection_policy_version: number | null }>(
+      `/rentals/requests/${encodeURIComponent(requestId)}/inspection-policy`,
+      { method: 'GET' }
+    );
+    return res.inspection_policy_version ?? null;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function createRequest(
   body: CreateRentalRequestBody
 ): Promise<CreateRentalRequestResult> {

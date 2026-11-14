@@ -10,6 +10,7 @@ import { initReactI18next } from 'react-i18next';
 import { ThemeProvider } from '../../apps/mobile/src/contexts/ThemeContext';
 import ClientInspectionScreen from '../../apps/mobile/src/screens/client/ClientInspectionScreen';
 import RentalBookingDetailScreen from '../../apps/mobile/src/screens/client/RentalBookingDetailScreen';
+import RentalRequestSubmittedScreen from '../../apps/mobile/src/screens/client/RentalRequestSubmittedScreen';
 import BusinessRentalBookingDetailScreen from '../../apps/mobile/src/screens/business/BusinessRentalBookingDetailScreen';
 import { ReportSentConfirmation } from '../../apps/mobile/src/components/rentals/inspection/ReportSentConfirmation';
 import { RentalStartedConfirmation } from '../../apps/mobile/src/components/rentals/inspection/RentalStartedConfirmation';
@@ -34,12 +35,15 @@ function CaptureScreen() {
   document.documentElement.lang = language;
   if (i18n.language !== language) void i18n.changeLanguage(language);
   const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push';
+  const submitted = scene === 'requestSubmitted';
   const inspection = scene === 'review' || scene === 'momo' || scene === 'conflict';
   const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait';
   return (
     <View style={{ flex: 1, minHeight: '100vh', backgroundColor: '#FAF9F7' }}>
       {direct ? (
         <DirectConfirmation scene={scene} language={language} />
+      ) : submitted ? (
+        <RentalRequestSubmittedScreen />
       ) : inspection ? (
         <ClientInspectionScreen />
       ) : business ? (
@@ -98,21 +102,25 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
 
 function StartedNotice({ language, due }: { language: string; due: string }) {
   const french = language === 'fr';
-  const title = french ? 'Location démarrée' : 'Rental started';
-  const body = french
+  const acceptedTitle = french ? 'État des lieux accepté' : 'Condition report accepted';
+  const acceptedBody = french
+    ? "Le client a accepté l'état des lieux de JBL PartyBox 310."
+    : 'The renter accepted the condition report for JBL PartyBox 310.';
+  const startedTitle = french ? 'Location démarrée' : 'Rental started';
+  const startedBody = french
     ? `Amina a accepté l'état des lieux. JBL PartyBox 310 est désormais en cours jusqu'au ${due}.`
     : `Amina accepted the condition report. JBL PartyBox 310 is now in progress until ${due}.`;
   return (
     <View style={{ padding: 20, gap: 16 }}>
-      <Text variant="labelSmall" style={{ color: '#5C6570' }}>{french ? 'Notification' : 'Notification'}</Text>
+      <Text variant="labelSmall" style={{ color: '#5C6570' }}>{french ? "À l'acceptation" : 'On accept'}</Text>
       <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E6E1D8' }}>
-        <Text variant="titleMedium" style={{ color: '#0A4FB5', fontWeight: '800' }}>{title}</Text>
-        <Text variant="bodyMedium" style={{ marginTop: 6, color: '#1C1B1F' }}>{body}</Text>
+        <Text variant="titleMedium" style={{ color: '#0B7A3B', fontWeight: '800' }}>{acceptedTitle}</Text>
+        <Text variant="bodyMedium" style={{ marginTop: 6, color: '#1C1B1F' }}>{acceptedBody}</Text>
       </View>
+      <Text variant="labelSmall" style={{ color: '#5C6570' }}>{french ? "Quand la location est active" : 'When the rental is active'}</Text>
       <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E6E1D8' }}>
-        <Text variant="labelSmall" style={{ color: '#5C6570' }}>{french ? "Dans l'application" : 'In the app'}</Text>
-        <Text variant="titleMedium" style={{ marginTop: 6, fontWeight: '800' }}>{title}</Text>
-        <Text variant="bodyMedium" style={{ marginTop: 6 }}>{body}</Text>
+        <Text variant="titleMedium" style={{ fontWeight: '800' }}>{startedTitle}</Text>
+        <Text variant="bodyMedium" style={{ marginTop: 6 }}>{startedBody}</Text>
       </View>
     </View>
   );

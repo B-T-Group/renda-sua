@@ -174,6 +174,10 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
   };
 }
 
+export async function getRequestInspectionPolicy(): Promise<number | null> {
+  return 1;
+}
+
 export async function getBooking() {
   return applyReturn(bookingFor(scene()));
 }

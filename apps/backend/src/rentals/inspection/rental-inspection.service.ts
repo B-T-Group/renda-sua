@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { HasuraUserService } from '../../hasura/hasura-user.service';
 import { NotificationsService } from '../../notifications/notifications.service';
@@ -23,6 +23,8 @@ import {
 } from './rental-inspection.policy';
 
 export type InspectionStage = 'pickup' | 'return';
+
+const inspectionLog = new Logger('RentalInspectionService');
 
 export interface InspectionDraftUnit {
   id: string;
@@ -737,7 +739,7 @@ export class RentalInspectionService {
         renterName: booking.client.user?.first_name,
       });
     } catch (error: any) {
-      void error;
+      inspectionLog.warn(`notifyReportSent ${booking.id}: ${error?.message ?? error}`);
     }
   }
 
@@ -751,7 +753,7 @@ export class RentalInspectionService {
         renterName: booking.client.user?.first_name,
       });
     } catch (error: any) {
-      void error;
+      inspectionLog.warn(`notifyReturnAccepted ${booking.id}: ${error?.message ?? error}`);
     }
   }
 
