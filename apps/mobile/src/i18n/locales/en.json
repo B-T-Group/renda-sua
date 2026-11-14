@@ -7929,6 +7929,7 @@
       "request": "Request rental",
       "signIn": "Sign in to request",
       "available": "Available",
+      "unavailable": "Not available for these dates",
       "freeFrom": "Free from {{date}}",
       "pickDates": "Pick your dates",
       "ownListing": "Your listing",

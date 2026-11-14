@@ -82,12 +82,15 @@ describe('AssistantRentalService edges', () => {
     const { start } = ahead(1, 1);
     const far = addCalendarDays(start, 8);
     const dropped = await service.run(searchCall(start, far));
-    expect(JSON.parse(dropped.content).status).toBe('needs_dates');
-    expect(dropped.cards?.[0].href).not.toContain(far);
+    const droppedBody = JSON.parse(dropped.content);
+    expect(droppedBody.status).toBe('ok');
+    expect(droppedBody.date_issue).toBe('card_window');
+    expect(dropped.cards?.[0].href).toContain(`end_date=${far}`);
+    expect(dropped.rental?.chips?.some((chip) => chip.id === 'suggested-range')).toBe(false);
     search.search.mockResolvedValue({ listings: [hammer('biz', true)], total: 1 });
     const kept = await service.run(searchCall(start, far));
-    expect(kept.cards?.[0].href).toContain(`end_date=${cap}`);
-    expect(kept.cards?.[0].href).not.toContain(far);
+    expect(kept.cards?.[0].href).toContain(`end_date=${far}`);
+    expect(kept.rental?.chips?.find((chip) => chip.id === 'suggested-range')?.endDate).toBe(cap);
   });
 
   it('rejects an hourly window that does not move forward', async () => {
