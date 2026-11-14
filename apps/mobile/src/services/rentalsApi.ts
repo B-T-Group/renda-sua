@@ -511,6 +511,23 @@ export async function deleteBusinessListing(
   );
 }
 
+export async function getDashboardRequests(
+  init?: Init
+): Promise<{
+  requests: BusinessRentalRequestRow[];
+  expiryNotices: Array<{ id: string; itemName: string; renterName: string; window: 'sla' | 'start' }>;
+}> {
+  const res = await apiRequest<{
+    success: boolean;
+    data: {
+      requests: BusinessRentalRequestRow[];
+      expiryNotices?: Array<{ id: string; itemName: string; renterName: string; window: 'sla' | 'start' }>;
+    };
+  }>('/rentals/business/requests?status=pending&limit=1000', { method: 'GET', signal: init?.signal });
+  if (!res.success) return { requests: [], expiryNotices: [] };
+  return { requests: res.data?.requests ?? [], expiryNotices: res.data?.expiryNotices ?? [] };
+}
+
 export async function getBusinessRequests(
   init?: Init & { status?: string }
 ): Promise<BusinessRentalRequestRow[]> {
@@ -709,6 +726,7 @@ export const rentalsApi = {
   updateBusinessListing,
   deleteBusinessListing,
   getBusinessRequests,
+  getDashboardRequests,
   respondToRequest,
   getBusinessSchedule,
   verifyStartPin,

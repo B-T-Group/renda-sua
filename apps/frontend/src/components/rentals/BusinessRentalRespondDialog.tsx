@@ -58,6 +58,14 @@ function totalRentalHoursForRequest(req: BusinessRentalRequestRow): number {
   return 0;
 }
 
+function parseTotalOverride(raw: string): number | null | 'invalid' {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) return 'invalid';
+  return Number(value.toFixed(2));
+}
+
 function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnapshotBody {
   const weekly = req.rental_location_listing.weekly_availability ?? [];
   const windows = parseRentalSelectionWindowsFromJson(
@@ -130,12 +138,14 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   const [availableNote, setAvailableNote] = useState('');
   const [reasonCode, setReasonCode] = useState<UnavailableRentalReasonCode | ''>('');
   const [unavailableNote, setUnavailableNote] = useState('');
+  const [totalOverride, setTotalOverride] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setContractHours('48');
+    setTotalOverride('');
     setAvailableNote('');
     setReasonCode('');
     setUnavailableNote('');
@@ -149,10 +159,16 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
       setError(t('business.rentals.respondValidationHours', 'Enter a whole number of hours between 1 and 168.'));
       return;
     }
+    const overridden = parseTotalOverride(totalOverride);
+    if (overridden === 'invalid') {
+      setError(t('business.rentals.changeTotalInvalid', 'Enter a total of zero or more.'));
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const snap = buildPricingSnapshot(request);
+      if (overridden != null) snap.total = overridden;
       await respondRequest(request.id, {
         status: 'available',
         rentalPricingSnapshot: snap,
@@ -176,7 +192,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, contractHours, onClose, onStale, onSuccess, request, respondRequest, t]);
+  }, [availableNote, contractHours, i18n.language, onClose, onStale, onSuccess, request, respondRequest, t, totalOverride]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -297,6 +313,18 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 </Typography>
               </>
             ) : null}
+            <TextField
+              label={t('business.rentals.changeTotalLabel', 'Change total (optional)')}
+              type="number"
+              value={totalOverride}
+              onChange={(e) => setTotalOverride(e.target.value)}
+              inputProps={{ min: 0, step: '0.01' }}
+              helperText={t(
+                'business.rentals.changeTotalHelper',
+                'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'
+              )}
+              fullWidth
+            />
             <TextField
               label={t(
                 'business.rentals.contractExpiryHoursLabel',

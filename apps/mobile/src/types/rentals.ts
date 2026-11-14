@@ -469,6 +469,10 @@ export interface BusinessRentalRequestRow {
   units_requested?: number | null;
   edit_version?: number | null;
   quoted_total?: number | string | null;
+  requested_start_at?: string | null;
+  respond_by?: string | null;
+  respond_window?: 'sla' | 'start' | null;
+  listing_timezone?: string | null;
   change_summary?: {
     fields?: string[];
     dates?: { from: RentalSelectionWindow[]; to: RentalSelectionWindow[] };

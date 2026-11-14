@@ -23,6 +23,7 @@ import {
   formatRequestAmount,
   formatRentalPeriod,
 } from '../../utils/rentals/rentalRequestFormat';
+import { requestStartIso, respondWindow } from '../../utils/rentals/dashboardRentalRequests';
 
 export interface ClientRentalRequestRowProps {
   row: ClientRentalRequest;
@@ -35,6 +36,7 @@ export interface ClientRentalRequestRowProps {
   onCancel: (id: string) => void;
   onViewListing: (listingId: string) => void;
   onViewBooking: (bookingId: string) => void;
+  onBrowseRentals?: () => void;
 }
 
 export function ClientRentalRequestRow({
@@ -48,6 +50,7 @@ export function ClientRentalRequestRow({
   onCancel,
   onViewListing,
   onViewBooking,
+  onBrowseRentals,
 }: ClientRentalRequestRowProps) {
   const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -187,6 +190,22 @@ export function ClientRentalRequestRow({
         </Text>
       ) : null}
 
+      {row.status === 'unavailable' && row.unavailable_reason_code === 'no_response' ? (
+        <Text style={[typography.body2, { color: colors.text.primary, marginTop: spacing.sm, fontFamily: fontFamily.medium }]}>
+          {respondWindow(row.created_at, requestStartIso(row)) === 'start'
+            ? t(
+                'rentals.clientRequests.noResponseStart',
+                '{{business}} didn’t respond before the start time. You can send a new request from the listing, or browse other rentals.',
+                { business: listing?.rental_item?.business?.name || subtitle || t('rentals.clientRequests.theBusiness', 'The business') }
+              )
+            : t(
+                'rentals.clientRequests.noResponseSla',
+                '{{business}} didn’t respond within 24 hours. You can send a new request from the listing, or browse other rentals.',
+                { business: listing?.rental_item?.business?.name || subtitle || t('rentals.clientRequests.theBusiness', 'The business') }
+              )}
+        </Text>
+      ) : null}
+
       {row.status === 'available' && deadlineIso ? (
         <Text
           style={[
@@ -259,6 +278,11 @@ export function ClientRentalRequestRow({
             labelStyle={styles.buttonLabel}
           >
             {t('rentals.modify.contact', 'Contact')}
+          </Button>
+        ) : null}
+        {row.status === 'unavailable' && row.unavailable_reason_code === 'no_response' && onBrowseRentals ? (
+          <Button mode="text" onPress={onBrowseRentals} labelStyle={styles.buttonLabel}>
+            {t('rentals.clientRequests.browseRentals', 'Browse rentals')}
           </Button>
         ) : null}
         {canBookNow ? (

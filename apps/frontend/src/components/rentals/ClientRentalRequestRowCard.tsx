@@ -26,6 +26,7 @@ import {
 } from '../../utils/rentalRequestDisplay';
 import { resolveRentalPhase } from '../../utils/rentalPhase';
 import { clientRequestPeriodLines } from '../../utils/rentalRequestFormat';
+import { requestStartIso, respondWindow } from '../../utils/dashboardRentalRequests';
 
 function phaseChipColor(
   phase: string
@@ -81,6 +82,7 @@ export interface ClientRentalRequestRowCardProps {
   onCancel: (id: string) => void;
   onViewListing: (listingId: string) => void;
   onViewBooking: (bookingId: string) => void;
+  onBrowseRentals?: () => void;
 }
 
 export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProps> = ({
@@ -90,6 +92,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   onCancel,
   onViewListing,
   onViewBooking,
+  onBrowseRentals,
 }) => {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -268,7 +271,23 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
           </Typography>
         ) : null}
 
-        {row.status === 'unavailable' && reasonCode ? (
+        {row.status === 'unavailable' && reasonCode === 'no_response' ? (
+          <Typography variant="body2">
+            {respondWindow(row.created_at, requestStartIso(row)) === 'start'
+              ? t(
+                  'rentals.clientRequests.noResponseStart',
+                  '{{business}} didn’t respond before the start time. You can send a new request from the listing, or browse other rentals.',
+                  { business: listing?.rental_item?.business?.name || locName || t('rentals.clientRequests.theBusiness', 'The business') }
+                )
+              : t(
+                  'rentals.clientRequests.noResponseSla',
+                  '{{business}} didn’t respond within 24 hours. You can send a new request from the listing, or browse other rentals.',
+                  { business: listing?.rental_item?.business?.name || locName || t('rentals.clientRequests.theBusiness', 'The business') }
+                )}
+          </Typography>
+        ) : null}
+
+        {row.status === 'unavailable' && reasonCode && reasonCode !== 'no_response' ? (
           <Typography variant="body2" color="text.secondary">
             <strong>{t('rentals.clientRequests.unavailableReason', 'Reason')}:</strong>{' '}
             {t(`rentals.unavailableReasons.${reasonCode}`, reasonCode)}
@@ -289,6 +308,11 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               onClick={() => onViewListing(listing.id)}
             >
               {t('rentals.clientRequests.viewListing', 'View listing')}
+            </Button>
+          ) : null}
+          {row.status === 'unavailable' && reasonCode === 'no_response' && onBrowseRentals ? (
+            <Button size="small" variant="text" onClick={onBrowseRentals}>
+              {t('rentals.clientRequests.browseRentals', 'Browse rentals')}
             </Button>
           ) : null}
           {row.status === 'available' ? (

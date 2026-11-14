@@ -26,6 +26,7 @@ import { ModerationFilterBanner } from '../../components/common/ModerationFilter
 import { StatusPill } from '../../components/common/StatusPill';
 import { RentalPhaseStatusPill } from '../../components/common/RentalPhaseStatusPill';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import {
@@ -38,6 +39,7 @@ import type {
   BusinessRentalScheduleRow,
 } from '../../types/rentals';
 import { formatChangeDetail } from '../../utils/rentals/rentalRequestFormat';
+import { compareSoonestRequestStart } from '../../utils/rentals/dashboardRentalRequests';
 import {
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
@@ -74,6 +76,7 @@ const QUEUE_FILTERS: BusinessActionQueue[] = [
 
 export default function BusinessRentalsStudioScreen() {
   const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
   const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const listBottomPadding = useMainTabContentBottomPadding(88);
@@ -190,7 +193,10 @@ export default function BusinessRentalsStudioScreen() {
   const [queueFilter, setQueueFilter] = useState<BusinessActionQueue>('all');
 
   const queuedRequests = useMemo(() => {
-    return requests.filter((r) => {
+    const ordered = flags.rentals_dashboard_requests_enabled
+      ? [...requests].sort(compareSoonestRequestStart)
+      : requests;
+    return ordered.filter((r) => {
       if (r.status === 'unavailable') return queueFilter === 'all';
       const info = resolveRentalPhase(
         {
@@ -201,7 +207,7 @@ export default function BusinessRentalsStudioScreen() {
       );
       return matchesBusinessQueue(info, queueFilter);
     });
-  }, [queueFilter, requests]);
+  }, [flags.rentals_dashboard_requests_enabled, queueFilter, requests]);
 
   const filteredCatalogItems = useMemo(() => {
     const list = items.filter((item) => {

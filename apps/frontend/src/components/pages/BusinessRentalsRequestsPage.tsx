@@ -13,6 +13,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useClientFlags } from '../../hooks/useClientFlags';
+import { compareSoonestRequestStart } from '../../utils/dashboardRentalRequests';
 import {
   useRentalApi,
   type BusinessRentalRequestRow,
@@ -38,6 +40,7 @@ const QUEUE_LABELS: Record<BusinessActionQueue, [string, string]> = {
 
 const BusinessRentalsRequestsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { flags } = useClientFlags();
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
   const { respondRequest, fetchBusinessRentalRequests } = useRentalApi();
@@ -68,15 +71,16 @@ const BusinessRentalsRequestsPage: React.FC = () => {
       .finally(() => setLoading(false));
   }, [businessId, loadRequests]);
 
-  const sortedRequests = useMemo(
-    () =>
-      [...requests].sort((a, b) => {
-        const aTime = new Date(a.created_at).getTime();
-        const bTime = new Date(b.created_at).getTime();
-        return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
-      }),
-    [requests]
-  );
+  const sortedRequests = useMemo(() => {
+    if (flags.rentals_dashboard_requests_enabled) {
+      return [...requests].sort(compareSoonestRequestStart);
+    }
+    return [...requests].sort((a, b) => {
+      const aTime = new Date(a.created_at).getTime();
+      const bTime = new Date(b.created_at).getTime();
+      return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
+    });
+  }, [flags.rentals_dashboard_requests_enabled, requests]);
 
   const queuedRequests = useMemo(() => {
     return sortedRequests.filter((r) => {

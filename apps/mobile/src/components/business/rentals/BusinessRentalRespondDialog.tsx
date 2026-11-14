@@ -43,6 +43,14 @@ export interface BusinessRentalRespondDialogProps {
   onStale?: () => void;
 }
 
+function parseTotalOverride(raw: string): number | null | 'invalid' {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) return 'invalid';
+  return Number(value.toFixed(2));
+}
+
 function buildPricingSnapshot(req: BusinessRentalRequestRow) {
   const windows = parseRentalSelectionWindowsFromJson(req.rental_selection_windows);
   const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
@@ -68,6 +76,7 @@ export function BusinessRentalRespondDialog({
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const [contractHours, setContractHours] = useState('48');
+  const [totalOverride, setTotalOverride] = useState('');
   const [availableNote, setAvailableNote] = useState('');
   const [reasonCode, setReasonCode] = useState<UnavailableRentalReasonCode | ''>('');
   const [unavailableNote, setUnavailableNote] = useState('');
@@ -86,6 +95,7 @@ export function BusinessRentalRespondDialog({
 
   const resetAndClose = useCallback(() => {
     setContractHours('48');
+    setTotalOverride('');
     setAvailableNote('');
     setReasonCode('');
     setUnavailableNote('');
@@ -105,10 +115,16 @@ export function BusinessRentalRespondDialog({
       );
       return;
     }
+    const overridden = parseTotalOverride(totalOverride);
+    if (overridden === 'invalid') {
+      setError(t('business.rentals.changeTotalInvalid', 'Enter a total of zero or more.'));
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const snap = buildPricingSnapshot(request);
+      if (overridden != null) snap.total = overridden;
       await rentalsApi.respondToRequest(request.id, {
         status: 'available',
         rentalPricingSnapshot: snap,
@@ -128,7 +144,7 @@ export function BusinessRentalRespondDialog({
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, contractHours, i18n.language, onStale, onSuccess, request, resetAndClose, t]);
+  }, [availableNote, contractHours, i18n.language, onStale, onSuccess, request, resetAndClose, t, totalOverride]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -175,8 +191,8 @@ export function BusinessRentalRespondDialog({
       <Dialog visible={visible} onDismiss={resetAndClose}>
         <Dialog.Title>
           {mode === 'available'
-            ? t('business.rentals.accept', 'Accept')
-            : t('business.rentals.reject', 'Reject')}
+            ? t('business.rentals.respondDialogTitleAvailable', 'Confirm availability')
+            : t('business.rentals.respondDialogTitleUnavailable', 'Mark unavailable')}
         </Dialog.Title>
         <Dialog.Content>
           <ScrollView style={{ maxHeight: 360 }}>
@@ -197,6 +213,20 @@ export function BusinessRentalRespondDialog({
                     )}
                   </Text>
                 ) : null}
+                <TextInput
+                  label={t('business.rentals.changeTotalLabel', 'Change total (optional)')}
+                  value={totalOverride}
+                  onChangeText={setTotalOverride}
+                  keyboardType="decimal-pad"
+                  mode="outlined"
+                  style={styles.field}
+                />
+                <Text variant="bodySmall" style={{ color: colors.text.secondary, marginBottom: 8 }}>
+                  {t(
+                    'business.rentals.changeTotalHelper',
+                    'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'
+                  )}
+                </Text>
                 <TextInput
                   label={t(
                     'business.rentals.contractHours',
@@ -268,7 +298,7 @@ export function BusinessRentalRespondDialog({
               else void submitUnavailable();
             }}
           >
-            {t('common.confirm', 'Confirm')}
+            {t('business.rentals.submitResponse', 'Send response')}
           </Button>
         </Dialog.Actions>
       </Dialog>
