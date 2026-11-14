@@ -3359,7 +3359,32 @@ export class RentalsService {
   ): Promise<void> {
     if (gate.pickupAckCurrent && gate.pickupAcceptedVersionId === versionId) return;
     await this.writePickupAccept(booking.id, versionId, actorId);
-    await this.notifyPickupAccepted(booking);
+    await this.notifyPickupAccepted(booking, await this.acceptNoticeMode(booking));
+  }
+
+  /** Card and wallet start in this call. MoMo stays pending until payment lands. */
+  private async acceptNoticeMode(booking: any): Promise<'skip' | 'plain' | 'pending'> {
+    const country = booking.rental_location_listing?.business_location?.address?.country;
+    if (!(await this.inspectionFlags.confirmationsEnabled(country))) return 'plain';
+    return (await this.startsInThisAccept(booking)) ? 'skip' : 'pending';
+  }
+
+  private async startsInThisAccept(booking: any): Promise<boolean> {
+    if (booking.payment_status === 'authorized') return true;
+    if (booking.status === 'confirmed' && booking.payment_status === 'paid') return true;
+    if (booking.status !== 'reserved') return false;
+    return this.walletCoversBooking(booking);
+  }
+
+  private async walletCoversBooking(booking: any): Promise<boolean> {
+    const userId = booking.client?.user_id as string | undefined;
+    if (!userId) return false;
+    try {
+      const account = await this.hasuraSystemService.getAccount(userId, booking.currency);
+      return Number(account?.available_balance ?? 0) >= Number(booking.total_amount);
+    } catch {
+      return false;
+    }
   }
 
   private async writePickupAccept(bookingId: string, versionId: string, actorId: string) {
@@ -3489,9 +3514,9 @@ export class RentalsService {
     };
   }
 
-  private async notifyPickupAccepted(booking: any): Promise<void> {
+  private async notifyPickupAccepted(booking: any, mode: 'skip' | 'plain' | 'pending'): Promise<void> {
     const userId = booking.business?.user_id as string | undefined;
-    if (!userId) return;
+    if (!userId || mode === 'skip') return;
     try {
       await this.notificationsService.sendRentalInspectionNotice({
         userId,
@@ -3502,6 +3527,7 @@ export class RentalsService {
         renterName: booking.client?.user?.first_name,
         endAt: booking.end_at,
         countryCode: booking.rental_location_listing?.business_location?.address?.country,
+        paymentPending: mode === 'pending',
       });
     } catch (error: any) {
       this.logger?.warn(`notifyPickupAccepted ${booking.id}: ${error?.message ?? error}`);

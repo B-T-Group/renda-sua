@@ -18,7 +18,7 @@ export function ReportSentConfirmation({
   stage,
   renterName,
   unitCount,
-  versionNo,
+  versionNo: _versionNo,
   when,
   photos,
   canEdit,
@@ -57,9 +57,8 @@ export function ReportSentConfirmation({
           : t('rentalInspection.confirm.sentLead', 'We asked {{name}} to review it. Hand over the item once they accept. The rental starts automatically.', { name: renterName })}
       </Text>
       <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.sm }]}>
-        {t('rentalInspection.confirm.unitLine', '{{count}} unit · v{{version}} · {{when}}', {
+        {t('rentalInspection.confirm.unitLine', '{{count}} unit · {{when}}', {
           count: unitCount,
-          version: versionNo,
           when,
         })}
       </Text>

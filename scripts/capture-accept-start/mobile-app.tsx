@@ -34,7 +34,7 @@ function CaptureScreen() {
   (window as Window & { __scene?: string }).__scene = scene;
   document.documentElement.lang = language;
   if (i18n.language !== language) void i18n.changeLanguage(language);
-  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push';
+  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush';
   const submitted = scene === 'requestSubmitted';
   const inspection = scene === 'review' || scene === 'momo' || scene === 'conflict';
   const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait';
@@ -83,7 +83,7 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
       />
     );
   }
-  if (scene === 'push') return <StartedNotice language={language} due={due} />;
+  if (scene === 'push' || scene === 'clientPush') return <StartedNotice language={language} due={due} zone={zone} kind={scene} />;
   return (
     <RentalStartedConfirmation
       momo={scene === 'momoStarted'}
@@ -95,30 +95,25 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
       title="JBL PartyBox 310"
       startAt="2026-11-17T15:00:00.000Z"
       endAt={scene === 'momoStarted' ? '2026-11-18T19:00:00.000Z' : '2026-11-19T01:00:00.000Z'}
-      location={scene === 'momoStarted' ? 'Sono Akwa – Akwa, Douala' : "Stripe Rail – L'Assomption"}
+      location={scene === 'momoStarted' ? 'Sono Akwa – Akwa, Douala' : 'Atelier Nord, Toronto'}
       onBack={() => undefined}
     />
   );
 }
 
-function StartedNotice({ language, due }: { language: string; due: string }) {
+function StartedNotice({ language, due, zone, kind }: { language: string; due: string; zone: string; kind: string }) {
   const french = language === 'fr';
-  const acceptedTitle = french ? 'État des lieux accepté' : 'Condition report accepted';
-  const acceptedBody = french
-    ? "Le client a accepté l'état des lieux de JBL PartyBox 310."
-    : 'The renter accepted the condition report for JBL PartyBox 310.';
+  const when = `${due} (${zone})`;
   const startedTitle = french ? 'Location démarrée' : 'Rental started';
-  const startedBody = french
-    ? `Amina a accepté l'état des lieux. JBL PartyBox 310 est désormais en cours jusqu'au ${due}.`
-    : `Amina accepted the condition report. JBL PartyBox 310 is now in progress until ${due}.`;
+  const startedBody = kind === 'clientPush'
+    ? french
+      ? `Votre location de JBL PartyBox 310 a commencé. Le retour est dû le ${when}.`
+      : `Your rental of JBL PartyBox 310 has started. Return is due by ${when}.`
+    : french
+      ? `Amina a accepté l'état des lieux. JBL PartyBox 310 est désormais en cours jusqu'au ${when}.`
+      : `Amina accepted the condition report. JBL PartyBox 310 is now in progress until ${when}.`;
   return (
-    <View style={{ padding: 20, gap: 16 }}>
-      <Text variant="labelSmall" style={{ color: '#5C6570', fontFamily: 'Inter_600SemiBold' }}>{french ? "À l'acceptation" : 'On accept'}</Text>
-      <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E6E1D8' }}>
-        <Text variant="titleMedium" style={{ color: '#0B7A3B', fontWeight: '800', fontFamily: 'Inter_600SemiBold' }}>{acceptedTitle}</Text>
-        <Text variant="bodyMedium" style={{ marginTop: 6, color: '#1C1B1F', fontFamily: 'Inter_400Regular' }}>{acceptedBody}</Text>
-      </View>
-      <Text variant="labelSmall" style={{ color: '#5C6570', fontFamily: 'Inter_600SemiBold' }}>{french ? "Quand la location est active" : 'When the rental is active'}</Text>
+    <View style={{ padding: 20 }}>
       <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E6E1D8' }}>
         <Text variant="titleMedium" style={{ fontWeight: '800', fontFamily: 'Inter_600SemiBold' }}>{startedTitle}</Text>
         <Text variant="bodyMedium" style={{ marginTop: 6, fontFamily: 'Inter_400Regular' }}>{startedBody}</Text>

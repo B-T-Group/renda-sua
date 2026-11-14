@@ -103,9 +103,9 @@ export function RentalPhaseBanner({
       <View style={styles.row}>
         <StatusPill
           label={chipLabel || t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
-          backgroundColor={phaseColors.backgroundColor}
-          textColor={phaseColors.textColor}
-          borderColor={phaseColors.borderColor}
+          backgroundColor={chipLabel ? '#B4530918' : phaseColors.backgroundColor}
+          textColor={chipLabel ? '#B45309' : phaseColors.textColor}
+          borderColor={chipLabel ? '#B4530944' : phaseColors.borderColor}
         />
         <Text
           style={[

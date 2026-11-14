@@ -2507,7 +2507,7 @@
       "reject": "Refuser",
       "viewBooking": "Voir la réservation",
       "booking": "Réservation",
-      "clientDetails": "Coordonnées du client",
+      "clientDetails": "Coordonnées du locataire",
       "offerTotal": "Total proposé",
       "contractHours": "Contrat valable (heures)",
       "responseNote": "Note (facultatif)",
@@ -2653,7 +2653,7 @@
           "backToStudio": "Retour aux locations"
         }
       },
-      "authorizedAmount": "Réservé sur la carte du client : {{amount}}"
+      "authorizedAmount": "Réservé sur la carte du locataire : {{amount}}"
     },
     "orders": {
       "title": "Commandes",
@@ -6186,7 +6186,7 @@
       "contractBody": "Le propriétaire examinera votre demande et, si l’article est disponible aux dates choisies, vous proposera un contrat. Vous pourrez refuser cette offre ou l’accepter et poursuivre vers le paiement de la location.",
       "pinTitle": "Début de la location",
       "pinBody": "Lorsque vous rencontrerez le propriétaire pour commencer la location, vous devrez lui communiquer votre code PIN de démarrage afin qu’il puisse confirmer la remise dans l’application.",
-      "pinBodyInspected": "Au retrait, l'entreprise partagera un état des lieux. Vérifiez-le et acceptez-le pour démarrer la location. Aucun code PIN n'est nécessaire.",
+      "pinBodyInspected": "Au retrait, l'entreprise partagera un état des lieux. Vérifiez-le et acceptez-le pour démarrer la location.",
       "payoutTitle": "Versement au propriétaire",
       "payoutBody": "Le paiement est versé automatiquement au propriétaire une fois la période de location terminée, conformément aux conditions de votre réservation.",
       "ratingsTitle": "Après la fin de la location",
@@ -8535,22 +8535,28 @@
     "waitingBody": "{{name}} vérifie l’état des lieux. Vous verrez quand la location démarre — remettez alors l’article.",
     "bannerReview": "Vérifiez l’état des lieux, puis acceptez-le pour démarrer la location.",
     "bannerWaiting": "En attente que le locataire accepte l’état. Aucun code PIN n’est nécessaire.",
-    "noPinNote": "Photos de départ envoyées · {{done}} unités sur {{total}}. Aucun code PIN n’est nécessaire pour cette location.",
-    "updateReport": "Mettre à jour le rapport",
+    "noPinNote_one": "Photos de départ envoyées · {{count}} unité sur {{total}}.",
+    "noPinNote_other": "Photos de départ envoyées · {{count}} unités sur {{total}}.",
+    "noPinNote_plural": "Photos de départ envoyées · {{count}} unités sur {{total}}.",
+    "noPinNote": "Photos de départ envoyées · {{count}} unité sur {{total}}.",
+    "updateReport": "Modifier le rapport",
     "phase": {
       "reportReady": "État des lieux à vérifier",
-      "waitingRenter": "En attente du client"
+      "waitingRenter": "En attente du locataire"
     },
     "confirm": {
       "pageTitle": "Confirmation",
       "sentTitle": "État des lieux envoyé",
-      "sentLead": "Nous avons demandé à {{name}} de le vérifier. Remettez l'article une fois qu'elle accepte. La location démarre automatiquement.",
+      "sentLead": "Nous avons demandé à {{name}} de le vérifier. Remettez l'article une fois l'état des lieux accepté. La location démarre automatiquement.",
       "sentLeadReturn": "Nous avons demandé à {{name}} de vérifier le retour. La location reste ouverte jusqu'à son acceptation.",
-      "unitLine": "{{count}} unité · v{{version}} · {{when}}",
+      "unitLine_one": "{{count}} unité · {{when}}",
+      "unitLine_other": "{{count}} unités · {{when}}",
+      "unitLine_plural": "{{count}} unités · {{when}}",
+      "unitLine": "{{count}} unité · {{when}}",
       "backToBooking": "Retour à la réservation",
       "editReport": "Modifier le rapport",
       "stepSent": "Rapport envoyé",
-      "stepReview": "Le client vérifie",
+      "stepReview": "Le locataire vérifie",
       "stepStarts": "La location démarre",
       "stepCloses": "Le retour se termine",
       "startedTitle": "Location démarrée",
@@ -8598,7 +8604,7 @@
     "timelineBooked": "Réservé",
     "timelinePickupSubmitted": "État des lieux de départ envoyé",
     "timelineAccepted": "Vous avez accepté l’état des lieux",
-    "statusClientAck": "Client a confirmé",
+    "statusClientAck": "Le locataire a accepté l'état des lieux",
     "timelineStarted": "Location commencée",
     "timelineHandback": "Remise physique enregistrée",
     "timelineReturnDamage": "État des lieux de retour",

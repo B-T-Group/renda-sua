@@ -31,7 +31,7 @@ function CaptureApp() {
   (window as Window & { __scene?: string }).__scene = scene;
   document.documentElement.lang = language;
   if (i18n.language !== language) void i18n.changeLanguage(language);
-  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push';
+  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush';
   return (
     <I18nextProvider i18n={i18n}>
       <ThemeProvider theme={theme}>
@@ -88,7 +88,7 @@ function WebConfirmation({ scene, language }: { scene: string; language: string 
       />
     );
   }
-  if (scene === 'push') return <WebNotice language={language} due={due} />;
+  if (scene === 'push' || scene === 'clientPush') return <WebNotice language={language} due={due} zone={zone} kind={scene} />;
   return (
     <RentalStartedConfirmation
       momo={scene === 'momoStarted'}
@@ -100,34 +100,27 @@ function WebConfirmation({ scene, language }: { scene: string; language: string 
       title="JBL PartyBox 310"
       startAt="2026-11-17T15:00:00.000Z"
       endAt={scene === 'momoStarted' ? '2026-11-18T19:00:00.000Z' : '2026-11-19T01:00:00.000Z'}
-      location={scene === 'momoStarted' ? 'Sono Akwa – Akwa, Douala' : "Stripe Rail – L'Assomption"}
+      location={scene === 'momoStarted' ? 'Sono Akwa – Akwa, Douala' : 'Atelier Nord, Toronto'}
       onBack={() => undefined}
     />
   );
 }
 
-function WebNotice({ language, due }: { language: string; due: string }) {
+function WebNotice({ language, due, zone, kind }: { language: string; due: string; zone: string; kind: string }) {
   const french = language === 'fr';
-  const acceptedTitle = french ? 'État des lieux accepté' : 'Condition report accepted';
-  const acceptedBody = french
-    ? "Le client a accepté l'état des lieux de JBL PartyBox 310."
-    : 'The renter accepted the condition report for JBL PartyBox 310.';
+  const when = `${due} (${zone})`;
   const startedTitle = french ? 'Location démarrée' : 'Rental started';
-  const startedBody = french
-    ? `Amina a accepté l'état des lieux. JBL PartyBox 310 est désormais en cours jusqu'au ${due}.`
-    : `Amina accepted the condition report. JBL PartyBox 310 is now in progress until ${due}.`;
+  const startedBody = kind === 'clientPush'
+    ? french
+      ? `Votre location de JBL PartyBox 310 a commencé. Le retour est dû le ${when}.`
+      : `Your rental of JBL PartyBox 310 has started. Return is due by ${when}.`
+    : french
+      ? `Amina a accepté l'état des lieux. JBL PartyBox 310 est désormais en cours jusqu'au ${when}.`
+      : `Amina accepted the condition report. JBL PartyBox 310 is now in progress until ${when}.`;
   return (
-    <Box sx={{ display: 'grid', gap: 2 }}>
-      <Typography variant="overline" color="text.secondary">{french ? "À l'acceptation" : 'On accept'}</Typography>
-      <Box sx={{ bgcolor: '#fff', borderRadius: 2, p: 2, border: '1px solid #E6E1D8' }}>
-        <Typography variant="h6" fontWeight={800} color="#0B7A3B">{acceptedTitle}</Typography>
-        <Typography variant="body1" sx={{ mt: 1 }}>{acceptedBody}</Typography>
-      </Box>
-      <Typography variant="overline" color="text.secondary">{french ? 'Quand la location est active' : 'When the rental is active'}</Typography>
-      <Box sx={{ bgcolor: '#fff', borderRadius: 2, p: 2, border: '1px solid #E6E1D8' }}>
-        <Typography variant="h6" fontWeight={800}>{startedTitle}</Typography>
-        <Typography variant="body1" sx={{ mt: 1 }}>{startedBody}</Typography>
-      </Box>
+    <Box sx={{ bgcolor: '#fff', borderRadius: 2, p: 2, border: '1px solid #E6E1D8', maxWidth: 420 }}>
+      <Typography variant="h6" fontWeight={800}>{startedTitle}</Typography>
+      <Typography variant="body1" sx={{ mt: 1 }}>{startedBody}</Typography>
     </Box>
   );
 }

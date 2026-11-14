@@ -36,7 +36,7 @@ const STEPS = [
       'The owner will review your request and, if the item is available, propose a contract.',
   },
   {
-    icon: 'numeric' as const,
+    icon: 'clipboard-check-outline' as const,
     titleKey: 'rentals.requestSubmitted.pinTitle',
     titleDefault: 'Starting the rental',
     bodyKey: 'rentals.requestSubmitted.pinBody',
@@ -174,7 +174,7 @@ export default function RentalRequestSubmittedScreen() {
               {step.bodyKey === 'rentals.requestSubmitted.pinBody' && noPin
                 ? t(
                     'rentals.requestSubmitted.pinBodyInspected',
-                    'At pickup, the business will share a condition report. Review and accept it to start the rental. No PIN is needed.'
+                    'At pickup, the business will share a condition report. Review and accept it to start the rental.'
                   )
                 : t(step.bodyKey, step.bodyDefault)}
             </Text>

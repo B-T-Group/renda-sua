@@ -394,29 +394,30 @@ export function RentalInspectionPanel({
       ) : null}
       {stage && view && unit && draft ? (
         <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
-          <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
-            {view.units.map((row, rowIndex) => (
-              <Button
-                key={row.unitId}
-                variant={rowIndex === index ? 'contained' : 'outlined'}
-                color="primary"
-                sx={{
-                  minHeight: 48,
-                  color: rowIndex === index ? 'primary.contrastText' : 'text.primary',
-                  borderColor: rowIndex === index ? 'primary.main' : 'text.primary',
-                  bgcolor: rowIndex === index ? 'primary.main' : 'background.paper',
-                }}
-                onClick={() => setIndex(rowIndex)}
-              >
-                {row.displayLabel}
-                {seen.has(row.unitId) ? ' ✓' : ''}
-              </Button>
-            ))}
-            {role === 'business' && view.versionNo != null ? <Chip label={t('rentalInspection.version', 'v{{version}}', { version: view.versionNo })} /> : null}
-          </Stack>
+          {view.units.length > 1 ? (
+            <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
+              {view.units.map((row, rowIndex) => (
+                <Button
+                  key={row.unitId}
+                  variant={rowIndex === index ? 'contained' : 'outlined'}
+                  color="primary"
+                  sx={{
+                    minHeight: 48,
+                    color: rowIndex === index ? 'primary.contrastText' : 'text.primary',
+                    borderColor: rowIndex === index ? 'primary.main' : 'text.primary',
+                    bgcolor: rowIndex === index ? 'primary.main' : 'background.paper',
+                  }}
+                  onClick={() => setIndex(rowIndex)}
+                >
+                  {row.displayLabel}
+                  {seen.has(row.unitId) ? ' ✓' : ''}
+                </Button>
+              ))}
+            </Stack>
+          ) : null}
           {role === 'business' && view.correctionReason ? <Alert severity="warning">{view.correctionReason}</Alert> : null}
           <Typography variant="h6" sx={{ mb: 1 }}>{unit.displayLabel}</Typography>
-          {minPhotos != null ? (
+          {role === 'business' && minPhotos != null ? (
             <Chip sx={{ mb: 1 }} label={t('rentalInspection.minPhotos', 'Min {{count}}', { count: minPhotos })} />
           ) : null}
           <PhotoRow
@@ -517,64 +518,43 @@ export function RentalInspectionPanel({
         </Box>
       ) : null}
       {role === 'client' && panel === 'review' && stage && view?.status === 'submitted' ? (
-        <>
-          <Box sx={{ height: 196 }} />
-          <Box
-            sx={{
-              position: 'fixed',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 20,
-              bgcolor: 'background.paper',
-              backgroundImage: 'none',
-              borderTop: 1,
-              borderColor: 'divider',
-              boxShadow: 3,
-              px: 2,
-              pt: 1.5,
-              pb: 2,
+        <Stack spacing={1} sx={{ mt: 2 }}>
+          {stage === 'pickup' && !damaged && (booking.accept_start_preview?.amount_due_at_pickup ?? 0) > 0 ? (
+            <Typography textAlign="center">
+              {t('rentalInspection.payNow', "You'll pay {{amount}} now", {
+                amount: fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF'),
+              })}
+            </Typography>
+          ) : null}
+          <Button
+            fullWidth
+            variant="contained"
+            sx={{ minHeight: 48 }}
+            disabled={busy || !reviewed || !view.versionId}
+            onClick={() => {
+              if (stage === 'pickup' && !damaged) {
+                setConfirmOpen(true);
+                return;
+              }
+              void run(() => model.api.acknowledge(bookingId, stage, { versionId: view.versionId!, decision: 'accept' }).then(() => undefined), 'accepted');
             }}
           >
-            <Stack spacing={1} sx={{ maxWidth: 720, mx: 'auto' }}>
-              {stage === 'pickup' && !damaged && (booking.accept_start_preview?.amount_due_at_pickup ?? 0) > 0 ? (
-                <Typography textAlign="center">
-                  {t('rentalInspection.payNow', "You'll pay {{amount}} now", {
-                    amount: fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF'),
-                  })}
-                </Typography>
-              ) : null}
-              <Button
-                fullWidth
-                variant="contained"
-                sx={{ minHeight: 48 }}
-                disabled={busy || !reviewed || !view.versionId}
-                onClick={() => {
-                  if (stage === 'pickup' && !damaged) {
-                    setConfirmOpen(true);
-                    return;
-                  }
-                  void run(() => model.api.acknowledge(bookingId, stage, { versionId: view.versionId!, decision: 'accept' }).then(() => undefined), 'accepted');
-                }}
-              >
-                {damaged
-                  ? damageRail(booking) === 'card'
-                    ? t('rentalInspection.agreeCapture', 'I agree · capture {{amount}}', { amount: view.claimedDamageAmount ?? '' })
-                    : t('rentalInspection.agreeRecord', 'I agree · record claim')
-                  : stage === 'pickup'
-                    ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
-                    : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
-              </Button>
-              <Button fullWidth variant="outlined" color="error" sx={{ minHeight: 48 }} onClick={() => setPanel(damaged ? 'dispute' : 'correction')}>
-                {damaged
-                  ? t('rentalInspection.disputeClaim', 'Dispute this claim')
-                  : stage === 'pickup'
-                    ? t('rentalInspection.reportProblem', 'Report a problem')
-                    : t('rentalInspection.requestCorrection', 'Request a correction')}
-              </Button>
-            </Stack>
-          </Box>
-        </>
+            {damaged
+              ? damageRail(booking) === 'card'
+                ? t('rentalInspection.agreeCapture', 'I agree · capture {{amount}}', { amount: view.claimedDamageAmount ?? '' })
+                : t('rentalInspection.agreeRecord', 'I agree · record claim')
+              : stage === 'pickup'
+                ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
+                : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
+          </Button>
+          <Button fullWidth variant="outlined" color="error" sx={{ minHeight: 48 }} onClick={() => setPanel(damaged ? 'dispute' : 'correction')}>
+            {damaged
+              ? t('rentalInspection.disputeClaim', 'Dispute this claim')
+              : stage === 'pickup'
+                ? t('rentalInspection.reportProblem', 'Report a problem')
+                : t('rentalInspection.requestCorrection', 'Request a correction')}
+          </Button>
+        </Stack>
       ) : null}
       <AcceptStartDialog
         open={confirmOpen}
@@ -706,8 +686,8 @@ function BusinessAcceptHero({
         </Typography>
       ) : (
         <Alert severity="info">
-          {t('rentalInspection.noPinNote', 'Pickup photos submitted · {{done}} of {{total}} units. No PIN is needed for this rental.', {
-            done: submitted,
+          {t('rentalInspection.noPinNote', 'Pickup photos submitted · {{count}} of {{total}} units.', {
+            count: submitted,
             total: booking.units_booked || submitted,
           })}
         </Alert>
@@ -788,31 +768,63 @@ function PhotoRow({
   readOnly: boolean;
   onFile: (role: PhotoRole, file: File) => void;
 }) {
-  const { t } = useTranslation();
+  const [open, setOpen] = useState<string | null>(null);
   const roles = minPhotos == null ? REQUIRED_PHOTO_ROLES : photoRolesForMinimum(minPhotos);
   return (
-    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
-      {roles.map((role) => {
-        const photo = unit.photos.find((row) => row.role === role);
-        const label = t(ROLE_KEY[role][0], ROLE_KEY[role][1]);
-        return (
-          <Button key={role} component="label" variant="outlined" sx={{ minHeight: 96, minWidth: 96 }}>
-            {photo?.url ? <Box component="img" src={photo.url} alt={label} sx={{ width: 72, height: 72, objectFit: 'cover' }} /> : label}
-            {readOnly ? null : (
-              <input
-                hidden
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) onFile(role, file);
-                }}
-              />
-            )}
-          </Button>
-        );
-      })}
-    </Stack>
+    <>
+      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
+        {roles.map((role) => (
+          <PhotoTile key={role} role={role} photo={unit.photos.find((row) => row.role === role)} readOnly={readOnly} onFile={onFile} onOpen={setOpen} />
+        ))}
+      </Stack>
+      <PhotoLightbox url={open} onClose={() => setOpen(null)} />
+    </>
+  );
+}
+
+function PhotoTile({
+  role,
+  photo,
+  readOnly,
+  onFile,
+  onOpen,
+}: {
+  role: PhotoRole;
+  photo: InspectionUnit['photos'][number] | undefined;
+  readOnly: boolean;
+  onFile: (role: PhotoRole, file: File) => void;
+  onOpen: (url: string) => void;
+}) {
+  const { t } = useTranslation();
+  const label = t(ROLE_KEY[role][0], ROLE_KEY[role][1]);
+  const thumb = photo?.url ? <Box component="img" src={photo.url} alt={label} sx={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 1 }} /> : label;
+  if (readOnly && photo?.url) {
+    return (
+      <Button variant="outlined" sx={{ minHeight: 96, minWidth: 96, p: 0.5 }} onClick={() => onOpen(photo.url!)} aria-label={label}>
+        {thumb}
+      </Button>
+    );
+  }
+  return (
+    <Button component="label" variant="outlined" sx={{ minHeight: 96, minWidth: 96, p: 0.5 }}>
+      {thumb}
+      {readOnly ? null : (
+        <input hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) onFile(role, file);
+        }} />
+      )}
+    </Button>
+  );
+}
+
+function PhotoLightbox({ url, onClose }: { url: string | null; onClose: () => void }) {
+  return (
+    <Dialog open={!!url} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogContent sx={{ p: 1 }}>
+        {url ? <Box component="img" src={url} alt="" sx={{ width: '100%', maxHeight: '80vh', objectFit: 'contain' }} /> : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -937,7 +949,6 @@ function Timeline({
         <Typography key={title} color={done[row] ? 'text.primary' : 'text.secondary'}>
           {done[row] ? '● ' : '○ '}
           {title}
-          {role === 'business' && row === 1 && pickup?.versionNo ? ` · ${t('rentalInspection.version', 'v{{version}}', { version: pickup.versionNo })}` : ''}
         </Typography>
       ))}
     </Stack>

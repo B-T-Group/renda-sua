@@ -61,6 +61,7 @@ import {
   confirmationTimeZone,
   confirmationZoneDefault,
   confirmationZoneKey,
+  formatBookedSpan,
   formatConfirmationDue,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
@@ -451,12 +452,17 @@ const RentalBookingDetailPage: React.FC = () => {
       count,
       defaultValue: count === 1 ? '{{count}} day' : '{{count}} days',
     });
-  const periodLines = bookingRequestedPeriodLines(
-    selectionWindows,
-    booking,
+  const listingCountry = booking.rental_location_listing?.business_location?.address?.country;
+  const bookedSpan = formatBookedSpan(
+    booking.start_at,
+    booking.end_at,
+    confirmationTimeZone(listingCountry, booking.currency),
     i18n.language,
-    dayCountLabel
+    confirmationZoneDefault(listingCountry, booking.currency, i18n.language)
   );
+  const periodLines = bookedSpan
+    ? [bookedSpan]
+    : bookingRequestedPeriodLines(selectionWindows, booking, i18n.language, dayCountLabel);
   const returnPhase = renterReturnPhase({
     status: booking.status,
     endAt: booking.end_at,
@@ -490,8 +496,11 @@ const RentalBookingDetailPage: React.FC = () => {
     detailStatusKey,
     DETAIL_STATUS_DEFAULTS[detailStatusKey] ?? status
   );
-  const formatDetailMoney = (amount: number) =>
-    formatRequestAmount(amount, booking.currency || 'XAF', i18n.language);
+  const formatDetailMoney = (amount: number) => {
+    const currency = booking.currency || 'XAF';
+    if (currency.toUpperCase() === 'CAD') return formatConfirmationMoney(amount, 'CAD', i18n.language);
+    return formatRequestAmount(amount, currency, i18n.language);
+  };
 
   const statusChipColor =
     status === 'confirmed'
@@ -594,7 +603,7 @@ const RentalBookingDetailPage: React.FC = () => {
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75, flexWrap: 'wrap' }}>
                 {booking.booking_number ? (
                   <Typography variant="body2" color="text.secondary">
-                    {t('rentals.bookingNumber', 'Booking')}: <strong>{booking.booking_number}</strong>
+                    {t('rentals.bookingNumber', 'Booking:')} <strong>{booking.booking_number}</strong>
                   </Typography>
                 ) : null}
                 <Typography variant="body2" color="text.secondary">
@@ -614,10 +623,9 @@ const RentalBookingDetailPage: React.FC = () => {
               sx={{
                 fontWeight: 800,
                 ...(reviewReady
-                  ? {
-                      bgcolor: isBusiness ? '#0B7A3B18' : '#0A4FB518',
-                      color: isBusiness ? '#0B7A3B' : '#0A4FB5',
-                    }
+                  ? isBusiness
+                    ? { bgcolor: '#B4530918', color: '#B45309' }
+                    : { bgcolor: '#0A4FB518', color: '#0A4FB5' }
                   : {}),
               }}
             />

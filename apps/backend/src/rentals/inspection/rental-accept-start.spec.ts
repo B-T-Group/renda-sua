@@ -135,6 +135,32 @@ describe('accept and start', () => {
     await svc.acceptAndStartRental('b1', 'ver-1');
     expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
     expect(svc.notificationsService.sendRentalStartedClientPush).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalInspectionNotice).not.toHaveBeenCalled();
+  });
+
+  it('keeps the accept notice, then the started notice, when Mobile Money waits', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    const result = await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(result).toMatchObject({ started: false, paymentPending: true, payment_rail: 'mobile_money' });
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted', paymentPending: true })
+    );
+    svc.fetchBookingByBookingNumber.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'confirmed', payment_status: 'paid', payment_timing: 'pay_at_pickup' })
+    );
+    svc.hasuraSystemService.executeQuery.mockResolvedValue(
+      gate({ pickup_ack_current: true, pickup_accepted_version_id: 'ver-1' })
+    );
+    await svc.processRentalBookingPayment({ entity_id: 'RB-1' });
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalStartedClientPush).toHaveBeenCalledTimes(1);
   });
 
   it('charges the wallet and then starts', async () => {

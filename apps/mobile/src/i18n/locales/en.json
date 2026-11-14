@@ -2574,7 +2574,7 @@
       "reject": "Reject",
       "viewBooking": "View booking",
       "booking": "Booking",
-      "clientDetails": "Client details",
+      "clientDetails": "Renter details",
       "offerTotal": "Quoted total",
       "contractHours": "Contract valid for (hours)",
       "responseNote": "Note (optional)",
@@ -2724,7 +2724,7 @@
           "backToStudio": "Back to rentals"
         }
       },
-      "authorizedAmount": "Held on client card: {{amount}}"
+      "authorizedAmount": "Held on the renter's card: {{amount}}"
     },
     "orders": {
       "title": "Orders",
@@ -6240,7 +6240,7 @@
       "contractBody": "The owner will review your request and, if the item is available for the dates you chose, propose a contract. You can reject that offer or accept it and continue to rental payment.",
       "pinTitle": "Starting the rental",
       "pinBody": "When you meet the owner to begin the rental, you will need to give them your start PIN so they can confirm the handover in the app.",
-      "pinBodyInspected": "At pickup, the business will share a condition report. Review and accept it to start the rental. No PIN is needed.",
+      "pinBodyInspected": "At pickup, the business will share a condition report. Review and accept it to start the rental.",
       "payoutTitle": "Funds to the owner",
       "payoutBody": "Payment is released to the owner automatically once the end of the rental period is reached, according to your booking terms.",
       "ratingsTitle": "After the rental ends",
@@ -8612,8 +8612,11 @@
     "waitingBody": "{{name}} is reviewing the condition report. You'll see when the rental starts — then hand over the item.",
     "bannerReview": "Review the condition report, then accept it to start the rental.",
     "bannerWaiting": "Waiting for the renter to accept the condition. No PIN is needed.",
-    "noPinNote": "Pickup photos submitted · {{done}} of {{total}} units. No PIN is needed for this rental.",
-    "updateReport": "Update report",
+    "noPinNote_one": "Pickup photos submitted · {{count}} of {{total}} unit.",
+    "noPinNote_other": "Pickup photos submitted · {{count}} of {{total}} units.",
+    "noPinNote_plural": "Pickup photos submitted · {{count}} of {{total}} units.",
+    "noPinNote": "Pickup photos submitted · {{count}} of {{total}} unit.",
+    "updateReport": "Edit report",
     "phase": {
       "reportReady": "Report ready to review",
       "waitingRenter": "Waiting for renter"
@@ -8623,7 +8626,10 @@
       "sentTitle": "Condition report sent",
       "sentLead": "We asked {{name}} to review it. Hand over the item once they accept. The rental starts automatically.",
       "sentLeadReturn": "We asked {{name}} to review the return. The rental stays open until they accept.",
-      "unitLine": "{{count}} unit · v{{version}} · {{when}}",
+      "unitLine_one": "{{count}} unit · {{when}}",
+      "unitLine_other": "{{count}} units · {{when}}",
+      "unitLine_plural": "{{count}} units · {{when}}",
+      "unitLine": "{{count}} unit · {{when}}",
       "backToBooking": "Back to booking",
       "editReport": "Edit report",
       "stepSent": "Report sent",
@@ -8675,7 +8681,7 @@
     "timelineBooked": "Booked",
     "timelinePickupSubmitted": "Pickup inspection submitted",
     "timelineAccepted": "You accepted the condition",
-    "statusClientAck": "Client acknowledged",
+    "statusClientAck": "The renter accepted the condition",
     "timelineStarted": "Rental started",
     "timelineHandback": "Physical handback recorded",
     "timelineReturnDamage": "Return inspection",

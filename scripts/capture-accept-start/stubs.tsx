@@ -32,7 +32,7 @@ function reviewBooking(current: Scene) {
     id: 'b1',
     booking_number: 'RB-25496259',
     status: 'reserved',
-    start_at: '2026-11-17T15:00:00.000Z',
+    start_at: '2026-11-17T20:00:00.000Z',
     end_at: '2026-11-19T01:00:00.000Z',
     total_amount: 45,
     currency: 'CAD',
@@ -50,7 +50,7 @@ function reviewBooking(current: Scene) {
         name: 'JBL PartyBox 310',
         rental_item_images: [{ id: 'img', image_url: '/hero-jbl.png', alt_text: 'JBL PartyBox 310' }],
       },
-      business_location: { name: "Stripe Rail – L'Assomption" },
+      business_location: { name: 'Atelier Nord, Toronto', address: { country: 'CA' } },
     },
     accept_start_preview: null,
     rental_request: {
@@ -58,13 +58,13 @@ function reviewBooking(current: Scene) {
         {
           billing: 'daily',
           calendar_date: '2026-11-17',
-          start_at: '2026-11-17T15:00:00.000Z',
+          start_at: '2026-11-17T20:00:00.000Z',
           end_at: '2026-11-19T01:00:00.000Z',
         },
       ],
     },
     security_deposit_amount: 20,
-    authorized_amount: 45,
+    authorized_amount: 65,
     overtime_amount: 0,
     _business: current === 'businessWait',
   };
@@ -122,9 +122,9 @@ const unit = (id: string, label: string) => ({
   wear: 'none',
   accessories: id === 'u2' ? [{ name: 'Battery + charger', count: 2 }] : [],
   photos: [
-    { id: `${id}-1`, role: 'overview', url: '' },
-    { id: `${id}-2`, role: 'other_side', url: '' },
-    { id: `${id}-3`, role: 'accessories', url: '' },
+    { id: `${id}-1`, role: 'overview', url: '/hero-jbl.png' },
+    { id: `${id}-2`, role: 'other_side', url: '/hero-jbl.png' },
+    { id: `${id}-3`, role: 'accessories', url: '/hero-jbl.png' },
   ],
 });
 
@@ -221,7 +221,7 @@ export function useApiClient() {
                 renter_return_escalated_at: null,
                 rental_location_listing: {
                   rental_item: { name: 'JBL PartyBox 310' },
-                  business_location: { name: "Stripe Rail - L'Assomption" },
+                  business_location: { name: "Atelier Nord, Toronto" },
                 },
               },
               {
@@ -232,7 +232,7 @@ export function useApiClient() {
                 renter_return_escalated_at: '2026-11-12T18:42:00.000Z',
                 rental_location_listing: {
                   rental_item: { name: 'JBL PartyBox 310' },
-                  business_location: { name: "Stripe Rail - L'Assomption" },
+                  business_location: { name: "Atelier Nord, Toronto" },
                 },
               },
             ],
@@ -289,8 +289,8 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
     renter_reported_returned_at: reported ? '2026-11-12T18:42:00.000Z' : null,
     renter_return_escalated_at: state === 'escalated' ? '2026-11-13T18:42:00.000Z' : null,
     return_place: {
-      name: "Stripe Rail - L'Assomption",
-      address: "Stripe Rail - L'Assomption",
+      name: "Atelier Nord, Toronto",
+      address: "Atelier Nord, Toronto",
       phone: '+237600000000',
     },
     inspection_policy_version: null,
@@ -299,7 +299,7 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
         name: 'JBL PartyBox 310',
         rental_item_images: [{ id: 'img', image_url: '/hero.png', alt_text: 'JBL PartyBox 310' }],
       },
-      business_location: { name: "Stripe Rail - L'Assomption" },
+      business_location: { name: "Atelier Nord, Toronto" },
     },
   };
 }
@@ -323,7 +323,7 @@ export function useRentalApi() {
           rental_location_listing: {
             id: 'loc',
             base_price_per_hour: 1000,
-            business_location: { name: "Stripe Rail - L'Assomption" },
+            business_location: { name: "Atelier Nord, Toronto" },
             rental_item: { name: 'JBL PartyBox 310', currency: 'XAF' },
           },
           rental_booking: {
@@ -341,7 +341,7 @@ export function useRentalApi() {
           rental_location_listing: {
             id: 'loc',
             base_price_per_hour: 1000,
-            business_location: { name: "Stripe Rail - L'Assomption" },
+            business_location: { name: "Atelier Nord, Toronto" },
             rental_item: { name: 'JBL PartyBox 310', currency: 'XAF' },
           },
           rental_booking: {

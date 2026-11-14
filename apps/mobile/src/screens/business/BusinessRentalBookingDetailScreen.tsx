@@ -39,6 +39,12 @@ import {
   resolveBookingPhase,
 } from '../../utils/rentals';
 import { bookingRequestedPeriodLines, formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
+import {
+  confirmationTimeZone,
+  confirmationZoneDefault,
+  formatBookedSpan,
+  formatConfirmationMoney,
+} from '../../utils/rentals/confirmationFormat';
 import { formatDoualaStamp } from '../../utils/rentals/renterReturnPhase';
 import {
   businessCanReplaceReport,
@@ -300,12 +306,26 @@ export default function BusinessRentalBookingDetailScreen() {
 
   const sc = rentalBookingStatusColors(booking.status, colors);
   const phaseInfo = resolveBookingPhase(booking.status, 'business');
-  const periodLines = bookingRequestedPeriodLines(
-    parseRentalSelectionWindows(booking.rental_request?.rental_selection_windows),
-    booking,
+  const listingCountry = booking.rental_location_listing?.business_location?.address?.country;
+  const bookedSpan = formatBookedSpan(
+    booking.start_at,
+    booking.end_at,
+    confirmationTimeZone(listingCountry, booking.currency),
     i18n.language,
-    (count) => t('rentals.requestForm.dayCount', '{{count}} day', { count })
+    confirmationZoneDefault(listingCountry, booking.currency, i18n.language)
   );
+  const periodLines = bookedSpan
+    ? [bookedSpan]
+    : bookingRequestedPeriodLines(
+        parseRentalSelectionWindows(booking.rental_request?.rental_selection_windows),
+        booking,
+        i18n.language,
+        (count) => t('rentals.requestForm.dayCount', '{{count}} day', { count })
+      );
+  const detailMoney = (amount: number) =>
+    (booking.currency || '').toUpperCase() === 'CAD'
+      ? formatConfirmationMoney(amount, 'CAD', i18n.language)
+      : formatRequestAmount(amount, booking.currency, i18n.language);
   const client = booking.client?.user;
   const clientName = [client?.first_name, client?.last_name].filter(Boolean).join(' ');
   const reviewReady =
@@ -383,14 +403,14 @@ export default function BusinessRentalBookingDetailScreen() {
                     booking.status === 'awaiting_return' ? 'Return due' : booking.status
                   )
             }
-            backgroundColor={reviewReady ? '#0B7A3B18' : sc.backgroundColor}
-            textColor={reviewReady ? '#0B7A3B' : sc.textColor}
-            borderColor={reviewReady ? '#0B7A3B44' : sc.borderColor}
+            backgroundColor={reviewReady ? '#B4530918' : sc.backgroundColor}
+            textColor={reviewReady ? '#B45309' : sc.textColor}
+            borderColor={reviewReady ? '#B4530944' : sc.borderColor}
           />
         </View>
         {booking.booking_number ? (
           <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
-            #{booking.booking_number}
+            {booking.booking_number}
           </Text>
         ) : null}
         <View style={{ marginTop: 8 }}>
@@ -404,13 +424,13 @@ export default function BusinessRentalBookingDetailScreen() {
           ))}
         </View>
         <Text style={{ color: colors.text.primary, marginTop: 8, fontWeight: '600' }}>
-          {formatRequestAmount(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+          {detailMoney(Number(booking.total_amount) || 0)}
         </Text>
         {depositAmount > 0 ? (
           <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
             {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
             {': '}
-            {formatRequestAmount(depositAmount, booking.currency, i18n.language)}
+            {detailMoney(depositAmount)}
           </Text>
         ) : null}
         {authorizedAmount > 0 ? (
@@ -418,7 +438,7 @@ export default function BusinessRentalBookingDetailScreen() {
             {t(
               'business.rentals.authorizedAmount',
               'Held on client card: {{amount}}',
-              { amount: formatRequestAmount(authorizedAmount, booking.currency, i18n.language) }
+              { amount: detailMoney(authorizedAmount) }
             )}
           </Text>
         ) : null}
@@ -901,7 +921,10 @@ function BusinessAcceptStartHero({
   if (!started && !waiting) return null;
   const name = booking.client?.user?.first_name || t('rentalInspection.renterFallback', 'The renter');
   const due = formatListingDue(booking.end_at, i18n.language);
-  const paid = formatRequestAmount(Number(booking.total_amount) || 0, booking.currency, i18n.language);
+  const paid =
+    (booking.currency || '').toUpperCase() === 'CAD'
+      ? formatConfirmationMoney(Number(booking.total_amount) || 0, 'CAD', i18n.language)
+      : formatRequestAmount(Number(booking.total_amount) || 0, booking.currency, i18n.language);
   const units = booking.units_booked || submittedUnits;
   return (
     <View style={{ gap: spacing.sm }}>
@@ -929,8 +952,8 @@ function BusinessAcceptStartHero({
       ) : (
         <View style={{ backgroundColor: colors.infoTint, borderRadius: borderRadius.md, padding: spacing.md }}>
           <Text style={{ color: colors.text.primary }}>
-            {t('rentalInspection.noPinNote', 'Pickup photos submitted · {{done}} of {{total}} units. No PIN is needed for this rental.', {
-              done: submittedUnits,
+            {t('rentalInspection.noPinNote', 'Pickup photos submitted · {{count}} of {{total}} units.', {
+              count: submittedUnits,
               total: units,
             })}
           </Text>

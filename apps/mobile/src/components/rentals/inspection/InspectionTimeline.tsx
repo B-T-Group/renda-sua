@@ -45,9 +45,6 @@ export function InspectionTimeline({
     {
       done: pickup?.status === 'submitted' || accepted,
       title: t('rentalInspection.timelinePickupSubmitted', 'Pickup inspection submitted'),
-      detail: role === 'business' && pickup?.versionNo
-        ? t('rentalInspection.version', 'v{{version}}', { version: pickup.versionNo })
-        : undefined,
     },
     {
       done: accepted,

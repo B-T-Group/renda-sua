@@ -19,7 +19,7 @@ export function ReportSentConfirmation({
   stage,
   renterName,
   unitCount,
-  versionNo,
+  versionNo: _versionNo,
   when,
   photos,
   canEdit,
@@ -54,7 +54,7 @@ export function ReportSentConfirmation({
         {t(leadKey, leadDefault, { name: renterName })}
       </Typography>
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-        {t('rentalInspection.confirm.unitLine', '{{count}} unit · v{{version}} · {{when}}', { count: unitCount, version: versionNo, when })}
+        {t('rentalInspection.confirm.unitLine', '{{count}} unit · {{when}}', { count: unitCount, when })}
       </Typography>
       <PhotoStrip photos={photos} />
       <SentSteps stage={stage} />

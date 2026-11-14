@@ -10,15 +10,23 @@ function part(parts: Intl.DateTimeFormatPart[], type: string): string {
   return parts.find((row) => row.type === type)?.value ?? '';
 }
 
-/** Compact due clock in the listing time zone. fr-CA stays `18 nov. · 20:00`. */
-export function formatRentalNoticeDue(
-  iso: string | null | undefined,
-  timeZone: string | null | undefined,
-  language?: string | null
-): string {
-  if (!iso) return '';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
+const NOTICE_ZONE: Record<string, { en: string; fr: string }> = {
+  'America/Toronto': { en: 'Montréal time', fr: 'heure de Montréal' },
+  'America/New_York': { en: 'New York time', fr: 'heure de New York' },
+  'Africa/Douala': { en: 'Douala time', fr: 'heure de Douala' },
+  'Africa/Libreville': { en: 'Libreville time', fr: 'heure de Libreville' },
+  'Africa/Lome': { en: 'Lome time', fr: 'heure de Lomé' },
+  'Africa/Porto-Novo': { en: 'Porto-Novo time', fr: 'heure de Porto-Novo' },
+  'Africa/Abidjan': { en: 'Abidjan time', fr: "heure d'Abidjan" },
+  'Africa/Brazzaville': { en: 'Brazzaville time', fr: 'heure de Brazzaville' },
+  'Africa/Kinshasa': { en: 'Kinshasa time', fr: 'heure de Kinshasa' },
+  'Africa/Ndjamena': { en: "N'Djamena time", fr: "heure de N'Djamena" },
+  'Africa/Bangui': { en: 'Bangui time', fr: 'heure de Bangui' },
+  'Africa/Malabo': { en: 'Malabo time', fr: 'heure de Malabo' },
+  'Asia/Manila': { en: 'Manila time', fr: 'heure de Manille' },
+};
+
+function noticeClock(iso: string, timeZone: string | null | undefined, language?: string | null): string {
   const fr = normalizeLocale(language) === 'fr';
   const parts = new Intl.DateTimeFormat(fr ? 'fr-CA' : 'en-CA', {
     timeZone: timeZone || 'UTC',
@@ -27,10 +35,28 @@ export function formatRentalNoticeDue(
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
-  }).formatToParts(date);
+  }).formatToParts(new Date(iso));
   const month = part(parts, 'month').replace(/\.$/, '');
   const label = fr ? `${month.toLowerCase()}.` : month;
   return `${part(parts, 'day')} ${label} · ${part(parts, 'hour')}:${part(parts, 'minute')}`;
+}
+
+function noticeZonePhrase(timeZone: string | null | undefined, language?: string | null): string {
+  const row = NOTICE_ZONE[timeZone || ''];
+  if (!row) return '';
+  return normalizeLocale(language) === 'fr' ? row.fr : row.en;
+}
+
+/** Compact due clock in the listing time zone, with the city when we know it. */
+export function formatRentalNoticeDue(
+  iso: string | null | undefined,
+  timeZone: string | null | undefined,
+  language?: string | null
+): string {
+  if (!iso || Number.isNaN(new Date(iso).getTime())) return '';
+  const clock = noticeClock(iso, timeZone, language);
+  const zone = noticeZonePhrase(timeZone, language);
+  return zone ? `${clock} (${zone})` : clock;
 }
 
 export function rentalNoticeZone(countryCode?: string | null): string | null {
@@ -308,6 +334,8 @@ export function buildRentalInspectionNotice(params: {
   preferredLanguage?: string | null;
   renterName?: string | null;
   returnDue?: string | null;
+  /** MoMo accept: the rental is not active until payment lands. */
+  paymentPending?: boolean;
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
   const item = params.rentalItemName;
@@ -327,13 +355,13 @@ export function buildRentalInspectionNotice(params: {
     correction: {
       title: fr ? 'Correction demandée' : 'Correction requested',
       body: fr
-        ? `Le client a demandé une correction pour ${item}.`
+        ? `Le locataire a demandé une correction pour ${item}.`
         : `The renter asked for a correction on ${item}.`,
     },
     pickup_accepted: {
       title: fr ? 'État des lieux accepté' : 'Condition report accepted',
       body: fr
-        ? `Le client a accepté l'état des lieux de ${item}.`
+        ? `Le locataire a accepté l'état des lieux de ${item}.`
         : `The renter accepted the condition report for ${item}.`,
     },
     return_reminder: {
@@ -361,7 +389,10 @@ export function buildRentalInspectionNotice(params: {
         : `Support decided the return of ${item}.`,
     },
   };
-  return copy[params.kind];
+  const row = copy[params.kind];
+  if (params.kind !== 'pickup_accepted' || !params.paymentPending) return row;
+  const extra = fr ? ' Paiement en attente.' : ' Payment is pending.';
+  return { ...row, body: `${row.body}${extra}` };
 }
 
 export function buildRentalStartedBusinessNotice(params: {
@@ -372,7 +403,7 @@ export function buildRentalStartedBusinessNotice(params: {
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
   const item = params.rentalItemName;
-  const renter = params.renterName?.trim() || (fr ? 'Le client' : 'The renter');
+  const renter = params.renterName?.trim() || (fr ? 'Le locataire' : 'The renter');
   return {
     title: fr ? 'Location démarrée' : 'Rental started',
     body: rentalStartedBody(fr, renter, item, params.returnDue),
@@ -407,7 +438,7 @@ export function buildReturnAcceptedPush(params: {
   preferredLanguage?: string | null;
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
-  const renter = params.renterName?.trim() || (fr ? 'Le client' : 'The renter');
+  const renter = params.renterName?.trim() || (fr ? 'Le locataire' : 'The renter');
   return {
     title: fr ? 'Retour accepté' : 'Return accepted',
     body: fr

@@ -3,7 +3,7 @@ import {
   CheckCircle as CheckCircleIcon,
   DescriptionOutlined as ContractIcon,
   RateReview as RateReviewIcon,
-  VpnKey as PinIcon,
+  AssignmentTurnedIn as PinIcon,
 } from '@mui/icons-material';
 import { Box, Button, Container, Paper, Stack, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -122,7 +122,7 @@ const RentalRequestSubmittedPage: React.FC = () => {
                     noPin
                       ? t(
                           'rentals.requestSubmitted.pinBodyInspected',
-                          'At pickup, the business will share a condition report. Review and accept it to start the rental. No PIN is needed.'
+                          'At pickup, the business will share a condition report. Review and accept it to start the rental.'
                         )
                       : t(
                           'rentals.requestSubmitted.pinBody',

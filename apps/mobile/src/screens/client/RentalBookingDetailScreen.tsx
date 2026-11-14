@@ -52,6 +52,12 @@ import {
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
 import { clientInspectionAction, pickupGate, reportReadyToReview } from '../../utils/rentals/rentalInspection';
+import {
+  confirmationTimeZone,
+  confirmationZoneDefault,
+  formatBookedSpan,
+  formatConfirmationMoney,
+} from '../../utils/rentals/confirmationFormat';
 import { renterReturnPhase } from '../../utils/rentals/renterReturnPhase';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
@@ -155,14 +161,26 @@ export default function RentalBookingDetailScreen() {
   );
   const pricing = parseRentalPricingSnapshot(booking?.rental_pricing_snapshot);
   const moneyCurrency = pricing?.currency ?? booking?.currency ?? 'XAF';
-  const formatDetailMoney = (amount: number) =>
-    formatRequestAmount(amount, moneyCurrency, i18n.language);
+  const formatDetailMoney = (amount: number) => {
+    if (moneyCurrency.toUpperCase() === 'CAD') return formatConfirmationMoney(amount, 'CAD', i18n.language);
+    return formatRequestAmount(amount, moneyCurrency, i18n.language);
+  };
   const windows = parseRentalSelectionWindows(
     booking?.rental_request?.rental_selection_windows
   );
   const dayCountLabel = (count: number) =>
     t('rentals.requestForm.dayCount', '{{count}} day', { count });
-  const periodLines = bookingRequestedPeriodLines(windows, booking, i18n.language, dayCountLabel);
+  const listingCountry = booking?.rental_location_listing?.business_location?.address?.country;
+  const bookedSpan = formatBookedSpan(
+    booking?.start_at,
+    booking?.end_at,
+    confirmationTimeZone(listingCountry, booking?.currency),
+    i18n.language,
+    confirmationZoneDefault(listingCountry, booking?.currency, i18n.language)
+  );
+  const periodLines = bookedSpan
+    ? [bookedSpan]
+    : bookingRequestedPeriodLines(windows, booking, i18n.language, dayCountLabel);
   const returnByLabel = booking?.end_at
     ? formatRentalPeriod(
         [{ start_at: booking.end_at, end_at: booking.end_at }],
@@ -749,7 +767,7 @@ export default function RentalBookingDetailScreen() {
           ) : null}
         </View>
 
-        {isReserved ? (
+        {isReserved && flags.rentals_card_charge_at_pickup_enabled ? (
           <View
             style={[
               styles.card,

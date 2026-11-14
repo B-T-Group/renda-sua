@@ -4063,6 +4063,7 @@ export class NotificationsService {
     renterName?: string | null;
     endAt?: string | null;
     countryCode?: string | null;
+    paymentPending?: boolean;
   }): Promise<void> {
     const userId = params.userId;
     if (!userId) return;
@@ -4088,6 +4089,7 @@ export class NotificationsService {
     renterName?: string | null;
     endAt?: string | null;
     countryCode?: string | null;
+    paymentPending?: boolean;
   }): Promise<void> {
     const preferredLanguage = await this.languageFor(params.userId, params.preferredLanguage);
     const msg = buildRentalInspectionNotice({

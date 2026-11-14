@@ -111,7 +111,15 @@ describe('rental push copy', () => {
         rentalItemName: item,
         preferredLanguage: 'fr',
       }).body
-    ).toBe(`Le client a accepté l'état des lieux de ${item}.`);
+    ).toBe(`Le locataire a accepté l'état des lieux de ${item}.`);
+    expect(
+      buildRentalInspectionNotice({
+        kind: 'pickup_accepted',
+        rentalItemName: item,
+        preferredLanguage: 'fr',
+        paymentPending: true,
+      }).body
+    ).toBe(`Le locataire a accepté l'état des lieux de ${item}. Paiement en attente.`);
     const started = buildRentalStartedBusinessNotice({
       rentalItemName: item,
       renterName: 'Amina',
@@ -137,10 +145,10 @@ describe('rental push copy', () => {
 
   it('formats the due clock in the listing time zone', () => {
     const iso = '2026-11-18T20:00:00.000Z';
-    expect(formatRentalNoticeDue(iso, 'America/Toronto', 'en')).toBe('18 Nov · 15:00');
-    expect(formatRentalNoticeDue('2026-11-19T01:00:00.000Z', 'America/Toronto', 'en')).toBe('18 Nov · 20:00');
+    expect(formatRentalNoticeDue(iso, 'America/Toronto', 'en')).toBe('18 Nov · 15:00 (Montréal time)');
+    expect(formatRentalNoticeDue('2026-11-19T01:00:00.000Z', 'America/Toronto', 'en')).toBe('18 Nov · 20:00 (Montréal time)');
     const fr = formatRentalNoticeDue('2026-11-19T01:00:00.000Z', 'America/Toronto', 'fr');
-    expect(fr).toBe('18 nov. · 20:00');
-    expect(fr).not.toContain('h');
+    expect(fr).toBe('18 nov. · 20:00 (heure de Montréal)');
+    expect(fr).not.toMatch(/\d+h/);
   });
 });
