@@ -38,6 +38,7 @@ import {
   RentalPricingSnapshotDto,
 } from './dto/rental-pricing-snapshot.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
+import { isRequestUuid, requestPolicyNotFound } from './rental-request-policy';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { peakConcurrentUnits as sweepPeakUnits } from './rental-capacity';
 import {
@@ -1512,12 +1513,30 @@ export class RentalsService {
   }
 
   async getRequestInspectionPolicy(requestId: string): Promise<number | null> {
+    if (!isRequestUuid(requestId)) throw requestPolicyNotFound();
     const user = await this.hasuraUserService.getUser();
-    const req = await this.fetchRequest(requestId);
-    if (!this.mayReadRequestPolicy(user, req)) {
-      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
-    }
+    const req = await this.loadRequestQuietly(requestId);
+    if (!this.mayReadRequestPolicy(user, req)) throw requestPolicyNotFound();
     return this.requestPolicyVersion(req.rental_location_listing);
+  }
+
+  private async loadRequestQuietly(id: string): Promise<any | null> {
+    try {
+      const row = await this.hasuraSystemService.executeQuery<{ rental_requests_by_pk: any }>(
+        Q.GET_RENTAL_REQUEST_FULL,
+        { id }
+      );
+      return row.rental_requests_by_pk ?? null;
+    } catch (error: any) {
+      if (this.hidesMissingRequest(error)) return null;
+      throw error;
+    }
+  }
+
+  private hidesMissingRequest(error: any): boolean {
+    if (!(error instanceof HttpException)) return false;
+    const status = error.getStatus();
+    return status === HttpStatus.BAD_REQUEST || status === HttpStatus.NOT_FOUND;
   }
 
   private mayReadRequestPolicy(user: any, req: any): boolean {

@@ -71,7 +71,9 @@ function listingZone(country?: string | null, currency?: string | null) {
   const fromCountry = LISTING_ZONES[(country || '').trim().toUpperCase()];
   if (fromCountry) return fromCountry;
   const code = (currency || '').toUpperCase();
-  return code === 'XAF' || code === 'XOF' ? LISTING_ZONES.CM : LISTING_ZONES.CA;
+  if (code === 'XAF') return LISTING_ZONES.CM;
+  if (code === 'XOF') return LISTING_ZONES.TG;
+  return LISTING_ZONES.CA;
 }
 
 export function confirmationZoneKey(country?: string | null, currency?: string | null): string {

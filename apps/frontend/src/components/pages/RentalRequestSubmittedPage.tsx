@@ -50,10 +50,17 @@ const RentalRequestSubmittedPage: React.FC = () => {
     <>
       <SEOHead
         title={`${pageTitle} | Rendasua`}
-        description={t(
-          'rentals.requestSubmitted.metaDescription',
-          'Your rental request was submitted. Learn what happens next: contract, payment, PIN, and payouts.'
-        )}
+        description={
+          noPin
+            ? t(
+                'rentals.requestSubmitted.metaDescriptionInspected',
+                'Your rental request was submitted. Learn what happens next: contract, payment, and payouts.'
+              )
+            : t(
+                'rentals.requestSubmitted.metaDescription',
+                'Your rental request was submitted. Learn what happens next: contract, payment, PIN, and payouts.'
+              )
+        }
         noindex
       />
       <Box

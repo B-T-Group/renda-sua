@@ -34,4 +34,21 @@ describe('rentals inspection confirmations flag', () => {
     expect(constants).toMatch(/rentals_inspection_confirmations_enabled: false/);
     expect(constants).not.toMatch(/rentals_inspection_confirmations_enabled:\s*isNonProduction/);
   });
+
+  it('keeps one in-app notice per booking and event', () => {
+    const noticeUp = readFileSync(
+      join(root, 'hasura/migrations/Rendasua/20261114133000_rental_notice_idempotency/up.sql'),
+      'utf8'
+    );
+    const noticeDown = readFileSync(
+      join(root, 'hasura/migrations/Rendasua/20261114133000_rental_notice_idempotency/down.sql'),
+      'utf8'
+    );
+    expect(noticeUp).toContain('notice_idempotency_key');
+    expect(noticeUp).toContain('user_messages_notice_idempotency_key_key UNIQUE');
+    expect(noticeDown).toContain('DROP CONSTRAINT IF EXISTS user_messages_notice_idempotency_key_key');
+    expect(noticeDown).toContain('DROP COLUMN IF EXISTS notice_idempotency_key');
+    expect(noticeDown).not.toMatch(/DELETE\s+FROM\s+public\.message_types/i);
+    expect(noticeDown).not.toMatch(/DELETE\s+FROM\s+public\.user_messages/i);
+  });
 });

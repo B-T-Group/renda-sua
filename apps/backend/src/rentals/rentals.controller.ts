@@ -37,6 +37,7 @@ import { AcceptAndStartRentalDto } from './dto/accept-and-start-rental.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
+import { requestPolicyIdPipe } from './rental-request-policy';
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
@@ -523,8 +524,11 @@ export class RentalsController {
   @ApiOperation({ summary: 'Whether this client request would use a condition report' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Policy version, or null for the start-PIN flow' })
-  @ApiResponse({ status: 404, description: 'Not the requester or the listing business' })
-  async getRequestInspectionPolicy(@Param('id') requestId: string) {
+  @ApiResponse({
+    status: 404,
+    description: 'Missing, unauthorized, or malformed request id',
+  })
+  async getRequestInspectionPolicy(@Param('id', requestPolicyIdPipe) requestId: string) {
     const inspection_policy_version = await this.rentalsService.getRequestInspectionPolicy(requestId);
     return { success: true, inspection_policy_version };
   }

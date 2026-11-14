@@ -6179,6 +6179,7 @@
     "requestSubmitted": {
       "pageTitle": "Demande envoyée",
       "metaDescription": "Votre demande de location a été envoyée. Découvrez la suite : contrat, paiement, code PIN et versement.",
+      "metaDescriptionInspected": "Votre demande de location a été envoyée. Découvrez la suite : contrat, paiement et versement.",
       "headline": "Votre demande de location a été envoyée",
       "intro": "Voici la suite du processus sur Rendasua.",
       "contractTitle": "Contrat et paiement",

@@ -277,6 +277,13 @@ export interface EmailTemplate {
   html: string;
 }
 
+const RENTAL_NOTICE_INSERT = `mutation InsertRentalNotice($object: user_messages_insert_input!) {
+  insert_user_messages_one(
+    object: $object
+    on_conflict: { constraint: user_messages_notice_idempotency_key_key, update_columns: [] }
+  ) { id }
+}`;
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -4115,60 +4122,33 @@ export class NotificationsService {
     body: string,
     path: string,
     event: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     const idempotencyKey = `${bookingId}:${event}`;
-    if (await this.rentalNoticeAlreadySent(userId, bookingId, messageType, idempotencyKey)) return;
-    await this.hasuraSystemService.executeMutation(
-      `mutation InsertRentalNotice($object: user_messages_insert_input!) {
-        insert_user_messages_one(object: $object) { id }
-      }`,
-      {
-        object: {
-          user_id: userId,
-          entity_type: 'rental_booking',
-          entity_id: bookingId,
-          message_type: messageType,
-          message: body,
-          message_payload: { bookingId, path, idempotencyKey },
-        },
-      }
-    );
+    const inserted = await this.hasuraSystemService.executeMutation<{
+      insert_user_messages_one: { id: string } | null;
+    }>(RENTAL_NOTICE_INSERT, {
+      object: this.rentalNoticeRow(userId, bookingId, messageType, body, path, idempotencyKey),
+    });
+    return Boolean(inserted?.insert_user_messages_one?.id);
   }
 
-  private async rentalNoticeAlreadySent(
+  private rentalNoticeRow(
     userId: string,
     bookingId: string,
     messageType: string,
+    body: string,
+    path: string,
     idempotencyKey: string
-  ): Promise<boolean> {
-    try {
-      return await this.rentalNoticeExists(userId, bookingId, messageType, idempotencyKey);
-    } catch (error: any) {
-      this.logger.warn(`rentalNoticeExists ${idempotencyKey}: ${error?.message ?? error}`);
-      return false;
-    }
-  }
-
-  private async rentalNoticeExists(
-    userId: string,
-    bookingId: string,
-    messageType: string,
-    idempotencyKey: string
-  ): Promise<boolean> {
-    const found = await this.hasuraSystemService.executeQuery<{
-      user_messages: Array<{ id: string }>;
-    }>(
-      `query RentalNoticeExists($userId: uuid!, $bookingId: uuid!, $type: String!, $key: jsonb!) {
-        user_messages(where: {
-          user_id: { _eq: $userId },
-          entity_id: { _eq: $bookingId },
-          message_type: { _eq: $type },
-          message_payload: { _contains: $key }
-        }, limit: 1) { id }
-      }`,
-      { userId, bookingId, type: messageType, key: { idempotencyKey } }
-    );
-    return (found.user_messages?.length ?? 0) > 0;
+  ) {
+    return {
+      user_id: userId,
+      entity_type: 'rental_booking',
+      entity_id: bookingId,
+      message_type: messageType,
+      message: body,
+      message_payload: { bookingId, path, idempotencyKey },
+      notice_idempotency_key: idempotencyKey,
+    };
   }
 
   async sendRentalBookingConfirmedPush(params: {
@@ -4227,8 +4207,15 @@ export class NotificationsService {
       returnDue: formatRentalNoticeDue(params.endAt, rentalNoticeZone(params.countryCode), preferredLanguage),
     });
     const url = this.inspectionNoticeUrl(params.bookingId, 'business');
-    await this.insertRentalUserMessage(params.businessUserId, params.bookingId, 'RENTAL_STARTED', msg.body, url, 'rental_started');
-    if (!this.rentalPushEnabled()) return;
+    const inserted = await this.insertRentalUserMessage(
+      params.businessUserId,
+      params.bookingId,
+      'RENTAL_STARTED',
+      msg.body,
+      url,
+      'rental_started'
+    );
+    if (!inserted || !this.rentalPushEnabled()) return;
     await this.sendPushNotificationByUserId(params.businessUserId, msg.title, msg.body, {
       type: 'rental_started',
       rentalBookingId: params.bookingId,

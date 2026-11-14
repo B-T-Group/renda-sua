@@ -1,5 +1,12 @@
 import { HttpException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+import type { HasuraSystemService } from '../../hasura/hasura-system.service';
+import type { NotificationsService as NotificationsServiceType } from '../../notifications/notifications.service';
 import { RentalsService } from '../rentals.service';
+
+const { NotificationsService } = jest.requireActual<{
+  NotificationsService: new (...args: unknown[]) => NotificationsServiceType;
+}>('../../notifications/notifications.service');
 import {
   acceptStartPaymentRail,
   didntReceiveWindowOpen,
@@ -184,6 +191,67 @@ describe('accept and start', () => {
     expect(markCalls()).toHaveLength(1);
     expect(markCalls()[0][1].at).toEqual(expect.any(String));
     expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+  });
+
+  it('writes one row and sends one push when a flagged Mobile Money webhook is replayed', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    const rows = new Set<string>();
+    const pushes: string[] = [];
+    const none = {} as never;
+    const notices = new NotificationsService(
+      { get: jest.fn(() => ({ enabled: true })) } as unknown as ConfigService,
+      {
+        executeMutation: jest.fn(async (_query: string, vars: { object?: { notice_idempotency_key?: string } }) => {
+          const key = vars?.object?.notice_idempotency_key ?? '';
+          if (rows.has(key)) return { insert_user_messages_one: null };
+          rows.add(key);
+          return { insert_user_messages_one: { id: 'row-1' } };
+        }),
+        executeQuery: jest.fn(),
+      } as unknown as HasuraSystemService,
+      none,
+      none,
+      none,
+      none,
+      none,
+      none,
+      none
+    );
+    jest.spyOn(notices as unknown as { languageFor: () => Promise<string> }, 'languageFor').mockResolvedValue('en');
+    jest
+      .spyOn(notices as unknown as { sendPushNotificationByUserId: () => Promise<void> }, 'sendPushNotificationByUserId')
+      .mockImplementation(async () => {
+        pushes.push('business');
+      });
+    svc.notificationsService.sendBusinessRentalStarted = (params: unknown) =>
+      notices.sendBusinessRentalStarted(params as never);
+    let marks = 0;
+    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
+      if (!String(query).includes('rental_mark_started')) {
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      marks += 1;
+      return marks === 1 ? { rental_mark_started: [{ id: 'b1' }] } : { rental_mark_started: [] };
+    });
+    svc.fetchBookingByBookingNumber.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'confirmed', payment_status: 'paid', payment_timing: 'pay_at_pickup' })
+    );
+    svc.hasuraSystemService.executeQuery.mockResolvedValue(
+      gate({ pickup_ack_current: true, pickup_accepted_version_id: 'ver-1' })
+    );
+    await svc.processRentalBookingPayment({ entity_id: 'RB-1' });
+    await svc.processRentalBookingPayment({ entity_id: 'RB-1' });
+    await notices.sendBusinessRentalStarted({
+      businessUserId: 'biz-user',
+      rentalItemName: 'Canon EOS R50',
+      bookingId: 'b1',
+    });
+    expect(pushes).toEqual(['business']);
+    expect(rows).toEqual(new Set(['b1:rental_started']));
+    expect(svc.notificationsService.sendRentalStartedClientPush).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the accept when Mobile Money fails, then retries without accepting again', async () => {

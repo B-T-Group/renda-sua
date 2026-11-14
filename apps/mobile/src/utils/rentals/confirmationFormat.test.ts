@@ -7,6 +7,7 @@ describe('confirmation timezone', () => {
     expect(confirmationTimeZone('CM')).toBe('Africa/Douala');
     expect(confirmationTimeZone('CA')).toBe('America/Toronto');
     expect(confirmationTimeZone(null, 'XAF')).toBe('Africa/Douala');
+    expect(confirmationTimeZone(null, 'XOF')).toBe('Africa/Lome');
     expect(confirmationTimeZone(null, 'CAD')).toBe('America/Toronto');
     expect(confirmationZoneKey('TG')).toBe('rentalInspection.confirm.zoneLome');
   });
