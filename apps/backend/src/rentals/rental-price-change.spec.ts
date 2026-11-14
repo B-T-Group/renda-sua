@@ -53,4 +53,20 @@ describe('rental price change', () => {
     expect(paymentBlockedUntilPriceSeen({ quoted: 2500, accepted: 3000, seenAt: '' })).toBe(true);
     expect(paymentBlockedUntilPriceSeen({ quoted: '2500', accepted: '2500.004', seenAt: null })).toBe(false);
   });
+
+  it('keeps the server total when the business snapshot omits units', () => {
+    const computed = {
+      ...snap,
+      total: 10000,
+      unitsBooked: 2,
+      lines: [{ kind: 'all_day' as const, calendarDate: '2026-11-14', ratePerDay: 5000, subtotal: 10000 }],
+    };
+    const sent = {
+      total: 5000,
+      currency: 'XAF',
+      lines: [{ subtotal: 5000 }],
+    };
+    expect(applyAcceptedPrice(computed, sent).snapshot.total).toBe(10000);
+    expect(applyAcceptedPrice(computed, { total: 3000, currency: 'XAF', lines: [{ subtotal: 5000 }] }).snapshot.total).toBe(3000);
+  });
 });
