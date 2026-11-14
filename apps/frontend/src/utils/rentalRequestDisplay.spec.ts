@@ -1,10 +1,18 @@
-import { formatRequestAmount } from './rentalRequestDisplay';
+import { formatAssistantMoney, formatRequestAmount } from './rentalRequestDisplay';
 
 const NBSP = '\u00A0';
 
 function joined(text: string): string {
   return text.replace(/ /g, NBSP);
 }
+
+describe('formatAssistantMoney', () => {
+  it('formats CAD with cents and a Canadian currency sign', () => {
+    expect(formatAssistantMoney(25, 'CAD', 'en')).toBe('$25.00');
+    expect(formatAssistantMoney(25, 'CAD', 'fr')).toBe('25,00\u00A0$');
+    expect(formatAssistantMoney(2500, 'XAF', 'fr')).toBe('2\u00A0500\u00A0FCFA');
+  });
+});
 
 describe('formatRequestAmount', () => {
   it('groups XAF and XOF with a non-breaking space and an FCFA suffix', () => {

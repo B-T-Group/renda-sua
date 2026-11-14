@@ -36,6 +36,7 @@ export type AssistantRentalMeta = {
   showAllHref?: string;
   showAllCount?: number;
   refs?: Record<string, string>;
+  suggestionNote?: string;
 };
 
 export type AssistantResultCard = {

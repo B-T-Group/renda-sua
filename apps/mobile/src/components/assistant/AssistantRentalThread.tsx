@@ -7,10 +7,10 @@ import { AppText } from '@/components/common/AppText';
 import { AssistantEntityCards } from '@/components/assistant/AssistantEntityCards';
 import { useTheme } from '@/contexts/ThemeContext';
 import { spacing } from '@/theme/spacing';
+import { formatAssistantMoney } from '@/utils/rentals/rentalRequestDisplay';
 import { formatRentalDay } from '@/utils/rentals/rentalRequestFormat';
 import type { AssistantRentalChip, AssistantRentalMeta, AssistantResultCard } from '@/utils/assistantResultCards';
 
-const NBSP = '\u00A0';
 const EN_DASH = '\u2013';
 
 export function AssistantRentalThread({
@@ -44,6 +44,7 @@ export function AssistantRentalThread({
       {rental?.footnote === 'estimate' ? <EstimateNote /> : null}
       {rental?.showAllCount ? <ShowAll count={rental.showAllCount} onChip={onChip} /> : null}
       {related.length ? <AppText role="body" style={styles.title}>{t('assistant.rental.otherRentals', 'Other things you can rent')}</AppText> : null}
+      {rental?.suggestionNote ? <AppText role="body">{rental.suggestionNote}</AppText> : null}
       <ChipRow chips={rental?.chips || []} onEditDates={onEditDates} onChip={onChip} />
     </View>
   );
@@ -86,17 +87,36 @@ function ChipRow({
   onEditDates: () => void;
   onChip: (message: string, dates?: { startDate?: string; endDate?: string }) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, i18n } = useChipTheme();
   if (!chips.length) return null;
   return (
     <View style={styles.chips}>
-      {chips.map((chip) => (
-        <Pressable key={chip.id} accessibilityRole="button" onPress={() => (chip.action === 'calendar' ? onEditDates() : onChip(chip.message || chip.label, chip))} style={[styles.chip, { borderColor: colors.primary.main, backgroundColor: colors.surface }]}>
-          <AppText role="bodySmall" color={colors.primary.main}>{chip.label}</AppText>
-        </Pressable>
-      ))}
+      {chips.map((chip) => {
+        const label = chipLabel(chip, i18n.language);
+        return (
+          <Pressable key={chip.id} accessibilityRole="button" onPress={() => (chip.action === 'calendar' ? onEditDates() : onChip(label, chip))} style={[styles.chip, { borderColor: colors.primary.main, backgroundColor: colors.surface }]}>
+            <AppText role="bodySmall" color={colors.primary.main}>{label}</AppText>
+          </Pressable>
+        );
+      })}
     </View>
   );
+}
+
+function useChipTheme() {
+  const { i18n } = useTranslation();
+  const { colors } = useTheme();
+  return { colors, i18n };
+}
+
+function chipLabel(chip: AssistantRentalChip, locale: string): string {
+  if (chip.id !== 'suggested-range' || !chip.startDate || !chip.endDate) return chip.label;
+  return formatRange({ startDate: chip.startDate, endDate: chip.endDate, dayCount: stayDays(chip.startDate, chip.endDate) }, locale);
+}
+
+function stayDays(start: string, end: string): number {
+  const days = Math.round((Date.parse(`${end}T00:00:00.000Z`) - Date.parse(`${start}T00:00:00.000Z`)) / 86_400_000);
+  return days > 0 ? days : 1;
 }
 
 function RentalCard({
@@ -114,14 +134,15 @@ function RentalCard({
   const { colors } = useTheme();
   const rental = card.rental!;
   const booked = rental.availability === 'unavailable' && rental.cta === 'shift';
-  const label = booked ? formatShift(rental, i18n.language) : mainLabel(rental, t);
+  const blocked = rental.availability === 'unavailable' && !booked;
+  const label = booked ? formatShift(rental, i18n.language) : mainLabel(rental, blocked, t);
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
       <View style={styles.row}>
         {card.imageUrl ? <Image source={{ uri: card.imageUrl }} style={styles.image} accessibilityLabel={card.title} /> : <View style={[styles.image, { backgroundColor: colors.divider }]} />}
         <CardFacts card={card} booked={booked} />
       </View>
-      <CardActions booked={booked} label={label} onMain={() => (booked ? onShift(card) : rental.cta === 'sign_in' || rental.cta === 'request' ? onRequest(card) : onOpen(card))} onOpen={() => onOpen(card)} />
+      <CardActions quiet={booked || blocked} label={label} onMain={() => (booked ? onShift(card) : blocked || rental.cta === 'none' || rental.cta === 'own' ? onOpen(card) : onRequest(card))} onOpen={() => onOpen(card)} />
     </View>
   );
 }
@@ -137,7 +158,7 @@ function CardFacts({ card, booked }: { card: AssistantResultCard; booked: boolea
       {rental.city ? <MetaLine name="map-marker-outline" text={rental.city} /> : null}
       <StatusLine booked={booked} availability={rental.availability} label={statusLabel(rental, t, i18n.language)} />
       <PriceLine text={priceLine(rental, i18n.language, booked)} estimate={Boolean(estimate)} />
-      {rental.deposit ? <MetaLine name="shield-outline" text={t('assistant.rental.deposit', 'Deposit {{amount}}', { amount: money(rental.deposit, rental.currency) })} /> : null}
+      {rental.deposit ? <MetaLine name="shield-outline" text={t('assistant.rental.deposit', 'Deposit {{amount}}', { amount: formatAssistantMoney(rental.deposit, rental.currency, i18n.language) })} /> : null}
     </View>
   );
 }
@@ -154,7 +175,7 @@ function MetaLine({ name, text }: { name: ComponentProps<typeof MaterialCommunit
 
 function StatusLine({ booked, availability, label }: { booked: boolean; availability?: string; label: string }) {
   const { colors } = useTheme();
-  const warning = booked || availability === 'no_dates';
+  const warning = booked || availability === 'no_dates' || availability === 'unavailable';
   const color = warning ? colors.warning?.main || '#B86E00' : colors.success?.main || '#1B7F4E';
   const name = warning ? 'calendar' : 'check-circle';
   return (
@@ -177,14 +198,14 @@ function PriceLine({ text, estimate }: { text: string; estimate: boolean }) {
   );
 }
 
-function CardActions({ booked, label, onMain, onOpen }: { booked: boolean; label: string; onMain: () => void; onOpen: () => void }) {
+function CardActions({ quiet, label, onMain, onOpen }: { quiet: boolean; label: string; onMain: () => void; onOpen: () => void }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   return (
     <View style={styles.actions}>
-      <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onMain} style={[styles.button, booked ? styles.outline : { backgroundColor: colors.primary.main }]}>
-        <MaterialCommunityIcons name={booked ? 'calendar' : 'calendar-check'} size={18} color={booked ? colors.primary.main : colors.primary.contrast} />
-        <AppText role="bodySmall" color={booked ? colors.primary.main : colors.primary.contrast} style={styles.buttonText}>{label}</AppText>
+      <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onMain} style={[styles.button, quiet ? styles.outline : { backgroundColor: colors.primary.main }]}>
+        <MaterialCommunityIcons name={quiet ? 'calendar' : 'calendar-check'} size={18} color={quiet ? colors.primary.main : colors.primary.contrast} />
+        <AppText role="bodySmall" color={quiet ? colors.primary.main : colors.primary.contrast} style={styles.buttonText}>{label}</AppText>
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={t('assistant.rental.details', 'Listing details')} onPress={onOpen} style={[styles.icon, { borderColor: colors.divider }]}>
         <MaterialCommunityIcons name="information-outline" size={20} color={colors.text.primary} />
@@ -196,7 +217,8 @@ function CardActions({ booked, label, onMain, onOpen }: { booked: boolean; label
   );
 }
 
-function mainLabel(rental: NonNullable<AssistantResultCard['rental']>, t: TFunction) {
+function mainLabel(rental: NonNullable<AssistantResultCard['rental']>, blocked: boolean, t: TFunction) {
+  if (blocked) return t('assistant.rental.openListing', 'Open listing');
   if (rental.cta === 'sign_in') return t('assistant.rental.signIn', 'Sign in to request');
   return t('assistant.rental.request', 'Request rental');
 }
@@ -205,6 +227,7 @@ function statusLabel(rental: NonNullable<AssistantResultCard['rental']>, t: TFun
   if (rental.availability === 'unavailable' && rental.nextAvailableDate) {
     return t('assistant.rental.freeFrom', 'Free from {{date}}', { date: formatRentalDay(rental.nextAvailableDate, locale) });
   }
+  if (rental.availability === 'unavailable') return t('assistant.rental.unavailable', 'Not available for these dates');
   if (rental.availability === 'no_dates') return t('assistant.rental.pickDates', 'Pick your dates');
   if (rental.availability === 'own_listing') return t('assistant.rental.ownListing', 'Your listing');
   return t('assistant.rental.available', 'Available');
@@ -214,9 +237,9 @@ function priceLine(rental: NonNullable<AssistantResultCard['rental']>, locale: s
   if (!booked && rental.quoteTotal != null && rental.dayCount) {
     const prefix = locale.startsWith('fr') ? 'Env.' : 'Est.';
     const unit = rental.dayCount === 1 ? (locale.startsWith('fr') ? 'jour' : 'day') : locale.startsWith('fr') ? 'jours' : 'days';
-    return `${prefix} ${money(rental.quoteTotal, rental.currency)} · ${rental.dayCount} ${unit}`;
+    return `${prefix} ${formatAssistantMoney(rental.quoteTotal, rental.currency, locale)} · ${rental.dayCount} ${unit}`;
   }
-  return rental.perDay != null ? `${money(rental.perDay, rental.currency)}/${locale.startsWith('fr') ? 'jour' : 'day'}` : '';
+  return rental.perDay != null ? `${formatAssistantMoney(rental.perDay, rental.currency, locale)}/${locale.startsWith('fr') ? 'jour' : 'day'}` : '';
 }
 
 function formatShift(rental: NonNullable<AssistantResultCard['rental']>, locale: string) {
@@ -227,12 +250,6 @@ function formatShift(rental: NonNullable<AssistantResultCard['rental']>, locale:
 function formatRange(dates: { startDate: string; endDate: string; dayCount: number }, locale: string) {
   const unit = dates.dayCount === 1 ? (locale.startsWith('fr') ? 'jour' : 'day') : locale.startsWith('fr') ? 'jours' : 'days';
   return `${formatRentalDay(dates.startDate, locale)} → ${formatRentalDay(dates.endDate, locale)} · ${dates.dayCount} ${unit}`;
-}
-
-function money(amount: number, currency?: string) {
-  const groups = String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
-  const code = currency === 'XAF' || currency === 'XOF' || !currency ? 'FCFA' : currency;
-  return `${groups}${NBSP}${code}`;
 }
 
 function relatedChips(chips?: AssistantRentalChip[]) {

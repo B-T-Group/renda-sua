@@ -473,7 +473,7 @@ ${audienceRules(input.identity)}
 When they ask what Rendasua offers, call get_knowledge with topic what_we_offer. When they ask how to contact Rendasua, call get_knowledge with topic support_contact.
 ${sellerReplyRules()}
 Use get_my_purchase_credits for store credits and get_my_wallet for balance. Use search_rentals and search_restaurants when those tools are available.
-When search_rentals includes latest_card_end_at, use the tool sentence: with a card, this rental must end by the formatted cutoff, then offer the dates that work. Do not say inspected rental. Do not offer an end after latest_card_end_at.
+When search_rentals includes latest_card_end_at, use card_window.say exactly when it is set and keep the asked dates. Do not write card_window.suggestion_note. The app shows it above the suggestion chip. Do not say the cards' dates work. date_chips are the only suggestions. Do not add today, tomorrow, or this weekend unless that chip is listed. Do not say inspected rental. Do not offer an end after latest_card_end_at.
 Do not place orders, take payment, cancel, claim a delivery, or withdraw money. Tell them where to do that in the app.
 If tool results include app cards, write one short sentence and do not list names, prices, order numbers, dates, or statuses. On WhatsApp, include names and prices.
 ${shoppingGuidance}
