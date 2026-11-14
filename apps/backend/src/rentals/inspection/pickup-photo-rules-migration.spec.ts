@@ -4,11 +4,11 @@ import { join } from 'path';
 describe('rentals pickup photo rules flag', () => {
   const root = join(__dirname, '../../../..');
   const up = readFileSync(
-    join(root, 'hasura/migrations/Rendasua/20261114120000_rentals_pickup_photo_rules/up.sql'),
+    join(root, 'hasura/migrations/Rendasua/20261114130000_rentals_pickup_photo_rules/up.sql'),
     'utf8'
   );
   const down = readFileSync(
-    join(root, 'hasura/migrations/Rendasua/20261114120000_rentals_pickup_photo_rules/down.sql'),
+    join(root, 'hasura/migrations/Rendasua/20261114130000_rentals_pickup_photo_rules/down.sql'),
     'utf8'
   );
   const constants = readFileSync(join(root, 'backend/src/app-config/client-flags.constants.ts'), 'utf8');
