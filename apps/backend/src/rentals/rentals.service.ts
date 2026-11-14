@@ -3368,7 +3368,11 @@ export class RentalsService {
       await this.notifyAcceptOutcome(booking, result.started, result.paymentPending);
       return result;
     } catch (error: any) {
-      await this.notifyAcceptFailure(booking);
+      try {
+        await this.notifyAcceptFailure(booking);
+      } catch (noticeError: any) {
+        this.logger?.warn(`notifyAcceptFailure ${booking?.id}: ${noticeError?.message ?? noticeError}`);
+      }
       throw error;
     }
   }

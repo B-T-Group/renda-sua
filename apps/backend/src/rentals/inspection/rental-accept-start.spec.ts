@@ -259,6 +259,65 @@ describe('accept and start', () => {
     expect(acceptCalls()).toHaveLength(1);
   });
 
+  it('starts on retry after a failed start without a second accept notice', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    let accepted = false;
+    let phase: 'fail' | 'retry' | 'paid' = 'fail';
+    svc.fetchBooking.mockImplementation(async () =>
+      enrolled({
+        status: phase === 'paid' ? 'confirmed' : 'reserved',
+        payment_status: phase === 'paid' ? 'paid' : 'pending',
+        payment_timing: 'pay_at_pickup',
+      })
+    );
+    svc.hasuraSystemService.executeQuery.mockImplementation(async () =>
+      gate({
+        pickup_ack_current: accepted,
+        pickup_accepted_version_id: accepted ? 'ver-1' : null,
+      })
+    );
+    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
+      if (String(query).includes('rental_accept_pickup_version')) {
+        accepted = true;
+        return { rental_accept_pickup_version: [{ id: 'b1' }] };
+      }
+      return { rental_mark_started: [{ id: 'b1' }] };
+    });
+    svc.hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc', available_balance: 760 });
+    svc.confirmWalletContract.mockImplementation(async () => {
+      if (phase === 'fail') {
+        phase = 'retry';
+        throw new HttpException('hold failed', 409);
+      }
+      phase = 'paid';
+      return true;
+    });
+    await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toBeInstanceOf(HttpException);
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted', paymentPending: false })
+    );
+    const result = await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(result).toMatchObject({ started: true, payment_rail: 'wallet' });
+    expect(acceptCalls()).toHaveLength(1);
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalStartedClientPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('rethrows the start error when the failure notice throws', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockRejectedValue(new Error('notice down'));
+    svc.fetchBooking.mockResolvedValue(
+      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
+    );
+    svc.hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc', available_balance: 760 });
+    svc.confirmWalletContract.mockRejectedValue(new HttpException('hold failed', 409));
+    await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toMatchObject({
+      message: 'hold failed',
+    });
+    expect(svc.logger.warn).toHaveBeenCalledWith(expect.stringContaining('notifyAcceptFailure'));
+  });
+
   it('skips the accept notice when a paid wallet start succeeds', async () => {
     svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
     let paid = false;
