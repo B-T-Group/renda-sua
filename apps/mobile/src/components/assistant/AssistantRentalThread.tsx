@@ -7,10 +7,10 @@ import { AppText } from '@/components/common/AppText';
 import { AssistantEntityCards } from '@/components/assistant/AssistantEntityCards';
 import { useTheme } from '@/contexts/ThemeContext';
 import { spacing } from '@/theme/spacing';
+import { formatAssistantMoney } from '@/utils/rentals/rentalRequestDisplay';
 import { formatRentalDay } from '@/utils/rentals/rentalRequestFormat';
 import type { AssistantRentalChip, AssistantRentalMeta, AssistantResultCard } from '@/utils/assistantResultCards';
 
-const NBSP = '\u00A0';
 const EN_DASH = '\u2013';
 
 export function AssistantRentalThread({
@@ -158,7 +158,7 @@ function CardFacts({ card, booked }: { card: AssistantResultCard; booked: boolea
       {rental.city ? <MetaLine name="map-marker-outline" text={rental.city} /> : null}
       <StatusLine booked={booked} availability={rental.availability} label={statusLabel(rental, t, i18n.language)} />
       <PriceLine text={priceLine(rental, i18n.language, booked)} estimate={Boolean(estimate)} />
-      {rental.deposit ? <MetaLine name="shield-outline" text={t('assistant.rental.deposit', 'Deposit {{amount}}', { amount: money(rental.deposit, rental.currency) })} /> : null}
+      {rental.deposit ? <MetaLine name="shield-outline" text={t('assistant.rental.deposit', 'Deposit {{amount}}', { amount: formatAssistantMoney(rental.deposit, rental.currency, i18n.language) })} /> : null}
     </View>
   );
 }
@@ -237,9 +237,9 @@ function priceLine(rental: NonNullable<AssistantResultCard['rental']>, locale: s
   if (!booked && rental.quoteTotal != null && rental.dayCount) {
     const prefix = locale.startsWith('fr') ? 'Env.' : 'Est.';
     const unit = rental.dayCount === 1 ? (locale.startsWith('fr') ? 'jour' : 'day') : locale.startsWith('fr') ? 'jours' : 'days';
-    return `${prefix} ${money(rental.quoteTotal, rental.currency)} · ${rental.dayCount} ${unit}`;
+    return `${prefix} ${formatAssistantMoney(rental.quoteTotal, rental.currency, locale)} · ${rental.dayCount} ${unit}`;
   }
-  return rental.perDay != null ? `${money(rental.perDay, rental.currency)}/${locale.startsWith('fr') ? 'jour' : 'day'}` : '';
+  return rental.perDay != null ? `${formatAssistantMoney(rental.perDay, rental.currency, locale)}/${locale.startsWith('fr') ? 'jour' : 'day'}` : '';
 }
 
 function formatShift(rental: NonNullable<AssistantResultCard['rental']>, locale: string) {
@@ -250,12 +250,6 @@ function formatShift(rental: NonNullable<AssistantResultCard['rental']>, locale:
 function formatRange(dates: { startDate: string; endDate: string; dayCount: number }, locale: string) {
   const unit = dates.dayCount === 1 ? (locale.startsWith('fr') ? 'jour' : 'day') : locale.startsWith('fr') ? 'jours' : 'days';
   return `${formatRentalDay(dates.startDate, locale)} → ${formatRentalDay(dates.endDate, locale)} · ${dates.dayCount} ${unit}`;
-}
-
-function money(amount: number, currency?: string) {
-  const groups = String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
-  const code = currency === 'XAF' || currency === 'XOF' || !currency ? 'FCFA' : currency;
-  return `${groups}${NBSP}${code}`;
 }
 
 function relatedChips(chips?: AssistantRentalChip[]) {

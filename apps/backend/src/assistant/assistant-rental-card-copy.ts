@@ -1,6 +1,8 @@
-/** Same cutoff shape as the rental date guard: "16 Nov · 13:00". */
+import { cutoffPlace, floorCardInstant } from './assistant-rental-suggestion';
+
+/** Cutoff rounded down to the hour, named once in the listing city's time. */
 export function formatCardCutoff(iso: string, timeZone: string, locale: string): string {
-  const date = new Date(iso);
+  const date = new Date(floorCardInstant(iso, timeZone));
   const day = new Intl.DateTimeFormat(locale, { day: 'numeric', timeZone }).format(date);
   const month = monthLabel(date, timeZone, locale);
   const time = new Intl.DateTimeFormat('en-GB', {
@@ -9,7 +11,9 @@ export function formatCardCutoff(iso: string, timeZone: string, locale: string):
     hourCycle: 'h23',
     timeZone,
   }).format(date);
-  return `${day} ${month} · ${time}`;
+  const place = cutoffPlace(timeZone);
+  const where = locale.toLowerCase().startsWith('fr') ? `(heure de ${place})` : `(${place} time)`;
+  return `${day} ${month} · ${time} ${where}`;
 }
 
 export function cardWindowCutoffOnly(locale: string, cutoff: string): string {

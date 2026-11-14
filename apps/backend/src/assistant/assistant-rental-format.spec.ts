@@ -7,8 +7,14 @@ describe('rental amount labels', () => {
     expect(perDayPriceLabel(2500, 'XAF', 'en')).toBe('2\u00A0500\u00A0FCFA/day');
   });
 
+  it('formats CAD like the other Stripe screens', () => {
+    expect(formatRentalAmount(25, 'CAD', 'en')).toBe('$25.00');
+    expect(formatRentalAmount(25, 'CAD', 'fr')).toBe('25,00\u00A0$');
+    expect(perDayPriceLabel(25, 'CAD', 'en')).toBe('$25.00/day');
+    expect(perDayPriceLabel(25, 'CAD', 'fr')).toBe('25,00\u00A0$/jour');
+  });
+
   it('keeps other currencies and labels the period as an estimate', () => {
-    expect(formatRentalAmount(12, 'CAD')).toBe('12\u00A0CAD');
     expect(estimatedPeriodLabel(2500, 'XAF', 1, 'en')).toBe('Est. 2\u00A0500\u00A0FCFA · 1 day');
     expect(estimatedPeriodLabel(2500, 'XOF', 1, 'fr')).toBe('Env. 2\u00A0500\u00A0FCFA · 1 jour');
   });

@@ -6,7 +6,6 @@ import { InventoryItemsService } from '../inventory-items/inventory-items.servic
 import { marketTimeZone, marketsMissingTimeZone } from '../common/market-timezones';
 import {
   clampExclusiveRange,
-  latestExclusiveEndDate,
   listingCountryCode,
   readLatestCardEndAt,
   type CardWindowFields,
@@ -20,12 +19,14 @@ import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 import { SiteEventsService } from '../site-events/site-events.service';
 import type { AssistantChip, AssistantIdentity, AssistantLocale, AssistantToolResult } from './assistant.types';
 import {
+  exclusiveDayCount,
   marketCalendarDate,
   relativeDayRange,
   resolveMonthDay,
   validateExclusiveRange,
   type ResolvedRentalRange,
 } from './assistant-rental-dates';
+import { earlierStart, startTooSoon, stayThroughCap, suggestionCap, floorCardInstant } from './assistant-rental-suggestion';
 import { shouldAskBuyOrRent } from './assistant-rental-intent';
 import { perDayPriceLabel } from './assistant-rental-format';
 import {
@@ -259,9 +260,55 @@ export class AssistantRentalService {
     country: string,
     call: AssistantRentalCall
   ): Promise<CardDateChoice> {
-    if (!card.guard || card.issue !== 'card_window' || !card.offer) return card;
-    const open = await this.rangeOpen(query, country, card.offer, call);
-    return open ? card : { ...card, offer: null };
+    if (!card.guard || card.issue !== 'card_window') return card;
+    const offer = await this.firstOpenStay(card, query, country, call);
+    return { ...card, offer };
+  }
+
+  private async firstOpenStay(
+    card: CardDateChoice,
+    query: string,
+    country: string,
+    call: AssistantRentalCall
+  ): Promise<CardWindowOffer | null> {
+    const latest = card.window.latest_card_end_at;
+    const asked = card.asked?.startDate;
+    if (!latest || !asked) return null;
+    return this.walkStays(asked, suggestionCap(latest, card.window.timezone), card.window.timezone, query, country, call);
+  }
+
+  private async walkStays(
+    start: string,
+    cap: string,
+    zone: string,
+    query: string,
+    country: string,
+    call: AssistantRentalCall
+  ): Promise<CardWindowOffer | null> {
+    const now = new Date();
+    let cursor = start;
+    for (let step = 0; step < 30 && cursor < cap; step += 1) {
+      const stay = await this.openStay(cursor, cap, zone, now, query, country, call);
+      if (stay) return stay;
+      if (startTooSoon(cursor, now, zone)) return null;
+      cursor = earlierStart(cursor);
+    }
+    return null;
+  }
+
+  private async openStay(
+    start: string,
+    cap: string,
+    zone: string,
+    now: Date,
+    query: string,
+    country: string,
+    call: AssistantRentalCall
+  ): Promise<CardWindowOffer | null> {
+    if (startTooSoon(start, now, zone)) return null;
+    const stay = stayThroughCap(start, cap);
+    if (!stay || !(await this.rangeOpen(query, country, stay, call))) return null;
+    return stay;
   }
 
   private async quickDateChips(
@@ -289,14 +336,15 @@ export class AssistantRentalService {
   ): Promise<AssistantChip | null> {
     const range = relativeDayRange(kind, now, card.window.timezone);
     if (!exclusiveRangeFits(range, card.window)) return null;
-    if (!(await this.rangeOpen(query, country, range, call))) return null;
+    const dayCount = exclusiveDayCount(range.startDate, range.endDate) ?? 1;
+    if (!(await this.rangeOpen(query, country, { ...range, dayCount }, call))) return null;
     return assistantDateChip(locale, kind, range);
   }
 
   private async rangeOpen(
     query: string,
     country: string,
-    range: { startDate: string; endDate: string },
+    range: { startDate: string; endDate: string; dayCount: number },
     call: AssistantRentalCall
   ): Promise<boolean> {
     const scoped = await this.openCount(query, country, range, call, false);
@@ -307,13 +355,13 @@ export class AssistantRentalService {
   private async openCount(
     query: string,
     country: string,
-    range: { startDate: string; endDate: string },
+    range: { startDate: string; endDate: string; dayCount: number },
     call: AssistantRentalCall,
     omitState: boolean
   ): Promise<number> {
     try {
       const page = await this.searchWithRetry(query, country, range.startDate, range.endDate, call, omitState);
-      return countAvailable(page);
+      return countBookable(page, range.dayCount);
     } catch (error: any) {
       this.logger.warn(`Date chip search failed: ${error?.message ?? error}`);
       return 0;
@@ -628,7 +676,6 @@ function clampedCardDates(
     today: marketCalendarDate(new Date(), window.timezone),
   });
   if (clamped.fits) return { ...openCardDates(checked, window), guard };
-  const today = marketCalendarDate(new Date(), window.timezone);
   return {
     start: checked.startDate,
     end: checked.endDate,
@@ -636,23 +683,9 @@ function clampedCardDates(
     issue: 'card_window',
     window,
     asked: { startDate: checked.startDate, endDate: checked.endDate },
-    offer: latestFittingStay(window, today),
+    offer: null,
     guard,
   };
-}
-
-function latestFittingStay(window: CardWindowFields, today: string): CardWindowOffer | null {
-  if (!window.latest_card_end_at) return null;
-  const cap = latestExclusiveEndDate(window.latest_card_end_at, window.timezone);
-  if (cap <= today) return null;
-  return clampExclusiveRange({
-    startDate: today,
-    endDate: cap,
-    dayCount: 1,
-    latestCardEndAt: window.latest_card_end_at,
-    zone: window.timezone,
-    today,
-  }).offer;
 }
 
 function exclusiveRangeFits(
@@ -661,11 +694,12 @@ function exclusiveRangeFits(
 ): boolean {
   if (!stripeCutoff(window)) return true;
   const today = marketCalendarDate(new Date(), window.timezone);
+  const latest = window.latest_card_end_at ? floorCardInstant(window.latest_card_end_at, window.timezone) : null;
   return clampExclusiveRange({
     startDate: range.startDate,
     endDate: range.endDate,
     dayCount: range.dayCount,
-    latestCardEndAt: window.latest_card_end_at,
+    latestCardEndAt: latest,
     zone: window.timezone,
     today,
   }).fits;
@@ -675,9 +709,14 @@ function stripeCutoff(window: CardWindowFields): boolean {
   return window.payment_rail === 'stripe' && window.latest_card_end_at != null;
 }
 
-function countAvailable(page: { availableCount?: number; listings?: Array<{ available?: boolean | null }> }): number {
-  if (typeof page.availableCount === 'number') return page.availableCount;
-  return (page.listings ?? []).filter((hit) => hit.available === true).length;
+function countBookable(
+  page: { availableCount?: number; listings?: RentalSearchHit[] },
+  dayCount: number
+): number {
+  const hours = dayCount * 24;
+  const listings = page.listings ?? [];
+  if (!listings.length) return typeof page.availableCount === 'number' ? page.availableCount : 0;
+  return listings.filter((hit) => hit.available === true && (hit.listing.min_rental_hours ?? 1) <= hours).length;
 }
 
 function openCardDates(

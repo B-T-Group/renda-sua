@@ -44,7 +44,7 @@ describe('assistant date chips past the card cutoff', () => {
     jest.useRealTimers();
   });
 
-  it('keeps an explicit 14–16 request and offers 13–15 only as a chip', async () => {
+  it('keeps an explicit 14–16 request and offers 14–15 from the stated start', async () => {
     const result = await service.run(call({ start_date: '2026-11-14', end_date: '2026-11-16' }, 'perceuse du 14 au 16'));
     expect(result.rental?.dates).toEqual({ startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 });
     expect(result.rental?.dateIssue).toBe('card_window');
@@ -52,22 +52,44 @@ describe('assistant date chips past the card cutoff', () => {
     expect(result.cards?.[0].rental?.endDate).toBe('2026-11-16');
     const suggestion = result.rental?.chips?.find((chip) => chip.id === 'suggested-range');
     expect(suggestion).toMatchObject({
-      startDate: '2026-11-13',
+      startDate: '2026-11-14',
       endDate: '2026-11-15',
       action: 'dates',
-      label: '13 nov. → 15 nov. · 2 jours',
+      label: '14 nov. → 15 nov. · 1 jour',
     });
     expect(result.rental?.chips?.some((chip) => chip.id === 'weekend')).toBe(false);
     const payload = JSON.parse(result.content);
     expect(payload.card_window.asked).toEqual({ startDate: '2026-11-14', endDate: '2026-11-16' });
-    expect(payload.card_window.offered).toEqual({ startDate: '2026-11-13', endDate: '2026-11-15', dayCount: 2 });
+    expect(payload.card_window.offered).toEqual({ startDate: '2026-11-14', endDate: '2026-11-15', dayCount: 1 });
     expect(payload.card_window.say).toBeNull();
+    expect(payload.card_window.suggestion_note).toMatch(/22:00 \(heure de Toronto\)/);
     expect(payload.card_window.suggestion_note).toMatch(/Ces dates conviennent à la place/);
-    expect(payload.card_window.fits).toBe(false);
-    const searched = search.search.mock.calls.map((entry) => entry[0].end_date);
-    expect(searched).toContain('2026-11-16');
-    expect(searched).toContain('2026-11-15');
+    expect(payload.card_window.suggestion_note).not.toMatch(/22:48/);
+    const starts = search.search.mock.calls.map((entry) => entry[0].start_date);
+    expect(starts).not.toContain('2026-11-13');
     expect(result.rental?.dates?.endDate).not.toBe('2026-11-15');
+  });
+
+  it('moves the start earlier when the stated start is too short for min hours', async () => {
+    search.search.mockImplementation(async (query: SearchArgs) => pageFor(query.end_date, 30));
+    const result = await service.run(call({ start_date: '2026-11-14', end_date: '2026-11-16' }, 'perceuse du 14 au 16'));
+    const suggestion = result.rental?.chips?.find((chip) => chip.id === 'suggested-range');
+    expect(suggestion).toMatchObject({
+      startDate: '2026-11-13',
+      endDate: '2026-11-15',
+      label: '13 nov. → 15 nov. · 2 jours',
+    });
+    expect(result.rental?.dates?.startDate).toBe('2026-11-14');
+  });
+
+  it('rejects a start that is past or within the next 2 hours', async () => {
+    jest.setSystemTime(new Date('2026-11-14T04:30:00.000Z'));
+    search.search.mockImplementation(async (query: SearchArgs) => pageFor(query.end_date, 30));
+    const result = await service.run(call({ start_date: '2026-11-14', end_date: '2026-11-16' }, 'perceuse du 14 au 16'));
+    expect(result.rental?.dates).toEqual({ startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 });
+    expect(result.rental?.chips?.some((chip) => chip.id === 'suggested-range')).toBe(false);
+    const starts = search.search.mock.calls.map((entry) => entry[0].start_date);
+    expect(starts).not.toContain('2026-11-13');
   });
 
   it('drops the suggestion chip when that range has no available listing', async () => {
@@ -144,10 +166,10 @@ function stripeWindow() {
   };
 }
 
-function pageFor(end?: string) {
+function pageFor(end?: string, minHours = 1) {
   const available = end !== '2026-11-16';
   return {
-    listings: [drill(available)],
+    listings: [drill(available, minHours)],
     total: 1,
     page: 1,
     limit: 6,
@@ -157,13 +179,13 @@ function pageFor(end?: string) {
   };
 }
 
-function drill(available: boolean): RentalSearchHit {
+function drill(available: boolean, minHours = 1): RentalSearchHit {
   return {
     listing: {
       id: 'drill-1',
       base_price_per_hour: 10,
       base_price_per_day: 40,
-      min_rental_hours: 1,
+      min_rental_hours: minHours,
       max_rental_hours: null,
       units_available: 1,
       pickup_instructions: '',

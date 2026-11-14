@@ -121,7 +121,7 @@ describe('rental presenter card window', () => {
         timezone: 'America/Toronto',
         guard: true,
         asked: { startDate: '2026-11-14', endDate: '2026-11-16' },
-        offered: { startDate: '2026-11-13', endDate: '2026-11-15', dayCount: 2 },
+        offered: { startDate: '2026-11-14', endDate: '2026-11-15', dayCount: 1 },
       },
     });
     expect(presented.rental.dates).toEqual({ startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 });
@@ -133,20 +133,22 @@ describe('rental presenter card window', () => {
     expect(presented.cards[0].href).not.toContain('openRequest=1');
     const suggestion = presented.rental.chips?.find((chip) => chip.id === 'suggested-range');
     expect(suggestion).toMatchObject({
-      startDate: '2026-11-13',
+      startDate: '2026-11-14',
       endDate: '2026-11-15',
       action: 'dates',
-      label: '13 nov. → 15 nov. · 2 jours',
+      label: '14 nov. → 15 nov. · 1 jour',
     });
     expect(presented.rental.chips?.some((chip) => chip.id === 'weekend')).toBe(false);
     const payload = JSON.parse(presented.content);
     expect(payload.card_window.fits).toBe(false);
     expect(payload.card_window.say).toBeNull();
+    expect(payload.card_window.suggestion_note).toMatch(/22:00 \(heure de Toronto\)/);
     expect(payload.card_window.suggestion_note).toMatch(/Ces dates conviennent à la place/);
+    expect(payload.card_window.suggestion_note).not.toMatch(/22:48/);
     expect(payload.card_window.suggestion_note).not.toMatch(/Voici des dates/);
     expect(presented.rental.suggestionNote).toBe(payload.card_window.suggestion_note);
     expect(payload.date_chips).toEqual([
-      expect.objectContaining({ id: 'suggested-range', start_date: '2026-11-13', end_date: '2026-11-15' }),
+      expect.objectContaining({ id: 'suggested-range', start_date: '2026-11-14', end_date: '2026-11-15' }),
     ]);
   });
 });

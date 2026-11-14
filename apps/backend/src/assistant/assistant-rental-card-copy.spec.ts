@@ -26,6 +26,12 @@ describe('card window assistant copy', () => {
     );
   });
 
+  it('rounds the cutoff down to the hour and names the city once', () => {
+    const iso = '2026-11-16T03:48:00.000Z';
+    expect(formatCardCutoff(iso, 'America/Toronto', 'en')).toBe('15 Nov · 22:00 (Toronto time)');
+    expect(formatCardCutoff(iso, 'America/Toronto', 'fr')).toBe('15 nov. · 22:00 (heure de Toronto)');
+  });
+
   it('formats a suggestion like the active range chip', () => {
     expect(formatSuggestedRange('2026-11-13', '2026-11-15', 2, 'en')).toBe('13 Nov → 15 Nov · 2 days');
     expect(formatSuggestedRange('2026-11-13', '2026-11-15', 2, 'fr')).toBe('13 nov. → 15 nov. · 2 jours');

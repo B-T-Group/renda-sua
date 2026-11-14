@@ -60,7 +60,7 @@ Un petit frais de service forfaitaire est inclus dans le total : 100 XAF au Came
 
 Frais d'annulation client : un pourcentage du prix des articles après réductions (livraison, taxes et frais de service exclus). Cameroun et Gabon 30 pour cent, Canada 0. La moitié va au magasin et la moitié à Rendasua. Ils s'appliquent quand le client annule après confirmation du magasin et, pour le paiement après confirmation, seulement une fois le client a payé.
 
-Avec une carte, une location doit se terminer à l'heure limite indiquée sur l'annonce, dans le fuseau du magasin. Gardez les dates demandées. Si elles dépassent cette heure, dites que la location doit se terminer à cette heure. Une autre plage est une suggestion, pas les dates de l'annonce. Mobile Money n'est pas proposé dans un pays où seule la carte est disponible.`
+Avec une carte, une location doit se terminer à l'heure limite indiquée, arrondie à l'heure inférieure, une seule fois avec la ville (heure de Toronto). Gardez les dates demandées. Si elles dépassent cette heure, dites que la location doit se terminer à cette heure. Une suggestion garde le début demandé quand cette plage convient. Une autre plage est une suggestion, pas les dates de l'annonce. Mobile Money n'est pas proposé dans un pays où seule la carte est disponible.`
       : `Rendasua supports mobile money in Africa and card payments (Stripe) in Canada, the United States, and the Philippines.
 
 - Cameroon: MTN Mobile Money, Orange Money
@@ -79,7 +79,7 @@ A small flat service fee is included in the order total: 100 XAF in Cameroon, Ga
 
 Client cancellation fee: a percentage of the item price after discounts (delivery, tax, and the service fee are not included). Cameroon and Gabon 30 percent, Canada 0. Half of the fee is paid to the store and half to Rendasua. It applies when the client cancels after the store has confirmed and, for pay-after-confirm, only after the client has paid.
 
-With a card, a rental must end by the latest end time on the listing, in the shop's time zone. Keep the dates the customer asked for. If those dates end after that time, say the rental must end by that time. Another range is a suggestion, not the dates on the card. Mobile Money is not offered in a card-only country.`;
+With a card, a rental must end by the latest end time, rounded down to the hour and named once with the city (Toronto time). Keep the dates the customer asked for. If those dates end after that time, say the rental must end by that time. A suggestion keeps the asked start when that range fits. Another range is a suggestion, not the dates on the card. Mobile Money is not offered in a card-only country.`;
 
   const credits =
     locale === 'fr'
