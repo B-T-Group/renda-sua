@@ -34,5 +34,33 @@ describe('renterReturnPhase', () => {
   it('formats Douala time', () => {
     expect(formatDoualaStamp('2026-11-12T19:00:00.000Z', 'en')).toContain('20:00');
     expect(formatDoualaStamp('2026-11-12T19:00:00.000Z', 'fr')).toContain('20:00');
+    expect(formatDoualaStamp('not-a-date', 'en')).toBe('');
+  });
+
+  it('opens at the end instant and escalates at 24 hours', () => {
+    const day = 24 * 60 * 60 * 1000;
+    expect(renterReturnPhase({ status: 'active', endAt: end, now: new Date(new Date(end).getTime() - 1) })).toBe('hidden');
+    expect(renterReturnPhase({ status: 'active', endAt: end, now: new Date(end) })).toBe('overdue');
+    expect(renterReturnPhase({ status: 'awaiting_return', endAt: null, now: after })).toBe('due');
+    expect(renterReturnPhase({ status: 'active', endAt: 'not-a-date', now: after })).toBe('hidden');
+    const almost = new Date(new Date(reported).getTime() + day - 1);
+    const exact = new Date(new Date(reported).getTime() + day);
+    expect(renterReturnPhase({ status: 'awaiting_return', endAt: end, reportedAt: reported, now: almost })).toBe('waiting');
+    expect(renterReturnPhase({ status: 'awaiting_return', endAt: end, reportedAt: reported, now: exact })).toBe('escalated');
+    expect(renterReturnPhase({
+      status: 'active',
+      endAt: end,
+      reportedAt: reported,
+      escalatedAt: reported,
+      now: after,
+    })).toBe('escalated');
+    expect(listReturnChip({ status: 'active', endAt: end, now: new Date(end) })).toBe('overdue');
+    expect(listReturnChip({
+      status: 'awaiting_return',
+      endAt: end,
+      reportedAt: reported,
+      escalatedAt: reported,
+      now: after,
+    })).toBeNull();
   });
 });

@@ -56,10 +56,10 @@ export default function RentalRequestScreen() {
     (requestId: string) => {
       (navigation as NativeStackNavigationProp<ClientRootStackParamList>).navigate(
         'RentalRequestSubmitted',
-        { requestId }
+        { requestId, inspectionPolicyVersion: listing?.inspection_policy_version ?? null }
       );
     },
-    [navigation]
+    [listing?.inspection_policy_version, navigation]
   );
 
   if (loading && !listing) {

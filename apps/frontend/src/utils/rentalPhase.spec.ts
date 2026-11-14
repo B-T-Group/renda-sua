@@ -30,6 +30,14 @@ describe('booking detail status labels', () => {
       'completed',
     ]);
     expect(bookingDetailTimeline('reserved')).not.toContain('reserved');
+    expect(bookingDetailTimeline('reserved', { includeReview: true })).toContain('report_review');
+    expect(
+      bookingDetailTimelineIndex(
+        bookingDetailTimeline('reserved', { includeReview: true }),
+        'reserved',
+        { reviewCurrent: true }
+      )
+    ).toBe(2);
     expect(bookingDetailTimelineIndex(steps, 'cancelled')).toBe(-1);
   });
 

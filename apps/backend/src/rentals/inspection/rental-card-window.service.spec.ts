@@ -24,6 +24,7 @@ function service(opts: {
     svc: new RentalCardWindowService(routing as never, flags as never, hasura as never),
     routing,
     flags,
+    hasura,
   };
 }
 
@@ -77,5 +78,41 @@ describe('RentalCardWindowService', () => {
     const fields = await svc.forCountry('CM', NOW);
     const end = new Date(fields.latest_card_end_at!);
     expect(end.getTime()).toBe(NOW.getTime() + 3 * 86400000);
+  });
+
+  it('keeps the country zone when the timezone query throws or is blank', async () => {
+    const thrown = service({ rail: 'stripe', timezone: 'Africa/Douala' });
+    thrown.hasura.executeQuery.mockRejectedValue(new Error('hasura down'));
+    const canada = await thrown.svc.forCountry('ca', NOW);
+    expect(canada.timezone).toBe('America/Toronto');
+    expect(canada.payment_rail).toBe('stripe');
+    expect(canada.latest_card_end_at).toBe('2026-11-15T19:00:00.000Z');
+    const blank = service({ rail: 'stripe', timezone: '   ' });
+    const unknown = await blank.svc.forCountry('ZZ', NOW);
+    expect(unknown.timezone).toBe('Africa/Douala');
+  });
+
+  it('keeps the upfront cutoff when inspection is off or the pickup method is absent', async () => {
+    const off = service({ rail: 'stripe', timezone: 'Africa/Douala', chargeAtPickup: true, inspection: false });
+    const fields = await off.svc.forCountry('CM', NOW);
+    expect(fields.inspection_enabled).toBe(false);
+    expect(fields.mode).toBe('authorize_upfront');
+    expect(fields.latest_card_end_at).toBe('2026-11-15T19:00:00.000Z');
+    const missing = service({ rail: 'stripe', timezone: 'Africa/Douala', chargeAtPickup: true });
+    delete (missing.flags as { cardChargeAtPickupEnabled?: unknown }).cardChargeAtPickupEnabled;
+    const kept = await missing.svc.forCountry('CM', NOW);
+    expect(kept.mode).toBe('authorize_upfront');
+    expect(kept.latest_card_end_at).not.toBeNull();
+  });
+
+  it('reads each country once and treats a blank country as mobile money', async () => {
+    const { svc, routing } = service({ rail: 'stripe', timezone: 'Africa/Douala' });
+    const map = await svc.forCountries(['cm', ' CM ', null], NOW);
+    expect([...map.keys()].sort()).toEqual(['', 'CM']);
+    expect(routing.resolveRailForCountry).toHaveBeenCalledTimes(1);
+    expect(routing.resolveRailForCountry).toHaveBeenCalledWith('CM');
+    expect(map.get('CM')?.timezone).toBe('Africa/Douala');
+    expect(map.get('')?.payment_rail).toBe('mobile_money');
+    expect(map.get('')?.latest_card_end_at).toBeNull();
   });
 });
