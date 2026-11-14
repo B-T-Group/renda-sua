@@ -43,6 +43,25 @@ export function checklistCount(rows: readonly unknown[]): number {
   return rows.length;
 }
 
+export function groupBlockedRows<T extends { reason?: string | null }>(rows: T[]) {
+  return {
+    open: rows.filter((row) => !row.reason),
+    skipped: rows.filter((row) => !!row.reason),
+  };
+}
+
+export function undoSkip<T extends { unitId: string; slotKey: string }>(
+  skips: T[],
+  target: { unitId: string; slotKey: string }
+): T[] {
+  return skips.filter((skip) => skip.unitId !== target.unitId || skip.slotKey !== target.slotKey);
+}
+
+export function otherReasonReady(text: string): boolean {
+  const cleaned = text.trim();
+  return cleaned.length > 0 && cleaned.length <= 280;
+}
+
 function toRow(gap: BlockedGuideGap, slots: BlockedGuideSlot[], reason: string | null): BlockedGuideRow & { reason: string | null } {
   return {
     unitId: gap.unitId,

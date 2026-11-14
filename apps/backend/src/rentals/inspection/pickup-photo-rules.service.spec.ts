@@ -256,4 +256,13 @@ describe('guide retake gate and skip reason', () => {
     expect(writes[0][1].object.reason).toBe('Same as the overview');
     expect(writes[1][1].object.reason).toBe('Covered by the front');
   });
+
+  it('deletes a skip when that angle is taken instead', async () => {
+    const built = service(true, rows(ready, []));
+    const id = '11111111-1111-4111-8111-111111111111';
+    await built.rules.clearSlot(id, 'unit-1', 'extra:1');
+    const writes = built.hasura.executeMutation.mock.calls.filter((call) => String(call[0]).includes('ClearSlotSkip'));
+    expect(writes).toHaveLength(1);
+    expect(writes[0][1]).toEqual({ inspectionId: 'ins-1', unitId: 'unit-1', slotKey: 'extra:1' });
+  });
 });

@@ -94,6 +94,16 @@ export async function applyPickupGuide(
   });
 }
 
+export async function clearPickupSlot(
+  bookingId: string,
+  body: { unitId: string; slotKey: string }
+): Promise<{ cleared: boolean }> {
+  return apiRequest(`${root(bookingId)}/pickup/slot-skips/clear`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export async function skipPickupSlot(
   bookingId: string,
   body: { unitId: string; slotKey: string; reason: string }

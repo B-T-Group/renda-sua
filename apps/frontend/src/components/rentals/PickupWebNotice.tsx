@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
-import type { BlockedGuideRow } from '../../utils/rentals/blockedGuideRows';
+import { groupBlockedRows, otherReasonReady, type BlockedGuideRow } from '../../utils/rentals/blockedGuideRows';
 import { formatListingDay, listingCity } from '../../utils/rentals/pickupPhotoTime';
 
 function CalendarArt() {
@@ -38,7 +38,7 @@ function BlockedWebRow({
   onSkip,
 }: {
   row: BlockedGuideRow & { label: string; reason?: string | null };
-  onRetake: (row: BlockedGuideRow) => void;
+  onRetake: (row: BlockedGuideRow & { reason?: string | null }) => void;
   onSkip: (row: BlockedGuideRow, reason: string) => void;
 }) {
   const { t } = useTranslation();
@@ -54,19 +54,22 @@ function BlockedWebRow({
           alt=""
           sx={{ width: 48, height: 48, borderRadius: 1, objectFit: 'cover', opacity: 0.4, bgcolor: 'grey.200' }}
         />
-        <Typography sx={{ flex: 1 }}>{row.label}</Typography>
+        <Typography sx={{ flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{row.label}</Typography>
         {row.reason ? (
-          <Typography variant="body2">{row.reason}</Typography>
-        ) : (
-          <Button variant="contained" color="success" onClick={() => onRetake(row)} aria-label={t('rentalInspection.takePhoto', 'Take photo')} sx={{ minWidth: 40, px: 1 }}>
-            <CameraArt />
+          <Button size="small" onClick={() => setOpen(true)} sx={{ whiteSpace: 'nowrap' }}>
+            {t('rentalInspection.changeSkip', 'Change')}
           </Button>
-        )}
-        {!row.reason && row.action === 'skip' ? (
-          <Button onClick={() => setOpen(true)}>{t('rentalInspection.skipAngle', 'Skip this angle')}</Button>
+        ) : row.action === 'skip' ? (
+          <Button size="small" onClick={() => setOpen(true)} sx={{ whiteSpace: 'nowrap' }}>
+            {t('rentalInspection.skipShort', 'Skip')}
+          </Button>
         ) : null}
+        <Button variant="contained" color="success" onClick={() => onRetake(row)} aria-label={row.label} sx={{ minWidth: 44, width: 44, height: 44, borderRadius: '22px', p: 0 }}>
+          <CameraArt />
+        </Button>
       </Stack>
-      {open && !row.reason ? (
+      {row.reason ? <Typography variant="body2">{row.reason}</Typography> : null}
+      {open ? (
         <Stack spacing={1}>
           {(['skipNotOnUnit', 'skipAccessory', 'skipCantReach'] as const).map((key) => (
             <Button key={key} variant="outlined" onClick={() => onSkip(row, t(`rentalInspection.${key}`, key))}>
@@ -83,7 +86,7 @@ function BlockedWebRow({
                 inputProps={{ maxLength: 280 }}
                 onChange={(event) => setReason(event.target.value)}
               />
-              <Button disabled={!reason.trim()} onClick={() => onSkip(row, reason.trim())}>
+              <Button disabled={!otherReasonReady(reason)} onClick={() => onSkip(row, reason.trim())}>
                 {t('rentalInspection.skipSave', 'Save reason')}
               </Button>
             </Stack>
@@ -110,7 +113,7 @@ export function PickupWebNotice({
   rows: Array<BlockedGuideRow & { label: string; reason?: string | null }>;
   progress?: { done: number; total: number } | null;
   onChoose: (mode: 'guide' | 'blank') => void;
-  onRetake: (row: BlockedGuideRow) => void;
+  onRetake: (row: BlockedGuideRow & { reason?: string | null }) => void;
   onSkip: (row: BlockedGuideRow, reason: string) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -127,6 +130,13 @@ export function PickupWebNotice({
         <Alert severity="info" icon={<CalendarArt />}>
           {t('rentalInspection.earlyPrepareBody', 'Photos are taken on pickup day, {{date}} ({{city}} time). You can prepare the checklist now.', { date: day, city })}
         </Alert>
+      ) : !rules.guideMode ? (
+        <Stack direction="row" spacing={1} alignItems="flex-start">
+          <CameraArt />
+          <Typography sx={{ flex: 1, minWidth: 0 }}>
+            {t('rentalInspection.pickupTodayBody', 'Pickup today: take the condition photos, ideally with the renter.')}
+          </Typography>
+        </Stack>
       ) : (
         <Alert severity="info" icon={<PhoneArt />}>
           {t('rentalInspection.webAppOnly', 'Take pickup photos in the Rendasua app')}
@@ -161,13 +171,19 @@ export function PickupWebNotice({
           <Typography variant="subtitle1">{t('rentalInspection.cantSendYet', "Can't send yet")}</Typography>
           <Typography>{t('rentalInspection.retakeOrSkip', 'Retake or skip the missing angles')}</Typography>
           <Typography variant="body2">
-            {t('rentalInspection.missingAngles', '{{count}} angles from the {{date}} guide are still missing. Retake them, or skip an extra angle with a reason.', {
-              count: rows.filter((row) => !row.reason).length,
+            {t('rentalInspection.missingAngles', '{{count}} angles from the {{date}} guide are still missing.', {
+              count: groupBlockedRows(rows).open.length,
               date,
             })}
           </Typography>
-          {rows.map((row) => (
+          {groupBlockedRows(rows).open.map((row) => (
             <BlockedWebRow key={`${row.unitId}-${row.slotKey}`} row={row} onRetake={onRetake} onSkip={onSkip} />
+          ))}
+          {groupBlockedRows(rows).skipped.length ? (
+            <Typography variant="subtitle2">{t('rentalInspection.skippedHeading', 'Skipped')}</Typography>
+          ) : null}
+          {groupBlockedRows(rows).skipped.map((row) => (
+            <BlockedWebRow key={`${row.unitId}-${row.slotKey}-skipped`} row={row} onRetake={onRetake} onSkip={onSkip} />
           ))}
         </Alert>
       ) : null}

@@ -124,6 +124,16 @@ export class PickupPhotoRulesService {
     return { saved: true };
   }
 
+  async clearSlot(bookingId: string, unitId: string, slotKey: string) {
+    const booking = await this.requireBusiness(bookingId);
+    if (!(await this.enabled(booking))) this.rejectOff();
+    const inspection = await this.inspection(bookingId);
+    if (!inspection) return { cleared: false };
+    await this.assertUnit(bookingId, unitId);
+    await this.deleteSkip(inspection.id, unitId, slotKey.trim());
+    return { cleared: true };
+  }
+
   async viewerExtras(bookingId: string, audience: 'client' | 'business' | 'admin') {
     const booking = await this.findBooking(bookingId);
     if (!booking || !(await this.enabled(booking))) return { slotSkips: [] as SkipRow[] };
@@ -468,6 +478,17 @@ export class PickupPhotoRulesService {
         ) { affected_rows }
       }`,
       { id: inspectionId }
+    );
+  }
+
+  private async deleteSkip(inspectionId: string, unitId: string, slotKey: string) {
+    await this.hasura.executeMutation(
+      `mutation ClearSlotSkip($inspectionId: uuid!, $unitId: uuid!, $slotKey: String!) {
+        delete_rental_inspection_slot_skips(where: {
+          inspection_id: { _eq: $inspectionId }, unit_id: { _eq: $unitId }, slot_key: { _eq: $slotKey }
+        }) { affected_rows }
+      }`,
+      { inspectionId, unitId, slotKey }
     );
   }
 

@@ -1,5 +1,5 @@
-import { blockedGuideRows, checklistCount, submitLeftCount } from './blockedGuideRows';
-import { formatListingStamp } from './pickupPhotoTime';
+import { blockedGuideRows, checklistCount, otherReasonReady, submitLeftCount, undoSkip } from './blockedGuideRows';
+import { formatListingStamp, slotTileLabel } from './pickupPhotoTime';
 
 describe('blocked guide rows', () => {
   it('lists every missing slot and uses that list for the count', () => {
@@ -16,6 +16,17 @@ describe('blocked guide rows', () => {
     expect(rows.map((row) => row.slotKey)).toEqual(gaps.map((gap) => gap.slotKey));
     expect(rows.every((row) => row.action === 'skip' && row.thumbUrl)).toBe(true);
     expect(submitLeftCount(gaps)).toBe(checklistCount(rows));
+  });
+
+  it('undoes a skip and keeps Other empty until there is text', () => {
+    const skips = [{ unitId: 'unit-1', slotKey: 'extra:3', reason: 'Absent' }];
+    expect(undoSkip(skips, { unitId: 'unit-1', slotKey: 'extra:3' })).toEqual([]);
+    expect(otherReasonReady('')).toBe(false);
+    expect(otherReasonReady('   ')).toBe(false);
+    expect(otherReasonReady('Poignée absente')).toBe(true);
+    expect(otherReasonReady('x'.repeat(280))).toBe(true);
+    expect(otherReasonReady('x'.repeat(281))).toBe(false);
+    expect(slotTileLabel('extra:1', 'fr')).toBe('Supp. 1');
   });
 
   it('formats a French listing stamp as 17 nov. · 10:14', () => {

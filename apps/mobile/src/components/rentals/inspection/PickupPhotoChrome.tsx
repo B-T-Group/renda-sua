@@ -5,7 +5,8 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { getPickupPhotoRules } from '../../../services/rentalInspectionApi';
-import { formatListingDay, formatListingStamp, listingCity } from '../../../utils/rentals/pickupPhotoTime';
+import { groupBlockedRows, otherReasonReady } from '../../../utils/rentals/blockedGuideRows';
+import { formatListingDay, listingCity } from '../../../utils/rentals/pickupPhotoTime';
 import type { PickupPhotoRules } from '../../../utils/rentals/rentalInspection';
 
 export function CalendarArt() {
@@ -43,10 +44,12 @@ export function PickupGuideStart({
   rules,
   busy,
   onChoose,
+  showTitle = true,
 }: {
   rules: PickupPhotoRules;
   busy: boolean;
   onChoose: (mode: 'guide' | 'blank') => void;
+  showTitle?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
@@ -55,7 +58,7 @@ export function PickupGuideStart({
   const date = formatListingDay(guide.submittedAt, rules.timezone, i18n.language);
   return (
     <View style={{ gap: spacing.md }}>
-      <Text style={[typography.h5, { color: colors.text.primary }]}>{t('rentalInspection.pickupPhotosTitle', 'Pickup photos')}</Text>
+      {showTitle ? <Text style={[typography.h5, { color: colors.text.primary }]}>{t('rentalInspection.pickupPhotosTitle', 'Pickup photos')}</Text> : null}
       <View style={[styles.card, { borderColor: colors.cta.main, borderRadius: borderRadius.lg, padding: spacing.md, gap: spacing.sm }]}>
         <Text style={[typography.subtitle1, { color: colors.text.primary }]}>{t('rentalInspection.startFromLast', 'Start from last report')}</Text>
         <Text style={{ color: colors.text.secondary }}>
@@ -77,25 +80,6 @@ export function PickupGuideStart({
           {t('rentalInspection.startBlank', 'Start blank')}
         </Button>
       </View>
-    </View>
-  );
-}
-
-export function PickupCameraSheet({ onTake, onClose }: { onTake: () => void; onClose: () => void }) {
-  const { t } = useTranslation();
-  const { colors, spacing, borderRadius, typography } = useTheme();
-  return (
-    <View style={[styles.sheet, { backgroundColor: colors.surface, padding: spacing.md, gap: spacing.sm, borderTopLeftRadius: borderRadius.lg, borderTopRightRadius: borderRadius.lg }]}>
-      <Text style={[typography.subtitle1, { color: colors.text.primary }]}>{t('rentalInspection.photoSource', 'Photo source')}</Text>
-      <Text style={{ color: colors.text.primary }}>{t('rentalInspection.inAppCamera', 'In-app camera')}</Text>
-      <Text style={{ color: colors.text.secondary }}>{t('rentalInspection.cameraRequired', 'Required for pickup photos.')}</Text>
-      <Text style={{ color: colors.text.disabled }}>{t('rentalInspection.photoLibrary', 'Photo library')}</Text>
-      <Text style={{ color: colors.text.disabled }}>{t('rentalInspection.libraryDisabled', 'Disabled for this report.')}</Text>
-      <Text style={{ color: colors.text.secondary }}>
-        {t('rentalInspection.libraryLockedNote', 'Gallery photos stay off for this report. Take the photo in the app.')}
-      </Text>
-      <Button mode="contained" buttonColor={colors.cta.main} onPress={onTake}>{t('rentalInspection.takePhoto', 'Take photo')}</Button>
-      <Button mode="text" onPress={onClose}>{t('common.cancel', 'Cancel')}</Button>
     </View>
   );
 }
@@ -143,7 +127,7 @@ export function PickupSubmitBlocked({
   const { t } = useTranslation();
   const { colors, spacing, typography } = useTheme();
   const [skipKey, setSkipKey] = useState<string | null>(null);
-  const open = rows.filter((row) => !row.reason).length;
+  const grouped = groupBlockedRows(rows);
   return (
     <View style={{ gap: spacing.sm, padding: spacing.md }}>
       <Text style={[typography.h5, { color: colors.text.primary }]}>{t('rentalInspection.cantSendYet', "Can't send yet")}</Text>
@@ -151,12 +135,25 @@ export function PickupSubmitBlocked({
         {t('rentalInspection.retakeOrSkip', 'Retake or skip the missing angles')}
       </Text>
       <Text style={{ color: colors.text.secondary }}>
-        {t('rentalInspection.missingAngles', '{{count}} angles from the {{date}} guide are still missing. Retake them, or skip an extra angle with a reason.', {
-          count: open,
+        {t('rentalInspection.missingAngles', '{{count}} angles from the {{date}} guide are still missing.', {
+          count: grouped.open.length,
           date,
         })}
       </Text>
-      {rows.map((row) => (
+      {grouped.open.map((row) => (
+        <BlockedAngle
+          key={`${row.unitId}-${row.slotKey}`}
+          row={row}
+          open={skipKey === row.slotKey}
+          onRetake={() => onRetake(row)}
+          onAskSkip={() => setSkipKey(row.slotKey)}
+          onSkip={(reason) => onSkip(row, reason)}
+        />
+      ))}
+      {grouped.skipped.length ? (
+        <Text style={[typography.subtitle1, { color: colors.text.primary }]}>{t('rentalInspection.skippedHeading', 'Skipped')}</Text>
+      ) : null}
+      {grouped.skipped.map((row) => (
         <BlockedAngle
           key={`${row.unitId}-${row.slotKey}`}
           row={row}
@@ -196,18 +193,22 @@ function BlockedAngle({
         ) : (
           <View style={{ width: 48, height: 48, borderRadius: borderRadius.md, backgroundColor: colors.surface }} />
         )}
-        <Text style={{ flex: 1, color: colors.text.primary }}>{row.label}</Text>
-        {row.reason ? null : (
-          <Pressable accessibilityRole="button" accessibilityLabel={t('rentalInspection.takePhoto', 'Take photo')} onPress={onRetake} style={[styles.cam, { backgroundColor: colors.cta.main }]}>
-            <CameraArt />
+        <Text numberOfLines={2} style={{ flex: 1, color: colors.text.primary }}>{row.label}</Text>
+        {row.reason ? (
+          <Pressable accessibilityRole="button" onPress={onAskSkip}>
+            <Text numberOfLines={1} style={{ color: colors.cta.main, fontWeight: '700' }}>{t('rentalInspection.changeSkip', 'Change')}</Text>
           </Pressable>
-        )}
-        {!row.reason && row.action === 'skip' ? (
-          <Button mode="text" onPress={onAskSkip}>{t('rentalInspection.skipAngle', 'Skip this angle')}</Button>
+        ) : row.action === 'skip' ? (
+          <Pressable accessibilityRole="button" onPress={onAskSkip}>
+            <Text numberOfLines={1} style={{ color: colors.cta.main, fontWeight: '700' }}>{t('rentalInspection.skipShort', 'Skip')}</Text>
+          </Pressable>
         ) : null}
+        <Pressable accessibilityRole="button" accessibilityLabel={row.label} onPress={onRetake} style={[styles.cam, { backgroundColor: colors.cta.main }]}>
+          <CameraArt />
+        </Pressable>
       </View>
       {row.reason ? <Text style={{ color: colors.text.secondary }}>{row.reason}</Text> : null}
-      {open && !row.reason ? <SkipReasonField onSave={onSkip} /> : null}
+      {open ? <SkipReasonField onSave={onSkip} /> : null}
     </View>
   );
 }
@@ -258,7 +259,7 @@ export function PickupDayCallout({ bookingId, onOpen }: { bookingId: string; onO
             : t('rentalInspection.pickupTodayBody', 'Pickup today: take the condition photos, ideally with the renter.')}
         </Text>
       </View>
-      {!early && rules.guide && !rules.guideMode ? <PickupGuideStart rules={rules} busy={false} onChoose={() => onOpen()} /> : null}
+      {!early && rules.guide && !rules.guideMode ? <PickupGuideStart rules={rules} busy={false} showTitle={false} onChoose={() => onOpen()} /> : null}
       <Button mode="contained" buttonColor={colors.cta.main} style={{ minHeight: 48 }} onPress={onOpen}>
         {early
           ? t('rentalInspection.prepareChecklist', 'Prepare checklist')
@@ -288,7 +289,7 @@ export function SkipReasonField({ onSave }: { onSave: (reason: string) => void }
       {other ? (
         <>
           <TextInput mode="outlined" label={t('rentalInspection.skipReason', 'Reason')} value={reason} onChangeText={setReason} maxLength={280} />
-          <Button mode="outlined" disabled={!reason.trim()} buttonColor={colors.surface} onPress={() => onSave(reason.trim())}>
+          <Button mode="outlined" disabled={!otherReasonReady(reason)} buttonColor={colors.surface} onPress={() => onSave(reason.trim())}>
             {t('rentalInspection.skipSave', 'Save reason')}
           </Button>
         </>
@@ -299,8 +300,7 @@ export function SkipReasonField({ onSave }: { onSave: (reason: string) => void }
 
 const styles = StyleSheet.create({
   card: { borderWidth: 1 },
-  sheet: { borderTopWidth: 1 },
   fill: { flex: 1 },
   tag: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', gap: 8, alignSelf: 'flex-start' },
-  cam: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  cam: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

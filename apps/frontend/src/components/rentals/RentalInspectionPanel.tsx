@@ -22,7 +22,7 @@ import { useClientFlags } from '../../hooks/useClientFlags';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { PickupWebNotice } from './PickupWebNotice';
 import { blockedScreenRows, submitLeftCount } from '../../utils/rentals/blockedGuideRows';
-import { formatListingDay, formatListingStamp } from '../../utils/rentals/pickupPhotoTime';
+import { formatListingDay, formatListingStamp, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { formatListingDue } from '../../utils/rentalRequestFormat';
@@ -438,7 +438,11 @@ export function RentalInspectionPanel({
                 const next = await model.api.photoRules(bookingId);
                 setPhotoRules(next);
               })}
-              onRetake={() => setPhotoBlocked(false)}
+              onRetake={(row) => void run(async () => {
+                if (row.reason) await model.api.clearSlot(bookingId, { unitId: row.unitId, slotKey: row.slotKey });
+                setPhotoBlocked(false);
+                await model.reload();
+              })}
               onSkip={(row, reason) => void run(async () => {
                 await model.api.skipSlot(bookingId, { unitId: row.unitId, slotKey: row.slotKey, reason });
                 await model.reload();
@@ -922,17 +926,14 @@ function PhotoRow({
         const role = slot.role;
         const photo = unit.photos.find((row) => (row.slotKey ? row.slotKey === slot.slotKey : row.role === role));
         const ghost = !photo?.url && slot.url;
-        const extra = slot.slotKey.startsWith('extra:') ? slot.slotKey.slice(6) : '';
-        const label = extra
-          ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: extra })
-          : t(ROLE_KEY[role][0], ROLE_KEY[role][1]);
+        const label = slotTileLabel(slot.slotKey, i18n.language);
         const stamp = photo?.capturedAt && stampZone
           ? formatListingStamp(photo.capturedAt, stampZone, i18n.language)
           : '';
         const caption = photo?.url
-          ? `${label} ✓${stamp ? ` ${stamp}` : ''}`
+          ? `${label}${stamp ? ` ${stamp}` : ''}`
           : ghost && guideDate
-            ? `${label} · ${t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })}`
+            ? `${label} ${t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })}`
             : label;
         return (
           <Button key={slot.slotKey} component="label" variant="outlined" sx={{ minHeight: 96, minWidth: 96, display: 'flex', flexDirection: 'column' }}>

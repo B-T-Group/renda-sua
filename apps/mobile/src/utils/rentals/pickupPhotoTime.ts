@@ -5,6 +5,15 @@ const CITY_BY_ZONE: Record<string, string> = {
   'Africa/Libreville': 'Libreville',
 };
 
+export function slotTileLabel(slotKey: string, language: string): string {
+  const french = language.startsWith('fr');
+  if (slotKey === 'overview') return french ? "Vue d'ensemble" : 'Overview';
+  if (slotKey === 'other_side') return french ? 'Autre côté' : 'Other side';
+  if (slotKey === 'accessories') return french ? 'Accessoires' : 'Accessories';
+  if (slotKey.startsWith('extra:')) return french ? `Supp. ${slotKey.slice(6)}` : `Extra ${slotKey.slice(6)}`;
+  return slotKey;
+}
+
 export function listingCity(timeZone: string): string {
   return CITY_BY_ZONE[timeZone] ?? timeZone.split('/').pop()?.replace(/_/g, ' ') ?? timeZone;
 }

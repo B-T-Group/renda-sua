@@ -10,6 +10,7 @@ import {
   openInspectionDraft,
   recordHandback,
   saveInspectionItems,
+  clearPickupSlot,
   skipPickupSlot,
   submitInspection,
   uploadInspectionPhoto,
@@ -409,6 +410,16 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     }
   };
 
+  const clearSkip = async (slotKey: string, unitId = current?.unitId) => {
+    if (!unitId) return;
+    try {
+      await clearPickupSlot(bookingId, { unitId, slotKey });
+      await load();
+    } catch (err: unknown) {
+      setError(classifyInspectionError(err));
+    }
+  };
+
   const skipAngle = async (slotKey: string, reason: string, unitId = current?.unitId) => {
     if (!unitId) return;
     setBusy(true);
@@ -454,6 +465,7 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     confirmField,
     chooseGuide,
     skipAngle,
+    clearSkip,
     addPhoto,
     retryPhoto,
     saveAndNext,

@@ -19,6 +19,7 @@ import {
   ApplyPickupGuideDto,
   PresignInspectionEvidenceDto,
   SaveInspectionItemsDto,
+  ClearPickupSlotDto,
   SkipPickupSlotDto,
   SubmitInspectionDto,
 } from './dto/rental-inspection.dto';
@@ -65,6 +66,16 @@ export class RentalInspectionsController {
     @Body() body: SkipPickupSlotDto
   ) {
     return this.photoRules.skipSlot(bookingId, body.unitId, body.slotKey, body.reason);
+  }
+
+  @Post('pickup/slot-skips/clear')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a skipped extra angle so it can be retaken' })
+  clearSlot(
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+    @Body() body: ClearPickupSlotDto
+  ) {
+    return this.photoRules.clearSlot(bookingId, body.unitId, body.slotKey);
   }
 
   @Post(':stage/draft')

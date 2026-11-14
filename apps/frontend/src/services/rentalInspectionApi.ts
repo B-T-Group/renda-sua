@@ -45,6 +45,8 @@ export function createRentalInspectionApi(api: AxiosInstance) {
       api.post<PickupPhotoRules>(`${root(bookingId)}/pickup/guide`, { mode }).then((res) => res.data),
     skipSlot: (bookingId: string, body: { unitId: string; slotKey: string; reason: string }) =>
       api.post(`${root(bookingId)}/pickup/slot-skips`, body).then((res) => res.data),
+    clearSlot: (bookingId: string, body: { unitId: string; slotKey: string }) =>
+      api.post(`${root(bookingId)}/pickup/slot-skips/clear`, body).then((res) => res.data),
     photoUrl: (bookingId: string, mediaId: string) =>
       api
         .get<{ url: string; expiresAt: string }>(`${root(bookingId)}/evidence/${mediaId}/url`)

@@ -143,6 +143,17 @@ export class ApplyPickupGuideDto {
   mode!: 'guide' | 'blank';
 }
 
+export class ClearPickupSlotDto {
+  @ApiProperty()
+  @IsUUID()
+  unitId!: string;
+
+  @ApiProperty()
+  @IsString()
+  @Matches(/^extra:[1-9]\d{0,2}$/)
+  slotKey!: string;
+}
+
 export class SkipPickupSlotDto {
   @ApiProperty()
   @IsUUID()

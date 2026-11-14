@@ -15,6 +15,7 @@ export interface SlotPhoto {
   ghostUri?: string;
   stamp?: string;
   fromLabel?: string;
+  tileLabel?: string;
   failed?: boolean;
   pending?: boolean;
 }
@@ -58,9 +59,8 @@ export function InspectionPhotoSlots({
         {slots.map((slot, index) => {
           const [key, fallback] = ROLE_KEY[slot.role] ?? ROLE_KEY.wear;
           const extra = slot.slotKey?.startsWith('extra:') ? slot.slotKey.slice(6) : '';
-          const label = extra
-            ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: extra })
-            : t(key, fallback);
+          const label = slot.tileLabel
+            ?? (extra ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: extra }) : t(key, fallback));
           const ghost = !slot.uri && !!slot.ghostUri;
           return (
             <Pressable
@@ -79,17 +79,19 @@ export function InspectionPhotoSlots({
             >
               {slot.uri ? <Image source={{ uri: slot.uri }} style={styles.image} /> : null}
               {ghost ? <Image source={{ uri: slot.ghostUri }} style={styles.ghost} /> : null}
-              <Text style={[typography.caption, { color: slot.uri ? '#fff' : colors.text.primary, textAlign: 'center' }]}>
-                {slot.failed
-                  ? t('rentalInspection.photoUploadFailed', 'Photo upload failed. Retry.')
-                  : slot.uri
-                    ? `${label} ✓`
-                    : ghost && slot.fromLabel
-                      ? `${label} · ${slot.fromLabel}`
-                      : label}
+              {slot.uri ? (
+                <View style={[styles.badge, { backgroundColor: colors.cta.main }]}>
+                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>✓</Text>
+                </View>
+              ) : null}
+              <Text numberOfLines={1} style={[typography.caption, styles.tileName, { color: slot.uri ? '#fff' : colors.text.primary }]}>
+                {slot.failed ? t('rentalInspection.photoUploadFailed', 'Photo upload failed. Retry.') : label}
               </Text>
               {slot.stamp && slot.uri ? (
-                <Text style={[typography.caption, { color: '#fff' }]}>{slot.stamp}</Text>
+                <Text numberOfLines={1} style={[typography.caption, styles.tileStamp, { color: '#fff' }]}>{slot.stamp}</Text>
+              ) : null}
+              {ghost && slot.fromLabel ? (
+                <Text numberOfLines={1} style={[typography.caption, styles.tileStamp, { color: colors.text.secondary }]}>{slot.fromLabel}</Text>
               ) : null}
               {slot.pending ? (
                 <Text style={[typography.caption, { color: colors.warning.dark }]}>
@@ -118,6 +120,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   image: { ...StyleSheet.absoluteFillObject, opacity: 0.85 },
+  badge: { position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  tileName: { position: 'absolute', left: 4, right: 4, bottom: 16, textAlign: 'center' },
+  tileStamp: { position: 'absolute', left: 2, right: 2, bottom: 2, textAlign: 'center' },
   ghost: { ...StyleSheet.absoluteFillObject, opacity: 0.35 },
 });
 

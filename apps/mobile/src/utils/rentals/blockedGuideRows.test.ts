@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { blockedGuideRows, blockedScreenRows, checklistCount, submitLeftCount } from './blockedGuideRows';
-import { formatListingStamp } from './pickupPhotoTime';
+import { blockedGuideRows, blockedScreenRows, checklistCount, groupBlockedRows, otherReasonReady, submitLeftCount, undoSkip } from './blockedGuideRows';
+import { formatListingStamp, slotTileLabel } from './pickupPhotoTime';
 
 describe('blocked guide rows', () => {
   it('lists every missing slot and uses that list for the count', () => {
@@ -33,6 +33,20 @@ describe('blocked guide rows', () => {
     expect(rows).toHaveLength(7);
     expect(rows[6].reason).toBe('Not on this unit');
     expect(checklistCount(rows.filter((row) => !row.reason))).toBe(submitLeftCount(gaps));
+  });
+
+  it('undoes a skip and keeps Other empty until there is text', () => {
+    const skips = [{ unitId: 'unit-1', slotKey: 'extra:9', reason: 'Not on this unit' }];
+    const left = undoSkip(skips, { unitId: 'unit-1', slotKey: 'extra:9' });
+    expect(left).toEqual([]);
+    expect(groupBlockedRows(blockedScreenRows([], left, [])).skipped).toEqual([]);
+    expect(otherReasonReady('')).toBe(false);
+    expect(otherReasonReady('   ')).toBe(false);
+    expect(otherReasonReady('Handle is missing')).toBe(true);
+    expect(otherReasonReady('x'.repeat(280))).toBe(true);
+    expect(otherReasonReady('x'.repeat(281))).toBe(false);
+    expect(slotTileLabel('extra:3', 'fr')).toBe('Supp. 3');
+    expect(slotTileLabel('overview', 'en')).toBe('Overview');
   });
 
   it('formats a French listing stamp as 17 nov. · 10:14', () => {

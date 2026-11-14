@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir =
-  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v3';
+  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v4';
 const heroSrc =
   '/cursor/stores/bot/handoffs/pickup-photo-prefill/hero-jbl.png';
 
@@ -64,7 +64,13 @@ const copy = {
       ['Notes', 'Handle scuff, works normally'],
     ],
     presets: ['Not on this unit', 'Accessory not included', "Can't reach this angle", 'Other'],
-    missingLine: (count) => `${count} angles from the 10 Nov guide are still missing. Retake them, or skip an extra angle with a reason.`,
+    missingLine: (count) => `${count} angles from the 10 Nov guide are still missing.`,
+    tileRoles: ['Overview', 'Other side', 'Accessories'],
+    extraShort: (n) => `Extra ${n}`,
+    skipShort: 'Skip',
+    save: 'Save reason',
+    skipped: 'Skipped',
+    change: 'Change',
     skip: 'Skip this angle',
     reason: 'Angle not on this unit',
     nav: ['Home', 'Orders', 'Rentals', 'Account'],
@@ -122,7 +128,13 @@ const copy = {
       ['Notes', 'Poignée marquée, fonctionne'],
     ],
     presets: ['Absent sur cette unité', 'Accessoire non inclus', 'Angle inaccessible', 'Autre'],
-    missingLine: (count) => `${count} angles du guide du 10 nov. manquent encore. Reprenez-les, ou ignorez un angle supplémentaire avec un motif.`,
+    missingLine: (count) => `${count} angles du guide du 10 nov. manquent encore.`,
+    tileRoles: ['Vue d\'ensemble', 'Autre côté', 'Accessoires'],
+    extraShort: (n) => `Supp. ${n}`,
+    skipShort: 'Ignorer',
+    save: 'Enregistrer le motif',
+    skipped: 'Ignorés',
+    change: 'Modifier',
     skip: 'Ignorer cet angle',
     reason: 'Angle absent sur cette unité',
     nav: ['Accueil', 'Commandes', 'Locations', 'Compte'],
@@ -169,12 +181,21 @@ const css = `
 .check{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
 .angle{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
 .angle img{width:40px;height:40px;border-radius:8px;object-fit:cover;opacity:.35}
-.angle b{flex:1;font-size:14px}
-.angle button{border:1px solid var(--green);background:#fff;color:var(--green-dark);border-radius:10px;font-weight:700;padding:6px 10px;font-family:inherit}
+.angle b{display:block;font-size:14px;line-height:1.15;font-weight:700}
+.angle .label{flex:1;min-width:0}
+.angle button{font-family:inherit}
+.angle .cam{width:44px;height:44px;border-radius:22px;background:var(--green);color:#fff;border:0;padding:0}
+.angle .skip-link{border:0;background:transparent;color:var(--green-dark);font-size:13px;font-weight:700;white-space:nowrap;padding:0 2px}
 .from{font-size:10px;font-weight:800;color:#92400e;background:var(--warn-tint);border-radius:999px;padding:3px 7px}
 .err{background:var(--err-tint);color:#9F1239;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600}
 .info{background:#F4F7F5;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600;display:flex;gap:8px}
-.cam{width:36px;height:36px;border-radius:50%;background:var(--green);color:#fff;border:0;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.cam{width:44px;height:44px;border-radius:22px;background:var(--green);color:#fff;border:0;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.skip-link{border:0;background:transparent;color:var(--green-dark);font-weight:700;font-size:13px;white-space:nowrap;padding:4px 2px}
+.today{display:flex;gap:8px;align-items:flex-start}
+.today p{flex:1;min-width:0;margin:0;overflow-wrap:anywhere}
+.badge{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:#0B7A3B;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;z-index:1}
+.slot .name{position:absolute;left:2px;right:2px;bottom:16px;font-size:9px;font-weight:800;text-align:center;color:#fff;text-shadow:0 1px 2px #000;z-index:1}
+.slot.ghost .name{color:#0F172A;text-shadow:none}
 .phase h3,.panel h2{display:flex;align-items:center;gap:8px}
 .presets{display:flex;flex-direction:column;gap:6px;margin-left:48px}
 .presets button{text-align:left;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;font:inherit;font-weight:650}
@@ -202,12 +223,12 @@ const css = `
 `;
 
 function slots(c, freshCount) {
-  const labels = [...c.roles, ...Array.from({ length: 9 }, (_, i) => c.extra(i + 1))];
+  const labels = [...c.tileRoles, ...Array.from({ length: 9 }, (_, i) => c.extraShort(i + 1))];
   return labels
     .map((label, i) => {
       const fresh = i < freshCount;
-      const tag = fresh ? `${label} ✓<br/>${c.stamp}` : `${label}<br/>${c.from}`;
-      return `<div class="slot ${fresh ? 'fresh' : 'ghost'}"><img src="hero-jbl.png" alt=""/><span class="tag">${tag}</span></div>`;
+      const badge = fresh ? '<span class="badge">✓</span>' : '';
+      return `<div class="slot ${fresh ? 'fresh' : 'ghost'}"><img src="hero-jbl.png" alt=""/>${badge}<span class="name">${label}</span><span class="tag">${fresh ? c.stamp : c.from}</span></div>`;
     })
     .join('');
 }
@@ -240,30 +261,32 @@ function missingAngles(c) {
 }
 
 function angleRow(c, label, mode) {
+  const cam = `<button class="cam" aria-label="${label}">${cameraIcon}</button>`;
   if (mode === 'skipped') {
-    return `<div class="angle"><img src="hero-jbl.png" alt=""/><b>${label}</b><span class="cap">${c.presets[0]}</span></div>`;
+    return `<div class="angle"><img src="hero-jbl.png" alt=""/><div class="label"><b>${label}</b><span class="cap">${c.presets[0]}</span></div><button class="skip-link">${c.change}</button>${cam}</div>`;
   }
-  const skip = `<button>${c.skip}</button>`;
-  const cam = `<button class="cam" aria-label="${c.take}">${camera}</button>`;
-  const presets = mode === 'reason'
-    ? `<div class="presets">${c.presets.map((item) => `<button>${item}</button>`).join('')}</div>`
+  const skip = `<button class="skip-link">${c.skipShort}</button>`;
+  const other = mode === 'other'
+    ? `<div class="presets">${c.presets.map((item) => `<button>${item}</button>`).join('')}<input aria-label="${c.presets[3]}" placeholder="${c.presets[3]}" style="min-height:40px;border:1px solid var(--line);border-radius:10px;padding:8px"/><button class="btn btn-outline" disabled style="opacity:.45">${c.save}</button></div>`
     : '';
-  return `<div class="angle"><img src="hero-jbl.png" alt=""/><b>${label}</b>${cam}${skip}</div>${presets}`;
+  return `<div class="angle"><img src="hero-jbl.png" alt=""/><div class="label"><b>${label}</b></div>${skip}${cam}</div>${other}`;
 }
 
 function blockedList(c, variant = 'list') {
   const rows = missingAngles(c);
   const open = variant === 'skipped' ? rows.slice(1) : rows;
-  const skipped = variant === 'skipped' ? angleRow(c, rows[0], 'skipped') : '';
   const items = open
-    .map((label, index) => angleRow(c, label, variant === 'reason' && index === 0 ? 'reason' : 'buttons'))
+    .map((label, index) => angleRow(c, label, variant === 'other' && index === 0 ? 'other' : 'buttons'))
     .join('');
+  const skipped = variant === 'skipped'
+    ? `<h4 style="margin:12px 0 4px">${c.skipped}</h4>${angleRow(c, rows[0], 'skipped')}`
+    : '';
   return `<section class="card"><h3>${c.blocked}</h3><p>${c.blockedBody}</p><p>${c.missingLine(open.length)}</p>${items}${skipped}</section>`;
 }
 
 const cameraOff = '<svg width="56" height="56" viewBox="0 0 72 72" aria-hidden="true"><rect x="16" y="26" width="34" height="24" rx="4" fill="#DCF5E5" stroke="#0B7A3B" stroke-width="2"/><circle cx="33" cy="38" r="6" fill="none" stroke="#0B7A3B" stroke-width="2"/><path d="M50 32l8-5v18l-8-5z" fill="#0B7A3B"/><path d="M18 54L54 18" stroke="#B45309" stroke-width="3"/></svg>';
 const calendar = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="#0B7A3B" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" fill="none" stroke="#0B7A3B" stroke-width="2"/></svg>';
-const camera = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="13" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+const cameraIcon = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="13" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
 const phoneIcon = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" fill="none" stroke="#0B7A3B" stroke-width="2"/><path d="M11 18h2" stroke="#0B7A3B" stroke-width="2"/></svg>';
 
 function pages(lang, c) {
@@ -272,8 +295,8 @@ function pages(lang, c) {
   const startFoot = `<footer class="footer"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></footer>`;
   const left = c.submitLeft(7);
   const gridBody = `<p class="progress">${c.progress}</p><div class="bar"><i></i></div><p class="note">${c.retakeNote}</p><div class="grid">${slots(c, 5)}</div><section class="card">${checks(c)}</section>`;
-  const camera = `${head(c)}<div class="sheet"><h3>${c.source}</h3><div class="lock"><div><b>${c.camera}</b><div class="cap">${c.cameraReq}</div></div></div><p class="note">${c.libraryNote}</p><button class="btn btn-green">${c.take}</button></div>`;
-  const today = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}<section class="phase"><h3>${camera} ${c.title}</h3><p>${c.today}</p></section>${startCard}`;
+  const todayCard = `<section class="phase today">${cameraIcon}<p>${c.today}</p></section>`;
+  const today = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}${todayCard}${startCard}`;
   const early = `<img class="hero" src="hero-jbl.png" alt=""/>${head(c)}<section class="phase"><h3>${calendar} ${c.title}</h3><p>${c.early}</p></section><p class="note">${c.noteLater}</p><section class="card">${checks(c)}</section>`;
   const denied = `<section class="card" style="margin-top:80px;text-align:center">${cameraOff}<h3>${c.enable}</h3><p>${c.denied}</p></section>`;
   const deniedFoot = `<footer class="footer"><button class="btn btn-green">${c.settings}</button></footer>`;
@@ -283,19 +306,18 @@ function pages(lang, c) {
     phone(`${lang}-01-start`, c, startBody, startFoot),
     phone(`${lang}-02-grid`, c, gridBody, foot(left)),
     phone(`${lang}-03-blocked`, c, blockedList(c), foot(left)),
-    phone(`${lang}-03-skip-reason`, c, blockedList(c, 'reason'), foot(left)),
+    phone(`${lang}-03-other`, c, blockedList(c, 'other'), foot(left)),
     phone(`${lang}-03-skipped`, c, blockedList(c, 'skipped'), foot(c.submitLeft(6))),
-    phone(`${lang}-04-camera`, c, camera),
     phone(`${lang}-05-today`, c, today, `<footer class="footer"><button class="btn btn-green">${c.takePhotos}</button></footer>`),
     phone(`${lang}-05-early`, c, early, `<footer class="footer"><button class="btn btn-outline">${c.prepare}</button></footer>`),
     phone(`${lang}-camera-denied`, c, denied, deniedFoot),
     web(`${lang}-01-start-web`, c, `<h2>${c.start}</h2><p>${c.summary}</p><p class="note">${c.note}</p>${webInfo}<div class="btns"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></div>`),
     web(`${lang}-02-grid-web`, c, `<h2>${c.title}</h2><p class="progress">${c.progress}</p>${webInfo}<div class="grid">${slots(c, 5)}</div><div>${checks(c)}</div><button class="btn btn-green" disabled style="opacity:.45">${left}</button>`),
     web(`${lang}-03-blocked-web`, c, `<h2>${c.blocked}</h2>${blockedList(c)}${webInfo}`),
-    web(`${lang}-03-skip-reason-web`, c, `<h2>${c.blocked}</h2>${blockedList(c, 'reason')}`),
+    web(`${lang}-03-other-web`, c, `<h2>${c.blocked}</h2>${blockedList(c, 'other')}`),
     web(`${lang}-03-skipped-web`, c, `<h2>${c.blocked}</h2>${blockedList(c, 'skipped')}`),
     web(`${lang}-04-readonly-web`, c, `<h2>${c.title}</h2>${webInfo}<p class="progress">${c.progress}</p><div>${checks(c)}</div>`),
-    web(`${lang}-05-today-web`, c, `<h2>${camera} ${c.title}</h2><p>${c.today}</p><h3>${c.start}</h3><p>${c.summary}</p><p class="note">${c.note}</p>${webInfo}`),
+    web(`${lang}-05-today-web`, c, `${todayCard}<h3>${c.start}</h3><p>${c.summary}</p><p class="note">${c.note}</p>${webInfo}`),
     web(`${lang}-05-early-web`, c, `<h2>${calendar} ${c.prepare}</h2><p class="info">${calendar}<span>${c.early}</span></p><p class="note">${c.noteLater}</p><div>${checks(c)}</div><button class="btn btn-green">${c.prepare}</button>`),
   ].join('');
 }
@@ -325,7 +347,7 @@ const names = [];
 for (let i = 0; i < count; i += 1) {
   const node = shots.nth(i);
   const name = await node.getAttribute('data-shot');
-  if (!name) continue;
+  if (!name || !/-(02-grid|03-blocked|03-skipped|03-other|05-today)(-web)?$/.test(name)) continue;
   const file = join(outDir, `${name}.png`);
   await node.screenshot({ path: file });
   names.push(file);
