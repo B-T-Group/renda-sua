@@ -19,6 +19,7 @@ import { BusinessReturnedBanner } from '../../components/rentals/BusinessReturne
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
+import { PickupDayCallout } from '../../components/rentals/inspection/PickupPhotoChrome';
 import { unpaidCancelMinutesLeft } from '../../utils/rentals/rentalInspection';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
@@ -528,14 +529,21 @@ export default function BusinessRentalBookingDetailScreen() {
             onUpdate={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
           />
           {gate.mode === 'capture' && (booking.status === 'reserved' || booking.status === 'confirmed') ? (
-            <Button
-              mode="contained"
-              buttonColor={colors.cta.main}
-              style={{ minHeight: 48 }}
-              onPress={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
-            >
-              {t('rentalInspection.pickupTitle', 'Pickup condition')}
-            </Button>
+            flags.rentals_pickup_photo_rules_enabled ? (
+              <PickupDayCallout
+                bookingId={bookingId}
+                onOpen={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
+              />
+            ) : (
+              <Button
+                mode="contained"
+                buttonColor={colors.cta.main}
+                style={{ minHeight: 48 }}
+                onPress={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
+              >
+                {t('rentalInspection.pickupTitle', 'Pickup condition')}
+              </Button>
+            )
           ) : null}
           {showReturnInspection && !showRenterReport ? (
             <Button

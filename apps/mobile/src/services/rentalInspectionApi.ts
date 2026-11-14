@@ -4,6 +4,7 @@ import type {
   InspectionUnit,
   InspectionView,
   PhotoRole,
+  PickupPhotoRules,
 } from '../utils/rentals/rentalInspection';
 
 export interface InspectionPresign {
@@ -11,6 +12,7 @@ export interface InspectionPresign {
   uploadUrl: string;
   expiresAt: string;
   headers: Record<string, string>;
+  capturedAt?: string;
 }
 
 function root(bookingId: string): string {
@@ -34,6 +36,7 @@ export async function saveInspectionItems(
     wear: string;
     checklistNote?: string;
     physicalLabel?: string;
+    guideUnconfirmed?: string[];
   }>
 ): Promise<{ success: boolean }> {
   return apiRequest(`${root(bookingId)}/${stage}/items`, {
@@ -77,9 +80,43 @@ export async function recordHandback(bookingId: string): Promise<{ handedBack: b
   return apiRequest(`${root(bookingId)}/return/handback`, { method: 'POST' });
 }
 
+export async function getPickupPhotoRules(bookingId: string): Promise<PickupPhotoRules> {
+  return apiRequest(`${root(bookingId)}/pickup/photo-rules`);
+}
+
+export async function applyPickupGuide(
+  bookingId: string,
+  mode: 'guide' | 'blank'
+): Promise<PickupPhotoRules> {
+  return apiRequest(`${root(bookingId)}/pickup/guide`, {
+    method: 'POST',
+    body: JSON.stringify({ mode }),
+  });
+}
+
+export async function clearPickupSlot(
+  bookingId: string,
+  body: { unitId: string; slotKey: string }
+): Promise<{ cleared: boolean }> {
+  return apiRequest(`${root(bookingId)}/pickup/slot-skips/clear`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function skipPickupSlot(
+  bookingId: string,
+  body: { unitId: string; slotKey: string; reason: string }
+): Promise<{ saved: boolean }> {
+  return apiRequest(`${root(bookingId)}/pickup/slot-skips`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export async function presignInspectionPhoto(
   bookingId: string,
-  body: { unitId: string; role: PhotoRole; contentType: string; fileSize: number }
+  body: { unitId: string; role: PhotoRole; contentType: string; fileSize: number; slotKey?: string }
 ): Promise<InspectionPresign> {
   return apiRequest(`${root(bookingId)}/evidence/presign`, {
     method: 'POST',
@@ -110,12 +147,14 @@ export async function uploadInspectionPhoto(input: {
   uri: string;
   contentType: string;
   fileSize: number;
-}): Promise<{ mediaId: string }> {
+  slotKey?: string;
+}): Promise<{ mediaId: string; capturedAt?: string }> {
   const signed = await presignInspectionPhoto(input.bookingId, {
     unitId: input.unitId,
     role: input.role,
     contentType: input.contentType,
     fileSize: input.fileSize,
+    slotKey: input.slotKey,
   });
   const file = await fetch(input.uri);
   const blob = await file.blob();
@@ -128,7 +167,7 @@ export async function uploadInspectionPhoto(input: {
     throw Object.assign(new Error('Photo upload failed'), { status: uploaded.status });
   }
   const ready = await finalizeInspectionPhoto(input.bookingId, signed.mediaId);
-  return { mediaId: ready.mediaId };
+  return { mediaId: ready.mediaId, capturedAt: signed.capturedAt };
 }
 
 export async function hydrateInspectionPhotos(

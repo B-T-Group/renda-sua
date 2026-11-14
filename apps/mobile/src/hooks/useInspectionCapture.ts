@@ -3,15 +3,20 @@ import * as ImagePicker from 'expo-image-picker';
 import { useNetworkStatus } from './useNetworkStatus';
 import { getBooking } from '../services/rentalsApi';
 import {
+  applyPickupGuide,
   getInspection,
+  getPickupPhotoRules,
   hydrateInspectionPhotos,
   openInspectionDraft,
   recordHandback,
   saveInspectionItems,
+  clearPickupSlot,
+  skipPickupSlot,
   submitInspection,
   uploadInspectionPhoto,
 } from '../services/rentalInspectionApi';
 import { filterSupportedImageAssets, IMAGE_LIBRARY_PICKER_OPTIONS } from '../utils/supportedImageFormats';
+import { pickupCaptureSource } from '../utils/rentals/pickupCaptureSource';
 import {
   classifyInspectionError,
   handbackEnabled,
@@ -24,14 +29,20 @@ import {
   type InspectionUnit,
   type InspectionView,
   type PhotoRole,
+  type PickupGuideSlot,
+  type PickupPhotoRules,
 } from '../utils/rentals/rentalInspection';
 import type { RentalBookingDetail } from '../types/rentals';
 
 export interface LocalPhoto {
   key: string;
   role: PhotoRole;
+  slotKey?: string;
+  required?: boolean;
   mediaId?: string;
   uri?: string;
+  ghostUri?: string;
+  capturedAt?: string | null;
   failed?: boolean;
   pending?: boolean;
 }
@@ -48,6 +59,7 @@ export interface LocalUnit {
   noWear: boolean;
   note: string;
   photos: LocalPhoto[];
+  guideUnconfirmed: string[];
   returnChoice: '' | 'same' | 'damage';
 }
 
@@ -63,8 +75,25 @@ function slotsFor(minPhotos: number, existing: InspectionUnit['photos']): LocalP
   });
 }
 
-function fromServer(unit: InspectionUnit, minPhotos: number, pickup?: InspectionUnit): LocalUnit {
+function guidePhotos(slots: PickupGuideSlot[], existing: InspectionUnit['photos']): LocalPhoto[] {
+  return slots.map((slot) => {
+    const photo = existing.find((row) => row.slotKey === slot.slotKey);
+    return {
+      key: slot.slotKey,
+      role: slot.role,
+      slotKey: slot.slotKey,
+      required: slot.required,
+      mediaId: photo?.id,
+      uri: photo?.url,
+      ghostUri: photo?.url ? undefined : slot.url ?? undefined,
+      capturedAt: photo?.capturedAt ?? null,
+    };
+  });
+}
+
+function fromServer(unit: InspectionUnit, minPhotos: number, pickup?: InspectionUnit, rules?: PickupPhotoRules | null): LocalUnit {
   const same = pickup && unit.condition && unit.condition === pickup.condition && unit.condition !== 'damaged';
+  const guided = rules?.enabled && rules.guideMode === 'guide' && rules.guide;
   return {
     unitId: unit.unitId,
     slotIndex: unit.slotIndex,
@@ -75,16 +104,32 @@ function fromServer(unit: InspectionUnit, minPhotos: number, pickup?: Inspection
     noAccessories: Array.isArray(unit.accessories) && unit.accessories.length === 0 && !!unit.condition,
     wear: unit.wear === 'none' ? '' : unit.wear ?? '',
     noWear: unit.wear === 'none',
-    note: '',
-    photos: slotsFor(minPhotos, unit.photos),
+    note: rules?.enabled ? unit.checklistNote ?? '' : '',
+    photos: guided ? guidePhotos(rules.guide!.slots, unit.photos) : slotsFor(minPhotos, unit.photos),
+    guideUnconfirmed: rules?.enabled && Array.isArray(unit.guideUnconfirmed) ? unit.guideUnconfirmed : [],
     returnChoice: unit.condition === 'damaged' ? 'damage' : same ? 'same' : '',
   };
 }
 
-function toPayload(unit: LocalUnit, stage: InspectionStage, pickup?: InspectionUnit) {
+const TAG_FOR: Record<string, string> = {
+  condition: 'condition',
+  accessories: 'accessories',
+  noAccessories: 'accessories',
+  wear: 'wear',
+  noWear: 'wear',
+  note: 'notes',
+};
+
+function toPayload(unit: LocalUnit, stage: InspectionStage, pickup?: InspectionUnit, keepTags = false) {
   if (stage === 'return' && unit.returnChoice === 'same') {
     const copied = sameConditionPayload(pickup);
-    return { unitId: unit.unitId, ...copied, checklistNote: unit.note.trim() || undefined, physicalLabel: unit.physicalLabel.trim() || undefined };
+    return {
+      unitId: unit.unitId,
+      ...copied,
+      checklistNote: unit.note.trim() || undefined,
+      physicalLabel: unit.physicalLabel.trim() || undefined,
+      guideUnconfirmed: keepTags ? unit.guideUnconfirmed : undefined,
+    };
   }
   const condition = stage === 'return' && unit.returnChoice === 'damage' ? 'damaged' : unit.condition;
   const wear = stage === 'return' && unit.returnChoice === 'damage'
@@ -104,6 +149,7 @@ function toPayload(unit: LocalUnit, stage: InspectionStage, pickup?: InspectionU
     wear,
     checklistNote: unit.note.trim() || undefined,
     physicalLabel: unit.physicalLabel.trim() || undefined,
+    guideUnconfirmed: keepTags ? unit.guideUnconfirmed : undefined,
   };
 }
 
@@ -119,6 +165,8 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [rules, setRules] = useState<PickupPhotoRules | null>(null);
+  const [cameraDenied, setCameraDenied] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,6 +174,8 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     try {
       const row = await getBooking(bookingId);
       setBooking(row);
+      const nextRules = stage === 'pickup' ? await loadRules(bookingId) : null;
+      setRules(nextRules);
       await openInspectionDraft(bookingId, stage);
       const current = await getInspection(bookingId, stage);
       const pickup = stage === 'return' ? await getInspection(bookingId, 'pickup') : null;
@@ -141,7 +191,12 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
       setView({ ...current, units: withUrls });
       setPickupView(pickup ? { ...pickup, units: pickupUnits } : null);
       if (floor != null) {
-        setUnits(withUrls.map((unit) => fromServer(unit, floor, pickupUnits.find((row) => row.unitId === unit.unitId))));
+        setUnits(withUrls.map((unit) => fromServer(
+          unit,
+          floor,
+          pickupUnits.find((item) => item.unitId === unit.unitId),
+          nextRules
+        )));
       }
     } catch (err: unknown) {
       setError(classifyInspectionError(err));
@@ -158,21 +213,31 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
   const unsynced = units.some((unit) => unit.photos.some((photo) => photo.pending || photo.failed));
 
   const update = (patch: Partial<LocalUnit>) => {
-    setUnits((prev) => prev.map((unit, unitIndex) => (unitIndex === index ? { ...unit, ...patch } : unit)));
+    const cleared = Object.keys(patch).map((key) => TAG_FOR[key]).filter((tag): tag is string => !!tag);
+    setUnits((prev) => prev.map((unit, unitIndex) => {
+      if (unitIndex !== index) return unit;
+      const guideUnconfirmed = unit.guideUnconfirmed.filter((tag) => !cleared.includes(tag));
+      return { ...unit, ...patch, guideUnconfirmed };
+    }));
   };
 
-  const addPhoto = async (role: PhotoRole, slotIndex: number) => {
-    if (!current) return;
+  const addPhoto = async (role: PhotoRole, slotIndex: number, cameraOnly = false) => {
+    if (!current) return 'cancel' as const;
     const permission = await ImagePicker.requestCameraPermissionsAsync();
-    const result = permission.granted
+    const source = pickupCaptureSource(cameraOnly, permission.granted);
+    if (source === 'denied') {
+      setCameraDenied(true);
+      return 'denied' as const;
+    }
+    const result = source === 'camera'
       ? await ImagePicker.launchCameraAsync(PICKER)
       : await ImagePicker.launchImageLibraryAsync(PICKER);
-    if (result.canceled || !result.assets[0]) return;
+    if (result.canceled || !result.assets[0]) return 'cancel' as const;
     const { supported } = filterSupportedImageAssets(result.assets);
     const asset = supported[0];
     if (!asset) {
       setNotice('unsupported');
-      return;
+      return 'cancel' as const;
     }
     const contentType = (asset.mimeType || 'image/jpeg').replace('image/jpg', 'image/jpeg');
     const fileSize = asset.fileSize ?? 0;
@@ -182,21 +247,31 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
       const photos = unit.photos.map((photo, photoIndex) => (photoIndex === slotIndex ? local : photo));
       return { ...unit, photos };
     }));
-    if (isOffline || !fileSize) return;
-    await sendPhoto(index, slotIndex, { uri: asset.uri, contentType, fileSize, role, unitId: current.unitId });
+    if (isOffline || !fileSize) return 'added' as const;
+    await sendPhoto(index, slotIndex, {
+      uri: asset.uri,
+      contentType,
+      fileSize,
+      role,
+      unitId: current.unitId,
+      slotKey: current.photos[slotIndex]?.slotKey,
+    });
+    return 'added' as const;
   };
 
   const sendPhoto = async (
     unitIndex: number,
     slotIndex: number,
-    photo: { uri: string; contentType: string; fileSize: number; role: PhotoRole; unitId: string }
+    photo: { uri: string; contentType: string; fileSize: number; role: PhotoRole; unitId: string; slotKey?: string }
   ) => {
     try {
       const saved = await uploadInspectionPhoto({ bookingId, ...photo });
       setUnits((prev) => prev.map((unit, i) => {
         if (i !== unitIndex) return unit;
         const photos = unit.photos.map((row, photoIndex) =>
-          photoIndex === slotIndex ? { ...row, mediaId: saved.mediaId, failed: false, pending: false } : row
+          photoIndex === slotIndex
+            ? { ...row, mediaId: saved.mediaId, capturedAt: saved.capturedAt ?? row.capturedAt, failed: false, pending: false }
+            : row
         );
         return { ...unit, photos };
       }));
@@ -222,6 +297,7 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
       fileSize: blob.size,
       role: photo.role,
       unitId: current.unitId,
+      slotKey: photo.slotKey,
     });
   };
 
@@ -229,13 +305,13 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     if (minPhotos == null) return [];
     return units.map((unit) => {
       const pickup = pickupView?.units.find((row) => row.unitId === unit.unitId);
-      const payload = toPayload(unit, stage, pickup);
+      const payload = toPayload(unit, stage, pickup, rules?.enabled === true);
       const photos = unit.photos.filter((photo) => photo.mediaId).map((photo) => ({ id: photo.mediaId!, role: photo.role }));
       return payload
         ? { ...payload, photos, wear: payload.wear, condition: payload.condition, accessories: payload.accessories, unitId: unit.unitId, slotIndex: unit.slotIndex, displayLabel: unit.displayLabel, physicalLabel: unit.physicalLabel || null }
         : null;
     });
-  }, [minPhotos, pickupView?.units, stage, units]);
+  }, [minPhotos, pickupView?.units, rules?.enabled, stage, units]);
 
   const canSubmit =
     minPhotos != null &&
@@ -262,7 +338,7 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
   const saveAndNext = async () => {
     if (!current || minPhotos == null) return;
     const pickup = pickupView?.units.find((row) => row.unitId === current.unitId);
-    const payload = toPayload(current, stage, pickup);
+    const payload = toPayload(current, stage, pickup, rules?.enabled === true);
     if (!payload) {
       setNotice('incomplete');
       return;
@@ -320,9 +396,54 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     }
   };
 
+  const guideGaps = useMemo(() => gapsFor(units, view?.slotSkips ?? []), [units, view?.slotSkips]);
+
+  const chooseGuide = async (mode: 'guide' | 'blank') => {
+    setBusy(true);
+    try {
+      await applyPickupGuide(bookingId, mode);
+      await load();
+    } catch (err: unknown) {
+      setError(classifyInspectionError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clearSkip = async (slotKey: string, unitId = current?.unitId) => {
+    if (!unitId) return;
+    try {
+      await clearPickupSlot(bookingId, { unitId, slotKey });
+      await load();
+    } catch (err: unknown) {
+      setError(classifyInspectionError(err));
+    }
+  };
+
+  const skipAngle = async (slotKey: string, reason: string, unitId = current?.unitId) => {
+    if (!unitId) return;
+    setBusy(true);
+    try {
+      await skipPickupSlot(bookingId, { unitId, slotKey, reason });
+      await load();
+    } catch (err: unknown) {
+      setError(classifyInspectionError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmField = (field: string) => {
+    setUnits((prev) => prev.map((unit, unitIndex) => {
+      if (unitIndex !== index) return unit;
+      return { ...unit, guideUnconfirmed: unit.guideUnconfirmed.filter((tag) => tag !== field) };
+    }));
+  };
+
   return {
     booking,
     view,
+    rules,
     pickupView,
     units,
     index,
@@ -336,8 +457,15 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     isOffline,
     unsynced,
     canSubmit,
+    guideGaps,
+    cameraDenied,
+    dismissCameraDenied: () => setCameraDenied(false),
     canHandback: handbackEnabled(view, booking?.units_booked ?? units.length),
     update,
+    confirmField,
+    chooseGuide,
+    skipAngle,
+    clearSkip,
     addPhoto,
     retryPhoto,
     saveAndNext,
@@ -345,4 +473,27 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     handback,
     reload: load,
   };
+}
+
+async function loadRules(bookingId: string): Promise<PickupPhotoRules | null> {
+  try {
+    return await getPickupPhotoRules(bookingId);
+  } catch {
+    return null;
+  }
+}
+
+function gapsFor(
+  units: LocalUnit[],
+  skips: Array<{ unitId: string; slotKey: string; reason: string }>
+) {
+  const gaps: Array<{ unitId: string; slotKey: string; required: boolean }> = [];
+  for (const unit of units) {
+    for (const photo of unit.photos) {
+      if (!photo.slotKey || photo.mediaId) continue;
+      const skipped = !photo.required && skips.some((row) => row.unitId === unit.unitId && row.slotKey === photo.slotKey && row.reason.trim());
+      if (!skipped) gaps.push({ unitId: unit.unitId, slotKey: photo.slotKey, required: !!photo.required });
+    }
+  }
+  return gaps;
 }

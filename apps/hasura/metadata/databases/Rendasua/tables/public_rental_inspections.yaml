@@ -27,3 +27,10 @@ array_relationships:
         table:
           name: rental_inspection_media
           schema: public
+  - name: slot_skips
+    using:
+      foreign_key_constraint_on:
+        column: inspection_id
+        table:
+          name: rental_inspection_slot_skips
+          schema: public
