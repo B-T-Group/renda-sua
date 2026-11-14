@@ -101,6 +101,24 @@ export function formatRequestAmount(amount: number, currency: string, _language:
   return formatRentalMoney(amount, currency);
 }
 
+/** CAD matches the other Stripe screens: `$25.00` / `25,00 $`. */
+export function formatAssistantMoney(amount: number, currency: string | undefined, locale: string): string {
+  if ((currency || '').toUpperCase() === 'CAD') return formatCadAmount(amount, locale);
+  const groups = String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
+  const code = currency === 'XAF' || currency === 'XOF' || !currency ? 'FCFA' : currency;
+  return `${groups}\u00A0${code}`;
+}
+
+function formatCadAmount(amount: number, locale: string): string {
+  const tag = locale.toLowerCase().startsWith('fr') ? 'fr-CA' : 'en-CA';
+  return new Intl.NumberFormat(tag, {
+    style: 'currency',
+    currency: 'CAD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
 export function formatRentalMoney(amount: number, currency: string): string {
   try {
     return new Intl.NumberFormat(undefined, {

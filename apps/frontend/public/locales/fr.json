@@ -9025,6 +9025,7 @@
       "request": "Demander la location",
       "signIn": "Connectez-vous pour demander",
       "available": "Disponible",
+      "unavailable": "Indisponible pour ces dates",
       "freeFrom": "Libre à partir du {{date}}",
       "pickDates": "Choisissez vos dates",
       "ownListing": "Votre annonce",

@@ -1,4 +1,4 @@
-import { cardWindowUnfitReply, formatCardCutoff } from './assistant-rental-card-copy';
+import { cardWindowInsteadReply, cardWindowUnfitReply, formatCardCutoff, formatSuggestedRange } from './assistant-rental-card-copy';
 import { clampExclusiveRange, exclusiveEndInstant, latestCardEndAt } from '../rentals/rental-card-window';
 
 const NOW = new Date('2026-11-13T12:00:00.000Z');
@@ -14,6 +14,28 @@ describe('card window assistant copy', () => {
     expect(fr).toBe(`Avec une carte, cette location doit se terminer le ${formatCardCutoff(latestCardEndAt(NOW).toISOString(), ZONE, 'fr')}. Voici des dates possibles :`);
     expect(en.toLowerCase()).not.toContain('inspected');
     expect(fr.toLowerCase()).not.toContain('inspect');
+  });
+
+  it('labels a different range as dates that work instead', () => {
+    const frCutoff = formatCardCutoff(latestCardEndAt(NOW).toISOString(), ZONE, 'fr');
+    expect(cardWindowInsteadReply('en', cutoff)).toBe(
+      `With a card, this rental must end by ${cutoff}. These dates work instead:`
+    );
+    expect(cardWindowInsteadReply('fr', frCutoff)).toBe(
+      `Avec une carte, cette location doit se terminer le ${frCutoff}. Ces dates conviennent à la place :`
+    );
+  });
+
+  it('rounds the cutoff down to the hour and names the city once', () => {
+    const iso = '2026-11-16T03:48:00.000Z';
+    expect(formatCardCutoff(iso, 'America/Toronto', 'en')).toBe('15 Nov · 22:00 (Toronto time)');
+    expect(formatCardCutoff(iso, 'America/Toronto', 'fr')).toBe('15 nov. · 22:00 (heure de Toronto)');
+  });
+
+  it('formats a suggestion like the active range chip', () => {
+    expect(formatSuggestedRange('2026-11-13', '2026-11-15', 2, 'en')).toBe('13 Nov → 15 Nov · 2 days');
+    expect(formatSuggestedRange('2026-11-13', '2026-11-15', 2, 'fr')).toBe('13 nov. → 15 nov. · 2 jours');
+    expect(formatSuggestedRange('2026-11-17', '2026-11-18', 1, 'en')).toBe('17 Nov → 18 Nov · 1 day');
   });
 
   it('counts 17–18 Nov as 1 day and 13–15 Nov as 2 days', () => {

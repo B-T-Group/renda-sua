@@ -90,4 +90,65 @@ describe('rental presenter card window', () => {
     expect(payload.card_window.say).toBe(say);
     expect(payload.card_window.say).not.toMatch(/inspected/i);
   });
+
+  it('keeps an asked end past the cutoff on the card and offers the fitting range as a chip', () => {
+    const latest = '2026-11-16T03:48:00.000Z';
+    const row = hit();
+    row.latest_card_end_at = latest;
+    row.timezone = 'America/Toronto';
+    row.available = false;
+    const presented = presentRentalSearch({
+      hits: [row],
+      total: 1,
+      locale: 'fr',
+      query: 'drill',
+      units: 1,
+      signedIn: true,
+      ownListingIds: [],
+      allowSelfBooking: false,
+      status: 'ok',
+      dateIssue: 'card_window',
+      startDate: '2026-11-14',
+      endDate: '2026-11-16',
+      dayCount: 2,
+      cardWindow: {
+        fits: false,
+        mode: 'authorize_upfront',
+        latest_card_end_at: latest,
+        payment_rail: 'stripe',
+        momo_available: false,
+        stripe_review_hours: 72,
+        timezone: 'America/Toronto',
+        guard: true,
+        asked: { startDate: '2026-11-14', endDate: '2026-11-16' },
+        offered: { startDate: '2026-11-14', endDate: '2026-11-15', dayCount: 1 },
+      },
+    });
+    expect(presented.rental.dates).toEqual({ startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 });
+    expect(presented.rental.dateIssue).toBe('card_window');
+    expect(presented.cards[0].rental?.availability).toBe('unavailable');
+    expect(presented.cards[0].rental?.startDate).toBe('2026-11-14');
+    expect(presented.cards[0].rental?.endDate).toBe('2026-11-16');
+    expect(presented.cards[0].href).toContain('end_date=2026-11-16');
+    expect(presented.cards[0].href).not.toContain('openRequest=1');
+    const suggestion = presented.rental.chips?.find((chip) => chip.id === 'suggested-range');
+    expect(suggestion).toMatchObject({
+      startDate: '2026-11-14',
+      endDate: '2026-11-15',
+      action: 'dates',
+      label: '14 nov. → 15 nov. · 1 jour',
+    });
+    expect(presented.rental.chips?.some((chip) => chip.id === 'weekend')).toBe(false);
+    const payload = JSON.parse(presented.content);
+    expect(payload.card_window.fits).toBe(false);
+    expect(payload.card_window.say).toBeNull();
+    expect(payload.card_window.suggestion_note).toMatch(/22:00 \(heure de Toronto\)/);
+    expect(payload.card_window.suggestion_note).toMatch(/Ces dates conviennent à la place/);
+    expect(payload.card_window.suggestion_note).not.toMatch(/22:48/);
+    expect(payload.card_window.suggestion_note).not.toMatch(/Voici des dates/);
+    expect(presented.rental.suggestionNote).toBe(payload.card_window.suggestion_note);
+    expect(payload.date_chips).toEqual([
+      expect.objectContaining({ id: 'suggested-range', start_date: '2026-11-14', end_date: '2026-11-15' }),
+    ]);
+  });
 });
