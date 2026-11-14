@@ -1,7 +1,54 @@
-import { Alert, Button, Stack, Typography } from '@mui/material';
+import { useState } from 'react';
+import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
+import type { BlockedGuideRow } from '../../utils/rentals/blockedGuideRows';
 import { formatListingDay, formatListingStamp } from '../../utils/rentals/pickupPhotoTime';
+
+function BlockedWebRow({
+  row,
+  onRetake,
+  onSkip,
+}: {
+  row: BlockedGuideRow & { label: string };
+  onRetake: (row: BlockedGuideRow) => void;
+  onSkip: (row: BlockedGuideRow, reason: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  return (
+    <Stack spacing={1} sx={{ py: 1, borderBottom: 1, borderColor: 'divider' }}>
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Box
+          component={row.thumbUrl ? 'img' : 'div'}
+          src={row.thumbUrl || undefined}
+          alt=""
+          sx={{ width: 48, height: 48, borderRadius: 1, objectFit: 'cover', opacity: 0.4, bgcolor: 'grey.200' }}
+        />
+        <Typography sx={{ flex: 1 }}>{row.label}</Typography>
+        {row.action === 'retake' ? (
+          <Button onClick={() => onRetake(row)}>{t('rentalInspection.retake', 'Retake')}</Button>
+        ) : (
+          <Button onClick={() => setOpen(true)}>{t('rentalInspection.skipAngle', 'Skip this angle')}</Button>
+        )}
+      </Stack>
+      {open ? (
+        <Stack direction="row" spacing={1}>
+          <TextField
+            size="small"
+            label={t('rentalInspection.skipReason', 'Reason')}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+          <Button disabled={!reason.trim()} onClick={() => onSkip(row, reason.trim())}>
+            {t('rentalInspection.skipSave', 'Save reason')}
+          </Button>
+        </Stack>
+      ) : null}
+    </Stack>
+  );
+}
 
 export function CameraLockArt({ label }: { label: string }) {
   return (
@@ -17,16 +64,18 @@ export function PickupWebNotice({
   rules,
   busy,
   blocked,
-  missing,
+  rows,
   onChoose,
   onRetake,
+  onSkip,
 }: {
   rules: PickupPhotoRules;
   busy: boolean;
   blocked: boolean;
-  missing: string[];
+  rows: Array<BlockedGuideRow & { label: string }>;
   onChoose: (mode: 'guide' | 'blank') => void;
-  onRetake: () => void;
+  onRetake: (row: BlockedGuideRow) => void;
+  onSkip: (row: BlockedGuideRow, reason: string) => void;
 }) {
   const { t, i18n } = useTranslation();
   const guide = rules.guide;
@@ -70,12 +119,13 @@ export function PickupWebNotice({
           <Typography>{t('rentalInspection.retakeBeforeSending', 'Retake all photos before sending')}</Typography>
           <Typography variant="body2">
             {t('rentalInspection.missingAngles', '{{count}} angles from the {{date}} guide are still missing. Retake them, or skip an extra angle with a reason.', {
-              count: missing.length,
+              count: rows.length,
               date,
             })}
           </Typography>
-          {missing.map((label) => <Typography key={label}>{label}</Typography>)}
-          <Button onClick={onRetake}>{t('rentalInspection.retakeMissing', 'Retake missing photos')}</Button>
+          {rows.map((row) => (
+            <BlockedWebRow key={`${row.unitId}-${row.slotKey}`} row={row} onRetake={onRetake} onSkip={onSkip} />
+          ))}
         </Alert>
       ) : null}
     </Stack>

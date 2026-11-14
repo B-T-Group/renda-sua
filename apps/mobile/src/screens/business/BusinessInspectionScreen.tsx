@@ -14,6 +14,7 @@ import {
   PickupSubmitBlocked,
   SkipReasonField,
 } from '../../components/rentals/inspection/PickupPhotoChrome';
+import { blockedGuideRows } from '../../utils/rentals/blockedGuideRows';
 import { formatListingDay, formatListingStamp } from '../../utils/rentals/pickupPhotoTime';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInspectionCapture } from '../../hooks/useInspectionCapture';
@@ -55,12 +56,23 @@ export default function BusinessInspectionScreen() {
   }
 
   if (blocked && rulesOn) {
-    const labels = model.guideGaps.map((gap) => gap.slotKey.startsWith('extra:')
-      ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: gap.slotKey.slice(6) })
-      : gap.slotKey);
+    const thumbs = model.units.flatMap((row) => row.photos);
+    const rows = blockedGuideRows(model.guideGaps, thumbs.map((photo) => ({
+      slotKey: photo.slotKey ?? '',
+      url: photo.ghostUri ?? photo.uri ?? null,
+    }))).map((row) => ({
+      ...row,
+      label: angleLabel(row.slotKey, t),
+      thumbUri: row.thumbUrl,
+    }));
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
-        <PickupSubmitBlocked missing={labels} date={guideDate} onRetake={() => setBlocked(false)} />
+        <PickupSubmitBlocked
+          rows={rows}
+          date={guideDate}
+          onRetake={(row) => openRetake(model, row, setBlocked, setSource)}
+          onSkip={(row, reason) => void model.skipAngle(row.slotKey, reason, row.unitId)}
+        />
       </View>
     );
   }
@@ -299,6 +311,34 @@ export default function BusinessInspectionScreen() {
       ) : null}
     </View>
   );
+}
+
+function angleLabel(slotKey: string, t: (key: string, fallback: string, options?: Record<string, string>) => string): string {
+  if (slotKey.startsWith('extra:')) {
+    return t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: slotKey.slice(6) });
+  }
+  const known: Record<string, [string, string]> = {
+    overview: ['rentalInspection.overview', 'Overview'],
+    other_side: ['rentalInspection.otherSide', 'Other side'],
+    accessories: ['rentalInspection.accessories', 'Accessories'],
+  };
+  const pair = known[slotKey];
+  return pair ? t(pair[0], pair[1]) : slotKey;
+}
+
+function openRetake(
+  model: ReturnType<typeof useInspectionCapture>,
+  row: { unitId: string; slotKey: string },
+  setBlocked: (value: boolean) => void,
+  setSource: (value: { role: 'overview' | 'other_side' | 'accessories' | 'wear' | 'counter'; index: number } | null) => void
+) {
+  const unitIndex = model.units.findIndex((unit) => unit.unitId === row.unitId);
+  if (unitIndex >= 0) model.setIndex(unitIndex);
+  const photos = model.units[unitIndex]?.photos ?? [];
+  const index = Math.max(0, photos.findIndex((photo) => photo.slotKey === row.slotKey));
+  const role = photos[index]?.role ?? 'wear';
+  setBlocked(false);
+  setSource({ role, index });
 }
 
 function messageFor(

@@ -21,6 +21,7 @@ import type { useRentalInspection } from '../../hooks/useRentalInspection';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { PickupWebNotice } from './PickupWebNotice';
+import { blockedGuideRows } from '../../utils/rentals/blockedGuideRows';
 import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
@@ -430,15 +431,17 @@ export function RentalInspectionPanel({
               rules={photoRules}
               busy={busy}
               blocked={photoBlocked}
-              missing={(photoRules.guide?.slots ?? [])
-                .filter((slot) => guideGaps(view.units, photoRules.guide?.slots ?? [], view.slotSkips ?? []).includes(slot.slotKey))
-                .map((slot) => slot.slotKey)}
+              rows={noticeRows(view.units, photoRules.guide?.slots ?? [], view.slotSkips ?? [], t)}
               onChoose={(mode) => void run(async () => {
                 await model.api.applyGuide(bookingId, mode);
                 const next = await model.api.photoRules(bookingId);
                 setPhotoRules(next);
               })}
               onRetake={() => setPhotoBlocked(false)}
+              onSkip={(row, reason) => void run(async () => {
+                await model.api.skipSlot(bookingId, { unitId: row.unitId, slotKey: row.slotKey, reason });
+                await model.reload();
+              })}
             />
           ) : null}
           <PhotoRow
@@ -831,16 +834,34 @@ function guideGaps(
   units: InspectionUnit[],
   slots: Array<{ slotKey: string; required: boolean }>,
   skips: Array<{ unitId: string; slotKey: string; reason: string }>
-): string[] {
-  const missing: string[] = [];
+) {
+  const missing: Array<{ unitId: string; slotKey: string; required: boolean }> = [];
   for (const unit of units) {
     for (const slot of slots) {
       const taken = unit.photos.some((photo) => photo.slotKey === slot.slotKey);
       const skipped = !slot.required && skips.some((row) => row.unitId === unit.unitId && row.slotKey === slot.slotKey);
-      if (!taken && !skipped && !missing.includes(slot.slotKey)) missing.push(slot.slotKey);
+      if (!taken && !skipped) missing.push({ unitId: unit.unitId, slotKey: slot.slotKey, required: slot.required });
     }
   }
   return missing;
+}
+
+function noticeRows(
+  units: InspectionUnit[],
+  slots: Array<{ slotKey: string; required: boolean; url?: string | null }>,
+  skips: Array<{ unitId: string; slotKey: string; reason: string }>,
+  t: (key: string, fallback: string, options?: Record<string, string>) => string
+) {
+  return blockedGuideRows(guideGaps(units, slots, skips), slots).map((row) => ({
+    ...row,
+    label: angleLabel(row.slotKey, t),
+  }));
+}
+
+function angleLabel(slotKey: string, t: (key: string, fallback: string, options?: Record<string, string>) => string) {
+  if (slotKey.startsWith('extra:')) return t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: slotKey.slice(6) });
+  const pair = ROLE_KEY[slotKey];
+  return pair ? t(pair[0], pair[1]) : slotKey;
 }
 
 function PhotoRow({

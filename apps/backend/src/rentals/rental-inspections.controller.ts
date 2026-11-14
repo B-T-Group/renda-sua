@@ -140,6 +140,8 @@ export class RentalInspectionsController {
     @Headers('x-rendasua-platform') platform?: string | string[],
     @Headers('x-client-platform') clientPlatform?: string | string[]
   ) {
+    // UX gate only. Either header can be spoofed. It is not proof of a camera capture.
+    // A missing x-rendasua-platform falls back to x-client-platform. Unknown values are web.
     return this.evidence.presign(bookingId, body, platform ?? clientPlatform);
   }
 

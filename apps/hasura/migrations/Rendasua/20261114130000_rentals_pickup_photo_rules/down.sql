@@ -27,5 +27,4 @@ ALTER TABLE public.rental_inspection_media
 ALTER TABLE public.rental_inspection_media
   DROP COLUMN IF EXISTS slot_key;
 
-ALTER TABLE public.rental_inspection_media
-  DROP COLUMN IF EXISTS captured_at;
+-- captured_at stays. Rolling back must not erase server capture stamps.

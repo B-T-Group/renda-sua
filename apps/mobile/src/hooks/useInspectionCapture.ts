@@ -15,6 +15,7 @@ import {
   uploadInspectionPhoto,
 } from '../services/rentalInspectionApi';
 import { filterSupportedImageAssets, IMAGE_LIBRARY_PICKER_OPTIONS } from '../utils/supportedImageFormats';
+import { pickupCaptureSource } from '../utils/rentals/pickupCaptureSource';
 import {
   classifyInspectionError,
   handbackEnabled,
@@ -222,11 +223,12 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
   const addPhoto = async (role: PhotoRole, slotIndex: number, cameraOnly = false) => {
     if (!current) return 'cancel' as const;
     const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted && cameraOnly) {
+    const source = pickupCaptureSource(cameraOnly, permission.granted);
+    if (source === 'denied') {
       setCameraDenied(true);
       return 'denied' as const;
     }
-    const result = permission.granted
+    const result = source === 'camera'
       ? await ImagePicker.launchCameraAsync(PICKER)
       : await ImagePicker.launchImageLibraryAsync(PICKER);
     if (result.canceled || !result.assets[0]) return 'cancel' as const;
@@ -407,11 +409,11 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     }
   };
 
-  const skipAngle = async (slotKey: string, reason: string) => {
-    if (!current) return;
+  const skipAngle = async (slotKey: string, reason: string, unitId = current?.unitId) => {
+    if (!unitId) return;
     setBusy(true);
     try {
-      await skipPickupSlot(bookingId, { unitId: current.unitId, slotKey, reason });
+      await skipPickupSlot(bookingId, { unitId, slotKey, reason });
       await load();
     } catch (err: unknown) {
       setError(classifyInspectionError(err));

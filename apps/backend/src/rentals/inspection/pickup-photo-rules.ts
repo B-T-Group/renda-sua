@@ -74,7 +74,11 @@ export function pendingMediaColumns(slotKey: string | null | undefined, clock: D
   return { captured_at: serverCaptureTimestamp(clock), slot_key: parseSlotKey(slotKey) };
 }
 
-/** ios/android are the app. A missing header is web, so a browser cannot claim the camera. */
+/**
+ * UX gate only. `ios`, `android`, and `mobile` count as the app; anything else, including a
+ * missing header, counts as web. A caller can spoof `x-rendasua-platform`. This is not proof
+ * the photo came from the camera. Freshness uses the server clock.
+ */
 export function uploadPlatform(header: string | string[] | undefined): 'app' | 'web' {
   const raw = Array.isArray(header) ? header[0] : header;
   const value = (raw ?? '').toLowerCase().trim();
@@ -191,10 +195,15 @@ function outsideDay(capturedAt: string | null, day: string, timeZone: string): b
   return Number.isNaN(at.getTime()) || calendarDay(at, timeZone) !== day;
 }
 
+/** Drop ASCII control characters, then trim. Length is capped by skipDecision. */
+export function cleanSkipReason(reason: string): string {
+  return reason.replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 export function skipDecision(slotKey: string, reason: string, allowed: string[]): 'ok' | 'required' | 'reason' {
   const key = parseSlotKey(slotKey);
   if (!key || isRequiredSlot(key) || !allowed.includes(key)) return 'required';
-  const text = reason.trim();
+  const text = cleanSkipReason(reason);
   if (!text || text.length > 280) return 'reason';
   return 'ok';
 }

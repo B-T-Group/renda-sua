@@ -8,6 +8,7 @@ import {
   missingGuideSlots,
   pendingMediaColumns,
   serverCaptureTimestamp,
+  cleanSkipReason,
   skipDecision,
   uploadPlatform,
 } from './pickup-photo-rules';
@@ -41,6 +42,29 @@ describe('pickup photo day in the listing timezone', () => {
 
   it('rejects a missing start', () => {
     expect(isPickupPhotoDay(new Date('nope'), new Date(), TORONTO)).toBe(false);
+  });
+
+  it('keeps Toronto pickup day across the spring-forward and fall-back midnights', () => {
+    const spring = new Date('2026-03-15T04:00:00.000Z');
+    expect(calendarDay(spring, TORONTO)).toBe('2026-03-15');
+    expect(isPickupPhotoDay(spring, new Date('2026-03-15T03:59:59.000Z'), TORONTO)).toBe(false);
+    expect(isPickupPhotoDay(spring, new Date('2026-03-15T04:00:00.000Z'), TORONTO)).toBe(true);
+    expect(isPickupPhotoDay(spring, new Date('2026-03-16T03:59:59.000Z'), TORONTO)).toBe(true);
+    expect(isPickupPhotoDay(spring, new Date('2026-03-16T04:00:00.000Z'), TORONTO)).toBe(false);
+    const fall = new Date('2026-11-01T04:00:00.000Z');
+    expect(calendarDay(fall, TORONTO)).toBe('2026-11-01');
+    expect(isPickupPhotoDay(fall, new Date('2026-11-01T03:59:59.000Z'), TORONTO)).toBe(false);
+    expect(isPickupPhotoDay(fall, new Date('2026-11-02T04:59:59.000Z'), TORONTO)).toBe(true);
+    expect(isPickupPhotoDay(fall, new Date('2026-11-02T05:00:00.000Z'), TORONTO)).toBe(false);
+  });
+
+  it('treats a Douala start just before local midnight as that calendar day', () => {
+    const late = new Date('2026-11-17T22:30:00.000Z');
+    expect(calendarDay(late, DOUALA)).toBe('2026-11-17');
+    expect(isPickupPhotoDay(late, new Date('2026-11-16T22:59:59.000Z'), DOUALA)).toBe(false);
+    expect(isPickupPhotoDay(late, new Date('2026-11-16T23:00:00.000Z'), DOUALA)).toBe(true);
+    expect(isPickupPhotoDay(late, new Date('2026-11-17T22:59:59.000Z'), DOUALA)).toBe(true);
+    expect(isPickupPhotoDay(late, new Date('2026-11-17T23:00:00.000Z'), DOUALA)).toBe(false);
   });
 });
 
@@ -105,6 +129,9 @@ describe('guide retake and skip', () => {
     expect(skipDecision('extra:1', '   ', ['extra:1'])).toBe('reason');
     expect(skipDecision('extra:1', 'x'.repeat(281), ['extra:1'])).toBe('reason');
     expect(skipDecision('extra:1', 'Covered by the overview', ['extra:1'])).toBe('ok');
+    expect(cleanSkipReason('Same\u0000 as\nthe overview\u007F')).toBe('Same as the overview');
+    expect(skipDecision('extra:1', 'Angle\u0000 was missing', ['extra:1'])).toBe('ok');
+    expect(skipDecision('extra:1', '\n\t', ['extra:1'])).toBe('reason');
   });
 
   it('rejects a photo whose server stamp is outside pickup day', () => {

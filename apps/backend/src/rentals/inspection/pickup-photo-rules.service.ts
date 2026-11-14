@@ -20,6 +20,7 @@ import {
   assignGuideSlots,
   canonicalUnitId,
   captureOutsidePickupDay,
+  cleanSkipReason,
   completeGuideSlots,
   guideChecklist,
   isPickupPhotoDay,
@@ -119,7 +120,7 @@ export class PickupPhotoRulesService {
     if (decision === 'required') this.rejectSlot();
     if (decision === 'reason') this.rejectReason();
     await this.assertUnit(bookingId, unitId);
-    await this.writeSkip(inspection.id, unitId, slotKey.trim(), reason.trim());
+    await this.writeSkip(inspection.id, unitId, slotKey.trim(), cleanSkipReason(reason));
     return { saved: true };
   }
 
@@ -221,7 +222,8 @@ export class PickupPhotoRulesService {
   }
 
   private async guidePayload(booking: BookingContext, versionId: string | null) {
-    const found = versionId ? await this.versionBundle(versionId) : await this.latestReturn(booking);
+    const listingId = booking.rental_location_listing_id;
+    const found = versionId ? await this.versionBundle(versionId, listingId) : await this.latestReturn(booking);
     if (!found) return null;
     const slots = await this.signedSlots(found.photos, found.keys);
     const checklist = guideChecklist(found.item);
@@ -235,9 +237,10 @@ export class PickupPhotoRulesService {
   }
 
   private async slotsFor(booking: BookingContext, versionId: string | null): Promise<GuideSlot[]> {
-    const found = versionId ? await this.versionBundle(versionId) : null;
-    if (!found?.photos.length && !found) return [];
-    return completeGuideSlots(assignGuideSlots(found?.photos ?? []));
+    if (!versionId) return completeGuideSlots([]);
+    const found = await this.versionBundle(versionId, booking.rental_location_listing_id);
+    if (!found) return completeGuideSlots([]);
+    return completeGuideSlots(assignGuideSlots(found.photos));
   }
 
   private async extraKeys(booking: BookingContext, versionId: string | null): Promise<string[]> {
@@ -293,11 +296,11 @@ export class PickupPhotoRulesService {
     );
     const version = result.rental_inspection_versions?.[0];
     if (!version) return null;
-    return this.versionBundle(version.id, version);
+    return this.versionBundle(version.id, booking.rental_location_listing_id, version);
   }
 
-  private async versionBundle(versionId: string, known?: VersionHit) {
-    const version = known ?? (await this.versionById(versionId));
+  private async versionBundle(versionId: string, listingId: string | null, known?: VersionHit) {
+    const version = known ?? (await this.versionById(versionId, listingId));
     if (!version) return null;
     const media = await this.guideMedia(version.id);
     const unitId = canonicalUnitId(unitPhotoCounts(version.items, media));
@@ -308,17 +311,24 @@ export class PickupPhotoRulesService {
     return { versionId: version.id, submittedAt: version.submitted_at, item, photos, keys: keyMap(media) };
   }
 
-  private async versionById(versionId: string): Promise<VersionHit | null> {
-    const result = await this.hasura.executeQuery<{ rental_inspection_versions_by_pk: VersionHit | null }>(
-      `query GuideVersion($id: uuid!) {
-        rental_inspection_versions_by_pk(id: $id) {
+  private async versionById(versionId: string, listingId: string | null): Promise<VersionHit | null> {
+    if (!listingId) return null;
+    const result = await this.hasura.executeQuery<{ rental_inspection_versions: VersionHit[] }>(
+      `query GuideVersion($id: uuid!, $listingId: uuid!) {
+        rental_inspection_versions(
+          where: {
+            id: { _eq: $id }
+            inspection: { rental_booking: { rental_location_listing_id: { _eq: $listingId } } }
+          }
+          limit: 1
+        ) {
           id submitted_at
           items { unit_id condition accessories wear checklist_note unit { slot_index } }
         }
       }`,
-      { id: versionId }
+      { id: versionId, listingId }
     );
-    return result.rental_inspection_versions_by_pk;
+    return result.rental_inspection_versions?.[0] ?? null;
   }
 
   private async guideMedia(versionId: string): Promise<MediaHit[]> {
@@ -576,6 +586,7 @@ function unitPhotoCounts(items: VersionItem[], media: MediaHit[]) {
   }));
 }
 
+/** Prefer the stripped derivative. The original stays a private signed GET, never a public URL. */
 function keyMap(media: MediaHit[]): Map<string, string | null> {
   return new Map(media.map((row) => [row.id, row.derivative_key || row.object_key]));
 }

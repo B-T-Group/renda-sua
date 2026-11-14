@@ -24,17 +24,23 @@ function booking(country: string, startAt: string | null = START) {
   };
 }
 
-function service(nowEnabled: boolean, rows: Record<string, unknown>) {
+function service(nowEnabled: boolean, rows: Record<string, unknown>, persona: { active_persona: string; businessId: string | null } = { active_persona: 'business', businessId: 'biz-1' }) {
   const hasura = {
     executeQuery: jest.fn(async (query: string) => {
       const name = Object.keys(rows).find((key) => query.includes(key));
-      if (!name) throw new Error(query.slice(0, 60));
+      if (!name) throw new Error(query.slice(0, 80));
       return rows[name];
     }),
     executeMutation: jest.fn(async () => ({ update_rental_inspection_items: { affected_rows: 1 } })),
   };
   const flags = { pickupPhotoRulesEnabled: jest.fn(async () => nowEnabled) };
-  const users = { getUser: jest.fn(async () => ({ id: 'user-1', active_persona: 'business', business: { id: 'biz-1' } })) };
+  const users = {
+    getUser: jest.fn(async () => ({
+      id: 'user-1',
+      active_persona: persona.active_persona,
+      business: persona.businessId ? { id: persona.businessId } : null,
+    })),
+  };
   const aws = { generatePresignedDownloadUrl: jest.fn(async () => ({ url: 'https://signed.example/photo', expiresAt: new Date() })) };
   const rules = new PickupPhotoRulesService(hasura as any, users as any, flags as any, aws as any);
   return { rules, hasura };
@@ -42,6 +48,16 @@ function service(nowEnabled: boolean, rows: Record<string, unknown>) {
 
 function codeOf(error: unknown): string {
   return (error as HttpException).getResponse()['code' as never] as string;
+}
+
+async function expectStatus(pending: Promise<unknown>, status: number) {
+  try {
+    await pending;
+    throw new Error(`expected HTTP ${status}`);
+  } catch (error: any) {
+    if (error instanceof HttpException) expect(error.getStatus()).toBe(status);
+    else throw error;
+  }
 }
 
 describe('pickup photo upload gate', () => {
@@ -111,7 +127,7 @@ describe('guide retake gate and skip reason', () => {
       PickupRulesInspection: {
         rental_inspections: [{ id: 'ins-1', pickup_guide_mode: 'guide', pickup_guide_version_id: version.id }],
       },
-      GuideVersion: { rental_inspection_versions_by_pk: version },
+      GuideVersion: { rental_inspection_versions: [version] },
       GuideMedia: media,
       PickupRulesUnits: { rental_booking_units: [{ id: 'unit-1' }] },
       PickupReadyPhotos: { rental_inspection_media: photos },
@@ -180,5 +196,64 @@ describe('guide retake gate and skip reason', () => {
     expect(result.guide?.photoCount).toBe(4);
     expect(result.guide?.checkCount).toBe(4);
     expect(result.guide?.slots.some((slot) => slot.slotKey === 'extra:1' && slot.required === false)).toBe(true);
+  });
+
+  it('requires the default angles when the guide version is gone', async () => {
+    const gone = {
+      ...rows([], []),
+      GuideVersion: { rental_inspection_versions: [] },
+    };
+    const cleared = {
+      ...gone,
+      PickupRulesInspection: {
+        rental_inspections: [{ id: 'ins-1', pickup_guide_mode: 'guide', pickup_guide_version_id: null }],
+      },
+    };
+    for (const table of [gone, cleared]) {
+      try {
+        await service(true, table).rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(START));
+        throw new Error('expected retake');
+      } catch (error: any) {
+        expect(codeOf(error)).toBe(PICKUP_GUIDE_RETAKE_REQUIRED);
+        expect(error.getResponse().missing.map((row: { slotKey: string }) => row.slotKey)).toEqual([
+          'overview',
+          'other_side',
+          'accessories',
+        ]);
+      }
+    }
+  });
+
+  it('loads a stored guide only for this listing', async () => {
+    const built = service(true, rows(ready, []));
+    await built.rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(START)).catch(() => undefined);
+    const call = built.hasura.executeQuery.mock.calls.find((row) => String(row[0]).includes('GuideVersion'));
+    expect(String(call?.[0])).toContain('rental_location_listing_id');
+    expect(call?.[1]).toEqual(expect.objectContaining({ listingId: '22222222-2222-4222-8222-222222222222' }));
+  });
+
+  it('refuses a client, another business, and a unit from another booking', async () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    const client = service(true, rows(ready, []), { active_persona: 'client', businessId: 'biz-1' });
+    const other = service(true, rows(ready, []), { active_persona: 'business', businessId: 'biz-2' });
+    await expect(client.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same view')).rejects.toBeInstanceOf(HttpException);
+    await expect(other.rules.getRules(id)).rejects.toBeInstanceOf(HttpException);
+    const own = service(true, rows(ready, [])).rules;
+    await expect(own.skipSlot(id, 'unit-9', 'extra:1', 'Same view')).rejects.toBeInstanceOf(HttpException);
+    await expectStatus(client.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same view'), 403);
+    await expectStatus(other.rules.getRules(id), 403);
+    await expectStatus(own.skipSlot(id, 'unit-9', 'extra:1', 'Same view'), 404);
+  });
+
+  it('stores a cleaned reason and updates it on a repeat skip', async () => {
+    const built = service(true, rows(ready, []));
+    const id = '11111111-1111-4111-8111-111111111111';
+    await built.rules.skipSlot(id, 'unit-1', 'extra:1', 'Same\u0000 as the overview');
+    await built.rules.skipSlot(id, 'unit-1', 'extra:1', 'Covered by the front');
+    const writes = built.hasura.executeMutation.mock.calls.filter((call) => String(call[0]).includes('InsertSlotSkip'));
+    expect(writes).toHaveLength(2);
+    expect(String(writes[0][0])).toContain('on_conflict');
+    expect(writes[0][1].object.reason).toBe('Same as the overview');
+    expect(writes[1][1].object.reason).toBe('Covered by the front');
   });
 });

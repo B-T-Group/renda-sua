@@ -54,6 +54,7 @@ export class RentalInspectionEvidenceService {
     });
     await this.assertUnit(bookingId, input.unitId);
     const mediaId = randomUUID();
+    // Server clock at presign, not finalize. Submit still requires that now is pickup day.
     const capturedAt = new Date();
     const objectKey = inspectionPendingObjectKey(bookingId, mediaId, upload.ext);
     await this.insertPending(bookingId, mediaId, inspection.id, input, objectKey, upload, actor.userId, capturedAt);

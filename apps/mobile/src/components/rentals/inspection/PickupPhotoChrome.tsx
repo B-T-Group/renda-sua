@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Text, TextInput } from 'react-native-paper';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
@@ -96,17 +96,28 @@ export function PickupCameraDenied({ onClose }: { onClose: () => void }) {
   );
 }
 
+export interface BlockedAngleRow {
+  unitId: string;
+  slotKey: string;
+  label: string;
+  thumbUri?: string | null;
+  action: 'retake' | 'skip';
+}
+
 export function PickupSubmitBlocked({
-  missing,
+  rows,
   date,
   onRetake,
+  onSkip,
 }: {
-  missing: string[];
+  rows: BlockedAngleRow[];
   date: string;
-  onRetake: () => void;
+  onRetake: (row: BlockedAngleRow) => void;
+  onSkip: (row: BlockedAngleRow, reason: string) => void;
 }) {
   const { t } = useTranslation();
   const { colors, spacing, typography } = useTheme();
+  const [skipKey, setSkipKey] = useState<string | null>(null);
   return (
     <View style={{ gap: spacing.sm, padding: spacing.md }}>
       <Text style={[typography.h5, { color: colors.text.primary }]}>{t('rentalInspection.cantSendYet', "Can't send yet")}</Text>
@@ -115,17 +126,56 @@ export function PickupSubmitBlocked({
       </Text>
       <Text style={{ color: colors.text.secondary }}>
         {t('rentalInspection.missingAngles', '{{count}} angles from the {{date}} guide are still missing. Retake them, or skip an extra angle with a reason.', {
-          count: missing.length,
+          count: rows.length,
           date,
         })}
       </Text>
-      {missing.map((label) => (
-        <Text key={label} style={{ color: colors.text.primary }}>{label}</Text>
+      {rows.map((row) => (
+        <BlockedAngle
+          key={`${row.unitId}-${row.slotKey}`}
+          row={row}
+          open={skipKey === row.slotKey}
+          onRetake={() => onRetake(row)}
+          onAskSkip={() => setSkipKey(row.slotKey)}
+          onSkip={(reason) => onSkip(row, reason)}
+        />
       ))}
-      <Button mode="contained" buttonColor={colors.cta.main} onPress={onRetake}>
-        {t('rentalInspection.retakeMissing', 'Retake missing photos')}
-      </Button>
       <Button mode="contained" disabled>{t('rentalInspection.submitReport', 'Submit report')}</Button>
+    </View>
+  );
+}
+
+function BlockedAngle({
+  row,
+  open,
+  onRetake,
+  onAskSkip,
+  onSkip,
+}: {
+  row: BlockedAngleRow;
+  open: boolean;
+  onRetake: () => void;
+  onAskSkip: () => void;
+  onSkip: (reason: string) => void;
+}) {
+  const { t } = useTranslation();
+  const { colors, spacing, borderRadius } = useTheme();
+  return (
+    <View style={{ gap: spacing.xs, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border ?? '#E6E1D8' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+        {row.thumbUri ? (
+          <Image source={{ uri: row.thumbUri }} style={{ width: 48, height: 48, borderRadius: borderRadius.md, opacity: 0.35 }} />
+        ) : (
+          <View style={{ width: 48, height: 48, borderRadius: borderRadius.md, backgroundColor: colors.surface }} />
+        )}
+        <Text style={{ flex: 1, color: colors.text.primary }}>{row.label}</Text>
+        {row.action === 'retake' ? (
+          <Button mode="outlined" onPress={onRetake}>{t('rentalInspection.retake', 'Retake')}</Button>
+        ) : (
+          <Button mode="text" onPress={onAskSkip}>{t('rentalInspection.skipAngle', 'Skip this angle')}</Button>
+        )}
+      </View>
+      {open ? <SkipReasonField onSave={onSkip} /> : null}
     </View>
   );
 }

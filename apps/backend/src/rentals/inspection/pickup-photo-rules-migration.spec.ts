@@ -22,7 +22,8 @@ describe('rentals pickup photo rules flag', () => {
     expect(up).not.toMatch(/'boolean', true/);
     expect(up).not.toContain('NODE_ENV');
     expect(down).toContain('DROP TABLE IF EXISTS public.rental_inspection_slot_skips');
-    expect(down).toContain('DROP COLUMN IF EXISTS captured_at');
+    expect(down).not.toContain('DROP COLUMN IF EXISTS captured_at');
+    expect(down).toContain('DROP COLUMN IF EXISTS slot_key');
   });
 
   it('does not turn the flag on from Hasura apply', () => {
