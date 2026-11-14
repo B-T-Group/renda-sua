@@ -3322,7 +3322,7 @@ export class RentalsService {
       return this.replayAcceptStart(actor.booking);
     }
     await this.acceptPickupVersion(actor.booking, gate, versionId, actor.userId);
-    return this.payAndStartAccepted(actor.booking);
+    return this.startThenNotify(actor.booking);
   }
 
   private async requireAcceptStartClient(bookingId: string) {
@@ -3359,30 +3359,51 @@ export class RentalsService {
   ): Promise<void> {
     if (gate.pickupAckCurrent && gate.pickupAcceptedVersionId === versionId) return;
     await this.writePickupAccept(booking.id, versionId, actorId);
-    await this.notifyPickupAccepted(booking, await this.acceptNoticeMode(booking));
   }
 
-  /** Card and wallet start in this call. MoMo stays pending until payment lands. */
-  private async acceptNoticeMode(booking: any): Promise<'skip' | 'plain' | 'pending'> {
+  /** Write the accept first. The notice follows the start result, not a balance guess. */
+  private async startThenNotify(booking: any): Promise<AcceptAndStartResult> {
+    try {
+      const result = await this.payAndStartAccepted(booking);
+      await this.notifyAcceptOutcome(booking, result.started, result.paymentPending);
+      return result;
+    } catch (error: any) {
+      await this.notifyAcceptFailure(booking);
+      throw error;
+    }
+  }
+
+  private async notifyAcceptOutcome(
+    booking: any,
+    started: boolean,
+    paymentPending: boolean
+  ): Promise<void> {
+    await this.notifyPickupAccepted(booking, await this.noticeAfterStart(booking, started, paymentPending));
+  }
+
+  private async noticeAfterStart(
+    booking: any,
+    started: boolean,
+    paymentPending: boolean
+  ): Promise<'skip' | 'plain' | 'pending'> {
     const country = booking.rental_location_listing?.business_location?.address?.country;
     if (!(await this.inspectionFlags.confirmationsEnabled(country))) return 'plain';
-    return (await this.startsInThisAccept(booking)) ? 'skip' : 'pending';
+    if (started) return 'skip';
+    return paymentPending ? 'pending' : 'plain';
   }
 
-  private async startsInThisAccept(booking: any): Promise<boolean> {
-    if (booking.payment_status === 'authorized') return true;
-    if (booking.status === 'confirmed' && booking.payment_status === 'paid') return true;
-    if (booking.status !== 'reserved') return false;
-    return this.walletCoversBooking(booking);
+  private async notifyAcceptFailure(booking: any): Promise<void> {
+    const pending = await this.failurePaymentPending(booking);
+    await this.notifyAcceptOutcome(booking, false, pending);
   }
 
-  private async walletCoversBooking(booking: any): Promise<boolean> {
-    const userId = booking.client?.user_id as string | undefined;
-    if (!userId) return false;
+  private async failurePaymentPending(booking: any): Promise<boolean> {
+    const number = booking.booking_number as string | undefined;
+    const pending = this.mobilePaymentsDatabaseService?.hasPendingRentalBookingPayment;
+    if (!number || !pending) return false;
     try {
-      const account = await this.hasuraSystemService.getAccount(userId, booking.currency);
-      return Number(account?.available_balance ?? 0) >= Number(booking.total_amount);
-    } catch {
+      return await pending.call(this.mobilePaymentsDatabaseService, number);
+    } catch (error: any) {
       return false;
     }
   }

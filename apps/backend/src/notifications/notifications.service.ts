@@ -4067,12 +4067,65 @@ export class NotificationsService {
   }): Promise<void> {
     const userId = params.userId;
     if (!userId) return;
-    if (!this.rentalPushEnabled()) return;
     try {
+      if (params.kind === 'pickup_accepted') {
+        await this.deliverPickupAccepted({ ...params, userId });
+        return;
+      }
+      if (!this.rentalPushEnabled()) return;
       await this.deliverInspectionNotice({ ...params, userId });
     } catch (error: any) {
       this.logger.warn(`sendRentalInspectionNotice: ${error?.message ?? error}`);
     }
+  }
+
+  /** One in-app row per booking. A conflicting retry does not push again. */
+  private async deliverPickupAccepted(
+    params: Parameters<NotificationsService['deliverInspectionNotice']>[0]
+  ): Promise<void> {
+    const preferredLanguage = await this.languageFor(params.userId, params.preferredLanguage);
+    const msg = this.inspectionCopy(params, preferredLanguage);
+    const url = this.inspectionNoticeUrl(params.bookingId, params.persona);
+    const inserted = await this.insertRentalUserMessage(
+      params.userId,
+      params.bookingId,
+      'RENTAL_PICKUP_ACCEPTED',
+      msg.body,
+      url,
+      'pickup_accepted'
+    );
+    if (!inserted || !this.rentalPushEnabled()) return;
+    await this.pushInspection(params, msg.title, msg.body, url);
+  }
+
+  private inspectionCopy(
+    params: Parameters<NotificationsService['deliverInspectionNotice']>[0],
+    preferredLanguage: string | null
+  ) {
+    return buildRentalInspectionNotice({
+      ...params,
+      preferredLanguage,
+      returnDue: formatRentalNoticeDue(
+        params.endAt,
+        rentalNoticeZone(params.countryCode),
+        preferredLanguage
+      ),
+    });
+  }
+
+  private async pushInspection(
+    params: Parameters<NotificationsService['deliverInspectionNotice']>[0],
+    title: string,
+    body: string,
+    url: string
+  ): Promise<void> {
+    await this.sendPushNotificationByUserId(params.userId, title, body, {
+      type: 'rental_inspection',
+      rentalBookingId: params.bookingId,
+      inspectionKind: params.kind,
+      persona: params.persona ?? '',
+      url,
+    });
   }
 
   private rentalPushEnabled(): boolean {

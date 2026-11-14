@@ -51,4 +51,20 @@ describe('rentals inspection confirmations flag', () => {
     expect(noticeDown).not.toMatch(/DELETE\s+FROM\s+public\.message_types/i);
     expect(noticeDown).not.toMatch(/DELETE\s+FROM\s+public\.user_messages/i);
   });
+
+  it('adds the pickup-accepted message type without deleting written notices', () => {
+    const noticeUp = readFileSync(
+      join(root, 'hasura/migrations/Rendasua/20261114183000_rental_pickup_accepted_notice/up.sql'),
+      'utf8'
+    );
+    const noticeDown = readFileSync(
+      join(root, 'hasura/migrations/Rendasua/20261114183000_rental_pickup_accepted_notice/down.sql'),
+      'utf8'
+    );
+    expect(noticeUp).toContain("'RENTAL_PICKUP_ACCEPTED'");
+    expect(noticeUp).toContain('ON CONFLICT (id) DO NOTHING');
+    expect(noticeDown).toContain('RENTAL_PICKUP_ACCEPTED');
+    expect(noticeDown).toContain('NOT EXISTS');
+    expect(noticeDown).not.toMatch(/DELETE\s+FROM\s+public\.user_messages/i);
+  });
 });
