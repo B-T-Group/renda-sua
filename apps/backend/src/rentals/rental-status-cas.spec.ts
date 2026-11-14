@@ -337,6 +337,10 @@ describe('wallet confirm and hold', () => {
       resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
     };
     svc.casBooking = jest.fn().mockResolvedValue(false);
+    svc.fetchRequest = jest.fn().mockResolvedValue({
+      quoted_total: 160,
+      rental_pricing_snapshot: { total: 160 },
+    });
     await expect(svc.retryBookingPayment('b1')).rejects.toBeInstanceOf(
       HttpException
     );
@@ -582,11 +586,46 @@ describe('wallet confirm and hold', () => {
     };
     svc.casBooking = jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     svc.placeHoldForBooking = jest.fn().mockResolvedValue('own');
+    svc.fetchRequest = jest.fn().mockResolvedValue({
+      quoted_total: 160,
+      rental_pricing_snapshot: { total: 160 },
+    });
     const error = await svc.retryBookingPayment('b1').catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(HttpException);
     expect((error as HttpException).getStatus()).toBe(HttpStatus.CONFLICT);
     expect(svc.placeHoldForBooking).toHaveBeenCalled();
     expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
+  });
+
+  it('does not charge a retry until the renter has seen a new price', async () => {
+    svc.hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'client-user',
+        active_persona: 'client',
+        client: { id: 'c1' },
+        email: 'a@b.c',
+      }),
+    };
+    svc.fetchBooking = jest.fn().mockResolvedValue(
+      booking({
+        status: 'proposed',
+        client_id: 'c1',
+        contract_expires_at: '2099-01-01T00:00:00.000Z',
+        booking_number: 'RB1',
+        rental_request_id: 'req',
+      })
+    );
+    svc.fetchRequest = jest.fn().mockResolvedValue({
+      quoted_total: 100,
+      price_change_seen_at: null,
+      rental_pricing_snapshot: { total: 160 },
+    });
+    svc.hasuraSystemService.getAccount = jest.fn();
+    const error = await svc.retryBookingPayment('b1').catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(HttpStatus.CONFLICT);
+    expect((error as HttpException).message).toBe('PRICE_CHANGE_UNSEEN');
+    expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
   });
 
   it('releases a MoMo hold when cancel wins before the booking is marked paid', async () => {

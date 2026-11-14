@@ -18,20 +18,62 @@ export function paymentBlockedUntilPriceSeen(input: {
   return !input.seenAt;
 }
 
+const LINE_SLACK = 0.02;
+
 export function applyAcceptedPrice(
   computed: RentalPricingSnapshotDto,
-  override?: { total?: number; currency?: string } | null
+  override?: { total?: number; currency?: string; lines?: Array<{ subtotal?: number }> } | null
 ): { snapshot: RentalPricingSnapshotDto; currencyMismatch: boolean } {
-  if (override?.total == null || !Number.isFinite(override.total) || override.total < 0) {
-    return { snapshot: computed, currencyMismatch: false };
-  }
-  if (override.currency && override.currency !== computed.currency) {
+  const total = override?.total;
+  if (!usableTotal(total)) return { snapshot: computed, currencyMismatch: false };
+  if (override?.currency && override.currency !== computed.currency) {
     return { snapshot: computed, currencyMismatch: true };
   }
+  const lines = override?.lines;
+  if (snapshotOmitsUnits(computed, { total, lines })) {
+    return { snapshot: computed, currencyMismatch: false };
+  }
   return {
-    snapshot: { ...computed, total: Number(override.total.toFixed(2)) },
+    snapshot: { ...computed, total: Number(total.toFixed(2)) },
     currencyMismatch: false,
   };
+}
+
+function usableTotal(total: number | null | undefined): total is number {
+  return total != null && Number.isFinite(total) && total >= 0;
+}
+
+/** Business apps send one-unit line subtotals. That is not a negotiated discount. */
+function snapshotOmitsUnits(
+  computed: RentalPricingSnapshotDto,
+  override: { total?: number; lines?: Array<{ subtotal?: number }> }
+): boolean {
+  const units = Math.floor(Number(computed.unitsBooked));
+  const sent = override.lines ?? [];
+  const total = Number(override.total);
+  if (units <= 1 || !sent.length || !closeMoney(sumSubtotals(sent), total)) return false;
+  const priced = computed.lines ?? [];
+  if (priced.length === sent.length) return sent.every((line, index) => scaledLine(line, priced[index], units));
+  const scaled = Number((sumSubtotals(sent) * units).toFixed(2));
+  return Math.abs(scaled - Number(computed.total)) <= LINE_SLACK * sent.length * units;
+}
+
+function scaledLine(
+  sent: { subtotal?: number },
+  priced: { subtotal?: number } | undefined,
+  units: number
+): boolean {
+  const scaled = Number(((Number(sent.subtotal) || 0) * units).toFixed(2));
+  return Math.abs(scaled - Number(priced?.subtotal)) <= LINE_SLACK * units;
+}
+
+function sumSubtotals(lines: Array<{ subtotal?: number }>): number {
+  const sum = lines.reduce((total, line) => total + (Number(line.subtotal) || 0), 0);
+  return Number(sum.toFixed(2));
+}
+
+function closeMoney(left: number, right: number): boolean {
+  return Math.abs(left - right) <= LINE_SLACK;
 }
 
 export function priceChangeCopy(

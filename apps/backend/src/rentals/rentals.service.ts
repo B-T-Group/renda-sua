@@ -1427,6 +1427,11 @@ export class RentalsService {
     throw new HttpException('PRICE_CHANGE_UNSEEN', HttpStatus.CONFLICT);
   }
 
+  private async assertAcceptedPriceSeen(requestId?: string): Promise<void> {
+    if (!requestId) return;
+    this.assertPriceChangeSeen(await this.fetchRequest(requestId));
+  }
+
   async markRentalPriceChangeSeen(requestId: string): Promise<{ success: boolean }> {
     const user = await this.hasuraUserService.getUser();
     const clientId = user.client?.id;
@@ -1587,6 +1592,7 @@ export class RentalsService {
     if (!exp || new Date(exp) <= new Date()) {
       throw new HttpException('Contract has expired', HttpStatus.GONE);
     }
+    await this.assertAcceptedPriceSeen(booking.rental_request_id as string | undefined);
     const bookingNumber = booking.booking_number as string | undefined;
     if (!bookingNumber) {
       throw new HttpException('Missing booking number', HttpStatus.BAD_REQUEST);
@@ -2504,6 +2510,7 @@ export class RentalsService {
     email: string | null | undefined,
     stripePaymentMethod?: 'payment_sheet'
   ): Promise<RentalBookingActionResult> {
+    this.assertPriceChangeSeen(req);
     await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
       req.rental_location_listing.units_available,
