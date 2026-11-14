@@ -38,6 +38,7 @@ import {
   RentalPricingSnapshotDto,
 } from './dto/rental-pricing-snapshot.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
+import { isRequestUuid, requestPolicyNotFound } from './rental-request-policy';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { peakConcurrentUnits as sweepPeakUnits } from './rental-capacity';
 import {
@@ -953,7 +954,16 @@ export class RentalsService {
       plan.envelopeEndIso,
       user
     );
-    return { success: true, requestId };
+    return {
+      success: true,
+      requestId,
+      inspection_policy_version: await this.requestPolicyVersion(listing),
+    };
+  }
+
+  private async requestPolicyVersion(listing: any): Promise<number | null> {
+    const country = listing?.business_location?.address?.country ?? null;
+    return this.listingInspectionPolicy(country);
   }
 
   private assertModifyVersion(
@@ -1500,6 +1510,41 @@ export class RentalsService {
       rental_bookings: any[];
     }>(Q.GET_BUSINESS_RENTAL_SCHEDULE, { businessId, rentalItemId });
     return r.rental_bookings ?? [];
+  }
+
+  async getRequestInspectionPolicy(requestId: string): Promise<number | null> {
+    if (!isRequestUuid(requestId)) throw requestPolicyNotFound();
+    const user = await this.hasuraUserService.getUser();
+    const req = await this.loadRequestQuietly(requestId);
+    if (!this.mayReadRequestPolicy(user, req)) throw requestPolicyNotFound();
+    return this.requestPolicyVersion(req.rental_location_listing);
+  }
+
+  private async loadRequestQuietly(id: string): Promise<any | null> {
+    try {
+      const row = await this.hasuraSystemService.executeQuery<{ rental_requests_by_pk: any }>(
+        Q.GET_RENTAL_REQUEST_FULL,
+        { id }
+      );
+      return row.rental_requests_by_pk ?? null;
+    } catch (error: any) {
+      if (this.hidesMissingRequest(error)) return null;
+      throw error;
+    }
+  }
+
+  private hidesMissingRequest(error: any): boolean {
+    if (!(error instanceof HttpException)) return false;
+    const status = error.getStatus();
+    return status === HttpStatus.BAD_REQUEST || status === HttpStatus.NOT_FOUND;
+  }
+
+  private mayReadRequestPolicy(user: any, req: any): boolean {
+    if (!req) return false;
+    const clientOk = isActivePersona(user, 'client') && user.client?.id === req.client_id;
+    const businessId = req.rental_location_listing?.rental_item?.business_id;
+    const businessOk = isActivePersona(user, 'business') && user.business?.id === businessId;
+    return Boolean(clientOk || businessOk);
   }
 
   async getClientRentalRequests(): Promise<ClientRentalRequestRow[]> {
@@ -2475,6 +2520,7 @@ export class RentalsService {
           booking?.rental_location_listing?.rental_item?.name ?? 'Rental',
         bookingId,
         bookingNumber: booking?.booking_number ?? '',
+        inspected: booking?.inspection_policy_version != null,
       });
     } catch (error: any) {
       this.logger.warn(
@@ -2750,6 +2796,7 @@ export class RentalsService {
         rentalItemName: itemName,
         bookingId,
         bookingNumber,
+        inspected: policy != null,
       });
     } catch (error: any) {
       this.logger.warn(
@@ -3275,7 +3322,7 @@ export class RentalsService {
       return this.replayAcceptStart(actor.booking);
     }
     await this.acceptPickupVersion(actor.booking, gate, versionId, actor.userId);
-    return this.payAndStartAccepted(actor.booking);
+    return this.startThenNotify(actor.booking);
   }
 
   private async requireAcceptStartClient(bookingId: string) {
@@ -3312,7 +3359,57 @@ export class RentalsService {
   ): Promise<void> {
     if (gate.pickupAckCurrent && gate.pickupAcceptedVersionId === versionId) return;
     await this.writePickupAccept(booking.id, versionId, actorId);
-    await this.notifyPickupAccepted(booking);
+  }
+
+  /** Write the accept first. The notice follows the start result, not a balance guess. */
+  private async startThenNotify(booking: any): Promise<AcceptAndStartResult> {
+    try {
+      const result = await this.payAndStartAccepted(booking);
+      await this.notifyAcceptOutcome(booking, result.started, result.paymentPending);
+      return result;
+    } catch (error: any) {
+      try {
+        await this.notifyAcceptFailure(booking);
+      } catch (noticeError: any) {
+        this.logger?.warn(`notifyAcceptFailure ${booking?.id}: ${noticeError?.message ?? noticeError}`);
+      }
+      throw error;
+    }
+  }
+
+  private async notifyAcceptOutcome(
+    booking: any,
+    started: boolean,
+    paymentPending: boolean
+  ): Promise<void> {
+    await this.notifyPickupAccepted(booking, await this.noticeAfterStart(booking, started, paymentPending));
+  }
+
+  private async noticeAfterStart(
+    booking: any,
+    started: boolean,
+    paymentPending: boolean
+  ): Promise<'skip' | 'plain' | 'pending'> {
+    const country = booking.rental_location_listing?.business_location?.address?.country;
+    if (!(await this.inspectionFlags.confirmationsEnabled(country))) return 'plain';
+    if (started) return 'skip';
+    return paymentPending ? 'pending' : 'plain';
+  }
+
+  private async notifyAcceptFailure(booking: any): Promise<void> {
+    const pending = await this.failurePaymentPending(booking);
+    await this.notifyAcceptOutcome(booking, false, pending);
+  }
+
+  private async failurePaymentPending(booking: any): Promise<boolean> {
+    const number = booking.booking_number as string | undefined;
+    const pending = this.mobilePaymentsDatabaseService?.hasPendingRentalBookingPayment;
+    if (!number || !pending) return false;
+    try {
+      return await pending.call(this.mobilePaymentsDatabaseService, number);
+    } catch (error: any) {
+      return false;
+    }
   }
 
   private async writePickupAccept(bookingId: string, versionId: string, actorId: string) {
@@ -3400,6 +3497,7 @@ export class RentalsService {
     } else {
       await this.startBlockedOrConflict(booking.id);
     }
+    if (won) await this.notifyRentalActivated(booking);
     return this.acceptStartBody(booking, rail, due, true, false);
   }
 
@@ -3441,9 +3539,9 @@ export class RentalsService {
     };
   }
 
-  private async notifyPickupAccepted(booking: any): Promise<void> {
+  private async notifyPickupAccepted(booking: any, mode: 'skip' | 'plain' | 'pending'): Promise<void> {
     const userId = booking.business?.user_id as string | undefined;
-    if (!userId) return;
+    if (!userId || mode === 'skip') return;
     try {
       await this.notificationsService.sendRentalInspectionNotice({
         userId,
@@ -3451,9 +3549,55 @@ export class RentalsService {
         persona: 'business',
         rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
         bookingId: booking.id,
+        renterName: booking.client?.user?.first_name,
+        endAt: booking.end_at,
+        countryCode: booking.rental_location_listing?.business_location?.address?.country,
+        paymentPending: mode === 'pending',
       });
     } catch (error: any) {
       this.logger?.warn(`notifyPickupAccepted ${booking.id}: ${error?.message ?? error}`);
+    }
+  }
+
+  private async notifyRentalActivated(booking: any): Promise<void> {
+    await this.notifyBusinessRentalStarted(booking);
+    await this.notifyRentalStartedIfEnabled(booking);
+  }
+
+  private async notifyBusinessRentalStarted(booking: any): Promise<void> {
+    const userId = booking.business?.user_id as string | undefined;
+    if (!userId) return;
+    try {
+      const country = booking.rental_location_listing?.business_location?.address?.country;
+      if (!(await this.inspectionFlags.confirmationsEnabled(country))) return;
+      await this.notificationsService.sendBusinessRentalStarted({
+        businessUserId: userId,
+        rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+        bookingId: booking.id,
+        renterName: booking.client?.user?.first_name,
+        endAt: booking.end_at,
+        countryCode: country,
+      });
+    } catch (error: any) {
+      this.logger?.warn(`notifyBusinessRentalStarted ${booking.id}: ${error?.message ?? error}`);
+    }
+  }
+
+  private async notifyRentalStartedIfEnabled(booking: any): Promise<void> {
+    const userId = booking.client?.user_id as string | undefined;
+    if (!userId) return;
+    try {
+      const country = booking.rental_location_listing?.business_location?.address?.country;
+      if (!(await this.inspectionFlags.confirmationsEnabled(country))) return;
+      await this.notificationsService.sendRentalStartedClientPush({
+        clientUserId: userId,
+        rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+        bookingId: booking.id,
+        endAt: booking.end_at,
+        countryCode: country,
+      });
+    } catch (error: any) {
+      this.logger?.warn(`notifyRentalStarted ${booking.id}: ${error?.message ?? error}`);
     }
   }
 
@@ -3509,6 +3653,7 @@ export class RentalsService {
       'system',
       'Started after Mobile Money'
     );
+    await this.notifyRentalActivated(fresh);
   }
 
   async verifyRentalStartPin(bookingId: string, body: VerifyRentalStartPinDto) {
@@ -5026,6 +5171,12 @@ export class RentalsService {
       throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country));
     }
     throw inspectionRejected(decision.code, decision.message);
+  }
+
+  /** 1 when a new booking in this country would be inspected. Does not reject the listing. */
+  async listingInspectionPolicy(country?: string | null): Promise<number | null> {
+    const enabled = await this.inspectionFlags.isEnabled(country);
+    return enabled ? 1 : null;
   }
 
   async cardWindowFieldsFor(country?: string | null, latest?: string | null, inspected?: boolean) {

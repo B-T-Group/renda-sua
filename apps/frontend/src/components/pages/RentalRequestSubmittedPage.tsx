@@ -3,13 +3,14 @@ import {
   CheckCircle as CheckCircleIcon,
   DescriptionOutlined as ContractIcon,
   RateReview as RateReviewIcon,
-  VpnKey as PinIcon,
+  AssignmentTurnedIn as PinIcon,
 } from '@mui/icons-material';
 import { Box, Button, Container, Paper, Stack, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useRentalApi } from '../../hooks/useRentalApi';
 import SEOHead from '../seo/SEOHead';
 
 interface InfoBlockProps {
@@ -42,16 +43,24 @@ const RentalRequestSubmittedPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
+  const noPin = useNoPinRequestCopy();
   const pageTitle = t('rentals.requestSubmitted.pageTitle', 'Request sent');
 
   return (
     <>
       <SEOHead
         title={`${pageTitle} | Rendasua`}
-        description={t(
-          'rentals.requestSubmitted.metaDescription',
-          'Your rental request was submitted. Learn what happens next: contract, payment, PIN, and payouts.'
-        )}
+        description={
+          noPin
+            ? t(
+                'rentals.requestSubmitted.metaDescriptionInspected',
+                'Your rental request was submitted. Learn what happens next: contract, payment, and payouts.'
+              )
+            : t(
+                'rentals.requestSubmitted.metaDescription',
+                'Your rental request was submitted. Learn what happens next: contract, payment, PIN, and payouts.'
+              )
+        }
         noindex
       />
       <Box
@@ -109,10 +118,17 @@ const RentalRequestSubmittedPage: React.FC = () => {
                 <InfoBlock
                   icon={<PinIcon />}
                   title={t('rentals.requestSubmitted.pinTitle', 'Starting the rental')}
-                  body={t(
-                    'rentals.requestSubmitted.pinBody',
-                    'When you meet the owner to begin the rental, you will need to give them your start PIN so they can confirm the handover in the app.'
-                  )}
+                  body={
+                    noPin
+                      ? t(
+                          'rentals.requestSubmitted.pinBodyInspected',
+                          'At pickup, the business will share a condition report. Review and accept it to start the rental.'
+                        )
+                      : t(
+                          'rentals.requestSubmitted.pinBody',
+                          'When you meet the owner to begin the rental, you will need to give them your start PIN so they can confirm the handover in the app.'
+                        )
+                  }
                 />
                 <InfoBlock
                   icon={<PayoutIcon />}
@@ -160,3 +176,40 @@ const RentalRequestSubmittedPage: React.FC = () => {
 };
 
 export default RentalRequestSubmittedPage;
+
+function useNoPinRequestCopy(): boolean {
+  const location = useLocation();
+  const [params] = useSearchParams();
+  const { fetchRequestInspectionPolicy } = useRentalApi();
+  const stateVersion = (location.state as { inspectionPolicyVersion?: number | null } | null)?.inspectionPolicyVersion;
+  const requestId = params.get('requestId');
+  const [noPin, setNoPin] = useState(stateVersion !== null);
+  useEffect(
+    () => watchRequestPolicy(requestId, stateVersion, fetchRequestInspectionPolicy, setNoPin),
+    [fetchRequestInspectionPolicy, requestId, stateVersion]
+  );
+  return noPin;
+}
+
+function watchRequestPolicy(
+  requestId: string | null,
+  stateVersion: number | null | undefined,
+  fetchPolicy: (id: string) => Promise<number | null>,
+  setNoPin: (value: boolean) => void
+): () => void {
+  if (!requestId) {
+    setNoPin(stateVersion !== null);
+    return () => undefined;
+  }
+  let stop = false;
+  void fetchPolicy(requestId)
+    .then((version) => {
+      if (!stop) setNoPin(version !== null);
+    })
+    .catch(() => {
+      if (!stop) setNoPin(true);
+    });
+  return () => {
+    stop = true;
+  };
+}

@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Dialog, Portal, Snackbar, Text } from 'react-native-paper';
@@ -36,6 +36,7 @@ import {
 } from '../../hooks/useRentalStripePayment';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import {
+  REPORT_REVIEW_STEP,
   bookingDetailStatusLabelKey,
   bookingDetailTimeline,
   bookingDetailTimelineIndex,
@@ -50,7 +51,13 @@ import {
   formatRentalPeriod,
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
-import { clientInspectionAction, pickupGate } from '../../utils/rentals/rentalInspection';
+import { clientInspectionAction, pickupGate, reportReadyToReview } from '../../utils/rentals/rentalInspection';
+import {
+  confirmationTimeZone,
+  confirmationZoneDefault,
+  formatBookedSpan,
+  formatConfirmationMoney,
+} from '../../utils/rentals/confirmationFormat';
 import { renterReturnPhase } from '../../utils/rentals/renterReturnPhase';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
@@ -63,6 +70,8 @@ const DETAIL_STATUS_DEFAULTS: Record<string, string> = {
   'rentals.phases.inProgress': 'In progress',
   'rentals.phases.done': 'Done',
   'rentals.bookingStatus.awaiting_return': 'Return due',
+  'rentalInspection.phase.reportReady': 'Report ready to review',
+  'rentalInspection.phase.waitingRenter': 'Waiting for renter',
 };
 
 function toAmount(value: number | string | null | undefined): number {
@@ -144,22 +153,34 @@ export default function RentalBookingDetailScreen() {
     }
   }, []);
 
-  const statusColors = rentalBookingStatusColors(booking?.status ?? '', colors);
-  const statusLabelKey = bookingDetailStatusLabelKey(booking?.status ?? '');
-  const statusLabel = t(
-    statusLabelKey,
-    DETAIL_STATUS_DEFAULTS[statusLabelKey] ?? booking?.status ?? ''
+  const statusColorsBase = rentalBookingStatusColors(booking?.status ?? '', colors);
+  const statusLabelKeyBase = bookingDetailStatusLabelKey(booking?.status ?? '');
+  const statusLabelBase = t(
+    statusLabelKeyBase,
+    DETAIL_STATUS_DEFAULTS[statusLabelKeyBase] ?? booking?.status ?? ''
   );
   const pricing = parseRentalPricingSnapshot(booking?.rental_pricing_snapshot);
   const moneyCurrency = pricing?.currency ?? booking?.currency ?? 'XAF';
-  const formatDetailMoney = (amount: number) =>
-    formatRequestAmount(amount, moneyCurrency, i18n.language);
+  const formatDetailMoney = (amount: number) => {
+    if (moneyCurrency.toUpperCase() === 'CAD') return formatConfirmationMoney(amount, 'CAD', i18n.language);
+    return formatRequestAmount(amount, moneyCurrency, i18n.language);
+  };
   const windows = parseRentalSelectionWindows(
     booking?.rental_request?.rental_selection_windows
   );
   const dayCountLabel = (count: number) =>
     t('rentals.requestForm.dayCount', '{{count}} day', { count });
-  const periodLines = bookingRequestedPeriodLines(windows, booking, i18n.language, dayCountLabel);
+  const listingCountry = booking?.rental_location_listing?.business_location?.address?.country;
+  const bookedSpan = formatBookedSpan(
+    booking?.start_at,
+    booking?.end_at,
+    confirmationTimeZone(listingCountry, booking?.currency),
+    i18n.language,
+    confirmationZoneDefault(listingCountry, booking?.currency, i18n.language)
+  );
+  const periodLines = bookedSpan
+    ? [bookedSpan]
+    : bookingRequestedPeriodLines(windows, booking, i18n.language, dayCountLabel);
   const returnByLabel = booking?.end_at
     ? formatRentalPeriod(
         [{ start_at: booking.end_at, end_at: booking.end_at }],
@@ -167,12 +188,40 @@ export default function RentalBookingDetailScreen() {
         dayCountLabel
       )
     : '—';
-  const timelineSteps = bookingDetailTimeline(booking?.status ?? '');
-  const currentIdx = bookingDetailTimelineIndex(timelineSteps, booking?.status ?? '');
+  const timelineStepsBase = bookingDetailTimeline(booking?.status ?? '');
+  const currentIdxBase = bookingDetailTimelineIndex(timelineStepsBase, booking?.status ?? '');
   const canCancel =
     (booking?.status === 'confirmed' || booking?.status === 'reserved') &&
     !booking?.actual_start_at;
   const snapshot = useInspectionSnapshot(bookingId ?? '', booking);
+  const confirmationsOn = !flagsLoading && flags.rentals_inspection_confirmations_enabled;
+  const reviewReady =
+    confirmationsOn &&
+    snapshot.enrolled &&
+    reportReadyToReview({ status: booking?.status, pickup: snapshot.pickup });
+  const statusColors = reviewReady
+    ? { backgroundColor: '#0A4FB518', textColor: '#0A4FB5', borderColor: '#0A4FB544' }
+    : statusColorsBase;
+  const statusLabelKey = reviewReady
+    ? bookingDetailStatusLabelKey(REPORT_REVIEW_STEP)
+    : statusLabelKeyBase;
+  const statusLabel = reviewReady
+    ? t(statusLabelKey, DETAIL_STATUS_DEFAULTS[statusLabelKey] ?? 'Report ready to review')
+    : statusLabelBase;
+  const timelineSteps = reviewReady
+    ? bookingDetailTimeline(booking?.status ?? '', { includeReview: true })
+    : timelineStepsBase;
+  const currentIdx = reviewReady
+    ? bookingDetailTimelineIndex(timelineSteps, booking?.status ?? '', { reviewCurrent: true })
+    : currentIdxBase;
+  useFocusEffect(
+    useCallback(() => {
+      if (!confirmationsOn) return undefined;
+      void refetch();
+      void snapshot.reload();
+      return undefined;
+    }, [confirmationsOn, refetch, snapshot.reload])
+  );
   const gate = pickupGate({
     enrolled: snapshot.enrolled,
     status: booking?.status ?? '',
@@ -450,7 +499,7 @@ export default function RentalBookingDetailScreen() {
         </View>
         )}
 
-        {snapshot.enrolled ? (
+        {snapshot.enrolled && !confirmationsOn ? (
           <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
             {reviewStage ? (
               <Button
@@ -570,13 +619,15 @@ export default function RentalBookingDetailScreen() {
           ) : (
             timelineSteps.map((step, idx) => {
               const done = currentIdx >= idx;
+              const reviewNow = step === REPORT_REVIEW_STEP && idx === currentIdx;
+              const returnNow = step === 'awaiting_return' && idx === currentIdx;
               const labelKey = bookingDetailStatusLabelKey(step);
               return (
                 <View key={step} style={[styles.timelineRow, { marginTop: spacing.xs }]}>
                   <MaterialCommunityIcons
-                    name={step === 'awaiting_return' && idx === currentIdx ? 'circle' : done ? 'check-circle' : 'circle-outline'}
+                    name={reviewNow || returnNow ? 'circle' : done ? 'check-circle' : 'circle-outline'}
                     size={18}
-                    color={step === 'awaiting_return' && idx === currentIdx ? '#0A4FB5' : done ? colors.success.main : colors.text.disabled}
+                    color={reviewNow || returnNow ? '#0A4FB5' : done ? colors.success.main : colors.text.disabled}
                   />
                   <View style={{ marginLeft: spacing.sm, flex: 1 }}>
                     <Text
@@ -680,8 +731,12 @@ export default function RentalBookingDetailScreen() {
           {authorizedAmount > 0 ? (
             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
               {t(
-                'rentals.bookingDetail.authorizedOnCard',
-                'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
+                booking.inspection_policy_version != null
+                  ? 'rentals.bookingDetail.authorizedOnCardInspected'
+                  : 'rentals.bookingDetail.authorizedOnCard',
+                booking.inspection_policy_version != null
+                  ? 'Held on your card: {{amount}} (rental + deposit). The rental is charged at return. The deposit is released unless there\'s damage or a late return.'
+                  : 'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
                 {
                   amount: formatDetailMoney(authorizedAmount),
                 }
@@ -716,7 +771,7 @@ export default function RentalBookingDetailScreen() {
           ) : null}
         </View>
 
-        {isReserved ? (
+        {isReserved && flags.rentals_card_charge_at_pickup_enabled ? (
           <View
             style={[
               styles.card,
@@ -730,10 +785,15 @@ export default function RentalBookingDetailScreen() {
             ]}
           >
             <Text style={[typography.body2, { color: colors.text.primary }]}>
-              {t(
-                'rentals.bookingDetail.reservedClientHint',
-                'Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.'
-              )}
+              {snapshot.enrolled
+                ? t(
+                    'rentals.bookingDetail.reservedClientHintInspected',
+                    'Your reservation is held for free. Pay when you accept the condition report at pickup.'
+                  )
+                : t(
+                    'rentals.bookingDetail.reservedClientHint',
+                    'Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.'
+                  )}
             </Text>
           </View>
         ) : null}
@@ -818,6 +878,11 @@ export default function RentalBookingDetailScreen() {
             <Button
               mode="contained"
               buttonColor={colors.primary.main}
+              icon={
+                confirmationsOn && reviewStage === 'pickup' && snapshot.pickup?.yourDecision !== 'accept'
+                  ? 'clipboard-check'
+                  : undefined
+              }
               style={{ minHeight: 48 }}
               onPress={() =>
                 navigation.navigate('ClientInspection', {

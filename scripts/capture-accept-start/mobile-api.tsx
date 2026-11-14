@@ -1,6 +1,19 @@
 import { useMemo } from 'react';
 
-type Scene = 'review' | 'started' | 'waiting' | 'handed' | 'momo' | 'legacy' | 'conflict';
+type Scene =
+  | 'review'
+  | 'started'
+  | 'waiting'
+  | 'handed'
+  | 'momo'
+  | 'legacy'
+  | 'conflict'
+  | 'clientReview'
+  | 'businessWait'
+  | 'reportSent'
+  | 'rentalStarted'
+  | 'momoStarted'
+  | 'push';
 
 function scene(): Scene {
   return ((window as Window & { __scene?: Scene }).__scene ?? 'review') as Scene;
@@ -9,7 +22,50 @@ function scene(): Scene {
 const pixel =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
+function reviewBooking() {
+  return {
+    id: 'b1',
+    booking_number: 'RB-25496259',
+    status: 'reserved',
+    start_at: '2026-11-17T20:00:00.000Z',
+    end_at: '2026-11-19T01:00:00.000Z',
+    total_amount: 45,
+    currency: 'CAD',
+    payment_timing: 'pay_now',
+    payment_status: 'authorized',
+    actual_start_at: null,
+    not_received_report: null,
+    units_booked: 1,
+    inspection_policy_version: 1,
+    client_id: 'client',
+    business_id: 'biz',
+    client: { user: { first_name: 'Amina', last_name: 'N.' } },
+    rental_location_listing: {
+      rental_item: {
+        name: 'JBL PartyBox 310',
+        rental_item_images: [{ id: 'img', image_url: '/hero-jbl.png', alt_text: 'JBL PartyBox 310' }],
+      },
+      business_location: { name: 'Atelier Nord, Toronto', address: { country: 'CA' } },
+    },
+    accept_start_preview: null,
+    rental_request: {
+      rental_selection_windows: [
+        {
+          billing: 'daily',
+          calendar_date: '2026-11-17',
+          start_at: '2026-11-17T20:00:00.000Z',
+          end_at: '2026-11-19T01:00:00.000Z',
+        },
+      ],
+    },
+    security_deposit_amount: 20,
+    authorized_amount: 65,
+    overtime_amount: 0,
+  };
+}
+
 function bookingFor(current: Scene) {
+  if (current === 'clientReview' || current === 'businessWait') return reviewBooking();
   const active = current === 'started' || current === 'handed';
   const legacy = current === 'legacy';
   return {
@@ -63,9 +119,9 @@ const unit = (id: string, label: string) => ({
   wear: 'none',
   accessories: id === 'u2' ? [{ name: 'Battery + charger', count: 2 }] : [],
   photos: [
-    { id: `${id}-1`, role: 'overview' as const, url: pixel },
-    { id: `${id}-2`, role: 'other_side' as const, url: pixel },
-    { id: `${id}-3`, role: 'accessories' as const, url: pixel },
+    { id: `${id}-1`, role: 'overview' as const, url: '/hero-jbl.png' },
+    { id: `${id}-2`, role: 'other_side' as const, url: '/hero-jbl.png' },
+    { id: `${id}-3`, role: 'accessories' as const, url: '/hero-jbl.png' },
   ],
 });
 
@@ -73,14 +129,18 @@ function inspectionFor() {
   const current = scene();
   const french = document.documentElement.lang === 'fr';
   const accepted = current === 'started' || current === 'handed';
+  const one = current === 'clientReview' || current === 'businessWait';
+  const units = one
+    ? [unit('u1', french ? 'Unité 1' : 'Unit 1')]
+    : [unit('u1', french ? 'Unité 1' : 'Unit 1'), unit('u2', french ? 'Unité 2' : 'Unit 2')];
   return {
     status: 'submitted' as const,
-    submittedAt: '2026-11-12T15:12:00.000Z',
+    submittedAt: one ? '2026-11-17T15:32:00.000Z' : '2026-11-12T15:12:00.000Z',
     yourDecision: accepted ? ('accept' as const) : null,
     versionId: 'ver-1',
     versionNo: 1,
     minPhotos: 3,
-    units: [unit('u1', french ? 'Unité 1' : 'Unit 1'), unit('u2', french ? 'Unité 2' : 'Unit 2')],
+    units,
   };
 }
 
@@ -99,8 +159,8 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
     renter_reported_returned_at: reported ? '2026-11-12T18:42:00.000Z' : null,
     renter_return_escalated_at: state === 'escalated' ? '2026-11-13T18:42:00.000Z' : null,
     return_place: {
-      name: "Stripe Rail - L'Assomption",
-      address: "Stripe Rail - L'Assomption",
+      name: "Atelier Nord, Toronto",
+      address: "Atelier Nord, Toronto",
       phone: '+237600000000',
     },
     inspection_policy_version: null,
@@ -109,9 +169,13 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
         name: 'JBL PartyBox 310',
         rental_item_images: [{ id: 'img', image_url: '/hero.png', alt_text: 'JBL PartyBox 310' }],
       },
-      business_location: { name: "Stripe Rail - L'Assomption" },
+      business_location: { name: "Atelier Nord, Toronto" },
     },
   };
+}
+
+export async function getRequestInspectionPolicy(): Promise<number | null> {
+  return 1;
 }
 
 export async function getBooking() {
@@ -291,6 +355,17 @@ function reportEnabled(): boolean {
   return captureParams().get('report') === '1';
 }
 
+function confirmationsScene(): boolean {
+  const current = scene();
+  return (
+    current === 'clientReview' ||
+    current === 'businessWait' ||
+    current === 'reportSent' ||
+    current === 'rentalStarted' ||
+    current === 'momoStarted'
+  );
+}
+
 export function useStore() {
   return {
     auth: { isAuthenticated: false },
@@ -306,6 +381,7 @@ export function useClientFlags() {
       flags: {
         rentals_not_received_report_enabled: reportEnabled(),
         rentals_renter_return_report_enabled: Boolean(captureParams().get('return')),
+        rentals_inspection_confirmations_enabled: confirmationsScene(),
       },
     }),
     []
@@ -368,6 +444,16 @@ export function addEventListener() {
   return () => undefined;
 }
 
+function iconGlyph(name?: string): string {
+  if (!name) return '•';
+  if (name.includes('clipboard')) return '☑';
+  if (name.includes('calendar')) return '📅';
+  if (name.includes('pencil')) return '✎';
+  if (name.includes('check')) return '✓';
+  if (name === 'circle') return '●';
+  return '•';
+}
+
 export default function Icon({
   name,
   color,
@@ -377,7 +463,6 @@ export default function Icon({
   color?: string;
   size?: number;
 }) {
-  const filled = (name ?? '').includes('check') || name === 'circle';
   const px = size ?? 18;
   return (
     <span
@@ -390,7 +475,7 @@ export default function Icon({
         textAlign: 'center',
       }}
     >
-      {filled ? '●' : '○'}
+      {iconGlyph(name)}
     </span>
   );
 }

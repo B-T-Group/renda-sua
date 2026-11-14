@@ -203,9 +203,19 @@ export function resolveBookingPhase(
  * so those two steps are not both "In progress".
  * Lists and hubs keep resolveBookingPhase (both statuses remain in_progress).
  */
+export const REPORT_REVIEW_STEP = 'report_review';
+
 export function bookingDetailStatusLabelKey(status: string): string {
+  if (status === REPORT_REVIEW_STEP) return 'rentalInspection.phase.reportReady';
   if (status === 'awaiting_return') return 'rentals.bookingStatus.awaiting_return';
   return resolveBookingPhase(status).labelKey;
+}
+
+export function bookingDetailStepLabelKey(status: string, role: RentalPhaseRole = 'client'): string {
+  if (status === REPORT_REVIEW_STEP && role === 'business') {
+    return 'rentalInspection.phase.waitingRenter';
+  }
+  return bookingDetailStatusLabelKey(status);
 }
 
 const OPEN_BOOKING_STEPS = [
@@ -217,11 +227,26 @@ const OPEN_BOOKING_STEPS = [
 ] as const;
 
 /** The booking-detail stepper is the five steps from the status model. Reserved uses that list. */
-export function bookingDetailTimeline(_status: string): string[] {
-  return [...OPEN_BOOKING_STEPS];
+export function bookingDetailTimeline(
+  _status: string,
+  options?: { includeReview?: boolean }
+): string[] {
+  const steps: string[] = [...OPEN_BOOKING_STEPS];
+  if (!options?.includeReview) return steps;
+  const at = steps.indexOf('confirmed');
+  steps.splice(at + 1, 0, REPORT_REVIEW_STEP);
+  return steps;
 }
 
-export function bookingDetailTimelineIndex(steps: readonly string[], status: string): number {
+export function bookingDetailTimelineIndex(
+  steps: readonly string[],
+  status: string,
+  options?: { reviewCurrent?: boolean }
+): number {
+  if (options?.reviewCurrent) {
+    const review = steps.indexOf(REPORT_REVIEW_STEP);
+    if (review >= 0) return review;
+  }
   if (status === 'cancelled') return -1;
   const index = steps.indexOf(status);
   return index >= 0 ? index : 0;

@@ -1,7 +1,8 @@
 import { presentRentalSearch } from './assistant-rental-present';
 import { cardWindowUnfitReply, formatCardCutoff } from './assistant-rental-card-copy';
+import { addCalendarDays } from './assistant-rental-dates';
 import type { RentalSearchHit } from '../rentals/rental-search.service';
-import { exclusiveEndInstant, latestCardEndAt } from '../rentals/rental-card-window';
+import { exclusiveEndInstant, latestCardEndAt, latestExclusiveEndDate } from '../rentals/rental-card-window';
 
 const NOW = new Date('2026-11-13T12:00:00.000Z');
 
@@ -90,4 +91,66 @@ describe('rental presenter card window', () => {
     expect(payload.card_window.say).toBe(say);
     expect(payload.card_window.say).not.toMatch(/inspected/i);
   });
+
+  it('does not let the owner request their own listing unless self-booking is on', () => {
+    const blocked = searchOf({ ownListingIds: ['listing-1'], allowSelfBooking: false });
+    expect(blocked.cards[0].rental?.availability).toBe('own_listing');
+    expect(blocked.cards[0].rental?.canRequest).toBe(false);
+    expect(blocked.cards[0].rental?.cta).toBe('own');
+    expect(blocked.cards[0].rental?.quoteTotal).toBeUndefined();
+    const allowed = searchOf({ ownListingIds: ['listing-1'], allowSelfBooking: true });
+    expect(allowed.cards[0].rental?.availability).toBe('available');
+    expect(allowed.cards[0].rental?.canRequest).toBe(true);
+    expect(allowed.cards[0].rental?.cta).toBe('request');
+    expect(allowed.cards[0].rental?.quoteTotal).toBe(2500);
+  });
+
+  it('shifts a booked listing only to a start before the card cutoff', () => {
+    const sample = hit();
+    const cap = latestExclusiveEndDate(sample.latest_card_end_at as string, 'Africa/Douala');
+    const next = addCalendarDays(cap, -2);
+    const shifted = searchOf({
+      hits: [{ ...sample, available: false, nextAvailableDate: next }],
+      startDate: addCalendarDays(cap, -2),
+      endDate: addCalendarDays(cap, -1),
+      dayCount: 5,
+    });
+    expect(shifted.cards[0].rental?.cta).toBe('shift');
+    expect(shifted.cards[0].rental?.shiftStart).toBe(next);
+    expect(shifted.cards[0].rental?.shiftEnd).toBe(cap);
+    expect(shifted.cards[0].rental?.quoteTotal).toBeUndefined();
+    const closed = searchOf({
+      hits: [{ ...sample, available: false, nextAvailableDate: cap }],
+      startDate: addCalendarDays(cap, -2),
+      endDate: addCalendarDays(cap, -1),
+      dayCount: 1,
+    });
+    expect(closed.cards[0].rental?.cta).toBe('none');
+    expect(closed.cards[0].rental?.shiftStart).toBeUndefined();
+  });
+
+  it('asks a signed-out renter to sign in and still marks the listing requestable', () => {
+    const presented = searchOf({ signedIn: false });
+    expect(presented.cards[0].rental?.cta).toBe('sign_in');
+    expect(presented.cards[0].rental?.canRequest).toBe(true);
+    expect(presented.cards[0].rental?.availability).toBe('available');
+  });
 });
+
+function searchOf(extra: Record<string, unknown>) {
+  return presentRentalSearch({
+    hits: [hit()],
+    total: 1,
+    locale: 'en',
+    query: 'hammer',
+    units: 1,
+    signedIn: true,
+    ownListingIds: [],
+    allowSelfBooking: false,
+    status: 'ok',
+    startDate: '2026-11-14',
+    endDate: '2026-11-15',
+    dayCount: 1,
+    ...extra,
+  });
+}

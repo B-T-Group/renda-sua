@@ -9,6 +9,7 @@ interface RentalsServiceHarness {
   assertListingBookable: jest.Mock;
   validateRentalRequestWindowsPlan: jest.Mock;
   emailBusinessNewRentalRequest: jest.Mock;
+  inspectionFlags: { isEnabled: jest.Mock };
 }
 
 describe('RentalsService.createRentalRequest', () => {
@@ -33,6 +34,7 @@ describe('RentalsService.createRentalRequest', () => {
     service.assertListingBookable = jest.fn();
     service.validateRentalRequestWindowsPlan = jest.fn();
     service.emailBusinessNewRentalRequest = jest.fn();
+    service.inspectionFlags = { isEnabled: jest.fn().mockResolvedValue(false) };
 
     const result = await service.createRentalRequest({
       rentalLocationListingId: 'listing-1',
@@ -73,12 +75,12 @@ describe('RentalsService.createRentalRequest', () => {
         quoted_total: null,
       },
     });
-    expect(result).toEqual({ success: true, requestId: 'request-1' });
+    expect(result).toEqual({ success: true, requestId: 'request-1', inspection_policy_version: null });
   });
 
   it('rejects an unfit card window at create time when the guard is on', async () => {
     const service = Object.create(RentalsService.prototype) as RentalsServiceHarness & {
-      inspectionFlags: { cardWindowGuardEnabled: jest.Mock };
+      inspectionFlags: { cardWindowGuardEnabled: jest.Mock; isEnabled: jest.Mock };
       cardWindow: { forCountry: jest.Mock };
       rejectUnfitCardRequest: RentalsService['rejectUnfitCardRequest'];
     };
@@ -133,7 +135,7 @@ describe('RentalsService.createRentalRequest', () => {
       insert_rental_requests_one: { id: 'request-pickup' },
     });
     const service = Object.create(RentalsService.prototype) as RentalsServiceHarness & {
-      inspectionFlags: { cardWindowGuardEnabled: jest.Mock };
+      inspectionFlags: { cardWindowGuardEnabled: jest.Mock; isEnabled: jest.Mock };
       cardWindow: { forCountry: jest.Mock };
     };
     service.hasuraUserService = {
@@ -152,7 +154,10 @@ describe('RentalsService.createRentalRequest', () => {
     service.assertListingBookable = jest.fn();
     service.validateRentalRequestWindowsPlan = jest.fn();
     service.emailBusinessNewRentalRequest = jest.fn();
-    service.inspectionFlags = { cardWindowGuardEnabled: jest.fn().mockResolvedValue(true) };
+    service.inspectionFlags = {
+      cardWindowGuardEnabled: jest.fn().mockResolvedValue(true),
+      isEnabled: jest.fn().mockResolvedValue(false),
+    };
     service.cardWindow = {
       forCountry: jest.fn().mockResolvedValue({
         mode: 'charge_at_pickup',
@@ -179,7 +184,7 @@ describe('RentalsService.createRentalRequest', () => {
       insert_rental_requests_one: { id: 'request-2' },
     });
     const service = Object.create(RentalsService.prototype) as RentalsServiceHarness & {
-      inspectionFlags: { cardWindowGuardEnabled: jest.Mock };
+      inspectionFlags: { cardWindowGuardEnabled: jest.Mock; isEnabled: jest.Mock };
     };
     service.hasuraUserService = {
       getUser: jest.fn().mockResolvedValue({
@@ -196,7 +201,10 @@ describe('RentalsService.createRentalRequest', () => {
     service.assertListingBookable = jest.fn();
     service.validateRentalRequestWindowsPlan = jest.fn();
     service.emailBusinessNewRentalRequest = jest.fn();
-    service.inspectionFlags = { cardWindowGuardEnabled: jest.fn().mockResolvedValue(false) };
+    service.inspectionFlags = {
+      cardWindowGuardEnabled: jest.fn().mockResolvedValue(false),
+      isEnabled: jest.fn().mockResolvedValue(false),
+    };
     const result = await service.createRentalRequest({
       rentalLocationListingId: 'listing-1',
       requestedStartAt: '2026-11-17T08:00:00.000Z',

@@ -2,6 +2,8 @@ import { brandTokens } from '../../../frontend/src/theme/brandTokens';
 import { darkColors, lightColors } from './colors';
 import { motion } from './motion';
 import { borderRadius, spacing } from './spacing';
+import { Platform } from 'react-native';
+import { brandFace } from './fonts';
 import { typography } from './typography';
 
 const channelLuminance = (channel: number) => {
@@ -85,9 +87,12 @@ describe('mobile design tokens', () => {
   });
 
   it('gives prices their own tabular role', () => {
-    expect(typography.display.fontFamily).toBe('Poppins_700Bold');
-    expect(typography.h2.fontFamily).toBe('Poppins_600SemiBold');
-    expect(typography.price.fontFamily).toBe('Inter_700Bold');
+    const suffix = Platform.OS === 'web' ? ', sans-serif' : '';
+    expect(typography.display.fontFamily).toBe(`Poppins_700Bold${suffix}`);
+    expect(typography.h2.fontFamily).toBe(`Poppins_600SemiBold${suffix}`);
+    expect(typography.price.fontFamily).toBe(`Inter_700Bold${suffix}`);
+    expect(brandFace('Inter_400Regular', 'ios')).toBe('Inter_400Regular');
+    expect(brandFace('Inter_400Regular', 'web')).toBe('Inter_400Regular, sans-serif');
     expect(typography.price.fontWeight).toBe('700');
     expect(typography.price.fontVariant).toEqual(['tabular-nums']);
     expect(typography.priceLarge.fontSize).toBeGreaterThan(typography.price.fontSize);
