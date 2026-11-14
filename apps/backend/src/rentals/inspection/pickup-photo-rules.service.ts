@@ -101,9 +101,16 @@ export class PickupPhotoRulesService {
     return this.enabledRules(booking, now);
   }
 
-  async applyGuide(bookingId: string, mode: 'guide' | 'blank') {
+  async applyGuide(
+    bookingId: string,
+    mode: 'guide' | 'blank',
+    platform?: string | string[],
+    openDraft?: () => Promise<unknown>
+  ) {
     const booking = await this.requireBusiness(bookingId);
     if (!(await this.enabled(booking))) this.rejectOff();
+    this.assertApp(platform);
+    if (openDraft) await openDraft();
     const inspection = await this.inspection(bookingId);
     if (!inspection) throw new HttpException('Open the draft first', HttpStatus.CONFLICT);
     if (mode === 'blank') return this.storeBlank(booking, inspection.id);

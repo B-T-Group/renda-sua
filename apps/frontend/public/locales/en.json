@@ -9512,6 +9512,7 @@
     "extraAngle": "Extra angle {{n}}",
     "skipAngle": "Skip this angle",
     "skipShort": "Skip",
+    "missingHeading": "Missing",
     "skippedHeading": "Skipped",
     "changeSkip": "Change",
     "skipNotOnUnit": "Not on this unit",

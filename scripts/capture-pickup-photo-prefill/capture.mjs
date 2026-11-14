@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir =
-  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v5';
+  process.env.OUT_DIR || '/opt/cursor/artifacts/pickup-photo-prefill/v6';
 const heroSrc =
   '/cursor/stores/bot/handoffs/pickup-photo-prefill/hero-jbl.png';
 
@@ -71,6 +71,7 @@ const copy = {
     skipShort: 'Skip',
     save: 'Save reason',
     reasonHint: 'Describe the reason',
+    missingHeading: 'Missing',
     skipped: 'Skipped',
     change: 'Change',
     skip: 'Skip this angle',
@@ -137,6 +138,7 @@ const copy = {
     skipShort: 'Ignorer',
     save: 'Enregistrer le motif',
     reasonHint: 'Précisez le motif',
+    missingHeading: 'Manquants',
     skipped: 'Ignorés',
     change: 'Modifier',
     skip: 'Ignorer cet angle',
@@ -223,6 +225,10 @@ const css = `
 .panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px}
 .panel h2{margin:0;font-size:22px}
 .web .grid{grid-template-columns:repeat(6,1fr)}
+.web-angles{display:grid;grid-template-columns:1fr 1fr;column-gap:16px}
+.web-angles.full{grid-template-columns:1fr}
+.web-angles p{margin:0;height:32px;line-height:32px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.web h4{margin:4px 0 0;font-size:14px}
 .btns{display:flex;gap:10px}
 .btns .btn{width:auto;flex:1}
 `;
@@ -298,15 +304,20 @@ function startCard(c, note) {
   return `<section class="card guide"><img class="thumb" src="hero-jbl.png" alt=""/><div><h3>${c.start}</h3><p>${c.summary}</p></div></section><p class="note">${note}</p>`;
 }
 
+function angleLine(label, reason) {
+  const text = reason ? `${label} · ${reason}` : label;
+  return `<p title="${text}">${text}</p>`;
+}
+
 function webAngles(c, variant) {
   const rows = missingAngles(c);
   const open = variant === 'skipped' ? rows.slice(1) : rows;
-  const items = open.map((label) => `<p class="plain"><b>${label}</b></p>`).join('');
+  const items = `<div class="web-angles">${open.map((label) => angleLine(label)).join('')}</div>`;
   const skipped = variant === 'skipped'
-    ? `<h4 style="margin:12px 0 4px">${c.skipped}</h4><p class="plain"><b>${rows[0]}</b><br/><span class="cap">${c.presets[0]}</span></p>`
+    ? `<h4>${c.skipped}</h4><div class="web-angles full">${angleLine(rows[0], c.presets[0])}</div>`
     : '';
   const phone = `<p class="info">${phoneIcon}<span>${c.web}</span></p>`;
-  return `<h2>${c.blocked}</h2><p class="progress">${c.progress}</p><p>${c.missingLine(open.length)}</p>${items}${skipped}<div>${checks(c)}</div>${phone}`;
+  return `<h2>${c.title}</h2><p class="progress">${c.progress}</p><h4>${c.missingHeading}</h4>${items}${skipped}<div>${checks(c)}</div>${phone}`;
 }
 
 function pages(lang, c) {
@@ -330,12 +341,12 @@ function pages(lang, c) {
     phone(`${lang}-05-today`, c, today, `<footer class="footer"><button class="btn btn-green">${c.takePhotos}</button></footer>`),
     phone(`${lang}-05-early`, c, early, `<footer class="footer"><button class="btn btn-outline">${c.prepare}</button></footer>`),
     phone(`${lang}-camera-denied`, c, denied, deniedFoot),
-    web(`${lang}-01-start-web`, c, `<h2>${c.start}</h2><p>${c.summary}</p><p class="note">${c.note}</p>${webInfo}<div class="btns"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></div>`),
+    web(`${lang}-01-start-web`, c, `<h2>${c.start}</h2><p>${c.summary}</p><p class="note">${c.note}</p>${webInfo}`),
     web(`${lang}-02-grid-web`, c, `<h2>${c.title}</h2><p class="progress">${c.progress}</p>${webInfo}<div class="grid">${slots(c, 5)}</div><div>${checks(c)}</div>`),
     web(`${lang}-03-blocked-web`, c, webAngles(c)),
     web(`${lang}-03-skipped-web`, c, webAngles(c, 'skipped')),
     web(`${lang}-04-readonly-web`, c, `<h2>${c.title}</h2>${webInfo}<p class="progress">${c.progress}</p><div>${checks(c)}</div>`),
-    web(`${lang}-05-today-web`, c, `<p>${c.today}</p><h3>${c.start}</h3><p>${c.summary}</p><p class="note">${c.noteShort}</p><div class="btns"><button class="btn btn-green">${c.guide}</button><button class="btn btn-outline">${c.blank}</button></div>${webInfo}`),
+    web(`${lang}-05-today-web`, c, `${todayCard}${startCard(c, c.noteShort)}${webInfo}`),
     web(`${lang}-05-early-web`, c, `<h2>${calendar} ${c.prepare}</h2><p class="info">${calendar}<span>${c.early}</span></p><p class="note">${c.noteLater}</p><div>${checks(c)}</div><button class="btn btn-green">${c.prepare}</button>`),
   ].join('');
 }
@@ -365,7 +376,7 @@ const names = [];
 for (let i = 0; i < count; i += 1) {
   const node = shots.nth(i);
   const name = await node.getAttribute('data-shot');
-  if (!name || !/-(02-grid-web|03-blocked-web|03-skipped-web|05-today-web|05-today|03-other)$/.test(name)) continue;
+  if (!name || !/-(03-blocked-web|03-skipped-web|05-today-web)$/.test(name)) continue;
   const file = join(outDir, `${name}.png`);
   await node.screenshot({ path: file });
   names.push(file);

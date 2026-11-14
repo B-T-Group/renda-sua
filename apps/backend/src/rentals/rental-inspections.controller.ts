@@ -52,10 +52,13 @@ export class RentalInspectionsController {
   @ApiOperation({ summary: 'Use the last return as a display-only guide, or start blank' })
   async applyGuide(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
-    @Body() body: ApplyPickupGuideDto
+    @Body() body: ApplyPickupGuideDto,
+    @Headers('x-rendasua-platform') platform?: string | string[],
+    @Headers('x-client-platform') clientPlatform?: string | string[]
   ) {
-    await this.inspections.openDraft(bookingId, 'pickup');
-    return this.photoRules.applyGuide(bookingId, body.mode);
+    const caller = platform ?? clientPlatform;
+    // Same spoofable UX gate as presign. A missing header is web. The draft opens only after that check.
+    return this.photoRules.applyGuide(bookingId, body.mode, caller, () => this.inspections.openDraft(bookingId, 'pickup'));
   }
 
   @Post('pickup/slot-skips')

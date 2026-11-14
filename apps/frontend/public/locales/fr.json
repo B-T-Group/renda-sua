@@ -9520,6 +9520,7 @@
     "extraAngle": "Angle supplémentaire {{n}}",
     "skipAngle": "Ignorer cet angle",
     "skipShort": "Ignorer",
+    "missingHeading": "Manquants",
     "skippedHeading": "Ignorés",
     "changeSkip": "Modifier",
     "skipNotOnUnit": "Absent sur cette unité",

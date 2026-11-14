@@ -429,15 +429,9 @@ export function RentalInspectionPanel({
           {rulesOn && photoRules ? (
             <PickupWebNotice
               rules={photoRules}
-              busy={busy}
               blocked={photoBlocked}
               rows={noticeRows(view.units, photoRules.guide?.slots ?? [], view.slotSkips ?? [], t)}
               progress={photoProgress(view.units, photoRules.guide?.slots ?? [])}
-              onChoose={(mode) => void run(async () => {
-                await model.api.applyGuide(bookingId, mode);
-                const next = await model.api.photoRules(bookingId);
-                setPhotoRules(next);
-              })}
             />
           ) : null}
           <PhotoRow

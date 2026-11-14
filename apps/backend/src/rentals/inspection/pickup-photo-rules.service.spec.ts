@@ -188,7 +188,7 @@ describe('guide retake gate and skip reason', () => {
       ...rows([], []),
       LatestReturnGuide: { rental_inspection_versions: [version] },
     });
-    const result = await built.rules.applyGuide('11111111-1111-4111-8111-111111111111', 'guide');
+    const result = await built.rules.applyGuide('11111111-1111-4111-8111-111111111111', 'guide', 'ios');
     const calls = built.hasura.executeMutation.mock.calls.map((call) => ({ query: String(call[0]), vars: call[1] }));
     expect(calls.some((call) => call.query.includes('insert_rental_inspection_media'))).toBe(false);
     expect(JSON.stringify(calls)).not.toContain('object_key');
@@ -255,6 +255,17 @@ describe('guide retake gate and skip reason', () => {
     expect(String(writes[0][0])).toContain('on_conflict');
     expect(writes[0][1].object.reason).toBe('Same as the overview');
     expect(writes[1][1].object.reason).toBe('Covered by the front');
+  });
+
+  it('rejects a web guide choice', async () => {
+    const built = service(true, rows(ready, []));
+    const id = '11111111-1111-4111-8111-111111111111';
+    await expect(built.rules.applyGuide(id, 'guide', 'web')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_APP_ONLY }),
+    });
+    await expect(built.rules.applyGuide(id, 'blank')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_APP_ONLY }),
+    });
   });
 
   it('rejects a web skip and a web clear', async () => {
