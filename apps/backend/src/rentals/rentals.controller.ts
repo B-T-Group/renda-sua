@@ -523,7 +523,7 @@ export class RentalsController {
   @ApiOperation({ summary: 'Whether this client request would use a condition report' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Policy version, or null for the start-PIN flow' })
-  @ApiResponse({ status: 404, description: 'Request not found' })
+  @ApiResponse({ status: 404, description: 'Not the requester or the listing business' })
   async getRequestInspectionPolicy(@Param('id') requestId: string) {
     const inspection_policy_version = await this.rentalsService.getRequestInspectionPolicy(requestId);
     return { success: true, inspection_policy_version };

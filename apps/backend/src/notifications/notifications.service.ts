@@ -4193,7 +4193,7 @@ export class NotificationsService {
     }
   }
 
-  /** Unflagged. The business hears the rental is active, including the in-app row when push is off. */
+  /** Flagged. The business hears the rental is active, including the in-app row when push is off. */
   async sendBusinessRentalStarted(params: {
     businessUserId: string;
     rentalItemName: string;

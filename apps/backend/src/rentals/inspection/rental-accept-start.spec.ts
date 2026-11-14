@@ -106,10 +106,28 @@ describe('accept and start', () => {
     expect(svc.confirmWalletContract).not.toHaveBeenCalled();
     expect(svc.pushMomoPickupPayment).not.toHaveBeenCalled();
     expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
-    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalStartedClientPush).not.toHaveBeenCalled();
     expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'pickup_accepted' })
     );
+  });
+
+  it('sends nothing new on activation when confirmations are off', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(false);
+    await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalStartedClientPush).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pickup_accepted' })
+    );
+  });
+
+  it('tells the business the rental started only after activation when the flag is on', async () => {
+    svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(true);
+    await svc.acceptAndStartRental('b1', 'ver-1');
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendRentalStartedClientPush).toHaveBeenCalledTimes(1);
   });
 
   it('charges the wallet and then starts', async () => {
@@ -165,7 +183,7 @@ describe('accept and start', () => {
     expect(svc.confirmWalletContract).toHaveBeenCalled();
     expect(markCalls()).toHaveLength(1);
     expect(markCalls()[0][1].at).toEqual(expect.any(String));
-    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
+    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
   });
 
   it('keeps the accept when Mobile Money fails, then retries without accepting again', async () => {

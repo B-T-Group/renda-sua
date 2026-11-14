@@ -1512,12 +1512,20 @@ export class RentalsService {
   }
 
   async getRequestInspectionPolicy(requestId: string): Promise<number | null> {
-    const clientId = await this.requireClientId();
+    const user = await this.hasuraUserService.getUser();
     const req = await this.fetchRequest(requestId);
-    if (!req || req.client_id !== clientId) {
+    if (!this.mayReadRequestPolicy(user, req)) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     }
     return this.requestPolicyVersion(req.rental_location_listing);
+  }
+
+  private mayReadRequestPolicy(user: any, req: any): boolean {
+    if (!req) return false;
+    const clientOk = isActivePersona(user, 'client') && user.client?.id === req.client_id;
+    const businessId = req.rental_location_listing?.rental_item?.business_id;
+    const businessOk = isActivePersona(user, 'business') && user.business?.id === businessId;
+    return Boolean(clientOk || businessOk);
   }
 
   async getClientRentalRequests(): Promise<ClientRentalRequestRow[]> {
@@ -3491,6 +3499,7 @@ export class RentalsService {
     if (!userId) return;
     try {
       const country = booking.rental_location_listing?.business_location?.address?.country;
+      if (!(await this.inspectionFlags.confirmationsEnabled(country))) return;
       await this.notificationsService.sendBusinessRentalStarted({
         businessUserId: userId,
         rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
