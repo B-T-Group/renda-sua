@@ -101,6 +101,8 @@ export interface RentalListingRow {
   units_available?: number;
   pickup_instructions: string;
   dropoff_instructions: string;
+  /** 1 when new bookings in this country are inspected. Null keeps the start PIN. */
+  inspection_policy_version?: number | null;
   weekly_availability: RentalWeeklyAvailabilityRow[];
   updated_at?: string;
   rental_item: {
@@ -263,7 +265,7 @@ export interface RentalBookingDetail {
         alt_text?: string | null;
       }>;
     } | null;
-    business_location?: { name?: string | null } | null;
+    business_location?: { name?: string | null; address?: { country?: string | null } | null } | null;
   } | null;
   rental_hold?: {
     client_hold_amount: number;
@@ -585,6 +587,7 @@ export interface CreateRentalRequestBody {
 export interface CreateRentalRequestResult {
   success: boolean;
   requestId: string;
+  inspection_policy_version?: number | null;
 }
 
 export interface CreateRentalBookingResult {

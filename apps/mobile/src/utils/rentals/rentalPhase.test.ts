@@ -28,6 +28,10 @@ describe('booking detail status labels', () => {
       'awaiting_return',
       'completed',
     ]);
+    const reviewSteps = bookingDetailTimeline('reserved', { includeReview: true });
+    expect(reviewSteps[2]).toBe('report_review');
+    expect(bookingDetailTimelineIndex(reviewSteps, 'reserved', { reviewCurrent: true })).toBe(2);
+    expect(bookingDetailStatusLabelKey('report_review')).toBe('rentalInspection.phase.reportReady');
   });
 
   it('does not change the 6-phase grouping used by lists and hubs', () => {

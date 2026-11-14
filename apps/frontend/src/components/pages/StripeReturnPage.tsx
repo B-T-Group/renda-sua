@@ -12,6 +12,7 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useRentalApi } from '../../hooks/useRentalApi';
 import { useStripePayments } from '../../hooks/useStripePayments';
 
 type ResultState = 'pending' | 'success' | 'failed' | 'cancelled';
@@ -24,14 +25,33 @@ const StripeReturnPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { checkStatusByReference } = useStripePayments();
+  const { fetchBookingDetail } = useRentalApi();
 
   const reference = searchParams.get('reference') ?? '';
   const bookingId = searchParams.get('booking') ?? '';
+  const [policy, setPolicy] = useState<'loading' | 'inspected' | 'legacy' | 'unknown'>(
+    bookingId ? 'loading' : 'legacy'
+  );
   const initialStatus = searchParams.get('status');
   const [state, setState] = useState<ResultState>(
     initialStatus === 'cancel' ? 'cancelled' : 'pending'
   );
   const pollsRef = useRef(0);
+
+  useEffect(() => {
+    if (!bookingId) return undefined;
+    let stop = false;
+    void fetchBookingDetail(bookingId)
+      .then((row) => {
+        if (!stop) setPolicy(row?.inspection_policy_version != null ? 'inspected' : 'legacy');
+      })
+      .catch(() => {
+        if (!stop) setPolicy('unknown');
+      });
+    return () => {
+      stop = true;
+    };
+  }, [bookingId, fetchBookingDetail]);
 
   const poll = useCallback(async () => {
     if (!reference) return;
@@ -89,10 +109,20 @@ const StripeReturnPage: React.FC = () => {
                 )
               : isSuccess
                 ? bookingId
-                  ? t(
-                      'stripe.return.rentalSuccessBody',
-                      'Your rental payment was received. You can open your booking to see confirmation and your start PIN.'
-                    )
+                  ? policy === 'loading'
+                    ? t(
+                        'stripe.return.pendingBody',
+                        'Please wait while we confirm your payment with Stripe.'
+                      )
+                    : policy === 'legacy'
+                      ? t(
+                          'stripe.return.rentalSuccessBody',
+                          'Your rental payment was received. You can open your booking to see confirmation and your start PIN.'
+                        )
+                      : t(
+                          'stripe.return.rentalSuccessBodyNeutral',
+                          'Your rental payment was received. Open your booking to see the confirmation.'
+                        )
                   : t(
                       'stripe.return.successBody',
                       'Your payment was received. Thank you!'

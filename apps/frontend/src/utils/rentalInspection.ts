@@ -213,6 +213,16 @@ export function businessCanReplaceReport(view: { yourDecision?: string | null } 
   return decision !== 'accept' && decision !== 'dispute';
 }
 
+/** Derived UI phase. The booking status stays reserved or confirmed. */
+export function reportReadyToReview(input: {
+  status?: string | null;
+  pickup: { status?: string | null; yourDecision?: string | null } | null;
+}): boolean {
+  const open = input.status === 'reserved' || input.status === 'confirmed';
+  if (!open || input.pickup?.status !== 'submitted') return false;
+  return input.pickup.yourDecision !== 'accept';
+}
+
 export type ClientInspectionAction = 'review_pickup' | 'review_return' | 'none';
 
 export function clientInspectionAction(input: {

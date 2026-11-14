@@ -164,8 +164,12 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
         {isStripeRail && quote?.securityDeposit ? (
           <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
             {t(
-              'rentals.clientRequests.paymentTermsCard',
-              'Card payments: {{authorized}} is held on your card (rental + deposit). The deposit only covers extra hours past your booked end time — the final charge at return is at least the rental total. Booking must end within 6 days.',
+              row.rental_booking?.inspection_policy_version != null
+                ? 'rentals.clientRequests.paymentTermsCardInspected'
+                : 'rentals.clientRequests.paymentTermsCard',
+              row.rental_booking?.inspection_policy_version != null
+                ? 'Card payments: {{authorized}} is held on your card (rental + deposit). The rental is charged at return. The deposit is released unless there\'s damage or a late return. Booking must end within 6 days.'
+                : 'Card payments: {{authorized}} is held on your card (rental + deposit). The deposit only covers extra hours past your booked end time — the final charge at return is at least the rental total. Booking must end within 6 days.',
               {
                 authorized: formatRentalMoney(
                   (quote?.total ?? 0) + (quote?.securityDeposit ?? 0),
