@@ -9,12 +9,11 @@ import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
 import {
   ChecklistTag,
-  PickupCameraDenied,
   PickupGuideStart,
   PickupSubmitBlocked,
 } from '../../components/rentals/inspection/PickupPhotoChrome';
 import { blockedScreenRows, submitLeftCount } from '../../utils/rentals/blockedGuideRows';
-import { formatListingDay, formatListingStamp, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
+import { formatListingDay, formatListingStamp, offPickupDay, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
 import { ReportSentConfirmation } from '../../components/rentals/inspection/ReportSentConfirmation';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -47,10 +46,6 @@ export default function BusinessInspectionScreen() {
   const guideDate = model.rules?.guide
     ? formatListingDay(model.rules.guide.submittedAt, model.rules.timezone, i18n.language)
     : '';
-
-  if (model.cameraDenied && rulesOn) {
-    return <PickupCameraDenied onClose={model.dismissCameraDenied} />;
-  }
 
   if (rulesOn && model.rules?.guide && !model.rules.guideMode && !model.loading) {
     return (
@@ -162,48 +157,42 @@ export default function BusinessInspectionScreen() {
             <ComparePhoto label={t('rentalInspection.returnColumn', 'Return')} uri={unit.photos[0]?.uri} />
           </View>
         ) : null}
-        {rulesOn && !model.rules?.pickupDay ? (
-          <InspectionBanner tone="info">
-            {t('rentalInspection.earlyPrepareBody', 'You can prepare the checklist now; photos are taken on pickup day.')}
+        {model.cameraDenied && rulesOn ? (
+          <InspectionBanner tone="warning">
+            {t('rentalInspection.cameraDeniedBody', 'Turn on the camera in Settings, or choose a photo from the gallery.')}
           </InspectionBanner>
-        ) : (
-          <>
-            {rulesOn && model.rules?.guideMode === 'guide' ? (
-              <Text style={{ color: colors.text.secondary }}>
-                {t('rentalInspection.retakenProgress', '{{done}} of {{total}} retaken', {
-                  done: unit.photos.filter((photo) => photo.mediaId).length,
-                  total: unit.photos.length,
-                })}
-                {'\n'}
-                {t('rentalInspection.guideRetakeNote', 'Old photos are a guide. Every slot must be retaken.')}
-              </Text>
-            ) : null}
-            <InspectionPhotoSlots
-              slots={unit.photos.map((photo) => ({
-                ...photo,
-                tileLabel: slotTileLabel(photo.slotKey ?? photo.role, i18n.language),
-                fromLabel: photo.ghostUri && guideDate
-                  ? t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })
-                  : undefined,
-                stamp: photo.capturedAt && model.rules?.timezone
-                  ? formatListingStamp(photo.capturedAt, model.rules.timezone, i18n.language)
-                  : undefined,
-              }))}
-              minPhotos={rulesOn ? null : model.minPhotos}
-              onAdd={(role, slot) => {
-                const photo = unit.photos[slot];
-                if (rulesOn) {
-                  setCameraLabel(angleLabel(photo?.slotKey ?? role, t));
-                  void model.addPhoto(role, slot, true);
-                  return;
-                }
-                void model.addPhoto(role, slot);
-              }}
-              onRetry={(slot) => void model.retryPhoto(slot)}
-            />
-            {cameraLabel ? <Text numberOfLines={1} style={{ color: colors.text.primary }}>{cameraLabel}</Text> : null}
-          </>
-        )}
+        ) : null}
+        {model.libraryDenied && rulesOn ? (
+          <InspectionBanner tone="warning">
+            {t('rentalInspection.libraryDeniedBody', 'Turn on photo library access in Settings to choose a gallery photo.')}
+          </InspectionBanner>
+        ) : null}
+        {rulesOn && model.rules?.guideMode === 'guide' ? (
+          <Text style={{ color: colors.text.secondary }}>
+            {t('rentalInspection.retakenProgress', '{{done}} of {{total}} retaken', {
+              done: unit.photos.filter((photo) => photo.mediaId).length,
+              total: unit.photos.length,
+            })}
+            {'\n'}
+            {t('rentalInspection.guideRetakeNote', 'Old photos are a guide. Every slot must be retaken.')}
+          </Text>
+        ) : null}
+        <InspectionPhotoSlots
+          slots={unit.photos.map((photo) => ({
+            ...photo,
+            tileLabel: slotTileLabel(photo.slotKey ?? photo.role, i18n.language),
+            fromLabel: photo.ghostUri && guideDate
+              ? t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })
+              : undefined,
+            stamp: photoStamp(photo.capturedAt, model.rules, i18n.language),
+            offDay: photoOffDay(photo.capturedAt, model.rules),
+          }))}
+          minPhotos={rulesOn ? null : model.minPhotos}
+          onAdd={(role, slot) => openSource(model, unit, role, slot, 'camera', rulesOn, setCameraLabel, t)}
+          onGallery={rulesOn ? (role, slot) => openSource(model, unit, role, slot, 'gallery', true, setCameraLabel, t) : undefined}
+          onRetry={(slot) => void model.retryPhoto(slot)}
+        />
+        {cameraLabel ? <Text numberOfLines={1} style={{ color: colors.text.primary }}>{cameraLabel}</Text> : null}
         {stage === 'return' ? (
           <View style={styles.row}>
             <Choice
@@ -309,7 +298,7 @@ export default function BusinessInspectionScreen() {
           disabled={
             model.busy
             || (needsClaim && !(Number(claim) > 0))
-            || (rulesOn && !model.rules?.pickupDay)
+            || (rulesOn && model.rules?.beforeStart === false)
             || (!model.canSubmit && model.guideGaps.length === 0)
           }
           onPress={() => {
@@ -364,7 +353,40 @@ function openRetake(
   setCameraLabel(angleLabel(row.slotKey, t));
   setBlocked(false);
   if (row.reason) void model.clearSkip(row.slotKey, row.unitId);
-  void model.addPhoto(role, index, true);
+  void model.addPhoto(role, index, 'camera');
+}
+
+function photoStamp(
+  capturedAt: string | null | undefined,
+  rules: { timezone: string } | null | undefined,
+  language: string
+): string | undefined {
+  if (!capturedAt || !rules?.timezone) return undefined;
+  return formatListingStamp(capturedAt, rules.timezone, language);
+}
+
+function photoOffDay(
+  capturedAt: string | null | undefined,
+  rules: { timezone: string; startAt: string | null } | null | undefined
+): boolean {
+  if (!capturedAt || !rules?.startAt || !rules.timezone) return false;
+  return offPickupDay(capturedAt, rules.startAt, rules.timezone);
+}
+
+function openSource(
+  model: ReturnType<typeof useInspectionCapture>,
+  unit: { photos: Array<{ slotKey?: string }> },
+  role: Parameters<typeof model.addPhoto>[0],
+  slot: number,
+  source: 'camera' | 'gallery',
+  rulesOn: boolean,
+  setCameraLabel: (value: string) => void,
+  t: (key: string, fallback: string, options?: Record<string, string>) => string
+) {
+  if (rulesOn && model.rules?.beforeStart === false) return;
+  const photo = unit.photos[slot];
+  if (rulesOn) setCameraLabel(angleLabel(photo?.slotKey ?? role, t));
+  void model.addPhoto(role, slot, rulesOn ? source : 'auto');
 }
 
 async function submitReport(

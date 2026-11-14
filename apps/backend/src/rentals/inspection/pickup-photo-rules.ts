@@ -2,7 +2,7 @@ import { marketTimeZone } from '../../common/market-timezones';
 import { isoCountryCode } from '../../orders/delivery-pricing.util';
 
 export const PICKUP_PHOTO_RULES_FLAG = 'rentals_pickup_photo_rules_enabled';
-export const PICKUP_PHOTO_NOT_PICKUP_DAY = 'PICKUP_PHOTO_NOT_PICKUP_DAY';
+export const PICKUP_PHOTO_AFTER_START = 'PICKUP_PHOTO_AFTER_START';
 export const PICKUP_PHOTO_APP_ONLY = 'PICKUP_PHOTO_APP_ONLY';
 export const PICKUP_PHOTO_SLOT_REQUIRED = 'PICKUP_PHOTO_SLOT_REQUIRED';
 export const PICKUP_GUIDE_RETAKE_REQUIRED = 'PICKUP_GUIDE_RETAKE_REQUIRED';
@@ -56,6 +56,12 @@ export function isPickupPhotoDay(startAt: Date, now: Date, timeZone: string): bo
   return calendarDay(startAt, timeZone) === calendarDay(now, timeZone);
 }
 
+/** Photos can be added until the rental start instant. The start instant itself is closed. */
+export function isBeforeRentalStart(startAt: Date, now: Date): boolean {
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(now.getTime())) return false;
+  return now.getTime() < startAt.getTime();
+}
+
 export function parseSlotKey(value: string | null | undefined): string | null {
   const key = (value ?? '').trim();
   return SLOT_KEY.test(key) ? key : null;
@@ -65,13 +71,102 @@ export function isRequiredSlot(slotKey: string): boolean {
   return (REQUIRED_SLOTS as readonly string[]).includes(slotKey);
 }
 
-/** Server clock at upload receipt. The client timestamp is not a parameter. */
+/** Server clock at upload receipt. Used when the photo has no EXIF time. */
 export function serverCaptureTimestamp(clock: Date): string {
   return clock.toISOString();
 }
 
-export function pendingMediaColumns(slotKey: string | null | undefined, clock: Date) {
-  return { captured_at: serverCaptureTimestamp(clock), slot_key: parseSlotKey(slotKey) };
+export interface CaptureColumns {
+  captured_at: string;
+  slot_key: string | null;
+  capture_source: 'camera' | 'gallery' | null;
+  captured_at_source: 'exif' | 'upload' | null;
+}
+
+/** Flag off keeps the server clock and leaves the new columns null. */
+export function captureColumns(input: {
+  slotKey: string | null | undefined;
+  clock: Date;
+  timeZone: string;
+  exif: string | null | undefined;
+  source: string | null | undefined;
+  rulesOn: boolean;
+}): CaptureColumns {
+  const slot_key = parseSlotKey(input.slotKey);
+  if (!input.rulesOn) return flagOffColumns(input.clock, slot_key);
+  const exifAt = parseExifCapture(input.exif, input.timeZone);
+  return {
+    captured_at: (exifAt ?? input.clock).toISOString(),
+    slot_key,
+    capture_source: normalizeSource(input.source),
+    captured_at_source: exifAt ? 'exif' : 'upload',
+  };
+}
+
+function flagOffColumns(clock: Date, slotKey: string | null): CaptureColumns {
+  return {
+    captured_at: serverCaptureTimestamp(clock),
+    slot_key: slotKey,
+    capture_source: null,
+    captured_at_source: null,
+  };
+}
+
+function normalizeSource(source: string | null | undefined): 'camera' | 'gallery' | null {
+  if (source === 'camera' || source === 'gallery') return source;
+  return null;
+}
+
+/** EXIF DateTimeOriginal. A value with no offset is read in the listing timezone. */
+export function parseExifCapture(raw: string | null | undefined, timeZone: string): Date | null {
+  const value = (raw ?? '').trim();
+  if (!value) return null;
+  if (hasZoneOffset(value)) return offsetInstant(value);
+  return wallInstant(value, timeZone);
+}
+
+function hasZoneOffset(value: string): boolean {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+}
+
+function offsetInstant(value: string): Date | null {
+  const iso = value.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3').replace(' ', 'T');
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function wallInstant(value: string, timeZone: string): Date | null {
+  const match = /^(\d{4})[:/-](\d{2})[:/-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const parts = match.slice(1).map((part) => Number(part));
+  return utcFromWall(parts, timeZone);
+}
+
+function utcFromWall(parts: number[], timeZone: string): Date {
+  const [year, month, day, hour, minute, second] = parts;
+  const wall = Date.UTC(year, month - 1, day, hour, minute, second);
+  const first = wall - zoneOffsetMs(new Date(wall), timeZone);
+  return new Date(wall - zoneOffsetMs(new Date(first), timeZone));
+}
+
+function zoneOffsetMs(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', zoneFormat(timeZone)).formatToParts(instant);
+  const pick = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? '0');
+  const asUtc = Date.UTC(pick('year'), pick('month') - 1, pick('day'), pick('hour') % 24, pick('minute'), pick('second'));
+  return asUtc - instant.getTime();
+}
+
+function zoneFormat(timeZone: string): Intl.DateTimeFormatOptions {
+  return {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  };
 }
 
 /**
@@ -180,19 +275,12 @@ function sameSkip(row: { unitId: string; slotKey: string; reason: string }, unit
   return row.unitId === unitId && row.slotKey === slotKey && !!row.reason.trim();
 }
 
-export function captureOutsidePickupDay(
-  photos: Array<{ capturedAt: string | null }>,
-  startAt: Date,
-  timeZone: string
-): boolean {
-  const day = calendarDay(startAt, timeZone);
-  return photos.some((photo) => outsideDay(photo.capturedAt, day, timeZone));
-}
-
-function outsideDay(capturedAt: string | null, day: string, timeZone: string): boolean {
-  if (!capturedAt) return true;
+/** True when a stored capture date falls on a different listing-timezone day than start_at. */
+export function photoOffPickupDay(capturedAt: string | null, startAt: Date, timeZone: string): boolean {
+  if (!capturedAt) return false;
   const at = new Date(capturedAt);
-  return Number.isNaN(at.getTime()) || calendarDay(at, timeZone) !== day;
+  if (Number.isNaN(at.getTime()) || Number.isNaN(startAt.getTime())) return false;
+  return calendarDay(at, timeZone) !== calendarDay(startAt, timeZone);
 }
 
 /** Drop ASCII control characters, then trim. Length is capped by skipDecision. */

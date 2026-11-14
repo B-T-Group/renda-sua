@@ -54,6 +54,7 @@ export interface PickupGuideSlot {
 
 export interface PickupPhotoRules {
   enabled: boolean;
+  beforeStart: boolean;
   pickupDay: boolean;
   timezone: string;
   startAt: string | null;

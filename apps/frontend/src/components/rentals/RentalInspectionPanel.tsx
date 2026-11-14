@@ -27,7 +27,7 @@ import { useClientFlags } from '../../hooks/useClientFlags';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { PickupWebNotice } from './PickupWebNotice';
 import { blockedScreenRows, submitLeftCount } from '../../utils/rentals/blockedGuideRows';
-import { formatListingDay, formatListingStamp, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
+import { formatListingDay, formatListingStamp, offPickupDay, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { formatListingDue } from '../../utils/rentalRequestFormat';
@@ -62,6 +62,7 @@ interface PanelBooking {
   return_resolution?: string | null;
   actual_start_at?: string | null;
   units_booked?: number | null;
+  start_at?: string | null;
   end_at?: string | null;
   total_amount?: number | string | null;
   currency?: string | null;
@@ -329,7 +330,7 @@ export function RentalInspectionPanel({
         return;
       }
     }
-    if (rulesOn && photoRules && !photoRules.pickupDay) return;
+    if (rulesOn && photoRules && photoRules.beforeStart === false) return;
     if (!reportReadyToSubmit(view.units, minPhotos)) {
       setBanner('incomplete');
       return;
@@ -473,7 +474,11 @@ export function RentalInspectionPanel({
             unit={unit}
             minPhotos={minPhotos}
             guideSlots={rulesOn && photoRules?.guideMode === 'guide' ? photoRules.guide?.slots : undefined}
-            stampZone={photoRules?.timezone}
+            stampZone={photoRules?.timezone ?? confirmationTimeZone(
+              booking.rental_location_listing?.business_location?.address?.country,
+              booking.currency
+            )}
+            startAt={photoRules?.startAt ?? booking.start_at}
             guideDate={photoRules?.guide ? formatListingDay(photoRules.guide.submittedAt, photoRules.timezone, i18n.language) : undefined}
             readOnly={role === 'client' || view.status === 'submitted' || rulesOn}
             submittedAt={view.submittedAt}
@@ -921,6 +926,7 @@ function PhotoRow({
   readOnly,
   guideSlots,
   stampZone,
+  startAt,
   guideDate,
   submittedAt,
   timeZone,
@@ -931,18 +937,21 @@ function PhotoRow({
   readOnly: boolean;
   guideSlots?: Array<{ slotKey: string; role: PhotoRole; url: string | null; required: boolean }>;
   stampZone?: string;
+  startAt?: string | null;
   guideDate?: string;
   submittedAt: string | null;
   timeZone: string;
   onFile: (role: PhotoRole, file: File) => void;
 }) {
   const [open, setOpen] = useState<number | null>(null);
-  if (guideSlots?.length) return <GuidePhotoRow unit={unit} readOnly={readOnly} guideSlots={guideSlots} stampZone={stampZone} guideDate={guideDate} onFile={onFile} />;
+  if (guideSlots?.length) {
+    return <GuidePhotoRow unit={unit} readOnly={readOnly} guideSlots={guideSlots} stampZone={stampZone} startAt={startAt} guideDate={guideDate} onFile={onFile} />;
+  }
   const roles = minPhotos == null ? REQUIRED_PHOTO_ROLES : photoRolesForMinimum(minPhotos);
   const slides = photoSlides(unit, roles);
   return (
     <>
-      <PhotoTiles roles={roles} unit={unit} readOnly={readOnly} slides={slides} onFile={onFile} onOpen={setOpen} />
+      <PhotoTiles roles={roles} unit={unit} readOnly={readOnly} slides={slides} stampZone={stampZone} startAt={startAt} onFile={onFile} onOpen={setOpen} />
       <PhotoLightbox slides={slides} index={open} submittedAt={submittedAt} timeZone={timeZone} onClose={() => setOpen(null)} onMove={setOpen} />
     </>
   );
@@ -953,6 +962,7 @@ function GuidePhotoRow({
   readOnly,
   guideSlots,
   stampZone,
+  startAt,
   guideDate,
   onFile,
 }: {
@@ -960,6 +970,7 @@ function GuidePhotoRow({
   readOnly: boolean;
   guideSlots: Array<{ slotKey: string; role: PhotoRole; url: string | null; required: boolean }>;
   stampZone?: string;
+  startAt?: string | null;
   guideDate?: string;
   onFile: (role: PhotoRole, file: File) => void;
 }) {
@@ -971,11 +982,8 @@ function GuidePhotoRow({
         const photo = unit.photos.find((row) => (row.slotKey ? row.slotKey === slot.slotKey : row.role === role));
         const ghost = !photo?.url && slot.url;
         const label = slotTileLabel(slot.slotKey, i18n.language);
-        const stamp = photo?.capturedAt && stampZone
-          ? formatListingStamp(photo.capturedAt, stampZone, i18n.language)
-          : '';
         const caption = photo?.url
-          ? `${label}${stamp ? ` ${stamp}` : ''}`
+          ? label
           : ghost && guideDate
             ? `${label} ${t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })}`
             : label;
@@ -984,6 +992,7 @@ function GuidePhotoRow({
             {photo?.url ? <Box component="img" src={photo.url} alt={label} sx={{ width: 72, height: 72, objectFit: 'cover' }} /> : null}
             {ghost ? <Box component="img" src={slot.url ?? ''} alt="" sx={{ width: 72, height: 72, objectFit: 'cover', opacity: 0.35 }} /> : null}
             <Typography variant="caption">{caption}</Typography>
+            <CaptureMeta capturedAt={photo?.capturedAt} zone={stampZone} startAt={startAt} />
             {readOnly ? null : (
               <input
                 hidden
@@ -1007,6 +1016,8 @@ function PhotoTiles({
   unit,
   readOnly,
   slides,
+  stampZone,
+  startAt,
   onFile,
   onOpen,
 }: {
@@ -1014,6 +1025,8 @@ function PhotoTiles({
   unit: InspectionUnit;
   readOnly: boolean;
   slides: PhotoSlide[];
+  stampZone?: string;
+  startAt?: string | null;
   onFile: (role: PhotoRole, file: File) => void;
   onOpen: (index: number) => void;
 }) {
@@ -1025,6 +1038,8 @@ function PhotoTiles({
           role={role}
           photo={unit.photos.find((row) => row.role === role)}
           readOnly={readOnly}
+          stampZone={stampZone}
+          startAt={startAt}
           onFile={onFile}
           onOpen={() => onOpen(slideIndex(slides, role))}
         />
@@ -1037,12 +1052,16 @@ function PhotoTile({
   role,
   photo,
   readOnly,
+  stampZone,
+  startAt,
   onFile,
   onOpen,
 }: {
   role: PhotoRole;
   photo: InspectionUnit['photos'][number] | undefined;
   readOnly: boolean;
+  stampZone?: string;
+  startAt?: string | null;
   onFile: (role: PhotoRole, file: File) => void;
   onOpen: () => void;
 }) {
@@ -1059,7 +1078,34 @@ function PhotoTile({
         <UploadTile label={label} role={role} readOnly={readOnly} onFile={onFile} thumb={thumb} />
       )}
       {photo?.url ? <Typography variant="caption" color="text.secondary" align="center">{label}</Typography> : null}
+      <CaptureMeta capturedAt={photo?.capturedAt} zone={stampZone} startAt={startAt} />
     </Stack>
+  );
+}
+
+function CaptureMeta({
+  capturedAt,
+  zone,
+  startAt,
+}: {
+  capturedAt?: string | null;
+  zone?: string;
+  startAt?: string | null;
+}) {
+  const { t, i18n } = useTranslation();
+  if (!capturedAt || !zone) return null;
+  const off = !!startAt && offPickupDay(capturedAt, startAt, zone);
+  return (
+    <>
+      <Typography variant="caption" color="text.secondary" align="center">
+        {formatListingStamp(capturedAt, zone, i18n.language)}
+      </Typography>
+      {off ? (
+        <Typography variant="caption" color="warning.dark" align="center">
+          {t('rentalInspection.notPickupDay', 'Not taken on pickup day')}
+        </Typography>
+      ) : null}
+    </>
   );
 }
 

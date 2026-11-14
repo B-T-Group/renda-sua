@@ -116,7 +116,15 @@ export async function skipPickupSlot(
 
 export async function presignInspectionPhoto(
   bookingId: string,
-  body: { unitId: string; role: PhotoRole; contentType: string; fileSize: number; slotKey?: string }
+  body: {
+    unitId: string;
+    role: PhotoRole;
+    contentType: string;
+    fileSize: number;
+    slotKey?: string;
+    exifDateTime?: string;
+    captureSource?: 'camera' | 'gallery';
+  }
 ): Promise<InspectionPresign> {
   return apiRequest(`${root(bookingId)}/evidence/presign`, {
     method: 'POST',
@@ -148,6 +156,8 @@ export async function uploadInspectionPhoto(input: {
   contentType: string;
   fileSize: number;
   slotKey?: string;
+  exifDateTime?: string;
+  captureSource?: 'camera' | 'gallery';
 }): Promise<{ mediaId: string; capturedAt?: string }> {
   const signed = await presignInspectionPhoto(input.bookingId, {
     unitId: input.unitId,

@@ -2,16 +2,7 @@ import { Alert, Box, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
 import { groupBlockedRows, type BlockedGuideRow } from '../../utils/rentals/blockedGuideRows';
-import { formatListingDay, listingCity } from '../../utils/rentals/pickupPhotoTime';
-
-function CalendarArt() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="#0B7A3B" strokeWidth="2" />
-      <path d="M3 10h18M8 3v4M16 3v4" fill="none" stroke="#0B7A3B" strokeWidth="2" />
-    </svg>
-  );
-}
+import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
 
 function PhoneArt() {
   return (
@@ -69,15 +60,13 @@ export function PickupWebNotice({
   const { t, i18n } = useTranslation();
   const guide = rules.guide;
   const date = guide ? formatListingDay(guide.submittedAt, rules.timezone, i18n.language) : '';
-  const day = rules.startAt ? formatListingDay(rules.startAt, rules.timezone, i18n.language) : '';
-  const city = listingCity(rules.timezone);
   const grouped = groupBlockedRows(rows);
   const note = rules.pickupDay
     ? t('rentalInspection.guideOnlyShort', 'The last return photos are a guide only.')
     : t('rentalInspection.guideOnlyNoteLater', 'The last return photos are a guide only. You must retake every photo on pickup day, ideally with the renter there.');
   return (
     <Stack spacing={1}>
-      <DayStatus city={city} day={day} rules={rules} />
+      <DayStatus rules={rules} />
       {progress && rules.guideMode === 'guide' && !blocked ? (
         <Typography>{t('rentalInspection.retakenProgress', '{{done}} of {{total}} retaken', progress)}</Typography>
       ) : null}
@@ -88,12 +77,13 @@ export function PickupWebNotice({
   );
 }
 
-function DayStatus({ city, day, rules }: { city: string; day: string; rules: PickupPhotoRules }) {
+function DayStatus({ rules }: { rules: PickupPhotoRules }) {
   const { t } = useTranslation();
+  if (!rules.beforeStart) return null;
   if (!rules.pickupDay) {
     return (
-      <Alert severity="info" icon={<CalendarArt />}>
-        {t('rentalInspection.earlyPrepareBody', 'Photos are taken on pickup day, {{date}} ({{city}} time). You can prepare the checklist now.', { date: day, city })}
+      <Alert severity="info">
+        {t('rentalInspection.addAnytime', 'Add pickup photos anytime before the rental starts.')}
       </Alert>
     );
   }

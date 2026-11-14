@@ -17,6 +17,7 @@ import {
 } from '../services/rentalInspectionApi';
 import { filterSupportedImageAssets, IMAGE_LIBRARY_PICKER_OPTIONS } from '../utils/supportedImageFormats';
 import { pickupCaptureSource } from '../utils/rentals/pickupCaptureSource';
+import { exifDateTimeOriginal } from '../utils/rentals/exifCapture';
 import {
   classifyInspectionError,
   handbackEnabled,
@@ -43,6 +44,8 @@ export interface LocalPhoto {
   uri?: string;
   ghostUri?: string;
   capturedAt?: string | null;
+  exifDateTime?: string | null;
+  captureSource?: 'camera' | 'gallery';
   failed?: boolean;
   pending?: boolean;
 }
@@ -63,7 +66,7 @@ export interface LocalUnit {
   returnChoice: '' | 'same' | 'damage';
 }
 
-const PICKER = { ...IMAGE_LIBRARY_PICKER_OPTIONS, quality: 1 };
+const PICKER = { ...IMAGE_LIBRARY_PICKER_OPTIONS, quality: 1, exif: true };
 
 function slotsFor(minPhotos: number, existing: InspectionUnit['photos']): LocalPhoto[] {
   const roles = photoRolesForMinimum(minPhotos);
@@ -167,6 +170,7 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
   const [notice, setNotice] = useState<string | null>(null);
   const [rules, setRules] = useState<PickupPhotoRules | null>(null);
   const [cameraDenied, setCameraDenied] = useState(false);
+  const [libraryDenied, setLibraryDenied] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -221,48 +225,120 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     }));
   };
 
-  const addPhoto = async (role: PhotoRole, slotIndex: number, cameraOnly = false) => {
+  const addPhoto = async (role: PhotoRole, slotIndex: number, source: 'camera' | 'gallery' | 'auto' = 'auto') => {
     if (!current) return 'cancel' as const;
+    if (source === 'gallery') return addFromGallery(role, slotIndex);
+    if (source === 'camera') return addFromCamera(role, slotIndex);
+    return addFromAuto(role, slotIndex);
+  };
+
+  const addFromCamera = async (role: PhotoRole, slotIndex: number) => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
-    const source = pickupCaptureSource(cameraOnly, permission.granted);
-    if (source === 'denied') {
+    if (!permission.granted) {
       setCameraDenied(true);
       return 'denied' as const;
     }
+    setCameraDenied(false);
+    return storePicked(role, slotIndex, 'camera', await ImagePicker.launchCameraAsync(PICKER));
+  };
+
+  const addFromGallery = async (role: PhotoRole, slotIndex: number) => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setLibraryDenied(true);
+      return 'denied' as const;
+    }
+    setLibraryDenied(false);
+    return storePicked(role, slotIndex, 'gallery', await ImagePicker.launchImageLibraryAsync(PICKER));
+  };
+
+  const addFromAuto = async (role: PhotoRole, slotIndex: number) => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    const source = pickupCaptureSource(false, permission.granted);
     const result = source === 'camera'
       ? await ImagePicker.launchCameraAsync(PICKER)
       : await ImagePicker.launchImageLibraryAsync(PICKER);
-    if (result.canceled || !result.assets[0]) return 'cancel' as const;
-    const { supported } = filterSupportedImageAssets(result.assets);
-    const asset = supported[0];
+    return storePicked(role, slotIndex, source === 'camera' ? 'camera' : 'gallery', result);
+  };
+
+  const storePicked = async (
+    role: PhotoRole,
+    slotIndex: number,
+    source: 'camera' | 'gallery',
+    result: ImagePicker.ImagePickerResult
+  ) => {
+    if (!current || result.canceled || !result.assets[0]) return 'cancel' as const;
+    const asset = filterSupportedImageAssets(result.assets).supported[0];
     if (!asset) {
       setNotice('unsupported');
       return 'cancel' as const;
     }
-    const contentType = (asset.mimeType || 'image/jpeg').replace('image/jpg', 'image/jpeg');
     const fileSize = asset.fileSize ?? 0;
-    const local: LocalPhoto = { key: `${role}-${slotIndex}`, role, uri: asset.uri, pending: isOffline || !fileSize };
-    setUnits((prev) => prev.map((unit, unitIndex) => {
-      if (unitIndex !== index) return unit;
-      const photos = unit.photos.map((photo, photoIndex) => (photoIndex === slotIndex ? local : photo));
-      return { ...unit, photos };
-    }));
+    const contentType = (asset.mimeType || 'image/jpeg').replace('image/jpg', 'image/jpeg');
+    const exifDateTime = exifDateTimeOriginal(asset.exif);
+    placeLocal(slotIndex, role, asset.uri, fileSize, source, exifDateTime);
     if (isOffline || !fileSize) return 'added' as const;
     await sendPhoto(index, slotIndex, {
-      uri: asset.uri,
+      ...photoPayload(role, slotIndex, asset.uri, fileSize, source, exifDateTime),
       contentType,
-      fileSize,
-      role,
-      unitId: current.unitId,
-      slotKey: current.photos[slotIndex]?.slotKey,
     });
     return 'added' as const;
   };
 
+  const placeLocal = (
+    slotIndex: number,
+    role: PhotoRole,
+    uri: string,
+    fileSize: number,
+    source: 'camera' | 'gallery',
+    exifDateTime: string | null
+  ) => {
+    const local: LocalPhoto = {
+      key: `${role}-${slotIndex}`,
+      role,
+      uri,
+      pending: isOffline || !fileSize,
+      captureSource: source,
+      exifDateTime,
+      slotKey: current?.photos[slotIndex]?.slotKey,
+    };
+    setUnits((prev) => prev.map((unit, unitIndex) => {
+      if (unitIndex !== index) return unit;
+      return { ...unit, photos: unit.photos.map((photo, photoIndex) => (photoIndex === slotIndex ? { ...photo, ...local } : photo)) };
+    }));
+  };
+
+  const photoPayload = (
+    role: PhotoRole,
+    slotIndex: number,
+    uri: string,
+    fileSize: number,
+    source: 'camera' | 'gallery',
+    exifDateTime: string | null
+  ) => ({
+    uri,
+    contentType: 'image/jpeg',
+    fileSize,
+    role,
+    unitId: current?.unitId ?? '',
+    slotKey: current?.photos[slotIndex]?.slotKey,
+    captureSource: source,
+    exifDateTime: exifDateTime ?? undefined,
+  });
+
   const sendPhoto = async (
     unitIndex: number,
     slotIndex: number,
-    photo: { uri: string; contentType: string; fileSize: number; role: PhotoRole; unitId: string; slotKey?: string }
+    photo: {
+      uri: string;
+      contentType: string;
+      fileSize: number;
+      role: PhotoRole;
+      unitId: string;
+      slotKey?: string;
+      captureSource?: 'camera' | 'gallery';
+      exifDateTime?: string;
+    }
   ) => {
     try {
       const saved = await uploadInspectionPhoto({ bookingId, ...photo });
@@ -298,6 +374,8 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
       role: photo.role,
       unitId: current.unitId,
       slotKey: photo.slotKey,
+      captureSource: photo.captureSource,
+      exifDateTime: photo.exifDateTime ?? undefined,
     });
   };
 
@@ -459,6 +537,7 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     canSubmit,
     guideGaps,
     cameraDenied,
+    libraryDenied,
     dismissCameraDenied: () => setCameraDenied(false),
     canHandback: handbackEnabled(view, booking?.units_booked ?? units.length),
     update,

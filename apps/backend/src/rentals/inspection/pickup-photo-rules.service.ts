@@ -14,15 +14,16 @@ import {
   PICKUP_GUIDE_RETAKE_REQUIRED,
   PICKUP_GUIDE_SKIP_REASON,
   PICKUP_GUIDE_SLOT_REQUIRED,
+  PICKUP_PHOTO_AFTER_START,
   PICKUP_PHOTO_APP_ONLY,
-  PICKUP_PHOTO_NOT_PICKUP_DAY,
   PICKUP_PHOTO_SLOT_REQUIRED,
   assignGuideSlots,
   canonicalUnitId,
-  captureOutsidePickupDay,
+  captureColumns,
   cleanSkipReason,
   completeGuideSlots,
   guideChecklist,
+  isBeforeRentalStart,
   isPickupPhotoDay,
   listingTimeZone,
   missingGuideSlots,
@@ -68,6 +69,12 @@ export interface UploadGate {
   slotKey?: string | null;
 }
 
+export interface CaptureInput {
+  slotKey?: string | null;
+  exifDateTime?: string | null;
+  captureSource?: string | null;
+}
+
 @Injectable()
 export class PickupPhotoRulesService {
   constructor(
@@ -89,10 +96,22 @@ export class PickupPhotoRulesService {
     if (stage !== 'pickup') return;
     const booking = await this.loadBooking(bookingId);
     if (!(await this.enabled(booking))) return;
-    const start = this.startAt(booking);
-    const zone = listingTimeZone(booking.country);
-    if (!start || !isPickupPhotoDay(start, now, zone)) this.rejectDay();
-    await this.assertFresh(booking, start!, zone);
+    this.assertBeforeStart(booking, now);
+    await this.assertGuide(booking);
+  }
+
+  async mediaColumns(bookingId: string, role: string, input: CaptureInput, clock: Date) {
+    if (role === 'counter') return this.plainColumns(input, clock);
+    const booking = await this.loadBooking(bookingId);
+    const rulesOn = this.pickupOpen(booking.status) && (await this.enabled(booking));
+    return captureColumns({
+      rulesOn,
+      slotKey: input.slotKey,
+      clock,
+      timeZone: listingTimeZone(booking.country),
+      exif: input.exifDateTime,
+      source: input.captureSource,
+    });
   }
 
   async getRules(bookingId: string, now = new Date()) {
@@ -153,17 +172,36 @@ export class PickupPhotoRulesService {
   }
 
   private rejectClosedUpload(booking: BookingContext, input: UploadGate, now: Date): void {
-    const start = this.startAt(booking);
-    if (!start || !isPickupPhotoDay(start, now, listingTimeZone(booking.country))) this.rejectDay();
+    this.assertBeforeStart(booking, now);
     if (uploadPlatform(input.platform) !== 'app') this.rejectApp();
     if (input.slotKey && !slotMatchesRole(input.slotKey, input.role)) this.rejectSlotPhoto();
   }
 
-  private async assertFresh(booking: BookingContext, start: Date, zone: string): Promise<void> {
+  private async assertGuide(booking: BookingContext): Promise<void> {
     const inspection = await this.inspection(booking.id);
     const photos = inspection ? await this.readyPhotos(inspection.id) : [];
     if (inspection?.pickup_guide_mode === 'guide') await this.assertRetaken(booking, inspection, photos);
-    if (captureOutsidePickupDay(photos, start, zone)) this.rejectDay();
+  }
+
+  private plainColumns(input: CaptureInput, clock: Date) {
+    return captureColumns({
+      rulesOn: false,
+      slotKey: input.slotKey,
+      clock,
+      timeZone: listingTimeZone(null),
+      exif: null,
+      source: null,
+    });
+  }
+
+  private assertBeforeStart(booking: BookingContext, now: Date): void {
+    const start = this.startAt(booking);
+    if (!start || !isBeforeRentalStart(start, now)) this.rejectAfterStart();
+  }
+
+  private beforeStart(booking: BookingContext, now: Date): boolean {
+    const start = this.startAt(booking);
+    return !!start && isBeforeRentalStart(start, now);
   }
 
   private async assertRetaken(booking: BookingContext, inspection: InspectionRow, photos: ReadyPhoto[]) {
@@ -221,6 +259,7 @@ export class PickupPhotoRulesService {
     const guide = await this.guidePayload(booking, inspection?.pickup_guide_version_id ?? null);
     return {
       enabled: true,
+      beforeStart: this.beforeStart(booking, now),
       pickupDay: this.onPickupDay(booking, now),
       timezone: listingTimeZone(booking.country),
       startAt: booking.start_at,
@@ -232,6 +271,7 @@ export class PickupPhotoRulesService {
   private disabledRules(booking: BookingContext) {
     return {
       enabled: false,
+      beforeStart: true,
       pickupDay: true,
       timezone: listingTimeZone(booking.country),
       startAt: booking.start_at,
@@ -532,8 +572,8 @@ export class PickupPhotoRulesService {
     return !!start && isPickupPhotoDay(start, now, listingTimeZone(booking.country));
   }
 
-  private rejectDay(): never {
-    throw inspectionRejected(PICKUP_PHOTO_NOT_PICKUP_DAY, 'Pickup photos can be taken only on pickup day');
+  private rejectAfterStart(): never {
+    throw inspectionRejected(PICKUP_PHOTO_AFTER_START, 'Pickup photos can be added only before the rental starts');
   }
 
   private assertApp(platform?: string | string[]): void {

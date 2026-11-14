@@ -24,6 +24,21 @@ export function formatListingDay(iso: string, timeZone: string, language: string
   return new Intl.DateTimeFormat('en-GB', { timeZone, day: 'numeric', month: 'short' }).format(date);
 }
 
+export function offPickupDay(capturedAt: string, startAt: string, timeZone: string): boolean {
+  return listingCalendarDay(capturedAt, timeZone) !== listingCalendarDay(startAt, timeZone);
+}
+
+function listingCalendarDay(iso: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(iso));
+  const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${pick('year')}-${pick('month')}-${pick('day')}`;
+}
+
 export function formatListingStamp(iso: string, timeZone: string, language: string): string {
   const date = new Date(iso);
   const day = formatListingDay(iso, timeZone, language);

@@ -4,8 +4,8 @@ import {
   PICKUP_GUIDE_RETAKE_REQUIRED,
   PICKUP_GUIDE_SKIP_REASON,
   PICKUP_GUIDE_SLOT_REQUIRED,
+  PICKUP_PHOTO_AFTER_START,
   PICKUP_PHOTO_APP_ONLY,
-  PICKUP_PHOTO_NOT_PICKUP_DAY,
 } from './pickup-photo-rules';
 
 const START = '2026-11-17T15:00:00.000Z';
@@ -60,40 +60,62 @@ async function expectStatus(pending: Promise<unknown>, status: number) {
   }
 }
 
+const BEFORE = '2026-11-17T14:59:59.000Z';
+
 describe('pickup photo upload gate', () => {
   const gate = { bookingId: '11111111-1111-4111-8111-111111111111', role: 'overview', platform: 'ios', slotKey: 'overview' };
 
-  it('rejects Toronto just before midnight and allows the pickup day', async () => {
-    const early = service(true, { PickupRulesBooking: booking('Canada') });
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T04:59:59.000Z'))).rejects.toBeInstanceOf(HttpException);
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T04:59:59.000Z'))).rejects.toMatchObject({
-      response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
+  it('accepts a photo anytime before start and rejects the start instant', async () => {
+    const rules = service(true, { PickupRulesBooking: booking('Canada') }).rules;
+    await expect(rules.assertUpload(gate, new Date('2026-11-10T15:00:00.000Z'))).resolves.toBeUndefined();
+    await expect(rules.assertUpload(gate, new Date(BEFORE))).resolves.toBeUndefined();
+    await expect(rules.assertUpload(gate, new Date(START))).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_AFTER_START }),
     });
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T05:00:00.000Z'))).resolves.toBeUndefined();
-  });
-
-  it('rejects Douala just before midnight and the day after', async () => {
-    const rules = service(true, { PickupRulesBooking: booking('Cameroon') }).rules;
-    await expect(rules.assertUpload(gate, new Date('2026-11-16T22:59:59.000Z'))).rejects.toMatchObject({
-      response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
-    });
-    await expect(rules.assertUpload(gate, new Date('2026-11-16T23:00:00.000Z'))).resolves.toBeUndefined();
-    await expect(rules.assertUpload(gate, new Date('2026-11-17T23:00:00.000Z'))).rejects.toMatchObject({
-      response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
+    await expect(rules.assertUpload(gate, new Date('2026-11-18T15:00:00.000Z'))).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_AFTER_START }),
     });
   });
 
   it('rejects a web upload and a missing start only when the flag is on', async () => {
     const on = service(true, { PickupRulesBooking: booking('Canada') }).rules;
-    await expect(on.assertUpload({ ...gate, platform: undefined }, new Date(START))).rejects.toMatchObject({
+    await expect(on.assertUpload({ ...gate, platform: undefined }, new Date(BEFORE))).rejects.toMatchObject({
       response: expect.objectContaining({ code: PICKUP_PHOTO_APP_ONLY }),
     });
     const noStart = service(true, { PickupRulesBooking: booking('Canada', null) }).rules;
-    await expect(noStart.assertUpload(gate, new Date(START))).rejects.toMatchObject({
-      response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
+    await expect(noStart.assertUpload(gate, new Date(BEFORE))).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_AFTER_START }),
     });
     const off = service(false, { PickupRulesBooking: booking('Canada', null) }).rules;
-    await expect(off.assertUpload({ ...gate, platform: 'web' }, new Date('2026-11-16T22:59:59.000Z'))).resolves.toBeUndefined();
+    await expect(off.assertUpload({ ...gate, platform: 'web' }, new Date('2026-11-18T15:00:00.000Z'))).resolves.toBeUndefined();
+  });
+
+  it('persists gallery EXIF and falls back to the upload clock', async () => {
+    const on = service(true, { PickupRulesBooking: booking('Canada') }).rules;
+    const clock = new Date(BEFORE);
+    const exif = await on.mediaColumns(gate.bookingId, 'overview', {
+      slotKey: 'overview',
+      exifDateTime: '2026:11:10 09:30:00',
+      captureSource: 'gallery',
+    }, clock);
+    expect(exif).toEqual({
+      captured_at: '2026-11-10T14:30:00.000Z',
+      slot_key: 'overview',
+      capture_source: 'gallery',
+      captured_at_source: 'exif',
+    });
+    const upload = await on.mediaColumns(gate.bookingId, 'overview', { slotKey: 'overview', captureSource: 'camera' }, clock);
+    expect(upload.captured_at).toBe(clock.toISOString());
+    expect(upload.captured_at_source).toBe('upload');
+    expect(upload.capture_source).toBe('camera');
+    const off = service(false, { PickupRulesBooking: booking('Canada') }).rules;
+    const ignored = await off.mediaColumns(gate.bookingId, 'overview', {
+      slotKey: 'overview',
+      exifDateTime: '2026:11:10 09:30:00',
+      captureSource: 'gallery',
+    }, clock);
+    expect(ignored.capture_source).toBeNull();
+    expect(ignored.captured_at).toBe(clock.toISOString());
   });
 });
 
@@ -144,7 +166,7 @@ describe('guide retake gate and skip reason', () => {
   it('blocks submit while an extra guide slot is open', async () => {
     const rules = service(true, rows(ready, [])).rules;
     try {
-      await rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(START));
+      await rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(BEFORE));
       throw new Error('expected retake');
     } catch (error: any) {
       expect(codeOf(error)).toBe(PICKUP_GUIDE_RETAKE_REQUIRED);
@@ -176,11 +198,15 @@ describe('guide retake gate and skip reason', () => {
     });
   });
 
-  it('lets submit through once the extra angle is skipped and the stamp is on pickup day', async () => {
-    const rules = service(true, rows(ready, [{ unit_id: 'unit-1', slot_key: 'extra:1', reason: 'Same as the overview' }])).rules;
+  it('lets submit through before start even when a photo is not from pickup day', async () => {
+    const early = ready.map((row) => ({ ...row, captured_at: '2026-11-10T15:00:00.000Z' }));
+    const rules = service(true, rows(early, [{ unit_id: 'unit-1', slot_key: 'extra:1', reason: 'Same as the overview' }])).rules;
+    await expect(
+      rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(BEFORE))
+    ).resolves.toBeUndefined();
     await expect(
       rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(START))
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ response: expect.objectContaining({ code: PICKUP_PHOTO_AFTER_START }) });
   });
 
   it('copies the checklist and never inserts last-report media', async () => {
@@ -211,7 +237,7 @@ describe('guide retake gate and skip reason', () => {
     };
     for (const table of [gone, cleared]) {
       try {
-        await service(true, table).rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(START));
+        await service(true, table).rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(BEFORE));
         throw new Error('expected retake');
       } catch (error: any) {
         expect(codeOf(error)).toBe(PICKUP_GUIDE_RETAKE_REQUIRED);
@@ -226,7 +252,7 @@ describe('guide retake gate and skip reason', () => {
 
   it('loads a stored guide only for this listing', async () => {
     const built = service(true, rows(ready, []));
-    await built.rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(START)).catch(() => undefined);
+    await built.rules.assertSubmit('11111111-1111-4111-8111-111111111111', 'pickup', new Date(BEFORE)).catch(() => undefined);
     const call = built.hasura.executeQuery.mock.calls.find((row) => String(row[0]).includes('GuideVersion'));
     expect(String(call?.[0])).toContain('rental_location_listing_id');
     expect(call?.[1]).toEqual(expect.objectContaining({ listingId: '22222222-2222-4222-8222-222222222222' }));

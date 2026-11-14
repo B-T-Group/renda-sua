@@ -30,6 +30,24 @@ describe('rentals pickup photo rules flag', () => {
     expect(action).not.toContain('rentals_pickup_photo_rules_enabled');
   });
 
+  it('adds nullable capture source columns without turning the flag on', () => {
+    const next = readFileSync(
+      join(root, 'hasura/migrations/Rendasua/20261114210000_rentals_pickup_photo_capture_source/up.sql'),
+      'utf8'
+    );
+    const nextDown = readFileSync(
+      join(root, 'hasura/migrations/Rendasua/20261114210000_rentals_pickup_photo_capture_source/down.sql'),
+      'utf8'
+    );
+    expect(next).toContain('capture_source');
+    expect(next).toContain('captured_at_source');
+    expect(next).toContain("IN ('camera', 'gallery')");
+    expect(next).toContain("IN ('exif', 'upload')");
+    expect(next).not.toMatch(/boolean_value\s*=\s*true/);
+    expect(nextDown).toContain('DROP COLUMN IF EXISTS capture_source');
+    expect(nextDown).not.toMatch(/DROP COLUMN IF EXISTS captured_at(?!_source)/);
+  });
+
   it('defaults false with no environment override', () => {
     expect(constants).toMatch(/rentals_pickup_photo_rules_enabled: false/);
     expect(constants).not.toMatch(/rentals_pickup_photo_rules_enabled:\s*isNonProduction/);

@@ -1,12 +1,14 @@
 import {
   assignGuideSlots,
   calendarDay,
-  captureOutsidePickupDay,
+  captureColumns,
   completeGuideSlots,
+  isBeforeRentalStart,
   isPickupPhotoDay,
   listingTimeZone,
   missingGuideSlots,
-  pendingMediaColumns,
+  parseExifCapture,
+  photoOffPickupDay,
   serverCaptureTimestamp,
   cleanSkipReason,
   skipDecision,
@@ -69,19 +71,62 @@ describe('pickup photo day in the listing timezone', () => {
 });
 
 describe('server capture timestamp', () => {
-  it('stamps the server clock and has no client timestamp argument', () => {
-    const clock = new Date('2026-11-17T15:14:00.000Z');
-    const clientClaim = '2026-11-08T12:00:00.000Z';
+  const clock = new Date('2026-11-17T15:14:00.000Z');
+
+  it('keeps the server clock when the rules flag is off', () => {
     expect(serverCaptureTimestamp(clock)).toBe(clock.toISOString());
     expect(serverCaptureTimestamp).toHaveLength(1);
-    expect(pendingMediaColumns('overview', clock)).toEqual({
+    const columns = captureColumns({
+      slotKey: 'overview',
+      clock,
+      timeZone: TORONTO,
+      exif: '2026:11:10 09:00:00',
+      source: 'gallery',
+      rulesOn: false,
+    });
+    expect(columns).toEqual({
       captured_at: clock.toISOString(),
       slot_key: 'overview',
+      capture_source: null,
+      captured_at_source: null,
     });
-    expect(pendingMediaColumns('overview', clock).captured_at).not.toBe(clientClaim);
-    expect(pendingMediaColumns('not-a-slot', clock).slot_key).toBeNull();
+    expect(captureColumns({ ...blankCapture(clock), slotKey: 'not-a-slot' }).slot_key).toBeNull();
+  });
+
+  it('stores EXIF in the listing timezone and falls back to the upload time', () => {
+    const exif = captureColumns({
+      slotKey: 'overview',
+      clock,
+      timeZone: TORONTO,
+      exif: '2026:11:10 09:30:00',
+      source: 'gallery',
+      rulesOn: true,
+    });
+    expect(exif).toEqual({
+      captured_at: '2026-11-10T14:30:00.000Z',
+      slot_key: 'overview',
+      capture_source: 'gallery',
+      captured_at_source: 'exif',
+    });
+    const offset = parseExifCapture('2026-11-10T14:30:00Z', TORONTO);
+    expect(offset?.toISOString()).toBe('2026-11-10T14:30:00.000Z');
+    const upload = captureColumns({
+      slotKey: 'other_side',
+      clock,
+      timeZone: DOUALA,
+      exif: 'not a date',
+      source: 'camera',
+      rulesOn: true,
+    });
+    expect(upload.captured_at).toBe(clock.toISOString());
+    expect(upload.capture_source).toBe('camera');
+    expect(upload.captured_at_source).toBe('upload');
   });
 });
+
+function blankCapture(clock: Date) {
+  return { slotKey: 'overview', clock, timeZone: TORONTO, exif: null, source: null, rulesOn: false };
+}
 
 describe('guide retake and skip', () => {
   const photos = [
@@ -134,17 +179,12 @@ describe('guide retake and skip', () => {
     expect(skipDecision('extra:1', '\n\t', ['extra:1'])).toBe('reason');
   });
 
-  it('rejects a photo whose server stamp is outside pickup day', () => {
-    const outside = captureOutsidePickupDay(
-      [{ capturedAt: '2026-11-16T15:00:00.000Z' }],
-      START,
-      TORONTO
-    );
-    const inside = captureOutsidePickupDay([{ capturedAt: '2026-11-17T15:14:00.000Z' }], START, TORONTO);
-    const missing = captureOutsidePickupDay([{ capturedAt: null }], START, TORONTO);
-    expect(outside).toBe(true);
-    expect(inside).toBe(false);
-    expect(missing).toBe(true);
+  it('marks a photo whose date is not the pickup day', () => {
+    expect(photoOffPickupDay('2026-11-16T15:00:00.000Z', START, TORONTO)).toBe(true);
+    expect(photoOffPickupDay('2026-11-17T15:14:00.000Z', START, TORONTO)).toBe(false);
+    expect(photoOffPickupDay(null, START, TORONTO)).toBe(false);
+    expect(isBeforeRentalStart(START, new Date('2026-11-10T15:00:00.000Z'))).toBe(true);
+    expect(isBeforeRentalStart(START, START)).toBe(false);
   });
 });
 

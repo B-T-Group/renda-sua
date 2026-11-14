@@ -1,5 +1,5 @@
 import { blockedGuideRows, checklistCount, otherReasonReady, submitLeftCount, undoSkip } from './blockedGuideRows';
-import { formatListingStamp, slotTileLabel } from './pickupPhotoTime';
+import { formatListingStamp, offPickupDay, slotTileLabel } from './pickupPhotoTime';
 
 describe('blocked guide rows', () => {
   it('lists every missing slot and uses that list for the count', () => {
@@ -31,5 +31,7 @@ describe('blocked guide rows', () => {
 
   it('formats a French listing stamp as 17 nov. · 10:14', () => {
     expect(formatListingStamp('2026-11-17T15:14:00.000Z', 'America/Toronto', 'fr')).toBe('17 nov. · 10:14');
+    expect(offPickupDay('2026-11-10T15:00:00.000Z', '2026-11-17T15:00:00.000Z', 'America/Toronto')).toBe(true);
+    expect(offPickupDay('2026-11-17T15:14:00.000Z', '2026-11-17T15:00:00.000Z', 'America/Toronto')).toBe(false);
   });
 });

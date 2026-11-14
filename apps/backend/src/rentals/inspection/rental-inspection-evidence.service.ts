@@ -18,7 +18,6 @@ import {
   isInspectionPendingKey,
   validateInspectionUpload,
 } from './rental-inspection-evidence';
-import { pendingMediaColumns } from './pickup-photo-rules';
 import { PickupPhotoRulesService } from './pickup-photo-rules.service';
 
 export interface EvidencePresignInput {
@@ -28,6 +27,8 @@ export interface EvidencePresignInput {
   fileSize: number;
   sha256?: string;
   slotKey?: string;
+  exifDateTime?: string;
+  captureSource?: 'camera' | 'gallery';
 }
 
 @Injectable()
@@ -54,10 +55,10 @@ export class RentalInspectionEvidenceService {
     });
     await this.assertUnit(bookingId, input.unitId);
     const mediaId = randomUUID();
-    // Server clock at presign, not finalize. Submit still requires that now is pickup day.
-    const capturedAt = new Date();
+    const clock = new Date();
+    const columns = await this.photoRules.mediaColumns(bookingId, input.role, input, clock);
     const objectKey = inspectionPendingObjectKey(bookingId, mediaId, upload.ext);
-    await this.insertPending(bookingId, mediaId, inspection.id, input, objectKey, upload, actor.userId, capturedAt);
+    await this.insertPending(bookingId, mediaId, inspection.id, input, objectKey, upload, actor.userId, columns);
     const signed = await this.aws.generateStrictUploadUrl({
       bucketName: this.bucket(),
       key: objectKey,
@@ -76,7 +77,7 @@ export class RentalInspectionEvidenceService {
         'Content-Length': String(upload.size),
         ...(checksum ? { 'x-amz-checksum-sha256': checksum } : {}),
       },
-      capturedAt: capturedAt.toISOString(),
+      capturedAt: columns.captured_at,
     };
   }
 
@@ -206,7 +207,7 @@ export class RentalInspectionEvidenceService {
     objectKey: string,
     upload: { contentType: string; size: number },
     userId: string,
-    capturedAt: Date
+    columns: { captured_at: string; slot_key: string | null; capture_source: string | null; captured_at_source: string | null }
   ) {
     if (!isInspectionPendingKey(objectKey, bookingId) || isInspectionEvidenceKey(objectKey, bookingId)) {
       throw new HttpException('Invalid evidence key', HttpStatus.BAD_REQUEST);
@@ -226,7 +227,7 @@ export class RentalInspectionEvidenceService {
           expected_byte_size: upload.size,
           status: 'pending',
           created_by: userId,
-          ...pendingMediaColumns(input.slotKey, capturedAt),
+          ...columns,
         },
       }
     );

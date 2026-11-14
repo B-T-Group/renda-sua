@@ -129,12 +129,25 @@ export class PresignInspectionEvidenceDto {
   sha256?: string;
 
   @ApiPropertyOptional({
-    description: 'Angle slot. Required roles use the role name. Extra angles use extra:N. The server sets the capture time.',
+    description: 'Angle slot. Required roles use the role name. Extra angles use extra:N.',
   })
   @IsOptional()
   @IsString()
   @Matches(/^(overview|other_side|accessories|extra:[1-9]\d{0,2})$/)
   slotKey?: string;
+
+  @ApiPropertyOptional({
+    description: 'EXIF DateTimeOriginal. A value with no offset is read in the listing timezone. Missing EXIF uses the upload time.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  exifDateTime?: string;
+
+  @ApiPropertyOptional({ enum: ['camera', 'gallery'] })
+  @IsOptional()
+  @IsIn(['camera', 'gallery'])
+  captureSource?: 'camera' | 'gallery';
 }
 
 export class ApplyPickupGuideDto {

@@ -1,41 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Text, TextInput } from 'react-native-paper';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { getPickupPhotoRules } from '../../../services/rentalInspectionApi';
 import { groupBlockedRows, otherReasonReady } from '../../../utils/rentals/blockedGuideRows';
-import { formatListingDay, listingCity } from '../../../utils/rentals/pickupPhotoTime';
+import { formatListingDay } from '../../../utils/rentals/pickupPhotoTime';
 import type { PickupPhotoRules } from '../../../utils/rentals/rentalInspection';
-
-export function CalendarArt() {
-  const { colors } = useTheme();
-  return (
-    <Svg width={22} height={22} viewBox="0 0 24 24">
-      <Rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke={colors.cta.main} strokeWidth="2" />
-      <Path d="M3 10h18M8 3v4M16 3v4" fill="none" stroke={colors.cta.main} strokeWidth="2" />
-    </Svg>
-  );
-}
 
 export function CameraArt({ color = '#fff' }: { color?: string }) {
   return (
     <Svg width={18} height={18} viewBox="0 0 24 24">
       <Path d="M4 8h3l2-2h6l2 2h3v11H4z" fill="none" stroke={color} strokeWidth="2" />
       <Circle cx="12" cy="13" r="3" fill="none" stroke={color} strokeWidth="2" />
-    </Svg>
-  );
-}
-
-export function CameraOffArt({ label }: { label: string }) {
-  const { colors } = useTheme();
-  return (
-    <Svg width={72} height={72} viewBox="0 0 72 72" accessibilityLabel={label}>
-      <Rect x="16" y="26" width="34" height="24" rx="4" fill={colors.cta.soft} stroke={colors.cta.main} strokeWidth="2" />
-      <Circle cx="33" cy="38" r="6" fill="none" stroke={colors.cta.main} strokeWidth="2" />
-      <Path d="M50 32l8-5v18l-8-5z" fill={colors.cta.main} />
-      <Path d="M18 54L54 18" stroke={colors.warning.dark} strokeWidth="3" />
     </Svg>
   );
 }
@@ -86,24 +64,6 @@ export function PickupGuideStart({
           {t('rentalInspection.startBlank', 'Start blank')}
         </Button>
       </View>
-    </View>
-  );
-}
-
-export function PickupCameraDenied({ onClose }: { onClose: () => void }) {
-  const { t } = useTranslation();
-  const { colors, spacing, typography } = useTheme();
-  return (
-    <View style={[styles.fill, { backgroundColor: colors.pageBackground, padding: spacing.lg, gap: spacing.md }]}>
-      <CameraOffArt label={t('rentalInspection.enableCamera', 'Enable the camera')} />
-      <Text style={[typography.h5, { color: colors.text.primary }]}>{t('rentalInspection.enableCamera', 'Enable the camera')}</Text>
-      <Text style={{ color: colors.text.primary }}>
-        {t('rentalInspection.cameraDeniedBody', 'Pickup photos have to be taken in the app. Turn on the camera in Settings. The photo library stays off.')}
-      </Text>
-      <Button mode="contained" buttonColor={colors.cta.main} onPress={() => void Linking.openSettings()}>
-        {t('rentalInspection.openSettings', 'Open Settings')}
-      </Button>
-      <Button mode="text" onPress={onClose}>{t('common.cancel', 'Cancel')}</Button>
     </View>
   );
 }
@@ -231,7 +191,7 @@ export function ChecklistTag({ label, onConfirm }: { label: string; onConfirm: (
 }
 
 export function PickupDayCallout({ bookingId, onOpen }: { bookingId: string; onOpen: () => void }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { colors, spacing, typography } = useTheme();
   const [rules, setRules] = useState<PickupPhotoRules | null>(null);
   useEffect(() => {
@@ -252,24 +212,20 @@ export function PickupDayCallout({ bookingId, onOpen }: { bookingId: string; onO
       </Button>
     );
   }
-  const day = rules.startAt ? formatListingDay(rules.startAt, rules.timezone, i18n.language) : '';
-  const city = listingCity(rules.timezone);
-  const early = !rules.pickupDay;
+  if (!rules.beforeStart) return null;
   return (
     <View style={{ gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
-        {early ? <CalendarArt /> : <CameraArt color={colors.cta.main} />}
+        <CameraArt color={colors.cta.main} />
         <Text style={[typography.subtitle1, { color: colors.text.primary, flex: 1 }]}>
-          {early
-            ? t('rentalInspection.earlyPrepareBody', 'Photos are taken on pickup day, {{date}} ({{city}} time). You can prepare the checklist now.', { date: day, city })
-            : t('rentalInspection.pickupTodayBody', 'Pickup today: take the condition photos, ideally with the renter.')}
+          {rules.pickupDay
+            ? t('rentalInspection.pickupTodayBody', 'Pickup today: take the condition photos, ideally with the renter.')
+            : t('rentalInspection.addAnytime', 'Add pickup photos anytime before the rental starts.')}
         </Text>
       </View>
-      {!early && rules.guide && !rules.guideMode ? <PickupGuideStart rules={rules} busy={false} showTitle={false} brief onChoose={() => onOpen()} /> : null}
+      {rules.guide && !rules.guideMode ? <PickupGuideStart rules={rules} busy={false} showTitle={false} brief onChoose={() => onOpen()} /> : null}
       <Button mode="contained" buttonColor={colors.cta.main} style={{ minHeight: 48 }} onPress={onOpen}>
-        {early
-          ? t('rentalInspection.prepareChecklist', 'Prepare checklist')
-          : t('rentalInspection.takePickupPhotos', 'Take pickup photos')}
+        {t('rentalInspection.takePickupPhotos', 'Take pickup photos')}
       </Button>
     </View>
   );
@@ -306,7 +262,6 @@ export function SkipReasonField({ onSave }: { onSave: (reason: string) => void }
 
 const styles = StyleSheet.create({
   card: { borderWidth: 1 },
-  fill: { flex: 1 },
   tag: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', gap: 8, alignSelf: 'flex-start' },
   cam: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

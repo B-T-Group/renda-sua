@@ -15,6 +15,7 @@ import { useClientInspection } from '../../hooks/useClientInspection';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { acceptAndStart, getBooking, getPaymentStatus } from '../../services/rentalsApi';
+import { formatListingStamp, offPickupDay } from '../../utils/rentals/pickupPhotoTime';
 import { formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
 import {
   confirmationDepositHeld,
@@ -269,10 +270,14 @@ export default function ClientInspectionScreen() {
         </Text>
         <View style={styles.photos}>
           {unit.photos.map((photo) => (
-            <View key={photo.id} style={[styles.photo, { backgroundColor: colors.surfaceInput }]}>
-              {photo.url ? <Image source={{ uri: photo.url }} style={styles.image} /> : null}
-              <Text style={{ color: colors.text.secondary }}>{photoRoleLabel(photo.role, t)}</Text>
-            </View>
+            <ReportPhoto
+              key={photo.id}
+              photo={photo}
+              startAt={model.booking?.start_at}
+              country={model.booking?.rental_location_listing?.business_location?.address?.country}
+              currency={model.booking?.currency}
+              language={i18n.language}
+            />
           ))}
         </View>
         <Text style={{ color: colors.text.primary }}>{conditionLine(unit.condition, t)}</Text>
@@ -415,6 +420,34 @@ export default function ClientInspectionScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+    </View>
+  );
+}
+
+function ReportPhoto({
+  photo,
+  startAt,
+  country,
+  currency,
+  language,
+}: {
+  photo: { url?: string; role: string; capturedAt?: string | null };
+  startAt?: string;
+  country?: string | null;
+  currency?: string | null;
+  language: string;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const zone = confirmationTimeZone(country, currency);
+  const stamp = photo.capturedAt ? formatListingStamp(photo.capturedAt, zone, language) : '';
+  const off = !!photo.capturedAt && !!startAt && offPickupDay(photo.capturedAt, startAt, zone);
+  return (
+    <View style={[styles.photo, { backgroundColor: colors.surfaceInput }]}>
+      {photo.url ? <Image source={{ uri: photo.url }} style={styles.image} /> : null}
+      <Text style={{ color: colors.text.secondary }}>{photoRoleLabel(photo.role, t)}</Text>
+      {stamp ? <Text style={{ color: colors.text.secondary }}>{stamp}</Text> : null}
+      {off ? <Text style={{ color: colors.warning.dark }}>{t('rentalInspection.notPickupDay', 'Not taken on pickup day')}</Text> : null}
     </View>
   );
 }
