@@ -176,20 +176,23 @@ function RentalCard({
   const { t } = useTranslation();
   const rental = card.rental!;
   const booked = rental.availability === 'unavailable' && rental.cta === 'shift';
-  const label = booked
-    ? formatShift(rental, locale)
-    : rental.cta === 'sign_in'
-      ? t('assistant.rental.signIn', 'Sign in to request')
-      : t('assistant.rental.request', 'Request rental');
+  const blocked = rental.availability === 'unavailable' && !booked;
+  const label = booked ? formatShift(rental, locale) : actionLabel(rental, blocked, t);
   return (
     <Paper variant="outlined" data-rental-card sx={{ p: 2, borderRadius: 2, minWidth: 0, overflow: 'hidden' }}>
       <Stack direction="row" spacing={1.5}>
         <CardPhoto url={card.imageUrl} title={card.title || ''} />
         <CardFacts card={card} locale={locale} booked={booked} />
       </Stack>
-      <CardActions booked={booked} label={label} onMain={() => (booked ? onShift() : onRequest())} onOpen={onOpen} />
+      <CardActions quiet={booked || blocked} label={label} onMain={() => (booked ? onShift() : blocked ? onOpen() : onRequest())} onOpen={onOpen} />
     </Paper>
   );
+}
+
+function actionLabel(rental: NonNullable<AssistantResultCard['rental']>, blocked: boolean, t: TFunction) {
+  if (blocked) return t('assistant.rental.openListing', 'Open listing');
+  if (rental.cta === 'sign_in') return t('assistant.rental.signIn', 'Sign in to request');
+  return t('assistant.rental.request', 'Request rental');
 }
 
 function CardPhoto({ url, title }: { url?: string | null; title: string }) {
@@ -226,8 +229,8 @@ function MetaLine({ icon, text }: { icon: ReactNode; text: string }) {
 }
 
 function StatusChip({ booked, availability, label }: { booked: boolean; availability?: string; label: string }) {
-  const icon = booked || availability === 'no_dates' ? <Event sx={{ fontSize: 14 }} /> : <CheckCircle sx={{ fontSize: 14 }} />;
-  const warning = booked || availability === 'no_dates';
+  const warning = booked || availability === 'no_dates' || availability === 'unavailable';
+  const icon = warning ? <Event sx={{ fontSize: 14 }} /> : <CheckCircle sx={{ fontSize: 14 }} />;
   return (
     <Chip size="small" icon={icon} label={label} sx={{ alignSelf: 'flex-start', height: 24, my: 0.25, color: warning ? 'warning.dark' : 'success.dark', bgcolor: warning ? 'warning.light' : 'success.light', '& .MuiChip-icon': { color: warning ? 'warning.main' : 'success.main' } }} />
   );
@@ -243,11 +246,11 @@ function PriceLine({ text, estimate, hint }: { text: string; estimate: boolean; 
   );
 }
 
-function CardActions({ booked, label, onMain, onOpen }: { booked: boolean; label: string; onMain: () => void; onOpen: () => void }) {
+function CardActions({ quiet, label, onMain, onOpen }: { quiet: boolean; label: string; onMain: () => void; onOpen: () => void }) {
   const { t } = useTranslation();
   return (
     <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} alignItems="center">
-      <Button fullWidth variant={booked ? 'outlined' : 'contained'} onClick={onMain} startIcon={booked ? <CalendarToday /> : <EventAvailable />} sx={{ minHeight: 44, textTransform: 'none', px: 1.25, whiteSpace: 'nowrap' }}>
+      <Button fullWidth variant={quiet ? 'outlined' : 'contained'} onClick={onMain} startIcon={quiet ? <CalendarToday /> : <EventAvailable />} sx={{ minHeight: 44, textTransform: 'none', px: 1.25, whiteSpace: 'nowrap' }}>
         {label}
       </Button>
       <IconButton onClick={onOpen} aria-label={t('assistant.rental.details', 'Listing details')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, width: 44, height: 44 }}>
@@ -264,6 +267,7 @@ function statusLabel(rental: NonNullable<AssistantResultCard['rental']>, locale:
   if (rental.availability === 'unavailable' && rental.nextAvailableDate) {
     return t('assistant.rental.freeFrom', 'Free from {{date}}', { date: formatRentalDay(rental.nextAvailableDate, locale) });
   }
+  if (rental.availability === 'unavailable') return t('assistant.rental.unavailable', 'Not available for these dates');
   if (rental.availability === 'no_dates') return t('assistant.rental.pickDates', 'Pick your dates');
   if (rental.availability === 'own_listing') return t('assistant.rental.ownListing', 'Your listing');
   return t('assistant.rental.available', 'Available');

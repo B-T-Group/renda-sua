@@ -17,7 +17,8 @@ Quotes are estimates. The business confirms the price and nothing is charged unt
 If status is buy_or_rent, ask whether they want to rent or buy and do not show cards.
 If status is unavailable_error, say the availability check failed and offer a retry. Do not invent a result.
 If mode is charge_at_pickup, or latest_card_end_at is null, keep the asked dates.
-If card_window.say is set, the reply is that sentence exactly, then the offered dates.
-Do not mention an inspection. Offered dates end on or before latest_card_end_at.
+If card_window.say is set, the reply is that sentence exactly. Keep the asked dates.
+date_chips are the only date suggestions. Do not add today, tomorrow, or this weekend unless that chip is listed.
+Do not mention an inspection. A suggestion ends on or before latest_card_end_at.
 Do not repeat prices.`;
 }

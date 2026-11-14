@@ -114,14 +114,15 @@ function RentalCard({
   const { colors } = useTheme();
   const rental = card.rental!;
   const booked = rental.availability === 'unavailable' && rental.cta === 'shift';
-  const label = booked ? formatShift(rental, i18n.language) : mainLabel(rental, t);
+  const blocked = rental.availability === 'unavailable' && !booked;
+  const label = booked ? formatShift(rental, i18n.language) : mainLabel(rental, blocked, t);
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
       <View style={styles.row}>
         {card.imageUrl ? <Image source={{ uri: card.imageUrl }} style={styles.image} accessibilityLabel={card.title} /> : <View style={[styles.image, { backgroundColor: colors.divider }]} />}
         <CardFacts card={card} booked={booked} />
       </View>
-      <CardActions booked={booked} label={label} onMain={() => (booked ? onShift(card) : rental.cta === 'sign_in' || rental.cta === 'request' ? onRequest(card) : onOpen(card))} onOpen={() => onOpen(card)} />
+      <CardActions quiet={booked || blocked} label={label} onMain={() => (booked ? onShift(card) : blocked || rental.cta === 'none' || rental.cta === 'own' ? onOpen(card) : onRequest(card))} onOpen={() => onOpen(card)} />
     </View>
   );
 }
@@ -154,7 +155,7 @@ function MetaLine({ name, text }: { name: ComponentProps<typeof MaterialCommunit
 
 function StatusLine({ booked, availability, label }: { booked: boolean; availability?: string; label: string }) {
   const { colors } = useTheme();
-  const warning = booked || availability === 'no_dates';
+  const warning = booked || availability === 'no_dates' || availability === 'unavailable';
   const color = warning ? colors.warning?.main || '#B86E00' : colors.success?.main || '#1B7F4E';
   const name = warning ? 'calendar' : 'check-circle';
   return (
@@ -177,14 +178,14 @@ function PriceLine({ text, estimate }: { text: string; estimate: boolean }) {
   );
 }
 
-function CardActions({ booked, label, onMain, onOpen }: { booked: boolean; label: string; onMain: () => void; onOpen: () => void }) {
+function CardActions({ quiet, label, onMain, onOpen }: { quiet: boolean; label: string; onMain: () => void; onOpen: () => void }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   return (
     <View style={styles.actions}>
-      <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onMain} style={[styles.button, booked ? styles.outline : { backgroundColor: colors.primary.main }]}>
-        <MaterialCommunityIcons name={booked ? 'calendar' : 'calendar-check'} size={18} color={booked ? colors.primary.main : colors.primary.contrast} />
-        <AppText role="bodySmall" color={booked ? colors.primary.main : colors.primary.contrast} style={styles.buttonText}>{label}</AppText>
+      <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onMain} style={[styles.button, quiet ? styles.outline : { backgroundColor: colors.primary.main }]}>
+        <MaterialCommunityIcons name={quiet ? 'calendar' : 'calendar-check'} size={18} color={quiet ? colors.primary.main : colors.primary.contrast} />
+        <AppText role="bodySmall" color={quiet ? colors.primary.main : colors.primary.contrast} style={styles.buttonText}>{label}</AppText>
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={t('assistant.rental.details', 'Listing details')} onPress={onOpen} style={[styles.icon, { borderColor: colors.divider }]}>
         <MaterialCommunityIcons name="information-outline" size={20} color={colors.text.primary} />
@@ -196,7 +197,8 @@ function CardActions({ booked, label, onMain, onOpen }: { booked: boolean; label
   );
 }
 
-function mainLabel(rental: NonNullable<AssistantResultCard['rental']>, t: TFunction) {
+function mainLabel(rental: NonNullable<AssistantResultCard['rental']>, blocked: boolean, t: TFunction) {
+  if (blocked) return t('assistant.rental.openListing', 'Open listing');
   if (rental.cta === 'sign_in') return t('assistant.rental.signIn', 'Sign in to request');
   return t('assistant.rental.request', 'Request rental');
 }
@@ -205,6 +207,7 @@ function statusLabel(rental: NonNullable<AssistantResultCard['rental']>, t: TFun
   if (rental.availability === 'unavailable' && rental.nextAvailableDate) {
     return t('assistant.rental.freeFrom', 'Free from {{date}}', { date: formatRentalDay(rental.nextAvailableDate, locale) });
   }
+  if (rental.availability === 'unavailable') return t('assistant.rental.unavailable', 'Not available for these dates');
   if (rental.availability === 'no_dates') return t('assistant.rental.pickDates', 'Pick your dates');
   if (rental.availability === 'own_listing') return t('assistant.rental.ownListing', 'Your listing');
   return t('assistant.rental.available', 'Available');

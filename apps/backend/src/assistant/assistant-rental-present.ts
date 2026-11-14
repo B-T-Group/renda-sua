@@ -46,6 +46,8 @@ export type RentalPresentInput = {
     offered?: CardWindowOffer | null;
     guard?: boolean;
   };
+  /** Guard-on replacement for today / tomorrow / weekend. Absent keeps the defaults. */
+  quickChips?: AssistantChip[];
 };
 
 export function presentRentalSearch(input: RentalPresentInput): {
@@ -94,7 +96,7 @@ function found(input: RentalPresentInput) {
   const buyCards = cards.length ? [] : buyCardsFrom(input);
   const chips = followChips(input, cards);
   return {
-    content: JSON.stringify(modelPayload(input, refs)),
+    content: JSON.stringify(modelPayload(input, refs, chips)),
     cards: cards.length ? cards : buyCards,
     rental: {
       status: input.dateIssue === 'too_long' ? 'invalid_dates' : input.status,
@@ -150,7 +152,7 @@ function buyOrRent(input: RentalPresentInput) {
   };
 }
 
-function modelPayload(input: RentalPresentInput, refs: Record<string, string>) {
+function modelPayload(input: RentalPresentInput, refs: Record<string, string>, chips: AssistantChip[] = []) {
   return {
     status: input.dateIssue === 'too_long' ? 'invalid_dates' : input.status,
     date_issue: input.dateIssue ?? null,
@@ -180,7 +182,12 @@ function modelPayload(input: RentalPresentInput, refs: Record<string, string>) {
     refs,
     related_categories: (input.categories || []).map((row) => row.name),
     buy_matches: (input.buyItems || []).length,
+    date_chips: chips.filter((chip) => chip.action === 'dates').map(chipFacts),
   };
+}
+
+function chipFacts(chip: AssistantChip) {
+  return { id: chip.id, label: chip.label, start_date: chip.startDate ?? null, end_date: chip.endDate ?? null };
 }
 
 function cardFromHit(hit: RentalSearchHit, input: RentalPresentInput, ref: string): AssistantCard {
@@ -200,6 +207,7 @@ function cardFromHit(hit: RentalSearchHit, input: RentalPresentInput, ref: strin
     quoteTotal: hit.available ? hit.totalForDates ?? undefined : undefined,
     nextAvailableDate: hit.nextAvailableDate,
     cardEndDate: dates.cap,
+    allowShift: input.dateIssue !== 'card_window',
   });
   card.id = ref;
   return card;
@@ -213,6 +221,7 @@ function availabilityOf(
   if (own && !input.allowSelfBooking) return 'own_listing';
   if (!input.startDate) return 'no_dates';
   if (input.dateIssue === 'too_long') return 'too_long';
+  if (input.dateIssue === 'card_window' && pastAskedCap(hit, input)) return 'unavailable';
   if (hit.available === false) return 'unavailable';
   if (hit.available && input.units > 1 && (hit.listing.units_available || 0) < input.units) {
     return 'partial_units';
@@ -235,12 +244,13 @@ function cardFromListing(
     quoteTotal?: number;
     nextAvailableDate?: string | null;
     cardEndDate?: string;
+    allowShift?: boolean;
   }
 ): AssistantCard {
   const currency = listing.rental_item.currency || 'XAF';
   const perDay = Number(listing.base_price_per_day) || 0;
   const deposit = Math.max(0, Number(listing.security_deposit_amount) || 0);
-  const shift = shiftRange(extra.nextAvailableDate, extra.dayCount, extra.cardEndDate);
+  const shift = extra.allowShift === false ? null : shiftRange(extra.nextAvailableDate, extra.dayCount, extra.cardEndDate);
   const rental: AssistantRentalCardDetails = {
     listingId: listing.id,
     businessName: listing.rental_item.business?.name || listing.business_location?.name || '',
@@ -270,7 +280,7 @@ function cardFromListing(
     title: listing.rental_item.name,
     imageUrl: listing.rental_item.rental_item_images?.[0]?.display_url || listing.rental_item.rental_item_images?.[0]?.image_url || null,
     priceLabel: perDayPriceLabel(perDay, currency, extra.locale),
-    href: listingHref(listing.id, extra.startDate, extra.endDate),
+    href: listingHref(listing.id, extra.startDate, extra.endDate, canRequest(extra)),
     rental,
   };
 }
@@ -299,10 +309,15 @@ function shiftRange(next: string | null | undefined, dayCount?: number, cap?: st
   return { startDate: next, endDate: end };
 }
 
+function pastAskedCap(hit: RentalSearchHit, input: RentalPresentInput): boolean {
+  const cap = cardCap(hit);
+  return !!cap && !!input.endDate && input.endDate > cap;
+}
+
 function datesForCard(hit: RentalSearchHit, input: RentalPresentInput) {
   const start = input.startDate;
   const end = input.endDate;
-  if (input.cardWindow?.guard === false) {
+  if (input.cardWindow?.guard === false || input.dateIssue === 'card_window') {
     return { startDate: start, endDate: end, dayCount: input.dayCount, cap: undefined as string | undefined };
   }
   const cap = cardCap(hit);
@@ -346,9 +361,10 @@ function windowFields(input: RentalPresentInput): Partial<CardWindowFields> {
   };
 }
 
-function listingHref(id: string, start?: string, end?: string): string {
+function listingHref(id: string, start?: string, end?: string, requestable = true): string {
   if (!start || !end) return `/rentals/${id}`;
-  return `/rentals/${id}?start_date=${start}&end_date=${end}&openRequest=1`;
+  const query = `start_date=${start}&end_date=${end}`;
+  return requestable ? `/rentals/${id}?${query}&openRequest=1` : `/rentals/${id}?${query}`;
 }
 
 function showAll(input: RentalPresentInput): string {
@@ -372,18 +388,27 @@ function buyCardsFrom(input: RentalPresentInput): AssistantCard[] {
 }
 
 function followChips(input: RentalPresentInput, cards: AssistantCard[]): AssistantChip[] {
-  if (!input.startDate || !input.endDate) return dateChips(input.locale);
+  const suggestion = windowSuggestion(input);
+  if (!input.startDate || !input.endDate) return input.quickChips ?? dateChips(input.locale);
   const rentalCards = cards.filter((card) => card.rental);
   const allBooked = rentalCards.length > 0 && rentalCards.every((card) => card.rental?.cta === 'shift');
-  if (!allBooked) return categoryChips(input);
+  if (!allBooked) return [...suggestion, ...categoryChips(input)];
   const fr = input.locale === 'fr';
-  return [{
+  return [...suggestion, {
     id: 'similar',
     label: fr ? 'Articles similaires' : 'Similar items',
     action: 'category',
     query: input.query,
     message: input.query,
   }];
+}
+
+function windowSuggestion(input: RentalPresentInput): AssistantChip[] {
+  if (input.dateIssue !== 'card_window') return [];
+  const offer = input.cardWindow?.offered;
+  const picker = calendarChip(input.locale);
+  if (!offer || (offer.startDate === input.startDate && offer.endDate === input.endDate)) return [picker];
+  return [rangeChip(input.locale, offer), picker];
 }
 
 function categoryChips(input: RentalPresentInput): AssistantChip[] {
@@ -397,13 +422,32 @@ function categoryChips(input: RentalPresentInput): AssistantChip[] {
   }));
 }
 
+export function calendarChip(locale: AssistantLocale): AssistantChip {
+  const fr = locale === 'fr';
+  return { id: 'calendar', label: fr ? 'Choisir les dates' : 'Choose dates', action: 'calendar' };
+}
+
+export function assistantDateChip(
+  locale: AssistantLocale,
+  kind: 'today' | 'tomorrow' | 'weekend',
+  range: { startDate: string; endDate: string }
+): AssistantChip {
+  const fr = locale === 'fr';
+  const copy = {
+    today: { label: fr ? "Aujourd'hui" : 'Today', message: fr ? "Aujourd'hui" : 'Today' },
+    tomorrow: { label: fr ? 'Demain' : 'Tomorrow', message: fr ? 'Demain' : 'Tomorrow' },
+    weekend: { label: fr ? 'Ce week-end' : 'This weekend', message: fr ? 'Ce week-end' : 'This weekend' },
+  }[kind];
+  return { id: kind, ...copy, action: 'dates', startDate: range.startDate, endDate: range.endDate };
+}
+
 function dateChips(locale: AssistantLocale): AssistantChip[] {
   const fr = locale === 'fr';
   return [
     { id: 'today', label: fr ? "Aujourd'hui" : 'Today', action: 'dates', message: fr ? "Aujourd'hui" : 'Today' },
     { id: 'tomorrow', label: fr ? 'Demain' : 'Tomorrow', action: 'dates', message: fr ? 'Demain' : 'Tomorrow' },
     { id: 'weekend', label: fr ? 'Ce week-end' : 'This weekend', action: 'dates', message: fr ? 'Ce week-end' : 'This weekend' },
-    { id: 'calendar', label: fr ? 'Choisir les dates' : 'Choose dates', action: 'calendar' },
+    calendarChip(locale),
   ];
 }
 

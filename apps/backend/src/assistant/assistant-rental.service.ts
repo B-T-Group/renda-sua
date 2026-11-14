@@ -6,9 +6,11 @@ import { InventoryItemsService } from '../inventory-items/inventory-items.servic
 import { marketTimeZone, marketsMissingTimeZone } from '../common/market-timezones';
 import {
   clampExclusiveRange,
+  latestExclusiveEndDate,
   listingCountryCode,
   readLatestCardEndAt,
   type CardWindowFields,
+  type CardWindowOffer,
 } from '../rentals/rental-card-window';
 import { RentalInspectionFlags } from '../rentals/inspection/rental-inspection-flags.service';
 import { unitsStillFree, type CapacityWindow } from '../rentals/rental-capacity';
@@ -16,7 +18,7 @@ import { RentalSearchService, type RentalSearchHit } from '../rentals/rental-sea
 import { RentalsService, type PublicRentalListingRow } from '../rentals/rentals.service';
 import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 import { SiteEventsService } from '../site-events/site-events.service';
-import type { AssistantIdentity, AssistantLocale, AssistantToolResult } from './assistant.types';
+import type { AssistantChip, AssistantIdentity, AssistantLocale, AssistantToolResult } from './assistant.types';
 import {
   marketCalendarDate,
   relativeDayRange,
@@ -26,7 +28,12 @@ import {
 } from './assistant-rental-dates';
 import { shouldAskBuyOrRent } from './assistant-rental-intent';
 import { perDayPriceLabel } from './assistant-rental-format';
-import { presentRentalDetails, presentRentalSearch } from './assistant-rental-present';
+import {
+  assistantDateChip,
+  calendarChip,
+  presentRentalDetails,
+  presentRentalSearch,
+} from './assistant-rental-present';
 import { quoteDayTotal, quoteHourlyWindow } from './assistant-rental-quote';
 import { rentalAnswerGrounded, rentalQuestionSay, rentalQuestionTopic } from './assistant-rental-questions';
 import { rentalSearchTerms } from './assistant-rental-query';
@@ -114,7 +121,8 @@ export class AssistantRentalService {
       const page = found.page;
       const placed = filterPlace(page.listings, text(call.input.place));
       const priced = filterPrice(placed.hits, numberOr(call.input.max_price_per_day));
-      const card = this.keepSearchableOffer(dated, priced);
+      const card = await this.bookableSuggestion(dated, found.query, country, call);
+      const quickChips = await this.quickDateChips(card, found.query, country, locale, call);
       const allow = await this.inspectionFlags.allowSelfBooking(country);
       const categories = found.categories;
       const buyItems = priced.length ? [] : await this.buyItems(query, country, locale);
@@ -140,6 +148,7 @@ export class AssistantRentalService {
         placeNote: placed.ignored ? 'place_ignored' : undefined,
         categories,
         buyItems,
+        quickChips,
       });
       if (!priced.length) {
         await this.storeZero(query, country, card.dayCount ?? checked?.dayCount, call, buyItems.length, guessCategory(query, categories));
@@ -244,10 +253,71 @@ export class AssistantRentalService {
     return dayQuoteBody(listing, units, window, range, { fits: priced.fits, offer }, free);
   }
 
-  private keepSearchableOffer(card: CardDateChoice, hits: Array<{ available: boolean | null }>): CardDateChoice {
-    if (card.issue !== 'card_window' || !card.offer) return card;
-    if (hits.some((hit) => hit.available === true)) return card;
-    return { ...card, offer: null, start: undefined, end: undefined, dayCount: undefined };
+  private async bookableSuggestion(
+    card: CardDateChoice,
+    query: string,
+    country: string,
+    call: AssistantRentalCall
+  ): Promise<CardDateChoice> {
+    if (!card.guard || card.issue !== 'card_window' || !card.offer) return card;
+    const open = await this.rangeOpen(query, country, card.offer, call);
+    return open ? card : { ...card, offer: null };
+  }
+
+  private async quickDateChips(
+    card: CardDateChoice,
+    query: string,
+    country: string,
+    locale: AssistantLocale,
+    call: AssistantRentalCall
+  ): Promise<AssistantChip[] | undefined> {
+    if (card.start || !card.guard) return undefined;
+    const now = new Date();
+    const kinds = ['today', 'tomorrow', 'weekend'] as const;
+    const rows = await Promise.all(kinds.map((kind) => this.openQuickChip(kind, now, card, query, country, locale, call)));
+    return [...rows.filter((chip): chip is AssistantChip => !!chip), calendarChip(locale)];
+  }
+
+  private async openQuickChip(
+    kind: 'today' | 'tomorrow' | 'weekend',
+    now: Date,
+    card: CardDateChoice,
+    query: string,
+    country: string,
+    locale: AssistantLocale,
+    call: AssistantRentalCall
+  ): Promise<AssistantChip | null> {
+    const range = relativeDayRange(kind, now, card.window.timezone);
+    if (!exclusiveRangeFits(range, card.window)) return null;
+    if (!(await this.rangeOpen(query, country, range, call))) return null;
+    return assistantDateChip(locale, kind, range);
+  }
+
+  private async rangeOpen(
+    query: string,
+    country: string,
+    range: { startDate: string; endDate: string },
+    call: AssistantRentalCall
+  ): Promise<boolean> {
+    const scoped = await this.openCount(query, country, range, call, false);
+    if (scoped > 0 || !call.identity.market?.state) return scoped > 0;
+    return (await this.openCount(query, country, range, call, true)) > 0;
+  }
+
+  private async openCount(
+    query: string,
+    country: string,
+    range: { startDate: string; endDate: string },
+    call: AssistantRentalCall,
+    omitState: boolean
+  ): Promise<number> {
+    try {
+      const page = await this.searchWithRetry(query, country, range.startDate, range.endDate, call, omitState);
+      return countAvailable(page);
+    } catch (error: any) {
+      this.logger.warn(`Date chip search failed: ${error?.message ?? error}`);
+      return 0;
+    }
   }
 
   private async cardDates(country: string, checked?: { startDate: string; endDate: string; dayCount: number }): Promise<CardDateChoice> {
@@ -558,16 +628,56 @@ function clampedCardDates(
     today: marketCalendarDate(new Date(), window.timezone),
   });
   if (clamped.fits) return { ...openCardDates(checked, window), guard };
+  const today = marketCalendarDate(new Date(), window.timezone);
   return {
-    start: clamped.offer?.startDate,
-    end: clamped.offer?.endDate,
-    dayCount: clamped.offer?.dayCount,
+    start: checked.startDate,
+    end: checked.endDate,
+    dayCount: checked.dayCount,
     issue: 'card_window',
     window,
     asked: { startDate: checked.startDate, endDate: checked.endDate },
-    offer: clamped.offer,
+    offer: latestFittingStay(window, today),
     guard,
   };
+}
+
+function latestFittingStay(window: CardWindowFields, today: string): CardWindowOffer | null {
+  if (!window.latest_card_end_at) return null;
+  const cap = latestExclusiveEndDate(window.latest_card_end_at, window.timezone);
+  if (cap <= today) return null;
+  return clampExclusiveRange({
+    startDate: today,
+    endDate: cap,
+    dayCount: 1,
+    latestCardEndAt: window.latest_card_end_at,
+    zone: window.timezone,
+    today,
+  }).offer;
+}
+
+function exclusiveRangeFits(
+  range: { startDate: string; endDate: string; dayCount: number },
+  window: CardWindowFields
+): boolean {
+  if (!stripeCutoff(window)) return true;
+  const today = marketCalendarDate(new Date(), window.timezone);
+  return clampExclusiveRange({
+    startDate: range.startDate,
+    endDate: range.endDate,
+    dayCount: range.dayCount,
+    latestCardEndAt: window.latest_card_end_at,
+    zone: window.timezone,
+    today,
+  }).fits;
+}
+
+function stripeCutoff(window: CardWindowFields): boolean {
+  return window.payment_rail === 'stripe' && window.latest_card_end_at != null;
+}
+
+function countAvailable(page: { availableCount?: number; listings?: Array<{ available?: boolean | null }> }): number {
+  if (typeof page.availableCount === 'number') return page.availableCount;
+  return (page.listings ?? []).filter((hit) => hit.available === true).length;
 }
 
 function openCardDates(
