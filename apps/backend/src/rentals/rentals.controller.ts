@@ -227,14 +227,14 @@ export class RentalsController {
     @Query('country_code') country_code?: string,
     @Query('state') state?: string
   ) {
-    const windows = await this.rentalsService.listTakenRentalBookingWindowsForPublicListing(
+    const availability = await this.rentalsService.listTakenRentalBookingWindowsForPublicListing(
       listingId,
       { country_code, state }
     );
-    if (windows === null) {
+    if (availability === null) {
       throw new NotFoundException('Listing not found');
     }
-    return { success: true, data: { windows } };
+    return { success: true, data: { windows: availability.windows, ...availability.card } };
   }
 
   @Public()

@@ -21,6 +21,7 @@ export const CLIENT_FLAG_KEYS = [
   'rentals_client_tab_enabled',
   'rentals_not_received_report_enabled',
   'rentals_renter_return_report_enabled',
+  'rentals_card_window_guard_enabled',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -71,4 +72,6 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_not_received_report_enabled: false,
   /** Renter "I've returned it" report. Off until a row turns it on. No NODE_ENV override. */
   rentals_renter_return_report_enabled: false,
+  /** Date picker and create-time card window guard. Off until a row turns it on. No NODE_ENV override. */
+  rentals_card_window_guard_enabled: false,
 };

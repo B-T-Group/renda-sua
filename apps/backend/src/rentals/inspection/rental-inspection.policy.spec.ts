@@ -113,6 +113,12 @@ describe('rental inspection enrolment', () => {
     expect(enrol({ rail: 'stripe', endAt }).outcome).toBe('enrol');
   });
 
+  it('enrols a far Stripe end when the shared policy clears latest_card_end_at', () => {
+    const far = new Date(NOW.getTime() + 20 * DAY);
+    expect(stripeReviewFits({ endAt: far, now: NOW, latest_card_end_at: null })).toBe(true);
+    expect(enrol({ rail: 'stripe', endAt: far, latest_card_end_at: null }).outcome).toBe('enrol');
+  });
+
   it('does not apply the card window to wallet or mobile-money bookings', () => {
     const endAt = new Date(NOW.getTime() + 20 * DAY);
     expect(enrol({ rail: 'mobile_money', endAt }).outcome).toBe('enrol');

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -15,6 +15,8 @@ import type { ClientRootStackParamList, GuestRootStackParamList } from '../../na
 import type { RentalTakenWindow } from '../../types/rentals';
 import { RentalTimeOptionSheet } from './RentalTimeOptionSheet';
 import { RentalRequestScreenForm } from './request/RentalRequestScreenForm';
+import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
+import { CardWindowNotice } from './request/CardWindowNotice';
 import {
   bookedSegmentsForLocalDay,
   dayHasRemainingCapacity,
@@ -122,6 +124,9 @@ export interface RentalSlotPickerProps {
   dateLine?: string;
   onEditDates?: () => void;
   unavailableLabel?: string;
+  notice?: ReactNode;
+  blockedReason?: string;
+  cardSendDisabled?: boolean;
   /** Renter edit of a Requested rental. Save stays disabled until something changes. */
   submitMode?: 'create' | 'modify';
   initialUnits?: number;
@@ -170,6 +175,9 @@ export function RentalSlotPicker({
   dateLine,
   onEditDates,
   unavailableLabel,
+  notice,
+  blockedReason,
+  cardSendDisabled = false,
   submitMode = 'create',
   initialUnits = 1,
   initialNotes = '',
@@ -201,6 +209,7 @@ export function RentalSlotPicker({
     [initialNotes, initialSelections, initialUnits, savedSelections]
   );
   const [msg, setMsg] = useState<string | null>(null);
+  const [cardFallback, setCardFallback] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [timePicker, setTimePicker] = useState<'start' | 'end' | null>(null);
 
@@ -511,8 +520,9 @@ export function RentalSlotPicker({
   ]);
 
   const openConfirm = () => {
-    if (requestBlocked || requestBusy) return;
+    if (requestBlocked || requestBusy || cardSendDisabled) return;
     setMsg(null);
+    setCardFallback(null);
     const err = validateBeforeSubmit();
     if (err) {
       setMsg(err);
@@ -574,7 +584,9 @@ export function RentalSlotPicker({
         navigation as unknown as NativeStackNavigationProp<ClientRootStackParamList>
       ).navigate('RentalRequestSubmitted', { requestId: res.requestId });
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
+      const friendly = cardWindowErrorMessage(e, i18n.language);
+      setCardFallback(friendly);
+      setMsg(friendly ?? (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed')));
       setConfirmOpen(false);
     }
   };
@@ -624,7 +636,9 @@ export function RentalSlotPicker({
     try {
       await onModifySave(buildModifyBody());
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
+      const friendly = cardWindowErrorMessage(e, i18n.language);
+      setCardFallback(friendly);
+      setMsg(friendly ?? (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed')));
     }
   };
 
@@ -679,6 +693,20 @@ export function RentalSlotPicker({
           onEditDates={onEditDates}
           datesFilled={datesFilled}
           unavailableLabel={unavailableLabel}
+          notice={
+            <>
+              {notice}
+              {cardFallback && onEditDates ? (
+                <CardWindowNotice
+                  tone="error"
+                  title={i18n.language.startsWith('fr') ? 'Impossible de continuer' : 'Can’t continue with these dates'}
+                  body={cardFallback}
+                  action={i18n.language.startsWith('fr') ? 'Modifier les dates' : 'Change dates'}
+                  onAction={onEditDates}
+                />
+              ) : null}
+            </>
+          }
           onSeeDates={onSeeDates}
           rows={selections.map((row) => ({
             id: row.id,
@@ -745,6 +773,7 @@ export function RentalSlotPicker({
               ? t('rentals.modify.businessSees', 'The business will see your changes before accepting.')
               : undefined
           }
+          blockedReason={blockedReason}
           message={msg}
           sendLabel={
             modifying
@@ -758,6 +787,7 @@ export function RentalSlotPicker({
             submitting ||
             requestBlocked ||
             requestBusy ||
+            cardSendDisabled ||
             (modifying ? !dirty || effectiveSelections.length === 0 : isAuthenticated && effectiveSelections.length === 0)
           }
           sending={submitting}

@@ -53,10 +53,13 @@ import {
 import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, shouldNotifyPriceChange } from './rental-price-change';
 import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
+import { RentalCardWindowService } from './inspection/rental-card-window.service';
+import type { ListingCardWindow } from './rental-card-window';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
   acceptStartConflict,
   acceptStartNotEnrolled,
+  cardWindowRejected,
   inspectionRejected,
   inspectionUnavailable,
   inspectionUpdateRequired,
@@ -67,6 +70,8 @@ import {
   decideInspectionEnrolment,
   DEFAULT_STRIPE_REVIEW_HOURS,
   INSPECTION_CODES,
+  STRIPE_AUTH_WINDOW_DAYS,
+  STRIPE_WINDOW_MESSAGE,
   OVERTIME_PROMPT_BACKOFF_MS,
   pickupStartAllowed,
   priceEnrolledCapture,
@@ -117,9 +122,6 @@ export const RENTAL_OVERWRITE_BUSINESS_FORBIDDEN =
 
 /** Default security deposit = 8x the listing hourly rate (business can overwrite). */
 const RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER = 8;
-
-/** Stripe authorizations expire after ~7 days; keep bookings safely inside that window. */
-const RENTAL_STRIPE_MAX_BOOKING_DAYS = 6;
 
 const ACCEPT_PICKUP_VERSION = `mutation AcceptPickup($id: uuid!, $version: uuid!, $actor: uuid!) {
   rental_accept_pickup_version(args: { p_booking_id: $id, p_version_id: $version, p_actor: $actor }) { id }
@@ -345,6 +347,14 @@ export interface PublicRentalListingRow {
   distance_text?: string;
   duration_text?: string;
   distance_value?: number;
+  mode?: ListingCardWindow['mode'];
+  payment_rail?: ListingCardWindow['payment_rail'];
+  momo_available?: boolean;
+  inspection_enabled?: boolean;
+  latest_card_end_at?: string | null;
+  card_auth_window_days?: number;
+  stripe_review_hours?: number;
+  timezone?: string;
 }
 
 /** Client “my requests” row (Hasura RLS scopes to current user). */
@@ -418,7 +428,8 @@ export class RentalsService {
     private readonly stripeCaptureService: StripeCaptureService,
     private readonly rentalListingAiReviewService: RentalListingAiReviewService,
     private readonly rentalStartPinShare: RentalStartPinShareService,
-    private readonly inspectionFlags: RentalInspectionFlags
+    private readonly inspectionFlags: RentalInspectionFlags,
+    private readonly cardWindow: RentalCardWindowService
   ) {}
 
   async listPublicRentalListings(
@@ -453,7 +464,7 @@ export class RentalsService {
     rows = await this.filterListingsByPaymentsEnabled(rows);
     rows = await this.enrichRentalListingsWithDistance(rows, query);
     rows = this.sortRentalListingRows(rows, sort);
-    return this.filterListingsByPrice(rows, query.min_price, query.max_price);
+    return this.attachCardWindows(this.filterListingsByPrice(rows, query.min_price, query.max_price));
   }
 
   async getTopRentalLocations(
@@ -773,6 +784,44 @@ export class RentalsService {
     });
   }
 
+  private async attachCardWindows(rows: PublicRentalListingRow[]): Promise<PublicRentalListingRow[]> {
+    if (!rows.length || !this.cardWindow) return rows;
+    const map = await this.cardWindow.forCountries(
+      rows.map((row) => row.business_location?.address?.country)
+    );
+    return rows.map((row) => this.withCardFields(row, map));
+  }
+
+  private withCardFields(
+    row: PublicRentalListingRow,
+    map: Map<string, ListingCardWindow>
+  ): PublicRentalListingRow {
+    const code = resolveItemCountry(row.business_location?.address?.country)?.toUpperCase() || '';
+    const fields = map.get(code);
+    return fields ? { ...row, ...fields } : row;
+  }
+
+  private async rejectUnfitCardRequest(
+    listing: { business_location?: { address?: { country?: string | null } | null } | null },
+    endIso: string
+  ): Promise<void> {
+    const country = resolveItemCountry(listing?.business_location?.address?.country);
+    if (!this.inspectionFlags?.cardWindowGuardEnabled) return;
+    if (!(await this.inspectionFlags.cardWindowGuardEnabled(country))) return;
+    this.throwIfCardEndMisses(endIso, await this.stripeWindowFields(country));
+  }
+
+  private throwIfCardEndMisses(endIso: string, fields: ListingCardWindow): void {
+    if (!fields.latest_card_end_at) return;
+    if (new Date(endIso).getTime() <= new Date(fields.latest_card_end_at).getTime()) return;
+    throw cardWindowRejected(INSPECTION_CODES.STRIPE_WINDOW, STRIPE_WINDOW_MESSAGE, fields);
+  }
+
+  private async stripeWindowFields(country: string | null): Promise<ListingCardWindow> {
+    if (this.cardWindow) return this.cardWindow.forCountry(country);
+    return emptyStripeFields();
+  }
+
   async getPublicRentalListingById(
     listingId: string,
     query: ListPublicRentalListingsQuery = {}
@@ -824,13 +873,18 @@ export class RentalsService {
       return null;
     }
     const enriched = await this.enrichRentalListingsWithDistance([row], query);
-    return enriched[0] ?? row;
+    const visible = enriched[0] ?? row;
+    const [withCard] = await this.attachCardWindows([visible]);
+    return withCard ?? visible;
   }
 
   async listTakenRentalBookingWindowsForPublicListing(
     listingId: string,
     query: ListPublicRentalListingsQuery = {}
-  ): Promise<Array<{ startAt: string; endAt: string; unitsBooked: number }> | null> {
+  ): Promise<{
+    windows: Array<{ startAt: string; endAt: string; unitsBooked: number }>;
+    card: ListingCardWindow | null;
+  } | null> {
     const visible = await this.getPublicRentalListingById(listingId, query);
     if (!visible) {
       return null;
@@ -843,11 +897,12 @@ export class RentalsService {
         rental_booking?: { units_booked?: number | null } | null;
       }>;
     }>(Q.LIST_TAKEN_RENTAL_BOOKING_WINDOWS, { listingId, now });
-    return (res.rental_booking_windows ?? []).map((b) => ({
+    const windows = (res.rental_booking_windows ?? []).map((b) => ({
       startAt: b.start_at,
       endAt: b.end_at,
       unitsBooked: Math.max(1, Number(b.rental_booking?.units_booked) || 1),
     }));
+    return { windows, card: readCardWindowFields(visible) };
   }
 
   async createRentalRequest(dto: CreateRentalRequestDto) {
@@ -867,6 +922,7 @@ export class RentalsService {
     }
     const plan = this.buildCreateRentalRequestPlan(dto);
     await this.validateRentalRequestWindowsPlan(plan, listing, unitsRequested);
+    await this.rejectUnfitCardRequest(listing, plan.envelopeEndIso);
     const note = dto.clientRequestNote?.trim();
     const row = await this.hasuraSystemService.executeMutation<{
       insert_rental_requests_one: { id: string };
@@ -947,6 +1003,7 @@ export class RentalsService {
     const units = this.normalizeUnitsRequested(dto.unitsRequested ?? req.units_requested);
     this.assertModifyStillOpen(req, user.clientId, dto.expectedVersion, plan.envelopeStartIso);
     await this.validateRentalRequestWindowsPlan(plan, req.rental_location_listing, units);
+    await this.rejectUnfitCardRequest(req.rental_location_listing, plan.envelopeEndIso);
     return this.commitRentalRequestEdit(requestId, user, req, edit, plan, units);
   }
 
@@ -1550,7 +1607,8 @@ export class RentalsService {
       ? await this.paymentRoutingService.resolveRailForCountry(listingCountry)
       : await this.paymentRoutingService.resolveRailForUser(user.id);
     if (rail === 'stripe') {
-      this.assertStripeRentalEndWithinAuthWindow(booking.end_at as string);
+      const fields = await this.stripeWindowFields(listingCountry);
+      this.assertStripeRentalEndWithinAuthWindow(booking.end_at as string, fields);
       await this.assertEnrolledStripeReviewWindow(
         bookingId,
         booking.end_at as string,
@@ -2352,7 +2410,8 @@ export class RentalsService {
       );
     }
     const enrolledEnd = this.requestWindowEnvelope(params.req).endAt;
-    this.assertStripeRentalEndWithinAuthWindow(enrolledEnd);
+    const fields = await this.stripeWindowFields(listingCountry);
+    this.assertStripeRentalEndWithinAuthWindow(enrolledEnd, fields);
     await this.assertEnrolledStripeReviewWindow(params.bookingId, enrolledEnd, listingCountry);
     const total = Number(snap.total);
     const deposit = this.snapshotSecurityDeposit(snap);
@@ -2425,19 +2484,15 @@ export class RentalsService {
   }
 
   /** Stripe rail: the booking must end before the card authorization could expire. */
-  private assertStripeRentalEndWithinAuthWindow(endAtIso: string): void {
-    const limit =
-      Date.now() + RENTAL_STRIPE_MAX_BOOKING_DAYS * 24 * 60 * 60 * 1000;
-    if (new Date(endAtIso).getTime() > limit) {
-      throw new HttpException(
-        {
-          success: false,
-          message: `Card payments support rentals ending within ${RENTAL_STRIPE_MAX_BOOKING_DAYS} days`,
-          error: 'RENTAL_STRIPE_BOOKING_WINDOW_EXCEEDED',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
+  private assertStripeRentalEndWithinAuthWindow(endAtIso: string, fields?: ListingCardWindow): void {
+    if (fields?.mode === 'charge_at_pickup') return;
+    const limit = Date.now() + STRIPE_AUTH_WINDOW_DAYS * 86400000;
+    if (new Date(endAtIso).getTime() <= limit) return;
+    throw cardWindowRejected(
+      'RENTAL_STRIPE_BOOKING_WINDOW_EXCEEDED',
+      `Card payments support rentals ending within ${STRIPE_AUTH_WINDOW_DAYS} days`,
+      fields ?? emptyStripeFields()
+    );
   }
 
   private async createLegacyRentalBooking(
@@ -4963,15 +5018,14 @@ export class RentalsService {
   }
 
   private async enrolOrReject(req: any, country: string | null): Promise<number | null> {
-    const input = await this.enrolmentInput(req, country);
-    const decision = decideInspectionEnrolment(input);
-    if (decision.outcome === 'reject') throw await this.rejectEnrolment(decision, country);
-    return decision.outcome === 'enrol' ? decision.policyVersion : null;
-  }
-
-  private async rejectEnrolment(decision: { code: string; message: string }, country: string | null) {
-    const extra = decision.code === INSPECTION_CODES.STRIPE_WINDOW ? await this.cardWindowBody(country, true) : undefined;
-    return inspectionRejected(decision.code, decision.message, extra);
+    const decision = decideInspectionEnrolment(await this.enrolmentInput(req, country));
+    if (decision.outcome !== 'reject') {
+      return decision.outcome === 'enrol' ? decision.policyVersion : null;
+    }
+    if (decision.code === INSPECTION_CODES.STRIPE_WINDOW) {
+      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country));
+    }
+    throw inspectionRejected(decision.code, decision.message);
   }
 
   async cardWindowFieldsFor(country?: string | null, latest?: string | null, inspected?: boolean) {
@@ -4989,10 +5043,6 @@ export class RentalsService {
       chargeAtPickupEnabled,
       inspected: willInspect,
     });
-  }
-
-  private async cardWindowBody(country: string | null, inspected: boolean) {
-    return this.cardWindowFieldsFor(country, null, inspected);
   }
 
   private async enrolmentInput(req: any, country: string | null) {
@@ -5061,7 +5111,9 @@ export class RentalsService {
       latest_card_end_at: card.latest_card_end_at,
     };
     const decision = decideInspectionEnrolment(input);
-    if (decision.outcome === 'reject') throw await this.rejectEnrolment(decision, country);
+    if (decision.outcome === 'reject') {
+      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country));
+    }
   }
 
   /** null = legacy. A failed read throws 503 so callers retry instead of guessing. */
@@ -6128,4 +6180,29 @@ export class RentalsService {
       },
     });
   }
+}
+
+function emptyStripeFields(): ListingCardWindow {
+  const policy = resolveCardPaymentPolicy({
+    rail: 'stripe',
+    timezone: 'Africa/Douala',
+    now: new Date(),
+    reviewHours: DEFAULT_STRIPE_REVIEW_HOURS,
+    inspected: true,
+  });
+  return { ...policy, inspection_enabled: true, card_auth_window_days: STRIPE_AUTH_WINDOW_DAYS };
+}
+
+export function readCardWindowFields(row: PublicRentalListingRow): ListingCardWindow | null {
+  if (!row.payment_rail || row.momo_available == null || !row.timezone) return null;
+  return {
+    mode: row.mode ?? 'authorize_upfront',
+    payment_rail: row.payment_rail,
+    momo_available: row.momo_available,
+    inspection_enabled: row.inspection_enabled === true,
+    latest_card_end_at: row.latest_card_end_at ?? null,
+    card_auth_window_days: row.card_auth_window_days ?? STRIPE_AUTH_WINDOW_DAYS,
+    stripe_review_hours: row.stripe_review_hours ?? DEFAULT_STRIPE_REVIEW_HOURS,
+    timezone: row.timezone,
+  };
 }

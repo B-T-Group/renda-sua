@@ -58,7 +58,9 @@ Plats cuisinés (livraison ou retrait ASAP) : pas d'acompte de réservation en m
 
 Un petit frais de service forfaitaire est inclus dans le total : 100 XAF au Cameroun, au Gabon et au Congo, et 0,99 CAD au Canada. Les autres pays n'ont pas de frais tant qu'aucun montant n'est configuré. Ce ne sont pas des frais de livraison. Les codes de réduction, les crédits boutique et l'acompte ne le réduisent pas. Le paiement à la livraison ou au retrait le perçoit avec le solde. La carte est débitée dans la devise du vendeur.
 
-Frais d'annulation client : un pourcentage du prix des articles après réductions (livraison, taxes et frais de service exclus). Cameroun et Gabon 30 pour cent, Canada 0. La moitié va au magasin et la moitié à Rendasua. Ils s'appliquent quand le client annule après confirmation du magasin et, pour le paiement après confirmation, seulement une fois le client a payé.`
+Frais d'annulation client : un pourcentage du prix des articles après réductions (livraison, taxes et frais de service exclus). Cameroun et Gabon 30 pour cent, Canada 0. La moitié va au magasin et la moitié à Rendasua. Ils s'appliquent quand le client annule après confirmation du magasin et, pour le paiement après confirmation, seulement une fois le client a payé.
+
+Avec une carte, une location doit se terminer à l'heure limite indiquée sur l'annonce, dans le fuseau du magasin. Proposez des dates possibles qui se terminent à cette heure ou avant. Mobile Money n'est pas proposé dans un pays où seule la carte est disponible.`
       : `Rendasua supports mobile money in Africa and card payments (Stripe) in Canada, the United States, and the Philippines.
 
 - Cameroon: MTN Mobile Money, Orange Money
@@ -75,7 +77,9 @@ Cooked-food ASAP delivery or pickup (restaurant dishes): there is no reservation
 
 A small flat service fee is included in the order total: 100 XAF in Cameroon, Gabon, and Congo, and 0.99 CAD in Canada. Other countries have no fee until one is configured. It is not a delivery fee. Discount codes, store credits, and the reservation deposit do not reduce it. Pay-at-delivery and pay-at-pickup collect it with the balance. The card is charged in the seller's currency.
 
-Client cancellation fee: a percentage of the item price after discounts (delivery, tax, and the service fee are not included). Cameroon and Gabon 30 percent, Canada 0. Half of the fee is paid to the store and half to Rendasua. It applies when the client cancels after the store has confirmed and, for pay-after-confirm, only after the client has paid.`;
+Client cancellation fee: a percentage of the item price after discounts (delivery, tax, and the service fee are not included). Cameroon and Gabon 30 percent, Canada 0. Half of the fee is paid to the store and half to Rendasua. It applies when the client cancels after the store has confirmed and, for pay-after-confirm, only after the client has paid.
+
+With a card, a rental must end by the latest end time on the listing, in the shop's time zone. Offer dates that work and that end by that time. Mobile Money is not offered in a card-only country.`;
 
   const credits =
     locale === 'fr'

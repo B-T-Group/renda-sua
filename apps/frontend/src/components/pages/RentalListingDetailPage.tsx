@@ -916,6 +916,7 @@ const RentalListingDetailPage: React.FC = () => {
                   currency={row.rental_item.currency}
                   initialStartDate={searchParams.get('start_date') || undefined}
                   initialEndDate={searchParams.get('end_date') || undefined}
+                  cardWindow={row}
                 />
               ) : null}
             </Grid>

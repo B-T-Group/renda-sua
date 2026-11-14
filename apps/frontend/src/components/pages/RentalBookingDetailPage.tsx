@@ -52,6 +52,7 @@ import {
   messagesDefaultExpanded,
 } from '../../utils/rentalPhase';
 import { unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 
 const PAYMENT_POLL_MS = 4000;
 
@@ -62,6 +63,8 @@ function apiErrorMessage(
 ): string {
   const data = (err as { response?: { status?: number; data?: { message?: string; code?: string } } })
     ?.response;
+  const friendly = cardWindowErrorMessage(err, navigator.language);
+  if (friendly) return friendly;
   const message = typeof data?.data?.message === 'string' ? data.data.message : '';
   if (data?.status === 426 || data?.data?.code === 'RENTAL_INSPECTION_UPDATE_REQUIRED') {
     return translate

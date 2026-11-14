@@ -31,6 +31,18 @@ import type { RentalTakenWindow } from '../../hooks/useRentalApi';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { SITE_EVENT_ASSISTANT_RENTAL_REQUEST_CREATED, useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { consumeRentalRequestAttribution } from '../../utils/rentalAssistantAttribution';
+import { useClientFlags } from '../../hooks/useClientFlags';
+import { CardWindowBanner, CardWindowCalendar } from './CardWindowCalendar';
+import {
+  cardEndMisses,
+  cardWindowErrorMessage,
+  cardWindowSendReason,
+  cardWindowWarning,
+  effectiveCardEnd,
+  calendarDay,
+  formatCardCutoff,
+  type CardWindowFields,
+} from '../../utils/rentals/cardWindow';
 import { localPickerInstantToRequestParts, requestedSlotUtcIso } from '../../utils/rentalRequestUtc';
 import { estimateTotalFromSelectionRanges } from '../../utils/rentalPricingLines';
 import {
@@ -101,6 +113,7 @@ export interface RentalListingRequestSectionProps {
   currency?: string;
   initialStartDate?: string;
   initialEndDate?: string;
+  cardWindow?: CardWindowFields | null;
 }
 
 export const RentalListingRequestSection: React.FC<RentalListingRequestSectionProps> = ({
@@ -116,9 +129,17 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   currency = 'XAF',
   initialStartDate,
   initialEndDate,
+  cardWindow = null,
 }) => {
   const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
+  const guardOn = flags.rentals_card_window_guard_enabled;
+  const [payingByCard, setPayingByCard] = useState<boolean | null>(null);
+  const [cardFallback, setCardFallback] = useState<string | null>(null);
+  const cardOn = payingByCard ?? cardWindow?.payment_rail === 'stripe';
+  const latest = guardOn ? effectiveCardEnd(cardWindow, cardOn) : null;
   const navigate = useNavigate();
+  const dateRef = useRef<HTMLInputElement | null>(null);
   const { createRequest, fetchListingBookedWindows } = useRentalApi();
   const { trackSiteEvent } = useTrackSiteEvent();
   const [booked, setBooked] = useState<RentalTakenWindow[]>([]);
@@ -292,7 +313,21 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     [basePricePerDay, basePricePerHour, selections, unitsRequested]
   );
 
+  const selectionEnd = useMemo(() => {
+    if (!selections.length) return null;
+    const ends = selections.map((row) => {
+      const end = localPickerInstantToRequestParts(row.endMs);
+      return Date.parse(requestedSlotUtcIso(end.dateKey, end.hour, end.minute));
+    });
+    return new Date(Math.max(...ends)).toISOString();
+  }, [selections]);
+  const cutoff = latest && cardWindow?.timezone
+    ? formatCardCutoff(latest, cardWindow.timezone, i18n.language)
+    : '';
+  const cardUnfit = cardEndMisses(selectionEnd, latest);
+
   const validateBeforeSubmit = useCallback((): string | null => {
+    if (cardUnfit) return t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language));
     if (selections.length === 0) {
       return t('rentals.requestForm.addOneRange', 'Add at least one time range.');
     }
@@ -336,6 +371,8 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     stock,
     t,
     unitsRequested,
+    cardUnfit,
+    i18n.language,
   ]);
 
   const openConfirm = () => {
@@ -397,10 +434,14 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
       void loadBooked();
       navigate('/rentals/request-submitted');
     } catch (e: unknown) {
+      const friendly = cardWindowErrorMessage(e, i18n.language);
+      setCardFallback(friendly);
       const http = e as { response?: { data?: { message?: string } } };
       setMsg(
-        http?.response?.data?.message ||
-          (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'))
+        friendly
+          ? null
+          : http?.response?.data?.message ||
+              (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'))
       );
     } finally {
       setSubmitting(false);
@@ -464,6 +505,31 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                     )}
                   </Typography>
                 </Box>
+                {guardOn && cardWindow ? (
+                  <CardWindowCalendar
+                    fields={{ ...cardWindow, latest_card_end_at: latest }}
+                    payingByCard={cardOn}
+                    locale={i18n.language}
+                    onPayWithMomo={cardWindow.momo_available ? () => setPayingByCard(false) : undefined}
+                  />
+                ) : null}
+                {cardUnfit ? (
+                  <CardWindowBanner
+                    tone="warn"
+                    body={cardWindowWarning(cutoff, i18n.language)}
+                    action={i18n.language.startsWith('fr') ? 'Modifier les dates' : 'Change dates'}
+                    onAction={() => dateRef.current?.focus()}
+                  />
+                ) : null}
+                {cardFallback ? (
+                  <CardWindowBanner
+                    tone="error"
+                    title={i18n.language.startsWith('fr') ? 'Impossible de continuer' : 'Can’t continue with these dates'}
+                    body={cardFallback}
+                    action={i18n.language.startsWith('fr') ? 'Modifier les dates' : 'Change dates'}
+                    onAction={() => setCardFallback(null)}
+                  />
+                ) : null}
 
                 {!dayBounds ? (
                   <Alert severity="info">
@@ -477,7 +543,11 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                       value={dateStr}
                       onChange={(e) => setDateStr(e.target.value)}
                       InputLabelProps={{ shrink: true }}
-                      inputProps={{ min: todayDateInputValue() }}
+                      inputRef={dateRef}
+                      inputProps={{
+                        min: todayDateInputValue(),
+                        max: latest && cardWindow?.timezone ? calendarDay(new Date(latest), cardWindow.timezone) : undefined,
+                      }}
                       size="small"
                       fullWidth
                     />
@@ -659,12 +729,17 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                   helperText={t('rentals.requestForm.optionalNotesHelper', 'Max 2000 characters')}
                 />
 
+                {cardUnfit || cardFallback ? (
+                  <Typography sx={{ color: '#B45309', fontWeight: 600 }}>
+                    {t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language))}
+                  </Typography>
+                ) : null}
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
                   <Button
                     variant="contained"
                     size="large"
                     onClick={() => openConfirm()}
-                    disabled={selections.length === 0}
+                    disabled={selections.length === 0 || cardUnfit || Boolean(cardFallback)}
                     sx={{
                       minHeight: 48,
                       fontWeight: 700,
@@ -776,7 +851,12 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
           <Button onClick={() => setConfirmOpen(false)} disabled={submitting}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button variant="contained" onClick={() => void submitRequest()} disabled={submitting}>
+          {cardUnfit || cardFallback ? (
+            <Typography sx={{ color: '#B45309', fontWeight: 600, mr: 'auto' }}>
+              {t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language))}
+            </Typography>
+          ) : null}
+          <Button variant="contained" onClick={() => void submitRequest()} disabled={submitting || cardUnfit || Boolean(cardFallback)}>
             {submitting ? t('common.loading', 'Loading...') : t('rentals.requestForm.confirmSend', 'Send request')}
           </Button>
         </DialogActions>

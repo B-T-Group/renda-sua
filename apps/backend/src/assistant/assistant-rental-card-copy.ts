@@ -12,6 +12,13 @@ export function formatCardCutoff(iso: string, timeZone: string, locale: string):
   return `${day} ${month} · ${time}`;
 }
 
+export function cardWindowCutoffOnly(locale: string, cutoff: string): string {
+  if (locale.toLowerCase().startsWith('fr')) {
+    return `Avec une carte, cette location doit se terminer le ${cutoff}.`;
+  }
+  return `With a card, this rental must end by ${cutoff}.`;
+}
+
 export function cardWindowUnfitReply(locale: string, cutoff: string): string {
   if (locale.toLowerCase().startsWith('fr')) {
     return `Avec une carte, cette location doit se terminer le ${cutoff}. Voici des dates possibles :`;

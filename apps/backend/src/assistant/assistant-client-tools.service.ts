@@ -1,6 +1,13 @@
 import type { Tool } from '@aws-sdk/client-bedrock-runtime';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { firstImage, formatPrice } from './assistant-cards';
+import {
+  assistantCardWindowCopy,
+  formatAssistantStay,
+  formatCardCutoff,
+  suggestedCardStay,
+} from '../rentals/inspection/card-window.copy';
+import type { CardPaymentPolicy } from '../rentals/rental-card-window';
 import type {
   AssistantCard,
   AssistantIdentity,
@@ -34,7 +41,10 @@ type OrderRow = {
 };
 
 export class AssistantClientToolsService {
-  constructor(private readonly hasura: HasuraSystemService) {}
+  constructor(
+    private readonly hasura: HasuraSystemService,
+    private readonly cardWindows?: { forCountry: (country: string) => Promise<CardPaymentPolicy> }
+  ) {}
 
   handles(name: string): boolean {
     return CLIENT_TOOLS.has(name) || PUBLIC_TOOLS.has(name);
@@ -111,18 +121,28 @@ export class AssistantClientToolsService {
     const country = request.identity.market?.country_code;
     if (!country) return { content: 'Market information is required to search.' };
     if (query.length < 2) return { content: 'Please provide a search query with at least 2 characters.' };
-    if (request.name === 'search_rentals') return this.searchRentals(country, query);
+    if (request.name === 'search_rentals') return this.searchRentals(country, query, request.locale);
     return this.searchRestaurants(country, query);
   }
 
-  private async searchRentals(country: string, query: string): Promise<AssistantToolResult> {
+  private async searchRentals(country: string, query: string, locale?: string): Promise<AssistantToolResult> {
     const result = await this.hasura.executeQuery<{ rental_location_listings: RentalRow[] }>(
       RENTAL_SEARCH_QUERY,
       { country, q: `%${query}%` }
     );
     const rows = result.rental_location_listings || [];
     if (!rows.length) return { content: `No rentals found for "${query}" in ${country}.` };
-    return { content: rentalText(rows), cards: rows.map(rentalCard) };
+    const window = await this.cardWindowFor(country);
+    return { content: rentalText(rows, window, locale || 'en'), cards: rows.map(rentalCard) };
+  }
+
+  private async cardWindowFor(country: string): Promise<CardPaymentPolicy | null> {
+    if (!this.cardWindows) return null;
+    try {
+      return await this.cardWindows.forCountry(country);
+    } catch {
+      return null;
+    }
   }
 
   private async searchRestaurants(country: string, query: string): Promise<AssistantToolResult> {
@@ -241,8 +261,18 @@ function rentalCard(row: RentalRow): AssistantCard {
   };
 }
 
-function rentalText(rows: RentalRow[]): string {
-  return rows.map((row) => `- ${rentalCard(row).title} ${rentalCard(row).priceLabel}`).join('\n');
+function rentalText(rows: RentalRow[], window: CardPaymentPolicy | null, locale: string): string {
+  const lines = rows.map((row) => `- ${rentalCard(row).title} ${rentalCard(row).priceLabel}`);
+  if (!window) return lines.join('\n');
+  return `${lines.join('\n')}\n${JSON.stringify(window)}\n${cardOffer(window, locale)}`;
+}
+
+function cardOffer(window: CardPaymentPolicy, locale: string): string {
+  if (!window.latest_card_end_at) return 'Card window does not apply.';
+  const stay = suggestedCardStay(window.latest_card_end_at, window.timezone, new Date());
+  const cutoff = formatCardCutoff(window.latest_card_end_at, window.timezone, locale);
+  const sentence = assistantCardWindowCopy(cutoff, locale);
+  return stay ? `${sentence} ${formatAssistantStay(stay, locale)}` : sentence;
 }
 
 type RestaurantRow = {
@@ -288,7 +318,8 @@ function rentalSearchTool(): Tool {
   return {
     toolSpec: {
       name: 'search_rentals',
-      description: 'Search public rental listings in the customer market. Works for guests.',
+      description:
+        'Search public rental listings in the customer market. Works for guests. Each result includes latest_card_end_at when a card payment must end by that instant. Say the rental must end by that formatted time and offer only dates that work. Never offer a later end.',
       inputSchema: {
         json: {
           type: 'object',

@@ -15,7 +15,7 @@ import { RentalsController } from './rentals.controller';
 import { RentalSearchController } from './rental-search.controller';
 import { RentalsCronService } from './rentals-cron.service';
 import { RentalInspectionEvidenceService } from './inspection/rental-inspection-evidence.service';
-import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
+import { RentalCardWindowModule } from './inspection/rental-card-window.module';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
@@ -31,6 +31,7 @@ import { RentalAvailabilityService } from './rental-availability.service';
     NotificationsModule,
     ImageValidationModule,
     StripePaymentsModule,
+    RentalCardWindowModule,
     RentalListingAiReviewModule,
   ],
   controllers: [RentalsController, RentalSearchController, RentalInspectionsController, AdminRentalBookingsController],
@@ -42,12 +43,11 @@ import { RentalAvailabilityService } from './rental-availability.service';
     RentalPaymentCallbackHandler,
     RentalStartPinShareService,
     RentalBookingMessagingService,
-    RentalInspectionFlags,
     RentalInspectionService,
     RentalNotReceivedService,
     RentalRenterReturnService,
     RentalInspectionEvidenceService,
   ],
-  exports: [RentalsService, RentalSearchService, RentalInspectionFlags, RentalPaymentCallbackHandler],
+  exports: [RentalsService, RentalSearchService, RentalPaymentCallbackHandler, RentalCardWindowModule],
 })
 export class RentalsModule {}

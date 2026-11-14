@@ -1,3 +1,4 @@
+import { latestExclusiveEndDate } from './rental-card-window';
 import { RentalSearchService } from './rental-search.service';
 import type { PublicRentalListingRow } from './rentals.service';
 
@@ -81,6 +82,34 @@ describe('RentalSearchService', () => {
       stripe_review_hours: 72,
       timezone: 'Africa/Douala',
     });
+  });
+
+  it('does not mark a card-only Stripe stay available past the cutoff when the guard is on', async () => {
+    const routing = { resolveRailForCountry: jest.fn().mockResolvedValue('stripe') };
+    const flags = {
+      cardWindowGuardEnabled: jest.fn().mockResolvedValue(true),
+      chargeAtPickupEnabled: jest.fn().mockResolvedValue(false),
+      isEnabled: jest.fn().mockResolvedValue(true),
+      numberConfig: jest.fn().mockResolvedValue(72),
+    };
+    const guarded = new RentalSearchService(rentals as any, hasura as any, routing as any, flags as any);
+    const row = listing('ca', 'Drill');
+    row.business_location.address.country = 'CA';
+    rentals.collectPublicRentalListings.mockResolvedValue([row]);
+    hasura.executeQuery.mockResolvedValue({ rental_booking_windows: [] });
+    const late = await guarded.search({ start_date: '2026-11-12', end_date: '2026-12-01', country_code: 'CA' });
+    const latest = late.listings[0].latest_card_end_at as string;
+    const cap = latestExclusiveEndDate(latest, 'America/Toronto');
+    expect(late.listings[0].payment_rail).toBe('stripe');
+    expect(late.listings[0].momo_available).toBe(false);
+    expect(late.listings[0].available).toBe(false);
+    const within = await guarded.search({ start_date: '2026-11-13', end_date: cap, country_code: 'CA' });
+    expect(within.listings[0].available).toBe(true);
+    expect(within.listings[0].latest_card_end_at).toEqual(expect.any(String));
+    flags.cardWindowGuardEnabled.mockResolvedValue(false);
+    const open = await guarded.search({ start_date: '2026-11-12', end_date: '2026-11-20', country_code: 'CA' });
+    expect(open.listings[0].available).toBe(true);
+    expect(open.listings[0].latest_card_end_at).toEqual(expect.any(String));
   });
 
   it('suggests categories and in-market titles', async () => {

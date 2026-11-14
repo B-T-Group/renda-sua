@@ -6863,6 +6863,17 @@
     "pickupInstructions": "Instructions prise en charge / service",
     "dropoffInstructions": "Instructions de retour",
     "requestRental": "Demander cette location",
+    "cardWindow": {
+      "note": "Avec une carte, cette location doit se terminer le {{cutoff}}. Choisissez des dates plus tôt.",
+      "warning": "Ces dates ne conviennent plus pour un paiement par carte. Cette location doit se terminer le {{cutoff}}.",
+      "payingByCard": "Paiement par carte",
+      "payWithMomo": "Payer plutôt avec Mobile Money",
+      "changeDates": "Modifier les dates",
+      "sendReason": "Modifiez les dates pour envoyer votre demande.",
+      "cannotContinue": "Impossible de continuer",
+      "applyDates": "Valider les dates",
+      "assistant": "Avec une carte, cette location doit se terminer le {{cutoff}}. Voici des dates possibles :"
+    },
     "start": "Début",
     "end": "Fin",
     "submitRequest": "Envoyer la demande",
