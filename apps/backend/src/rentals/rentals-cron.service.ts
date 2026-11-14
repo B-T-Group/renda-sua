@@ -6,6 +6,9 @@ import { RentalInspectionService } from './inspection/rental-inspection.service'
 import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
+import { dashboardRequestsEnabled, type DashboardRequestFlagRow } from './rental-dashboard-flag';
+import { expireUnansweredRentalRequests, type UnansweredRentalRequest } from './rental-request-expiry';
+import type { RentalRespondWindow } from './rental-respond-by';
 import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
 
@@ -70,6 +73,17 @@ export class RentalsCronService {
       if (n > 0) {
         this.logger.log(`Expired ${n} proposed rental contract(s)`);
       }
+    } catch (error: any) {
+      this.logger.error(error?.message ?? String(error));
+    }
+  }
+
+  /** Pending requests past respond_by. Off while rentals_dashboard_requests_enabled is false. */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleUnansweredRentalRequests(): Promise<void> {
+    try {
+      const n = await this.expireUnansweredRentalRequests();
+      if (n > 0) this.logger.log(`Auto-declined ${n} unanswered rental request(s)`);
     } catch (error: any) {
       this.logger.error(error?.message ?? String(error));
     }
@@ -339,6 +353,70 @@ export class RentalsCronService {
       }`,
       { id, _set }
     );
+  }
+
+  async expireUnansweredRentalRequests(now = new Date()): Promise<number> {
+    const flags = await this.loadDashboardRequestFlags();
+    return expireUnansweredRentalRequests({
+      now,
+      isEnabled: async () => flags.some((row) => row.boolean_value === true),
+      listPending: () => this.listUnansweredRequests(flags),
+      casDecline: (id, respondedAt) => this.casDeclineNoResponse(id, respondedAt),
+      releaseHolds: (requestId) => this.rentalsService.releaseLinkedDeclineHold(requestId),
+      notify: (row, window) => this.notifyNoResponse(row, window),
+    });
+  }
+
+  private async loadDashboardRequestFlags(): Promise<DashboardRequestFlagRow[]> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      application_configurations: DashboardRequestFlagRow[];
+    }>(Q.DASHBOARD_REQUESTS_FLAG, {});
+    return res.application_configurations ?? [];
+  }
+
+  private async listUnansweredRequests(flags: DashboardRequestFlagRow[]): Promise<UnansweredRentalRequest[]> {
+    const res = await this.hasuraSystemService.executeQuery<{ rental_requests: any[] }>(
+      Q.LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY,
+      {}
+    );
+    return (res.rental_requests ?? []).filter((row) => this.rowFlagOn(flags, row)).map((row) => this.toUnanswered(row));
+  }
+
+  private rowFlagOn(flags: DashboardRequestFlagRow[], row: any): boolean {
+    const country = row.rental_location_listing?.business_location?.address?.country ?? null;
+    return dashboardRequestsEnabled(flags, country);
+  }
+
+  private toUnanswered(row: any): UnansweredRentalRequest {
+    const user = row.client?.user;
+    const item = row.rental_location_listing?.rental_item;
+    return {
+      id: row.id,
+      created_at: row.created_at,
+      requested_start_at: row.requested_start_at,
+      rental_selection_windows: row.rental_selection_windows,
+      clientUserId: row.client?.user_id ?? null,
+      businessUserId: item?.business?.user_id ?? null,
+      itemName: item?.name ?? 'Rental',
+      businessName: item?.business?.name?.trim() || 'The business',
+      renterName: [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim(),
+      listingId: row.rental_location_listing?.id ?? '',
+    };
+  }
+
+  private async casDeclineNoResponse(id: string, respondedAt: string): Promise<boolean> {
+    const saved = await this.hasuraSystemService.executeMutation<{
+      update_rental_requests: { affected_rows: number } | null;
+    }>(Q.EXPIRE_RENTAL_REQUEST_NO_RESPONSE, { id, respondedAt });
+    return (saved.update_rental_requests?.affected_rows ?? 0) > 0;
+  }
+
+  private async notifyNoResponse(row: UnansweredRentalRequest, window: RentalRespondWindow): Promise<void> {
+    try {
+      await this.notificationsService.sendRentalRequestNoResponse({ ...row, window });
+    } catch (error: any) {
+      this.logger.warn(`notifyNoResponse ${row.id}: ${error?.message ?? error}`);
+    }
   }
 
   private async logHistory(

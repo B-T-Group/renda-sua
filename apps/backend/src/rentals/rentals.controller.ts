@@ -313,7 +313,7 @@ export class RentalsController {
   @ApiQuery({
     name: 'limit',
     required: false,
-    description: 'Page size (default 50, max 100)',
+    description: 'Page size (default 50, max 100). Pending requests are uncapped when rentals_dashboard_requests_enabled is on.',
   })
   @ApiQuery({
     name: 'status',
@@ -347,6 +347,7 @@ export class RentalsController {
         total: result.total,
         page: result.page,
         limit: result.limit,
+        expiryNotices: result.expiryNotices,
       },
     };
   }

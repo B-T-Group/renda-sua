@@ -1141,20 +1141,91 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
   }
 `;
 
+export const DASHBOARD_REQUESTS_FLAG = `
+  query DashboardRequestsFlag {
+    application_configurations(
+      where: {
+        config_key: { _eq: "rentals_dashboard_requests_enabled" }
+        status: { _eq: "active" }
+      }
+    ) {
+      boolean_value
+      country_code
+    }
+  }
+`;
+
+export const LIST_RECENT_NO_RESPONSE_REQUESTS = `
+  query ListRecentNoResponseRequests($where: rental_requests_bool_exp!) {
+    rental_requests(where: $where, order_by: { responded_at: desc }, limit: 5) {
+      id
+      created_at
+      requested_start_at
+      responded_at
+      rental_selection_windows
+      client { user { first_name last_name } }
+      rental_location_listing { rental_item { name } }
+    }
+  }
+`;
+
+export const EXPIRE_RENTAL_REQUEST_NO_RESPONSE = `
+  mutation ExpireRentalRequestNoResponse($id: uuid!, $respondedAt: timestamptz!) {
+    update_rental_requests(
+      where: { id: { _eq: $id }, status: { _eq: pending } }
+      _set: {
+        status: unavailable
+        unavailable_reason_code: "no_response"
+        responded_at: $respondedAt
+        business_response_note: null
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+export const LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY = `
+  query ListPendingRentalRequestsForExpiry {
+    rental_requests(where: { status: { _eq: pending } }) {
+      id
+      created_at
+      requested_start_at
+      rental_selection_windows
+      client { user_id user { first_name last_name } }
+      rental_location_listing {
+        id
+        business_location { address { country } }
+        rental_item { name business { name user_id } }
+      }
+    }
+  }
+`;
+
+export const BOOKING_IDS_FOR_RENTAL_REQUEST = `
+  query BookingIdsForRentalRequest($requestId: uuid!) {
+    rental_bookings(where: { rental_request_id: { _eq: $requestId } }, limit: 5) {
+      id
+    }
+  }
+`;
+
 export const GET_BUSINESS_RENTAL_REQUESTS = `
   query GetBusinessRentalRequests(
     $where: rental_requests_bool_exp!
     $limit: Int!
     $offset: Int!
+    $orderBy: [rental_requests_order_by!]
   ) {
     rental_requests(
       where: $where
-      order_by: { created_at: desc }
+      order_by: $orderBy
       limit: $limit
       offset: $offset
     ) {
       id
       created_at
+      requested_start_at
       status
       rental_selection_windows
       rental_pricing_snapshot
@@ -1200,6 +1271,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
           name
           address {
             city
+            country
           }
         }
         weekly_availability(order_by: { weekday: asc }) {

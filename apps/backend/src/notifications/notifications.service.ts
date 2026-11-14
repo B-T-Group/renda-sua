@@ -142,7 +142,9 @@ import {
   buildRenterReturnEscalationNotice,
   buildRentalNotReceivedSupportNotice,
   buildRentalPeriodEndedPush,
+  buildBusinessRentalRequestExpiredPush,
   buildRentalRequestAcceptedPush,
+  buildRentalRequestNoResponsePush,
   buildRentalRequestRejectedPush,
   buildConditionDeclinedNotice,
   buildConditionRefundSupportNotice,
@@ -244,12 +246,14 @@ const RENTAL_REJECTION_REASONS: Record<
     fully_booked: 'This listing is fully booked for the dates you requested.',
     dates_not_available: 'Those dates are not available from this business.',
     item_unavailable: 'The item is not available.',
+    no_response: 'The business did not respond in time. You can send a new request from the listing.',
     pricing_mismatch: 'The business could not match the requested pricing.',
   },
   fr: {
     fully_booked: 'Cette annonce est complète pour les dates demandées.',
     dates_not_available: 'Ces dates ne sont pas disponibles chez ce professionnel.',
     item_unavailable: "L'article n'est pas disponible.",
+    no_response: "Le commerce n'a pas répondu à temps. Vous pouvez envoyer une nouvelle demande depuis l'annonce.",
     pricing_mismatch: "Le professionnel n'a pas pu confirmer le tarif demandé.",
   },
 };
@@ -3748,6 +3752,127 @@ export class NotificationsService {
         `sendClientRentalRequestAcceptedEmail: ${error?.message ?? String(error)}`
       );
     }
+  }
+
+  /** In-app row, push, and email. 24h copy, not the “not available” decline. Never throws. */
+  async sendRentalRequestNoResponse(payload: {
+    id: string;
+    window: 'sla' | 'start';
+    clientUserId: string | null;
+    businessUserId: string | null;
+    itemName: string;
+    businessName: string;
+    renterName: string;
+    listingId: string;
+  }): Promise<void> {
+    try {
+      await this.deliverRenterNoResponse(payload);
+      await this.deliverBusinessRequestExpired(payload);
+    } catch (error: any) {
+      this.logger.error(`sendRentalRequestNoResponse: ${error?.message ?? error}`);
+    }
+  }
+
+  private async deliverRenterNoResponse(payload: {
+    id: string;
+    window: 'sla' | 'start';
+    clientUserId: string | null;
+    businessName: string;
+    listingId: string;
+  }): Promise<void> {
+    const userId = payload.clientUserId?.trim();
+    if (!userId) return;
+    const user = await this.getUserRowForEmail(userId);
+    const msg = buildRentalRequestNoResponsePush({
+      businessName: payload.businessName,
+      window: payload.window,
+      preferredLanguage: user?.preferred_language,
+    });
+    const listingPath = `/rentals/${payload.listingId}`;
+    await this.insertNoResponseMessage(userId, payload.id, 'RENTAL_REQUEST_NO_RESPONSE', msg.body, {
+      path: listingPath,
+      actions: [
+        { id: 'view_listing', label: msg.viewListing, path: listingPath },
+        { id: 'browse_rentals', label: msg.browseRentals, path: '/rentals' },
+      ],
+    });
+    await this.pushNoResponse(userId, msg.title, msg.body, {
+      type: 'rental_request_no_response',
+      rentalRequestId: payload.id,
+      url: listingPath,
+    });
+    await this.emailNoResponse(user?.email ?? null, msg.title, msg.body);
+  }
+
+  private async deliverBusinessRequestExpired(payload: {
+    id: string;
+    window: 'sla' | 'start';
+    businessUserId: string | null;
+    itemName: string;
+    renterName: string;
+  }): Promise<void> {
+    const userId = payload.businessUserId?.trim();
+    if (!userId) return;
+    const user = await this.getUserRowForEmail(userId);
+    const msg = buildBusinessRentalRequestExpiredPush({
+      window: payload.window,
+      preferredLanguage: user?.preferred_language,
+    });
+    const path = '/business/rentals/requests';
+    const detail = [payload.itemName, payload.renterName].filter(Boolean).join(' · ');
+    await this.insertNoResponseMessage(userId, payload.id, 'RENTAL_REQUEST_EXPIRED', msg.body, {
+      path,
+      itemName: payload.itemName,
+      detail,
+    });
+    await this.pushNoResponse(userId, msg.title, msg.body, {
+      type: 'rental_request_expired',
+      rentalRequestId: payload.id,
+      url: path,
+    });
+  }
+
+  private async insertNoResponseMessage(
+    userId: string,
+    requestId: string,
+    messageType: string,
+    body: string,
+    messagePayload: Record<string, unknown>
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation InsertRentalNoResponse($object: user_messages_insert_input!) {
+        insert_user_messages_one(object: $object) { id }
+      }`,
+      {
+        object: {
+          user_id: userId,
+          entity_type: 'rental_request',
+          entity_id: requestId,
+          message_type: messageType,
+          message: body,
+          message_payload: { requestId, ...messagePayload },
+        },
+      }
+    );
+  }
+
+  private async pushNoResponse(
+    userId: string,
+    title: string,
+    body: string,
+    data: Record<string, string>
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    await this.sendPushNotificationByUserId(userId, title, body, data);
+  }
+
+  private async emailNoResponse(email: string | null, subject: string, body: string): Promise<void> {
+    if (!email) return;
+    await this.sendSimpleLifecycleEmail({
+      to: email,
+      subject,
+      html: `<p>${escapeHtmlForEmail(body)}</p>`,
+    });
   }
 
   async sendClientRentalRequestRejectedEmail(

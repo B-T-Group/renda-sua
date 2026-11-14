@@ -50,6 +50,8 @@ import {
 import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, shouldNotifyPriceChange } from './rental-price-change';
 import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
+import { computeRespondBy, earliestRequestStartIso } from './rental-respond-by';
+import { dashboardRequestsEnabled, type DashboardRequestFlagRow } from './rental-dashboard-flag';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { refundLateCollectIfDeclined } from './pickup-decline/late-collect-refund';
@@ -199,11 +201,20 @@ export interface ListBusinessRentalRequestsQuery {
   status?: string;
 }
 
+export interface RentalRequestExpiryNotice {
+  id: string;
+  itemName: string;
+  renterName: string;
+  window: 'sla' | 'start';
+  respondedAt: string | null;
+}
+
 export interface PaginatedBusinessRentalRequests {
   requests: any[];
   total: number;
   page: number;
   limit: number;
+  expiryNotices: RentalRequestExpiryNotice[];
 }
 
 export interface PaginatedPublicRentalListings {
@@ -1513,14 +1524,39 @@ export class RentalsService {
     query: ListBusinessRentalRequestsQuery = {}
   ): Promise<PaginatedBusinessRentalRequests> {
     const businessId = await this.requireBusinessId();
+    const flags = await this.loadDashboardRequestFlags();
+    const enabled = dashboardRequestsEnabled(flags, null);
     const page = Math.max(1, Number(query.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(query.limit) || 50));
+    const limit = this.businessRequestLimit(query, enabled);
+    const listed = await this.queryBusinessRequests(businessId, query, page, limit, enabled);
+    const expiryNotices = enabled ? await this.recentNoResponseNotices(businessId) : [];
+    return { ...listed, requests: this.withRespondBy(listed.requests), expiryNotices };
+  }
+
+  private businessRequestLimit(query: ListBusinessRentalRequestsQuery, enabled: boolean): number {
+    const requested = Number(query.limit);
+    const hasLimit = Number.isFinite(requested) && requested > 0;
+    const pending = query.status?.trim() === 'pending';
+    if (enabled && pending) return hasLimit ? requested : 1000;
+    return Math.min(100, hasLimit ? requested : 50);
+  }
+
+  private async queryBusinessRequests(
+    businessId: string,
+    query: ListBusinessRentalRequestsQuery,
+    page: number,
+    limit: number,
+    soonestFirst: boolean
+  ): Promise<Omit<PaginatedBusinessRentalRequests, 'expiryNotices'>> {
     const offset = (page - 1) * limit;
     const where = this.buildBusinessRequestsWhere(businessId, query.status);
+    const orderBy = soonestFirst
+      ? [{ requested_start_at: 'asc' }, { created_at: 'asc' }]
+      : [{ created_at: 'desc' }];
     const r = await this.hasuraSystemService.executeQuery<{
       rental_requests: any[];
       rental_requests_aggregate: { aggregate: { count: number } | null } | null;
-    }>(Q.GET_BUSINESS_RENTAL_REQUESTS, { where, limit, offset });
+    }>(Q.GET_BUSINESS_RENTAL_REQUESTS, { where, limit, offset, orderBy });
     return {
       requests: r.rental_requests ?? [],
       total: r.rental_requests_aggregate?.aggregate?.count ?? 0,
@@ -1551,6 +1587,80 @@ export class RentalsService {
       where.status = { _eq: trimmed };
     }
     return where;
+  }
+
+  private withRespondBy(rows: any[]): any[] {
+    return rows.map((row) => this.attachRespondBy(row));
+  }
+
+  private attachRespondBy(row: any): any {
+    const startAt = earliestRequestStartIso(row);
+    const decision = computeRespondBy({ createdAt: row.created_at, startAt });
+    const country = row.rental_location_listing?.business_location?.address?.country;
+    return {
+      ...row,
+      respond_by: decision.respondBy,
+      respond_window: decision.window,
+      listing_timezone: marketTimeZone(country) ?? 'Africa/Douala',
+    };
+  }
+
+  private async loadDashboardRequestFlags(): Promise<DashboardRequestFlagRow[]> {
+    const rows = await this.hasuraSystemService.executeQuery<{
+      application_configurations: DashboardRequestFlagRow[];
+    }>(Q.DASHBOARD_REQUESTS_FLAG, {});
+    return rows.application_configurations ?? [];
+  }
+
+  private async recentNoResponseNotices(businessId: string): Promise<RentalRequestExpiryNotice[]> {
+    const since = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+    const where = this.noResponseWhere(businessId, since);
+    const r = await this.hasuraSystemService.executeQuery<{ rental_requests: any[] }>(
+      Q.LIST_RECENT_NO_RESPONSE_REQUESTS,
+      { where }
+    );
+    return (r.rental_requests ?? []).map((row) => this.toExpiryNotice(row));
+  }
+
+  private noResponseWhere(businessId: string, since: string): Record<string, unknown> {
+    return {
+      status: { _eq: 'unavailable' },
+      unavailable_reason_code: { _eq: 'no_response' },
+      responded_at: { _gte: since },
+      rental_location_listing: { rental_item: { business_id: { _eq: businessId } } },
+    };
+  }
+
+  private toExpiryNotice(row: any): RentalRequestExpiryNotice {
+    const decision = computeRespondBy({
+      createdAt: row.created_at,
+      startAt: earliestRequestStartIso(row),
+    });
+    const user = row.client?.user;
+    const renterName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim();
+    return {
+      id: row.id,
+      itemName: row.rental_location_listing?.rental_item?.name ?? 'Rental',
+      renterName,
+      window: decision.window,
+      respondedAt: row.responded_at ?? null,
+    };
+  }
+
+  /** Same hold and card release a decline uses when a booking was already opened. */
+  async releaseLinkedDeclineHold(requestId: string): Promise<void> {
+    const booking = await this.bookingForRequest(requestId);
+    if (!booking) return;
+    await this.releaseHoldIfNeeded(booking.id, booking);
+    await this.cancelStripeAuthorizationIfAny(booking);
+  }
+
+  private async bookingForRequest(requestId: string): Promise<any | null> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: Array<{ id: string }>;
+    }>(Q.BOOKING_IDS_FOR_RENTAL_REQUEST, { requestId });
+    const id = res.rental_bookings?.[0]?.id;
+    return id ? this.fetchBooking(id) : null;
   }
 
   async getBusinessRentalSchedule(rentalItemId: string): Promise<any[]> {
