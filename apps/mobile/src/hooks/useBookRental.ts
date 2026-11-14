@@ -1,11 +1,14 @@
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createBooking } from '../services/rentalsApi';
+import { cardWindowErrorMessage } from '../utils/rentals/cardWindow';
 import type {
   CreateRentalBookingOptions,
   CreateRentalBookingResult,
 } from '../types/rentals';
 
 export function useBookRental() {
+  const { i18n } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,14 +29,14 @@ export function useBookRental() {
         }
         return res;
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Failed to create booking';
+        const msg = cardWindowErrorMessage(e, i18n.language) ?? (e instanceof Error ? e.message : 'Failed to create booking');
         setError(msg);
         throw e;
       } finally {
         setLoading(false);
       }
     },
-    []
+    [i18n.language]
   );
 
   return { book, loading, error };

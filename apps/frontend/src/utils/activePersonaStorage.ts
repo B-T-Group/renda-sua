@@ -129,9 +129,15 @@ export function activePersonaAuthField(): { active_persona?: PersonaSlug } {
   return persona ? { active_persona: persona } : {};
 }
 
-/** Authorize query params. Extra keys (connection, login_hint) stay, and stored persona is added. */
+/**
+ * Authorize params for the Auth0 SPA client.
+ * `active_persona` is always present so a provider default captured at page
+ * load can be cleared. Auth0 drops `undefined` (JSON.stringify / stripUndefined).
+ * Omitting the key instead leaves the baked-in persona on refresh, so a
+ * delegation switch keeps the previous owner role in the cached token.
+ */
 export function authorizationParamsWithActivePersona(
   extra: Record<string, string> = {}
-): Record<string, string> {
-  return { ...extra, ...activePersonaAuthField() };
+): Record<string, string | undefined> {
+  return { ...extra, active_persona: readStoredActivePersonaSlug() };
 }

@@ -47,12 +47,29 @@ const NEXT_STEP_DEFAULTS: Record<string, string> = {
   'rentals.nextStep.awaitingReturnBusiness':
     'Confirm return when the item is back to settle the booking.',
   'rentals.nextStep.completed': 'This rental is complete.',
+  'rentalInspection.bannerReview':
+    'Review the condition report, then accept it to start the rental.',
+  'rentalInspection.bannerWaiting':
+    'Waiting for the renter to accept the condition report. No PIN is needed.',
 };
+
+const REVIEW_PILL = { backgroundColor: '#0A4FB518', textColor: '#0A4FB5', borderColor: '#0A4FB544' };
+const WAITING_PILL = { backgroundColor: '#B4530918', textColor: '#B45309', borderColor: '#B4530944' };
+
+function inspectionChipTone(nextStepKey?: string): 'review' | 'waiting' | null {
+  if (nextStepKey === 'rentalInspection.bannerWaiting') return 'waiting';
+  if (nextStepKey === 'rentalInspection.bannerReview') return 'review';
+  return null;
+}
 
 interface Props {
   bookingStatus?: string | null;
   requestStatus?: string | null;
   role: RentalPhaseRole;
+  /** Detail screens pass the pill label so awaiting return is not the phase name. */
+  chipLabel?: string;
+  /** Replaces the status next-step when an inspected rental does not use a PIN. */
+  nextStepKey?: string;
   action?: React.ReactNode;
 }
 
@@ -60,6 +77,8 @@ export function RentalPhaseBanner({
   bookingStatus,
   requestStatus,
   role,
+  chipLabel,
+  nextStepKey,
   action,
 }: Props) {
   const { t } = useTranslation();
@@ -69,7 +88,10 @@ export function RentalPhaseBanner({
       ? resolveBookingPhase(bookingStatus, role)
       : resolveRentalPhase({ requestStatus, bookingStatus }, role);
 
-  if (!info.nextStepKey && info.phase === 'done' && !bookingStatus) {
+  const stepKey = nextStepKey ?? info.nextStepKey;
+  const tone = inspectionChipTone(nextStepKey);
+  const toneColors = tone === 'waiting' ? WAITING_PILL : tone === 'review' ? REVIEW_PILL : null;
+  if (!stepKey && info.phase === 'done' && !bookingStatus) {
     return null;
   }
 
@@ -91,10 +113,10 @@ export function RentalPhaseBanner({
     >
       <View style={styles.row}>
         <StatusPill
-          label={t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
-          backgroundColor={phaseColors.backgroundColor}
-          textColor={phaseColors.textColor}
-          borderColor={phaseColors.borderColor}
+          label={chipLabel || t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
+          backgroundColor={toneColors?.backgroundColor ?? phaseColors.backgroundColor}
+          textColor={toneColors?.textColor ?? phaseColors.textColor}
+          borderColor={toneColors?.borderColor ?? phaseColors.borderColor}
         />
         <Text
           style={[
@@ -105,9 +127,9 @@ export function RentalPhaseBanner({
           {t('rentals.nextStep.label', 'Next step')}
         </Text>
       </View>
-      {info.nextStepKey ? (
+      {stepKey ? (
         <Text style={[typography.body2, { color: colors.text.primary }]}>
-          {t(info.nextStepKey, NEXT_STEP_DEFAULTS[info.nextStepKey] ?? '')}
+          {t(stepKey, NEXT_STEP_DEFAULTS[stepKey] ?? '')}
         </Text>
       ) : null}
       {action}

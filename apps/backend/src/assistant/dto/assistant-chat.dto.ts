@@ -4,6 +4,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -62,6 +63,21 @@ export class AssistantChatRequestDto {
   @IsOptional()
   @IsUUID('4')
   threadId?: string;
+
+  @ApiPropertyOptional({ description: 'Dates already chosen in the rental date chip' })
+  @IsOptional()
+  @IsObject()
+  rentalDates?: {
+    startDate?: string;
+    endDate?: string;
+    startAt?: string;
+    endAt?: string;
+  };
+
+  @ApiPropertyOptional({ description: 'Listing ids for rental refs from the previous turn' })
+  @IsOptional()
+  @IsObject()
+  rentalRefs?: Record<string, string>;
 }
 
 export class AssistantCardDto {
@@ -85,6 +101,9 @@ export class AssistantCardDto {
 
   @ApiPropertyOptional()
   secondaryHref?: string;
+
+  @ApiPropertyOptional({ description: 'Rental card details. Older apps ignore this.' })
+  rental?: Record<string, unknown>;
 }
 
 export class AssistantChatResponseDto {
@@ -96,4 +115,7 @@ export class AssistantChatResponseDto {
 
   @ApiPropertyOptional({ type: [AssistantCardDto] })
   cards?: AssistantCardDto[];
+
+  @ApiPropertyOptional({ description: 'Rental date chip, follow-up chips and estimate footnote' })
+  rental?: Record<string, unknown>;
 }

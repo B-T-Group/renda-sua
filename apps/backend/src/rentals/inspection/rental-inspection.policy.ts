@@ -38,6 +38,10 @@ export interface EnrolmentInput {
   now: Date;
   reviewHours?: number;
   authWindowDays?: number;
+  /** Skip only the self-rental rejection. Other enrolment checks still apply. */
+  allowSelfBooking?: boolean;
+  /** From resolveCardPaymentPolicy. Null means charge-at-pickup: the window does not apply. */
+  latest_card_end_at?: string | null;
 }
 
 export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecision {
@@ -48,7 +52,7 @@ export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecis
       'This booking is missing a client or business account, so it cannot use condition inspections.'
     );
   }
-  if (input.clientUserId === input.businessUserId) {
+  if (input.clientUserId === input.businessUserId && !input.allowSelfBooking) {
     return reject(
       INSPECTION_CODES.SELF_RENTAL,
       'You cannot book your own listing while condition inspections are enabled.'
@@ -60,24 +64,44 @@ export function decideInspectionEnrolment(input: EnrolmentInput): EnrolmentDecis
       'Condition inspections do not support multi-window bookings yet. Book a single window.'
     );
   }
-  if (input.rail === 'stripe' && !stripeReviewFits(input)) {
-    return reject(
-      INSPECTION_CODES.STRIPE_WINDOW,
-      'Card payments for inspected rentals must end early enough that the 72-hour review still fits inside the 6-day card authorization.'
-    );
+  if (input.rail === 'stripe' && !stripeReviewFits(reviewFitInput(input))) {
+    return reject(INSPECTION_CODES.STRIPE_WINDOW, STRIPE_WINDOW_MESSAGE);
   }
   return { outcome: 'enrol', policyVersion: INSPECTION_POLICY_VERSION };
 }
 
+export const STRIPE_WINDOW_MESSAGE =
+  'Card payments for inspected rentals must end early enough that the 72-hour review still fits inside the 6-day card authorization.';
+
+/** True when the end is on or before latest_card_end_at. A null cutoff does not limit dates. */
 export function stripeReviewFits(input: {
   endAt: Date;
   now: Date;
   reviewHours?: number;
   authWindowDays?: number;
+  /** Set from the card payment policy. Null skips the window. A string is the latest legal end. */
+  latest_card_end_at?: string | null;
 }): boolean {
+  if (Object.prototype.hasOwnProperty.call(input, 'latest_card_end_at')) {
+    if (input.latest_card_end_at == null) return true;
+    const latest = new Date(input.latest_card_end_at);
+    if (Number.isNaN(latest.getTime())) return false;
+    return input.endAt.getTime() <= latest.getTime();
+  }
   const reviewMs = (input.reviewHours ?? DEFAULT_STRIPE_REVIEW_HOURS) * 3600000;
   const authMs = (input.authWindowDays ?? STRIPE_AUTH_WINDOW_DAYS) * 86400000;
   return input.endAt.getTime() + reviewMs <= input.now.getTime() + authMs;
+}
+
+function reviewFitInput(input: EnrolmentInput) {
+  const fit = {
+    endAt: input.endAt,
+    now: input.now,
+    reviewHours: input.reviewHours,
+    authWindowDays: input.authWindowDays,
+  };
+  if (!Object.prototype.hasOwnProperty.call(input, 'latest_card_end_at')) return fit;
+  return { ...fit, latest_card_end_at: input.latest_card_end_at };
 }
 
 export interface PickupGateBooking {
@@ -111,6 +135,45 @@ export function pickupStartAllowed(booking: PickupGateBooking): boolean {
     !!booking.pickupAcceptedVersionId &&
     booking.pickupAcceptedVersionId === booking.pickupCurrentVersionId
   );
+}
+
+export const DIDNT_RECEIVE_WINDOW_MINUTES = 30;
+
+export type AcceptStartPaymentRail = 'card' | 'wallet' | 'mobile_money';
+
+export interface AcceptAndStartResult {
+  success: true;
+  accepted: true;
+  started: boolean;
+  alreadyStarted: boolean;
+  paymentPending: boolean;
+  payment_rail: AcceptStartPaymentRail;
+  amount_due_at_pickup: number;
+  bookingId: string;
+}
+
+/** Card is already authorized. Wallet covers the contract. Otherwise Mobile Money. */
+export function acceptStartPaymentRail(input: {
+  status: string;
+  paymentStatus: string | null | undefined;
+  walletCovers: boolean;
+}): AcceptStartPaymentRail | null {
+  if (input.status === 'confirmed' && input.paymentStatus === 'authorized') return 'card';
+  if (input.status === 'confirmed' && input.paymentStatus === 'paid') return 'wallet';
+  if (input.status !== 'reserved') return null;
+  return input.walletCovers ? 'wallet' : 'mobile_money';
+}
+
+export function didntReceiveWindowOpen(
+  startedAt: string | null | undefined,
+  now: Date,
+  minutes = DIDNT_RECEIVE_WINDOW_MINUTES
+): boolean {
+  if (!startedAt) return false;
+  const at = new Date(startedAt).getTime();
+  if (!Number.isFinite(at)) return false;
+  const elapsed = now.getTime() - at;
+  return elapsed >= 0 && elapsed <= minutes * 60000;
 }
 
 export interface SettlementGateBooking {

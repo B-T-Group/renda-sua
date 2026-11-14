@@ -249,6 +249,15 @@ export class SiteEventsService {
     );
   }
 
+  private allowsRentalBookingSubject(body: TrackSiteEventDto): boolean {
+    return (
+      (body.eventType === 'rental_accept_and_start_tap' ||
+        body.eventType === 'rental_renter_reported_returned') &&
+      body.subjectType === 'rental_booking' &&
+      Boolean(body.subjectId)
+    );
+  }
+
   private requiresInventorySubject(eventType: string): boolean {
     return (
       eventType.startsWith('inventory.cta.') ||
@@ -258,6 +267,7 @@ export class SiteEventsService {
   }
 
   private assertV1Subject(body: TrackSiteEventDto): void {
+    if (this.allowsRentalBookingSubject(body)) return;
     // Item-scoped inventory events require an inventory_item subject.
     // Funnel / FTUE / market / discovery events may omit subject entirely.
     if (this.requiresInventorySubject(body.eventType)) {

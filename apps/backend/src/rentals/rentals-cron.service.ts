@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
+import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
 import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
@@ -22,7 +23,8 @@ export class RentalsCronService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly notificationsService: NotificationsService,
     private readonly inspections: RentalInspectionService,
-    private readonly rentalsService: RentalsService
+    private readonly rentalsService: RentalsService,
+    private readonly renterReturns: RentalRenterReturnService
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -146,6 +148,16 @@ export class RentalsCronService {
       }
     }
     return rows.length;
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleReturnReportEscalations(): Promise<void> {
+    try {
+      const n = await this.renterReturns.escalateDue();
+      if (n > 0) this.logger.log(`Escalated ${n} unconfirmed renter return report(s)`);
+    } catch (error: any) {
+      this.logger.error(error?.message ?? String(error));
+    }
   }
 
   @Cron(CronExpression.EVERY_5_MINUTES)

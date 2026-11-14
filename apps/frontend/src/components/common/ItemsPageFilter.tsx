@@ -82,6 +82,8 @@ interface ItemsPageFilterProps {
   onBusinessFilterChange?: (businessName: string) => void;
   /** Called when user clears all filters from this panel. */
   onClearFilters?: () => void;
+  /** `/items?focus=search` puts the caret in the catalog search field. */
+  autoFocusSearch?: boolean;
 }
 
 const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
@@ -95,6 +97,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   loading = false,
   onBusinessFilterChange,
   onClearFilters,
+  autoFocusSearch = false,
 }) => {
   const { t } = useTranslation();
   const browserGeo = usePublicBrowserGeo(true);
@@ -108,10 +111,16 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   const { trackSiteEvent } = useTrackSiteEvent();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [searchDraft, setSearchDraft] = React.useState(searchTerm);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setSearchDraft(searchTerm);
   }, [searchTerm]);
+
+  useLayoutEffect(() => {
+    if (!autoFocusSearch) return;
+    searchInputRef.current?.focus();
+  }, [autoFocusSearch]);
 
   const runSearch = React.useCallback(() => {
     onSearchSubmit(searchDraft.trim());
@@ -560,6 +569,8 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
                 fullWidth
                 size="medium"
                 variant="outlined"
+                autoFocus={autoFocusSearch}
+                inputRef={searchInputRef}
                 placeholder={t(
                   'public.items.searchPlaceholder',
                   'Search for items, shops, or categories…'

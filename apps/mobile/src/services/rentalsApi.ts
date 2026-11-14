@@ -251,6 +251,18 @@ export async function modifyRequest(
   });
 }
 
+export async function getRequestInspectionPolicy(requestId: string): Promise<number | null | undefined> {
+  try {
+    const res = await apiRequest<{ success: boolean; inspection_policy_version: number | null }>(
+      `/rentals/requests/${encodeURIComponent(requestId)}/inspection-policy`,
+      { method: 'GET' }
+    );
+    return res.inspection_policy_version ?? null;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function createRequest(
   body: CreateRentalRequestBody
 ): Promise<CreateRentalRequestResult> {
@@ -345,6 +357,50 @@ export async function initiatePickupPayment(
   return apiRequest<CreateRentalBookingResult>(
     `/rentals/bookings/${encodeURIComponent(bookingId)}/pickup-payment`,
     { method: 'POST' }
+  );
+}
+
+export interface AcceptAndStartResult {
+  success: true;
+  accepted: true;
+  started: boolean;
+  alreadyStarted: boolean;
+  paymentPending: boolean;
+  payment_rail: 'card' | 'wallet' | 'mobile_money';
+  amount_due_at_pickup: number;
+  bookingId: string;
+}
+
+export async function reportReturned(bookingId: string): Promise<{
+  success: true;
+  alreadyReported: boolean;
+  wasOverdue: boolean;
+  report: { rentalBookingId: string; reportedAt: string };
+}> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/report-returned`,
+    { method: 'POST' }
+  );
+}
+
+export async function reportNotReceived(bookingId: string): Promise<{
+  success: true;
+  alreadyReported: boolean;
+  report: { id: string; rentalBookingId: string; reportedAt: string };
+}> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/report-not-received`,
+    { method: 'POST' }
+  );
+}
+
+export async function acceptAndStart(
+  bookingId: string,
+  versionId: string
+): Promise<AcceptAndStartResult> {
+  return apiRequest<AcceptAndStartResult>(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/accept-and-start`,
+    { method: 'POST', body: JSON.stringify({ versionId }) }
   );
 }
 
@@ -628,6 +684,9 @@ export const rentalsApi = {
   getStartPin,
   cancelBooking,
   initiatePickupPayment,
+  acceptAndStart,
+  reportNotReceived,
+  reportReturned,
   getBusinessItems,
   getBusinessItem,
   createBusinessItem,

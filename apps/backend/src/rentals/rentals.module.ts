@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AppConfigModule } from '../app-config/app-config.module';
 import { AdminAuthModule } from '../admin/admin-auth.module';
 import { AwsModule } from '../aws/aws.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
@@ -14,8 +15,10 @@ import { RentalsController } from './rentals.controller';
 import { RentalSearchController } from './rental-search.controller';
 import { RentalsCronService } from './rentals-cron.service';
 import { RentalInspectionEvidenceService } from './inspection/rental-inspection-evidence.service';
-import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
+import { RentalCardWindowModule } from './inspection/rental-card-window.module';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
+import { RentalNotReceivedService } from './inspection/rental-not-received.service';
+import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { RentalsService } from './rentals.service';
 import { RentalSearchService } from './rental-search.service';
 import { RentalAvailabilityService } from './rental-availability.service';
@@ -23,10 +26,12 @@ import { RentalAvailabilityService } from './rental-availability.service';
 @Module({
   imports: [
     AdminAuthModule,
+    AppConfigModule,
     AwsModule,
     NotificationsModule,
     ImageValidationModule,
     StripePaymentsModule,
+    RentalCardWindowModule,
     RentalListingAiReviewModule,
   ],
   controllers: [RentalsController, RentalSearchController, RentalInspectionsController, AdminRentalBookingsController],
@@ -38,10 +43,11 @@ import { RentalAvailabilityService } from './rental-availability.service';
     RentalPaymentCallbackHandler,
     RentalStartPinShareService,
     RentalBookingMessagingService,
-    RentalInspectionFlags,
     RentalInspectionService,
+    RentalNotReceivedService,
+    RentalRenterReturnService,
     RentalInspectionEvidenceService,
   ],
-  exports: [RentalsService, RentalPaymentCallbackHandler],
+  exports: [RentalsService, RentalSearchService, RentalPaymentCallbackHandler, RentalCardWindowModule],
 })
 export class RentalsModule {}

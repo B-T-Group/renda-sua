@@ -13,6 +13,7 @@ import type {
   BusinessRentalRequestRow,
   UnavailableRentalReasonCode,
 } from '../../../types/rentals';
+import { cardWindowErrorMessage } from '../../../utils/rentals/cardWindow';
 import {
   computeRentalPricingLines,
   formatRentalMoney,
@@ -64,7 +65,7 @@ export function BusinessRentalRespondDialog({
   onSuccess,
   onStale,
 }: BusinessRentalRespondDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const [contractHours, setContractHours] = useState('48');
   const [availableNote, setAvailableNote] = useState('');
@@ -123,15 +124,11 @@ export function BusinessRentalRespondDialog({
         resetAndClose();
         return;
       }
-      setError(
-        e instanceof Error
-          ? e.message
-          : t('business.rentals.respondFailed', 'Could not send response')
-      );
+      setError(respondErrorText(e, i18n.language, t));
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, contractHours, onStale, onSuccess, request, resetAndClose, t]);
+  }, [availableNote, contractHours, i18n.language, onStale, onSuccess, request, resetAndClose, t]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -165,15 +162,11 @@ export function BusinessRentalRespondDialog({
         resetAndClose();
         return;
       }
-      setError(
-        e instanceof Error
-          ? e.message
-          : t('business.rentals.respondFailed', 'Could not send response')
-      );
+      setError(respondErrorText(e, i18n.language, t));
     } finally {
       setSubmitting(false);
     }
-  }, [onStale, onSuccess, reasonCode, request, resetAndClose, t, unavailableNote]);
+  }, [i18n.language, onStale, onSuccess, reasonCode, request, resetAndClose, t, unavailableNote]);
 
   if (!mode) return null;
 
@@ -284,6 +277,17 @@ export function BusinessRentalRespondDialog({
 }
 
 /** Confirm soft-delete helper used by detail screens. */
+function respondErrorText(
+  error: unknown,
+  locale: string,
+  t: (key: string, fallback: string) => string
+): string {
+  return (
+    cardWindowErrorMessage(error, locale) ??
+    (error instanceof Error ? error.message : t('business.rentals.respondFailed', 'Could not send response'))
+  );
+}
+
 export function confirmSoftDelete(
   title: string,
   message: string,

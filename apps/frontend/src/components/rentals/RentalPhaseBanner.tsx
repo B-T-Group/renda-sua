@@ -44,12 +44,29 @@ const NEXT_STEP_DEFAULTS: Record<string, string> = {
   'rentals.nextStep.awaitingReturnBusiness':
     'Confirm return when the item is back to settle the booking.',
   'rentals.nextStep.completed': 'This rental is complete.',
+  'rentalInspection.bannerReview':
+    'Review the condition report, then accept it to start the rental.',
+  'rentalInspection.bannerWaiting':
+    'Waiting for the renter to accept the condition report. No PIN is needed.',
 };
+
+const REVIEW_CHIP = { bgcolor: '#0A4FB518', color: '#0A4FB5', borderColor: '#0A4FB544' };
+const WAITING_CHIP = { bgcolor: '#B4530918', color: '#B45309', borderColor: '#B4530944' };
+
+function inspectionChipTone(nextStepKey?: string): 'review' | 'waiting' | null {
+  if (nextStepKey === 'rentalInspection.bannerWaiting') return 'waiting';
+  if (nextStepKey === 'rentalInspection.bannerReview') return 'review';
+  return null;
+}
 
 interface Props {
   bookingStatus?: string | null;
   requestStatus?: string | null;
   role: RentalPhaseRole;
+  /** Detail screens pass the pill label so awaiting return is not the phase name. */
+  chipLabel?: string;
+  /** Replaces the status next-step when an inspected rental does not use a PIN. */
+  nextStepKey?: string;
   /** Optional primary action rendered under the banner */
   action?: React.ReactNode;
 }
@@ -58,6 +75,8 @@ export const RentalPhaseBanner: React.FC<Props> = ({
   bookingStatus,
   requestStatus,
   role,
+  chipLabel,
+  nextStepKey,
   action,
 }) => {
   const { t } = useTranslation();
@@ -67,7 +86,9 @@ export const RentalPhaseBanner: React.FC<Props> = ({
       ? resolveBookingPhase(bookingStatus, role)
       : resolveRentalPhase({ requestStatus, bookingStatus }, role);
 
-  if (!info.nextStepKey && info.phase === 'done' && !bookingStatus) {
+  const stepKey = nextStepKey ?? info.nextStepKey;
+  const tone = inspectionChipTone(nextStepKey);
+  if (!stepKey && info.phase === 'done' && !bookingStatus) {
     return null;
   }
 
@@ -85,18 +106,18 @@ export const RentalPhaseBanner: React.FC<Props> = ({
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
         <Chip
           size="small"
-          label={t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
-          color="info"
+          label={chipLabel || t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
+          color={tone ? undefined : 'info'}
           variant="outlined"
-          sx={{ fontWeight: 700 }}
+          sx={{ fontWeight: 700, ...(tone === 'waiting' ? WAITING_CHIP : {}), ...(tone === 'review' ? REVIEW_CHIP : {}) }}
         />
         <Typography variant="caption" color="info.main" fontWeight={700}>
           {t('rentals.nextStep.label', 'Next step')}
         </Typography>
       </Stack>
-      {info.nextStepKey ? (
+      {stepKey ? (
         <Typography variant="body2" color="text.primary">
-          {t(info.nextStepKey, NEXT_STEP_DEFAULTS[info.nextStepKey] ?? '')}
+          {t(stepKey, NEXT_STEP_DEFAULTS[stepKey] ?? '')}
         </Typography>
       ) : null}
       {action}

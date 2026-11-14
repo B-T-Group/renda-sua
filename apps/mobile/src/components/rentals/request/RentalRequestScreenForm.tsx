@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -26,6 +26,8 @@ export interface RentalRequestScreenFormProps extends RentalRequestScheduleCardP
   onSend: () => void;
   previousAmount?: string;
   legal?: string;
+  notice?: ReactNode;
+  blockedReason?: string;
 }
 
 export function RentalRequestScreenForm(props: RentalRequestScreenFormProps) {
@@ -48,6 +50,7 @@ export function RentalRequestScreenForm(props: RentalRequestScreenFormProps) {
         showsVerticalScrollIndicator={false}
       >
         <RentalRequestScheduleCard {...props} />
+        {props.notice}
         <QuantityBlock {...props} blockStyle={block} />
         <TextInput
           testID="rental-request-notes"
@@ -95,6 +98,7 @@ export function RentalRequestScreenForm(props: RentalRequestScreenFormProps) {
         onSend={props.onSend}
         previousAmount={props.previousAmount}
         legal={props.legal}
+        blockedReason={props.blockedReason}
       />
     </View>
   );

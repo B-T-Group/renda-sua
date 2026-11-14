@@ -13,6 +13,7 @@ export interface RentalRequestStickyBarProps {
   onSend: () => void;
   previousAmount?: string;
   legal?: string;
+  blockedReason?: string;
 }
 
 export function RentalRequestStickyBar({
@@ -24,6 +25,7 @@ export function RentalRequestStickyBar({
   onSend,
   previousAmount,
   legal,
+  blockedReason,
 }: RentalRequestStickyBarProps) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
@@ -56,8 +58,8 @@ export function RentalRequestStickyBar({
           </Text>
         </View>
       </View>
-      <Text style={[styles.legal, { color: colors.text.secondary }]}>
-        {legal ?? t('rentals.searchFirst.nothingCharged', 'Nothing is charged until the business accepts.')}
+      <Text style={[styles.legal, { color: blockedReason ? '#B45309' : colors.text.secondary, fontWeight: blockedReason ? '600' : '400' }]}>
+        {blockedReason ?? legal ?? t('rentals.searchFirst.nothingCharged', 'Nothing is charged until the business accepts.')}
       </Text>
       <Button
         mode="contained"

@@ -304,7 +304,10 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
                 variant="contained"
                 onClick={() => navigate(`/rentals/bookings/${booking.id}`)}
               >
-                {phase.businessQueue === 'collect_pay'
+                {booking?.inspection_policy_version != null &&
+                (phase.businessQueue === 'collect_pay' || phase.businessQueue === 'start')
+                  ? t('rentals.actions.openBooking', 'Open booking')
+                  : phase.businessQueue === 'collect_pay'
                   ? t('rentals.actions.collectPayment', 'Collect payment')
                   : phase.businessQueue === 'start'
                     ? t('rentals.actions.verifyStartPin', 'Verify start PIN')

@@ -183,6 +183,10 @@ function ClientBrowseHomeScreenBase() {
     () => selectBuyAgainOrder(clientBrowseOrders ? orders : [], foodOnly),
     [clientBrowseOrders, orders, foodOnly]
   );
+  const openCatalogSearch = useCallback(() => {
+    rootNav?.navigate('ClientCatalogSearch', { foodOnly: lane === 'food' });
+  }, [lane, rootNav]);
+
   const onLaneChange = useCallback(
     (next: HomeLane) => {
       tabNav.setParams({
@@ -254,6 +258,7 @@ function ClientBrowseHomeScreenBase() {
         </View>
       ) : null}
       <BrowseCatalogScreen
+        onSearchBarPress={flags.rentals_client_tab_enabled ? openCatalogSearch : undefined}
         foodOnly={foodOnly}
         initialSegment={foodOnly ? 'food' : 'all'}
         requestedCategory={route.params?.category}

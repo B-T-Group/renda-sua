@@ -1,3 +1,4 @@
+import { CheckCircle, Lens, RadioButtonUnchecked } from '@mui/icons-material';
 import {
   Alert,
   Avatar,
@@ -18,6 +19,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
+import { useClientFlags } from '../../hooks/useClientFlags';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
   type RentalBookingDetail,
@@ -28,17 +30,42 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useRentalInspection } from '../../hooks/useRentalInspection';
 import LoadingPage from '../common/LoadingPage';
 import { UserMessagesComponent } from '../common/UserMessagesComponent';
+import {
+  DidntReceiveReportButton,
+  useDidntReceiveWindow,
+} from '../rentals/DidntReceiveReportButton';
 import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
+import { RenterReturnPanel } from '../rentals/RenterReturnPanel';
 import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
+import { ReportSentConfirmation } from '../rentals/ReportSentConfirmation';
+import { RentalStartedConfirmation } from '../rentals/RentalStartedConfirmation';
 import SEOHead from '../seo/SEOHead';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
-  formatRentalRequestLocalDateTime,
-  parseRentalPricingSnapshot,
+  formatRequestAmount,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
-import { messagesDefaultExpanded } from '../../utils/rentalPhase';
-import { unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { bookingRequestedPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
+import { formatDoualaStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
+import {
+  REPORT_REVIEW_STEP,
+  bookingDetailStatusLabelKey,
+  bookingDetailStepLabelKey,
+  bookingDetailTimeline,
+  bookingDetailTimelineIndex,
+  messagesDefaultExpanded,
+} from '../../utils/rentalPhase';
+import { businessCanReplaceReport, reportReadyToReview, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import {
+  confirmationDepositHeld,
+  confirmationTimeZone,
+  confirmationZoneDefault,
+  confirmationZoneKey,
+  formatBookedSpan,
+  formatConfirmationDue,
+  formatConfirmationMoney,
+} from '../../utils/rentals/confirmationFormat';
+import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 
 const PAYMENT_POLL_MS = 4000;
 
@@ -49,6 +76,8 @@ function apiErrorMessage(
 ): string {
   const data = (err as { response?: { status?: number; data?: { message?: string; code?: string } } })
     ?.response;
+  const friendly = cardWindowErrorMessage(err, navigator.language);
+  if (friendly) return friendly;
   const message = typeof data?.data?.message === 'string' ? data.data.message : '';
   if (data?.status === 426 || data?.data?.code === 'RENTAL_INSPECTION_UPDATE_REQUIRED') {
     return translate
@@ -72,9 +101,102 @@ function toDateTimeLocalValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const DETAIL_STATUS_DEFAULTS: Record<string, string> = {
+  'rentals.phases.offerReady': 'Offer ready',
+  'rentals.phases.reserved': 'Reserved',
+  'rentals.phases.readyForPickup': 'Ready for pickup',
+  'rentals.phases.inProgress': 'In progress',
+  'rentals.phases.done': 'Done',
+  'rentals.bookingStatus.awaiting_return': 'Return due',
+  'rentalInspection.phase.reportReady': 'Report ready to review',
+  'rentalInspection.phase.waitingRenter': 'Waiting for renter',
+};
+
+function BookingStatusStep({
+  step,
+  done,
+  current,
+  role,
+}: {
+  step: string;
+  done: boolean;
+  current: boolean;
+  role: 'client' | 'business';
+}) {
+  const { t } = useTranslation();
+  const labelKey = bookingDetailStepLabelKey(step, role);
+  const accent = step === REPORT_REVIEW_STEP && role === 'business' ? '#0B7A3B' : '#0A4FB5';
+  const color = done || current ? 'text.primary' : 'text.disabled';
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      {current ? (
+        <Lens sx={{ fontSize: 16, color: accent }} />
+      ) : done ? (
+        <CheckCircle sx={{ fontSize: 18, color: 'success.main' }} />
+      ) : (
+        <RadioButtonUnchecked sx={{ fontSize: 18, color: 'text.disabled' }} />
+      )}
+      <Typography variant="body2" fontWeight={current ? 700 : 400} color={color}>
+        {t(labelKey, DETAIL_STATUS_DEFAULTS[labelKey] ?? step)}
+      </Typography>
+    </Stack>
+  );
+}
+
+function BookingStatusSteps({
+  status,
+  returnNote,
+  noteColor,
+  includeReview,
+  reviewCurrent,
+  role = 'client',
+}: {
+  status: string;
+  returnNote?: string;
+  noteColor?: string;
+  includeReview?: boolean;
+  reviewCurrent?: boolean;
+  role?: 'client' | 'business';
+}) {
+  const { t } = useTranslation();
+  const steps = bookingDetailTimeline(status, { includeReview });
+  const current = bookingDetailTimelineIndex(steps, status, { reviewCurrent });
+  if (status === 'cancelled') {
+    return (
+      <Typography color="error" variant="body2" sx={{ mt: 0.5 }}>
+        {t('rentals.cancelled', 'Booking cancelled')}
+      </Typography>
+    );
+  }
+  return (
+    <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+      {steps.map((step, idx) => (
+        <Box key={step}>
+          <BookingStatusStep
+            step={step}
+            done={current > idx}
+            current={doneCurrent(current, idx)}
+            role={role}
+          />
+          {step === 'awaiting_return' && returnNote ? (
+            <Typography variant="caption" sx={{ ml: 3.5, color: noteColor ?? '#0A4FB5', display: 'block' }}>
+              {returnNote}
+            </Typography>
+          ) : null}
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
+function doneCurrent(current: number, idx: number): boolean {
+  return current === idx && current >= 0;
+}
+
 const RentalBookingDetailPage: React.FC = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { flags, loaded: flagsLoaded } = useClientFlags();
   const theme = useTheme();
   const navigate = useNavigate();
   const { isAuthenticated } = useSessionAuth();
@@ -99,6 +221,8 @@ const RentalBookingDetailPage: React.FC = () => {
     retryBookingPayment,
   } = useRentalApi();
   const [booking, setBooking] = useState<RentalBookingDetail | null>(null);
+  const [reportedNow, setReportedNow] = useState(false);
+  const [windowForcedClosed, setWindowForcedClosed] = useState(false);
   const [paymentStatus, setPaymentStatus] =
     useState<RentalBookingPaymentStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,6 +243,7 @@ const RentalBookingDetailPage: React.FC = () => {
   const [sharedPinMessageId, setSharedPinMessageId] = useState<string | null>(
     null
   );
+  const [confirmView, setConfirmView] = useState<ConfirmView | null>(null);
   const inspection = useRentalInspection(bookingId, booking);
 
   useEffect(() => {
@@ -169,6 +294,7 @@ const RentalBookingDetailPage: React.FC = () => {
       return;
     }
     if (profile?.business?.id && booking.business_id === profile.business.id) {
+      if (booking.inspection_policy_version != null) return;
       void getActiveStartPin(bookingId)
         .then((active) => {
           if (active?.pin) {
@@ -187,6 +313,7 @@ const RentalBookingDetailPage: React.FC = () => {
     }
   }, [
     booking?.business_id,
+    booking?.inspection_policy_version,
     booking?.status,
     bookingId,
     getActiveStartPin,
@@ -249,12 +376,29 @@ const RentalBookingDetailPage: React.FC = () => {
     }
   };
 
+  const didntWindowOpen = useDidntReceiveWindow(
+    booking?.inspection_policy_version != null,
+    booking?.actual_start_at
+  );
+  const reportedMissingItem = reportedNow || Boolean(booking?.not_received_report);
+  useEffect(() => {
+    setReportedNow(false);
+    setWindowForcedClosed(false);
+  }, [bookingId]);
+
   const isClient = profile?.client?.id === booking?.client_id;
   const isBusiness = profile?.business?.id === booking?.business_id;
   const showClientPin = isClient && inspection.gate.showStart && !inspection.loading;
   const showCollect = isBusiness && inspection.gate.showCollectPayment && !inspection.loading;
   const showVerify = isBusiness && inspection.gate.showStart && !inspection.loading;
-  const showReturnPicker = isBusiness && inspection.showLegacyReturn;
+  const showReturnPicker =
+    isBusiness &&
+    inspection.showLegacyReturn &&
+    !(
+      flagsLoaded &&
+      flags.rentals_renter_return_report_enabled &&
+      booking?.renter_reported_returned_at
+    );
   const paymentRail = paymentStatus?.payment_rail;
   const isStripePending =
     paymentRail === 'stripe' || (paymentRail == null && isStripeRail);
@@ -300,24 +444,63 @@ const RentalBookingDetailPage: React.FC = () => {
   const bookingImage = booking.rental_location_listing?.rental_item?.rental_item_images?.[0];
   const imageUrl = bookingImage?.image_url?.trim() || '';
   const imageAlt = bookingImage?.alt_text?.trim() || title;
-  const pricing = parseRentalPricingSnapshot(booking.rental_pricing_snapshot);
-  const isAllDay =
-    (pricing?.lines?.length ?? 0) > 0 &&
-    pricing?.lines?.every((l) => l.kind === 'all_day') === true;
-  const startLocal = formatRentalRequestLocalDateTime(booking.start_at);
-  const endLocal = formatRentalRequestLocalDateTime(booking.end_at);
   const selectionWindows = parseRentalSelectionWindows(
     booking.rental_request?.rental_selection_windows
   );
-  const bookingWindows = selectionWindows.length
-    ? selectionWindows
-    : [
-        {
-          start_at: booking.start_at,
-          end_at: booking.end_at,
-          billing: isAllDay ? 'all_day' : 'hourly',
-        },
-      ];
+  const dayCountLabel = (count: number) =>
+    t('rentals.clientRequests.periodDayCount', {
+      count,
+      defaultValue: count === 1 ? '{{count}} day' : '{{count}} days',
+    });
+  const listingCountry = booking.rental_location_listing?.business_location?.address?.country;
+  const bookedSpan = formatBookedSpan(
+    booking.start_at,
+    booking.end_at,
+    confirmationTimeZone(listingCountry, booking.currency),
+    i18n.language,
+    confirmationZoneDefault(listingCountry, booking.currency, i18n.language)
+  );
+  const periodLines = bookedSpan
+    ? [bookedSpan]
+    : bookingRequestedPeriodLines(selectionWindows, booking, i18n.language, dayCountLabel);
+  const returnPhase = renterReturnPhase({
+    status: booking.status,
+    endAt: booking.end_at,
+    reportedAt: booking.renter_reported_returned_at,
+    escalatedAt: booking.renter_return_escalated_at,
+  });
+  const showReturnReport =
+    Boolean(isClient) && flagsLoaded && flags.rentals_renter_return_report_enabled && returnPhase !== 'hidden';
+  const showBusinessReport =
+    Boolean(isBusiness) &&
+    flagsLoaded &&
+    flags.rentals_renter_return_report_enabled &&
+    Boolean(booking.renter_reported_returned_at);
+  const returnLocation = booking.return_place?.name || locationName;
+  const returnByLabel = booking.end_at
+    ? formatRentalPeriod(
+        [{ start_at: booking.end_at, end_at: booking.end_at }],
+        i18n.language,
+        dayCountLabel
+      )
+    : '—';
+  const confirmationsOn = flagsLoaded && flags.rentals_inspection_confirmations_enabled;
+  const reviewReady =
+    confirmationsOn &&
+    inspection.enrolled &&
+    reportReadyToReview({ status, pickup: inspection.pickup });
+  const detailStatusKey = reviewReady
+    ? bookingDetailStepLabelKey(REPORT_REVIEW_STEP, isBusiness ? 'business' : 'client')
+    : bookingDetailStatusLabelKey(status);
+  const detailStatusLabel = t(
+    detailStatusKey,
+    DETAIL_STATUS_DEFAULTS[detailStatusKey] ?? status
+  );
+  const formatDetailMoney = (amount: number) => {
+    const currency = booking.currency || 'XAF';
+    if (currency.toUpperCase() === 'CAD') return formatConfirmationMoney(amount, 'CAD', i18n.language);
+    return formatRequestAmount(amount, currency, i18n.language);
+  };
 
   const statusChipColor =
     status === 'confirmed'
@@ -375,6 +558,25 @@ const RentalBookingDetailPage: React.FC = () => {
     }
   };
 
+  if (confirmView) {
+    return (
+      <BookingConfirmation
+        view={confirmView}
+        booking={booking}
+        language={i18n.language}
+        canEdit={businessCanReplaceReport(
+          confirmView.kind === 'sent' && confirmView.stage === 'return' ? inspection.returnView : inspection.pickup
+        )}
+        onBack={() => {
+          setConfirmView(null);
+          void inspection.reload();
+          void load();
+        }}
+        onEdit={() => setConfirmView(null)}
+      />
+    );
+  }
+
   return (
     <>
       <SEOHead title={title} />
@@ -401,7 +603,7 @@ const RentalBookingDetailPage: React.FC = () => {
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75, flexWrap: 'wrap' }}>
                 {booking.booking_number ? (
                   <Typography variant="body2" color="text.secondary">
-                    {t('rentals.bookingNumber', 'Booking')}: <strong>{booking.booking_number}</strong>
+                    {t('rentals.bookingNumber', 'Booking:')} <strong>{booking.booking_number}</strong>
                   </Typography>
                 ) : null}
                 <Typography variant="body2" color="text.secondary">
@@ -411,12 +613,21 @@ const RentalBookingDetailPage: React.FC = () => {
             </Box>
             <Chip
               label={
-                t('rentals.status', 'Status') +
-                ': ' +
-                t(`rentals.bookingStatus.${status}`, status)
+                reviewReady
+                  ? detailStatusLabel
+                  : status === 'awaiting_return'
+                    ? t(detailStatusKey, 'Return due')
+                    : `${t('rentals.status', 'Status')}: ${t(`rentals.bookingStatus.${status}`, status)}`
               }
-              color={statusChipColor}
-              sx={{ fontWeight: 800 }}
+              color={reviewReady ? undefined : statusChipColor}
+              sx={{
+                fontWeight: 800,
+                ...(reviewReady
+                  ? isBusiness
+                    ? { bgcolor: '#B4530918', color: '#B45309' }
+                    : { bgcolor: '#0A4FB518', color: '#0A4FB5' }
+                  : {}),
+              }}
             />
           </Stack>
 
@@ -431,10 +642,19 @@ const RentalBookingDetailPage: React.FC = () => {
             </Alert>
           ) : null}
 
+          {showReturnReport || showBusinessReport ? null : (
           <Box sx={{ mb: 2 }}>
             <RentalPhaseBanner
               bookingStatus={status}
+              chipLabel={detailStatusLabel}
               role={isBusiness ? 'business' : 'client'}
+              nextStepKey={
+                inspection.enrolled && (status === 'reserved' || status === 'confirmed')
+                  ? isBusiness
+                    ? 'rentalInspection.bannerWaiting'
+                    : 'rentalInspection.bannerReview'
+                  : undefined
+              }
               action={
                 showPaymentPending ? (
                   <Stack spacing={1}>
@@ -548,6 +768,7 @@ const RentalBookingDetailPage: React.FC = () => {
               }
             />
           </Box>
+          )}
 
           {bookingId && inspection.enrolled ? (
             <Box id="rental-inspection">
@@ -557,18 +778,75 @@ const RentalBookingDetailPage: React.FC = () => {
                 booking={booking}
                 model={inspection}
                 onChanged={() => void load()}
+                confirmationsEnabled={confirmationsOn}
+                onReportSent={(summary) => setConfirmView({ kind: 'sent', ...summary })}
+                onRentalStarted={({ momo }) => setConfirmView({ kind: 'started', momo })}
               />
             </Box>
           ) : null}
 
-          {isClient &&
+          {showReturnReport && bookingId ? (
+            <RenterReturnPanel
+              phase={returnPhase as Exclude<typeof returnPhase, 'hidden'>}
+              bookingId={bookingId}
+              location={returnLocation}
+              address={booking.return_place?.address ?? returnLocation}
+              phone={booking.return_place?.phone ?? null}
+              endAt={booking.end_at}
+              reportedAt={booking.renter_reported_returned_at}
+              depositLabel={formatDetailMoney(depositAmount)}
+              onChanged={() => void load()}
+            />
+          ) : null}
+          {showBusinessReport && booking.renter_reported_returned_at ? (
+            <Alert severity="success" sx={{ mb: 2 }} data-testid="business-return-report">
+              <Typography fontWeight={700}>
+                {t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
+                  time: formatDoualaStamp(booking.renter_reported_returned_at, i18n.language),
+                })}
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
+                {t(
+                  'rentals.returnReport.businessBody',
+                  'Please check the item, then confirm the return. The {{amount}} deposit is released only after you confirm.',
+                  { amount: formatDetailMoney(depositAmount) }
+                )}
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1.5 }}>
+                <Button
+                  variant="contained"
+                  color="success"
+                  sx={{ minHeight: 48 }}
+                  onClick={() => {
+                    if (inspection.showLegacyReturn) {
+                      setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                      setReturnDialogOpen(true);
+                      return;
+                    }
+                    document.getElementById('rental-inspection')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                >
+                  {t('rentals.returnReport.confirmReturn', 'Confirm return')}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  sx={{ minHeight: 48 }}
+                  onClick={() => document.getElementById('rental-inspection')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  {t('rentals.returnReport.reportProblem', 'Report a problem')}
+                </Button>
+              </Stack>
+            </Alert>
+          ) : null}
+          {!showReturnReport && isClient &&
           (booking.status === 'active' ||
             booking.status === 'awaiting_return') ? (
             <Alert severity="info" sx={{ mb: 2 }}>
               {t(
                 'rentals.nextStep.returnReminder',
                 'Return by {{time}} at {{location}}. The business will confirm when the item is back.',
-                { time: endLocal, location: locationName }
+                { time: returnByLabel, location: locationName }
               )}
               {overtimeAmount > 0
                 ? ` ${t(
@@ -582,7 +860,39 @@ const RentalBookingDetailPage: React.FC = () => {
             </Alert>
           ) : null}
 
+          {isClient &&
+          bookingId &&
+          (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
+            <DidntReceiveReportButton
+              bookingId={bookingId}
+              reported={reportedMissingItem}
+              onReported={() => setReportedNow(true)}
+              onWindowClosed={() => setWindowForcedClosed(true)}
+            />
+          ) : null}
+
           <Stack spacing={2}>
+            <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, border: 1, borderColor: 'divider' }}>
+              <Typography variant="h6" fontWeight={900}>
+                {t('rentals.status', 'Status')}
+              </Typography>
+              <BookingStatusSteps
+                status={status}
+                includeReview={reviewReady}
+                reviewCurrent={reviewReady}
+                role={isBusiness ? 'business' : 'client'}
+                noteColor={returnPhase === 'overdue' ? 'error.main' : '#0A4FB5'}
+                returnNote={
+                  returnPhase === 'waiting'
+                    ? t('rentals.returnReport.waitingStepper', 'Waiting for confirmation')
+                    : returnPhase === 'escalated'
+                      ? t('rentals.returnReport.escalatedStepper', 'Support is checking')
+                      : returnPhase === 'overdue'
+                        ? t('rentals.returnReport.overdue', 'Overdue')
+                        : undefined
+                }
+              />
+            </Paper>
             <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, border: 1, borderColor: 'divider' }}>
               <Stack spacing={1.25}>
                 <Typography variant="h6" fontWeight={900}>
@@ -643,41 +953,13 @@ const RentalBookingDetailPage: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">
                       {t('rentals.clientRequests.bookConfirmLabelPeriod', 'Rental period')}
                     </Typography>
-                    <Box
-                      sx={{
-                        mt: 0.5,
-                        p: 1,
-                        borderRadius: 1.5,
-                        border: 1,
-                        borderColor: 'divider',
-                        bgcolor: alpha(theme.palette.primary.main, 0.04),
-                      }}
-                    >
-                      <Typography variant="body2" fontWeight={800} sx={{ mb: 0.6 }}>
-                        {`${startLocal} → ${endLocal}`}
-                      </Typography>
-                      <Stack spacing={0.6}>
-                        {bookingWindows.map((window, idx) => (
-                          <Box
-                            key={`${window.start_at}-${window.end_at}-${idx}`}
-                            sx={{
-                              px: 1,
-                              py: 0.75,
-                              borderRadius: 1,
-                              border: 1,
-                              borderColor: alpha(theme.palette.divider, 0.8),
-                              bgcolor: 'background.paper',
-                            }}
-                          >
-                            <Typography variant="body2" fontWeight={700}>
-                              {window.billing === 'all_day'
-                                ? `${formatRentalRequestLocalDateTime(window.start_at)} — ${t('rentals.allDay', 'All day')}`
-                                : `${formatRentalRequestLocalDateTime(window.start_at)} → ${formatRentalRequestLocalDateTime(window.end_at)}`}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Stack>
-                    </Box>
+                    <Stack spacing={0.35} sx={{ mt: 0.5 }}>
+                      {(periodLines.length ? periodLines : ['—']).map((line, idx) => (
+                        <Typography key={`${idx}-${line}`} variant="body1" fontWeight={700}>
+                          {line}
+                        </Typography>
+                      ))}
+                    </Stack>
                   </Box>
                 </Stack>
 
@@ -695,23 +977,27 @@ const RentalBookingDetailPage: React.FC = () => {
                     {t('rentals.clientRequests.bookConfirmLabelTotal', 'Quoted total')}
                   </Typography>
                   <Typography variant="h5" fontWeight={900} color="success.dark">
-                    {booking.total_amount} {booking.currency}
+                    {formatDetailMoney(Number(booking.total_amount) || 0)}
                   </Typography>
                   <Stack spacing={0.5} sx={{ mt: 1 }}>
                     {depositAmount > 0 ? (
                       <Typography variant="body2" color="text.secondary">
                         {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}:{' '}
                         <strong>
-                          {depositAmount} {booking.currency}
+                          {formatDetailMoney(depositAmount)}
                         </strong>
                       </Typography>
                     ) : null}
                     {booking.payment_status === 'authorized' && authorizedAmount > 0 ? (
                       <Typography variant="body2" color="text.secondary">
                         {t(
-                          'rentals.bookingDetail.authorizedOnCard',
-                          'Held on your card (rental + deposit): {{amount}} {{currency}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
-                          { amount: authorizedAmount, currency: booking.currency }
+                          booking.inspection_policy_version != null
+                            ? 'rentals.bookingDetail.authorizedOnCardInspected'
+                            : 'rentals.bookingDetail.authorizedOnCard',
+                          booking.inspection_policy_version != null
+                            ? 'Held on your card: {{amount}} (rental + deposit). The rental is charged at return. The deposit is released unless there\'s damage or a late return.'
+                            : 'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
+                          { amount: formatDetailMoney(authorizedAmount) }
                         )}
                       </Typography>
                     ) : null}
@@ -892,6 +1178,7 @@ const RentalBookingDetailPage: React.FC = () => {
             ) : null}
 
             {bookingId && booking.status !== 'cancelled' ? (
+              <Box id="rental-messages">
               <UserMessagesComponent
                 entityType="rental_booking"
                 entityId={bookingId}
@@ -899,12 +1186,13 @@ const RentalBookingDetailPage: React.FC = () => {
                 defaultExpanded={messagesDefaultExpanded(booking.status)}
                 maxVisibleMessages={5}
               />
+              </Box>
             ) : null}
           </Stack>
         </Container>
       </Box>
 
-      {(showPaymentPending || showClientPin || showCollect || showVerify || showReturnPicker) && (
+      {(showPaymentPending || showCollect || showVerify || showReturnPicker) && (
         <Box
           sx={{
             display: { xs: 'block', md: 'none' },
@@ -929,31 +1217,6 @@ const RentalBookingDetailPage: React.FC = () => {
               onClick={() => void handleRetryPayment()}
             >
               {t('rentals.actions.completePayment', 'Complete payment')}
-            </Button>
-          ) : showClientPin ? (
-            <Button
-              fullWidth
-              variant="contained"
-              disabled={sharingPin}
-              onClick={async () => {
-                if (!bookingId) return;
-                setSharingPin(true);
-                try {
-                  await shareStartPin(bookingId);
-                  setInfo(
-                    t(
-                      'rentals.messaging.startPin.sentConfirmation',
-                      'PIN shared in booking chat. The business will be notified.'
-                    )
-                  );
-                } catch (e: unknown) {
-                  setError(e instanceof Error ? e.message : 'Error');
-                } finally {
-                  setSharingPin(false);
-                }
-              }}
-            >
-              {t('rentals.actions.sendStartPin', 'Send start PIN')}
             </Button>
           ) : showCollect ? (
             <Button
@@ -1102,3 +1365,80 @@ const RentalBookingDetailPage: React.FC = () => {
 };
 
 export default RentalBookingDetailPage;
+
+type ConfirmView =
+  | {
+      kind: 'sent';
+      stage: 'pickup' | 'return';
+      versionNo: number;
+      submittedAt: string;
+      unitCount: number;
+      photos: Array<{ id: string; role: string; url?: string }>;
+    }
+  | { kind: 'started'; momo: boolean };
+
+function BookingConfirmation({
+  view,
+  booking,
+  language,
+  canEdit,
+  onBack,
+  onEdit,
+}: {
+  view: ConfirmView;
+  booking: RentalBookingDetail;
+  language: string;
+  canEdit: boolean;
+  onBack: () => void;
+  onEdit: () => void;
+}) {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const country = booking.rental_location_listing?.business_location?.address?.country;
+  const zoneId = confirmationTimeZone(country, booking.currency);
+  const due = formatConfirmationDue(booking.end_at, zoneId, language);
+  const zone = t(
+    confirmationZoneKey(country, booking.currency),
+    confirmationZoneDefault(country, booking.currency, language)
+  );
+  return (
+    <Box sx={{ minHeight: '100%', pb: 5, bgcolor: alpha(theme.palette.divider, 0.04) }}>
+      <Container maxWidth="md" sx={{ py: 3 }}>
+        {view.kind === 'sent' ? (
+          <ReportSentConfirmation
+            stage={view.stage}
+            renterName={booking.client?.user?.first_name || t('rentals.client', 'the renter')}
+            unitCount={view.unitCount}
+            versionNo={view.versionNo}
+            when={formatConfirmationDue(view.submittedAt, zoneId, language)}
+            photos={view.photos}
+            canEdit={canEdit}
+            onBack={onBack}
+            onEdit={onEdit}
+          />
+        ) : (
+          <RentalStartedConfirmation
+            momo={view.momo}
+            due={due}
+            zone={zone}
+            paid={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, language)}
+            deposit={depositLabel(booking, language)}
+            depositHeld={confirmationDepositHeld(booking.payment_status)}
+            title={booking.rental_location_listing?.rental_item?.name || 'Rental'}
+            startAt={booking.start_at}
+            endAt={booking.end_at}
+            location={booking.rental_location_listing?.business_location?.name}
+            onBack={onBack}
+          />
+        )}
+      </Container>
+    </Box>
+  );
+}
+
+function depositLabel(booking: RentalBookingDetail, language: string): string {
+  const amount = Number(booking.security_deposit_amount) || 0;
+  if (amount <= 0) return '';
+  return formatConfirmationMoney(amount, booking.currency, language);
+}
+

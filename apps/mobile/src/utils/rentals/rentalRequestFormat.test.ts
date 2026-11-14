@@ -10,16 +10,40 @@ import {
   requestSelectionLabel,
   requestUsesDayWording,
   selectedRequestDateKeys,
+  bookingPeriodWindows,
+  bookingRequestedPeriodLines,
+  clientRequestPeriodLines,
   formatChangeDetail,
+  formatListingDeadline,
+  formatListingDue,
+  formatRentalDateRange,
   formatRentalPeriod,
+  isSingleRequestedPeriod,
+  LISTING_TIME_ZONE,
+  modifySaveNeedsConfirm,
+  rentalEditWindowOpen,
+  rentalSelectionFingerprint,
+  RENTAL_EDIT_LEAD_MS,
 } from './rentalRequestFormat';
+
+const NBSP = '\u00A0';
+
+function joined(text: string): string {
+  return text.replace(/ /g, NBSP);
+}
 
 describe('formatRequestAmount', () => {
   it('puts the amount before FCFA in English and French', () => {
-    expect(formatRequestAmount(760, 'XAF', 'en')).toBe('760 FCFA');
-    expect(formatRequestAmount(380, 'FCFA', 'fr')).toBe('380 FCFA');
-    expect(formatRequestAmount(1140, 'XAF', 'en')).toBe('1 140 FCFA');
-    expect(formatRequestAmount(1140, 'XAF', 'fr')).toBe('1 140 FCFA');
+    expect(formatRequestAmount(760, 'XAF', 'en')).toBe(joined('760 FCFA'));
+    expect(formatRequestAmount(380, 'FCFA', 'fr')).toBe(joined('380 FCFA'));
+    expect(formatRequestAmount(1140, 'XAF', 'en')).toBe(joined('1 140 FCFA'));
+    expect(formatRequestAmount(1140, 'XAF', 'fr')).toBe(joined('1 140 FCFA'));
+  });
+
+  it('uses non-breaking spaces so 45 000 FCFA stays on one line', () => {
+    const value = formatRequestAmount(45000, 'XAF', 'fr');
+    expect(value).toBe(`45${NBSP}000${NBSP}FCFA`);
+    expect(value.includes(' ')).toBe(false);
   });
 
   it('does not put the currency code in front', () => {
@@ -28,9 +52,19 @@ describe('formatRequestAmount', () => {
   });
 
   it('keeps a minus and a zero, and treats a fr-CM tag as French', () => {
-    expect(formatRequestAmount(0, 'XAF', 'en')).toBe('0 FCFA');
-    expect(formatRequestAmount(-2500, 'XAF', 'en')).toBe('-2 500 FCFA');
-    expect(formatRequestAmount(-2500, 'xaf', 'fr-CM')).toBe('-2 500 FCFA');
+    expect(formatRequestAmount(0, 'XAF', 'en')).toBe(joined('0 FCFA'));
+    expect(formatRequestAmount(-2500, 'XAF', 'en')).toBe(joined('-2 500 FCFA'));
+    expect(formatRequestAmount(-2500, 'xaf', 'fr-CM')).toBe(joined('-2 500 FCFA'));
+  });
+
+  it('groups XAF and XOF with a non-breaking space and an FCFA suffix, and leaves USD alone', () => {
+    expect(formatRequestAmount(45000, 'XAF', 'en')).toBe(joined('45 000 FCFA'));
+    expect(formatRequestAmount(45000.4, 'XAF', 'en')).toBe(joined('45 000 FCFA'));
+    expect(formatRequestAmount(45000.5, 'xaf', 'fr')).toBe(joined('45 001 FCFA'));
+    expect(formatRequestAmount(1000000, 'FCFA', 'en')).toBe(joined('1 000 000 FCFA'));
+    expect(formatRequestAmount(55000, 'XOF', 'fr')).toBe(joined('55 000 FCFA'));
+    expect(formatRequestAmount(260, 'USD', 'en')).not.toMatch(/FCFA/);
+    expect(formatRequestAmount(260, 'USD', 'fr')).not.toMatch(/FCFA/);
   });
 });
 
@@ -162,8 +196,8 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(one.priceLabel).toBe('2 days × 380 FCFA / day');
-    expect(one.priceAmount).toBe('760 FCFA');
+    expect(one.priceLabel).toBe(`2 days × 380${NBSP}FCFA / day`);
+    expect(one.priceAmount).toBe(`760${NBSP}FCFA`);
     expect(one.hoursCaption).toBeUndefined();
 
     const two = requestPriceCopy({
@@ -177,7 +211,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(two.priceLabel).toBe('1 days × 380 FCFA / day × 2');
+    expect(two.priceLabel).toBe(`1 days × 380${NBSP}FCFA / day × 2`);
   });
 
   it('keeps the hourly caption and a negative total sign', () => {
@@ -192,9 +226,9 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(hourly.priceLabel).toBe('8 h × 16 FCFA / hour × 3');
+    expect(hourly.priceLabel).toBe(`8 h × 16${NBSP}FCFA / hour × 3`);
     expect(hourly.hoursCaption).toBe('8 billable hours total');
-    expect(hourly.totalAmount).toBe('-128 FCFA');
+    expect(hourly.totalAmount).toBe(`-128${NBSP}FCFA`);
     expect(hourly.priceLabel?.startsWith('FCFA')).toBe(false);
   });
 
@@ -216,9 +250,38 @@ describe('formatRentalPeriod', () => {
   ];
 
   it('shows a daily range in the listing calendar, not a device clock', () => {
-    expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201317 Nov · 2 days');
-    expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201317 nov. · 2 jours');
+    expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201316 Nov · 2 days');
+    expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201316 nov. · 2 jours');
     expect(formatRentalPeriod(daily, 'en', days)).not.toMatch(/PM|AM|2026/);
+  });
+
+  it('treats a same-clock end the next day as one booked day', () => {
+    const overnight = [{
+      start_at: '2026-11-12T08:00:00.000Z',
+      end_at: '2026-11-13T08:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(overnight, 'en', days)).toBe('12 Nov · 1 day');
+    expect(formatRentalPeriod(overnight, 'fr', jours)).toBe('12 nov. · 1 jour');
+    expect(formatRentalPeriod(overnight, 'en', days)).not.toContain('08:00');
+  });
+
+  it('counts whole days through the last booked day when the return is the same clock', () => {
+    const span = [{
+      start_at: '2026-11-15T08:00:00.000Z',
+      end_at: '2026-11-18T08:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(span, 'en', days)).toBe('15\u201317 Nov · 3 days');
+    expect(formatRentalPeriod(span, 'fr', jours)).toBe('15\u201317 nov. · 3 jours');
+  });
+
+  it('collapses one all-day calendar date to that day', () => {
+    const one = [{
+      billing: 'all_day',
+      calendar_date: '2026-11-12',
+      start_at: '2026-11-12T08:00:00.000Z',
+      end_at: '2026-11-13T08:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(one, 'en', days)).toBe('12 Nov · 1 day');
   });
 
   it('shows hourly bookings as a listing wall-clock range', () => {
@@ -228,6 +291,13 @@ describe('formatRentalPeriod', () => {
       end_at: '2026-11-15T14:00:00.000Z',
     }];
     expect(formatRentalPeriod(hourly, 'en', days)).toBe('15 Nov · 10:00\u201314:00');
+  });
+
+  it('formats a return instant as one listing clock', () => {
+    const at = (iso: string) => [{ start_at: iso, end_at: iso }];
+    expect(formatRentalPeriod(at('2026-11-12T18:00:00.000Z'), 'en', days)).toBe('12 Nov · 18:00');
+    expect(formatRentalPeriod(at('2026-11-14T18:00:00.000Z'), 'fr', jours)).toBe('14 nov. · 18:00');
+    expect(formatRentalPeriod(at('2026-11-12T18:00:00.000Z'), 'en', days)).not.toMatch(/PM|AM|2026/);
   });
 
   it('lists only the fields that changed', () => {
@@ -241,6 +311,183 @@ describe('formatRentalPeriod', () => {
         ],
       },
     }, 'en');
-    expect(detail).toBe('dates 15\u201317 → 15\u201318 Nov');
+    expect(detail).toBe('dates 15\u201316 → 15\u201317 Nov');
+  });
+});
+
+describe('formatListingDeadline', () => {
+  it('uses the listing wall clock, not a device locale string', () => {
+    expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).toBe('Fri 20 Nov, 10:00');
+    expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'fr')).toBe('ven. 20 nov., 10:00');
+    expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).not.toMatch(/AM|PM|2026/);
+  });
+});
+
+describe('formatListingDue', () => {
+  it('keeps a late return on the stored listing day', () => {
+    expect(formatListingDue('2026-11-12T09:00:00.000Z', 'en')).toBe('12\u00A0Nov\u00A0·\u00A009:00');
+    expect(formatListingDue('2026-11-12T23:30:00.000Z', 'en')).toBe('12\u00A0Nov\u00A0·\u00A023:30');
+    expect(formatListingDue('2026-11-14T18:00:00.000Z', 'fr')).toBe('14\u00A0nov.\u00A0·\u00A018:00');
+    expect(formatListingDue('2026-11-12T09:00:00.000Z', 'en')).not.toContain('10:00');
+    expect(formatListingDue('2026-11-12', 'en')).toBe('2026-11-12');
+    expect(formatListingDue('not-a-date', 'en')).toBe('not-a-date');
+  });
+});
+
+describe('formatRentalPeriod edges', () => {
+  const daily = [
+    { billing: 'all_day', calendar_date: '2026-11-15', start_at: '2026-11-15T00:00:00.000Z', end_at: '2026-11-16T00:00:00.000Z' },
+    { billing: 'all_day', calendar_date: '2026-11-16', start_at: '2026-11-16T00:00:00.000Z', end_at: '2026-11-17T00:00:00.000Z' },
+  ];
+
+  it('keeps both months when the stay crosses a month and falls back to clocks for a mixed stay', () => {
+    const cross = [
+      { billing: 'all_day', calendar_date: '2026-11-30', start_at: '2026-11-30T00:00:00.000Z', end_at: '2026-12-01T00:00:00.000Z' },
+      { billing: 'all_day', calendar_date: '2026-12-01', start_at: '2026-12-01T00:00:00.000Z', end_at: '2026-12-02T00:00:00.000Z' },
+    ];
+    expect(formatRentalPeriod(cross, 'en', days)).toBe('30 Nov \u2013 1 Dec · 2 days');
+    expect(formatRentalPeriod(cross, 'fr', jours)).toBe('30 nov. \u2013 1 déc. · 2 jours');
+    expect(formatRentalPeriod([], 'en', days)).toBe('\u2014');
+
+    const mixed = [
+      { billing: 'all_day', calendar_date: '2026-11-15', start_at: '2026-11-15T10:00:00.000Z', end_at: '2026-11-15T18:00:00.000Z' },
+      { billing: 'hourly', start_at: '2026-11-16T09:00:00.000Z', end_at: '2026-11-16T11:00:00.000Z' },
+    ];
+    expect(formatRentalPeriod(mixed, 'en', days)).toBe('15 Nov · 10:00\u201318:00, 16 Nov · 09:00\u201311:00');
+  });
+
+  it('lists quantity and notes, and keeps the old month when the new dates are in another month', () => {
+    expect(
+      formatChangeDetail(
+        { fields: ['quantity', 'notes'], quantity: { from: 1, to: 3 } },
+        'en'
+      )
+    ).toBe('quantity 1 → 3, notes');
+    expect(formatChangeDetail(null, 'en')).toBe('');
+    expect(formatChangeDetail({ fields: [] }, 'en')).toBe('');
+    expect(
+      formatChangeDetail(
+        {
+          fields: ['dates'],
+          dates: {
+            from: [daily[0]],
+            to: [{ billing: 'all_day', calendar_date: '2026-12-01', start_at: '2026-12-01T00:00:00.000Z', end_at: '2026-12-02T00:00:00.000Z' }],
+          },
+        },
+        'en'
+      )
+    ).toBe('dates 15 Nov → 1 Dec');
+    expect(formatRentalDateRange([daily[0]], 'en')).toBe('15 Nov');
+  });
+});
+
+describe('rental edit confirmation', () => {
+  const now = Date.parse('2026-11-12T10:00:00.000Z');
+
+  it('closes the edit at exactly 2 hours and for an unusable start', () => {
+    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS).toISOString(), now)).toBe(false);
+    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS + 1).toISOString(), now)).toBe(true);
+    expect(rentalEditWindowOpen('not-a-date', now)).toBe(false);
+    expect(rentalEditWindowOpen('', now)).toBe(false);
+  });
+
+  it('asks for confirmation only when the new total is higher by more than one centime', () => {
+    expect(modifySaveNeedsConfirm(10, 10)).toBe(false);
+    expect(modifySaveNeedsConfirm(10.009, 10)).toBe(false);
+    expect(modifySaveNeedsConfirm(10.01, 10)).toBe(true);
+    expect(modifySaveNeedsConfirm(9, 10)).toBe(false);
+    expect(modifySaveNeedsConfirm(Number.NaN, 10)).toBe(false);
+  });
+
+  it('treats reordered windows and trimmed notes as the same draft', () => {
+    const day = { billing: 'all_day', calendarDate: '2026-11-15', startMs: 1, endMs: 2 };
+    const hour = { billing: 'hourly', startMs: 3, endMs: 4 };
+    expect(rentalSelectionFingerprint([hour, day], 2, '  hello ')).toBe(
+      rentalSelectionFingerprint([day, hour], 2, 'hello')
+    );
+    expect(rentalSelectionFingerprint([day], 1, 'hello')).not.toBe(rentalSelectionFingerprint([day], 2, 'hello'));
+    expect(rentalSelectionFingerprint([day], 1, '   ')).toBe(rentalSelectionFingerprint([day], 1, ''));
+  });
+});
+
+const bookedDay = (date: string) => ({
+  billing: 'all_day' as const,
+  calendar_date: date,
+  start_at: `${date}T08:00:00.000Z`,
+  end_at: `${date}T18:00:00.000Z`,
+});
+
+const bookedHour = (start: string, end: string) => ({
+  billing: 'hourly' as const,
+  start_at: start,
+  end_at: end,
+});
+
+describe('clientRequestPeriodLines', () => {
+  it('shows a single day once, in English and French, with no times and no number', () => {
+    const lines = clientRequestPeriodLines([bookedDay('2026-11-12')], 'en', days);
+    expect(lines).toEqual(['12 Nov · 1 day']);
+    expect(clientRequestPeriodLines([bookedDay('2026-11-12')], 'fr', jours)).toEqual(['12 nov. · 1 jour']);
+    expect(lines.join(' ')).not.toMatch(/^1\.|08:00|18:00/);
+    expect(isSingleRequestedPeriod([bookedDay('2026-11-12')])).toBe(true);
+  });
+
+  it('shows a contiguous stay once, including a cross-month stay', () => {
+    const stay = [bookedDay('2026-11-12'), bookedDay('2026-11-13'), bookedDay('2026-11-14')];
+    expect(clientRequestPeriodLines(stay, 'en', days)).toEqual(['12\u201314 Nov · 3 days']);
+    expect(clientRequestPeriodLines(stay, 'fr', jours)).toEqual(['12\u201314 nov. · 3 jours']);
+    const cross = [bookedDay('2026-11-30'), bookedDay('2026-12-01'), bookedDay('2026-12-02')];
+    expect(clientRequestPeriodLines(cross, 'en', days)).toEqual(['30 Nov \u2013 2 Dec · 3 days']);
+    expect(clientRequestPeriodLines(cross, 'fr', jours)).toEqual(['30 nov. \u2013 2 d\u00e9c. · 3 jours']);
+  });
+
+  it('shows one hourly window with listing wall-clock times and no number', () => {
+    const slot = [bookedHour('2026-11-12T09:00:00.000Z', '2026-11-12T13:00:00.000Z')];
+    expect(LISTING_TIME_ZONE).toBe('Africa/Douala');
+    expect(clientRequestPeriodLines(slot, 'en', days)).toEqual(['12 Nov · 09:00\u201313:00']);
+    expect(clientRequestPeriodLines(slot, 'fr', jours)).toEqual(['12 nov. · 09:00\u201313:00']);
+    expect(clientRequestPeriodLines(slot, 'en', days)[0]).not.toMatch(/04:00|10:00|AM|PM/);
+  });
+
+  it('numbers only when there are two or more separate windows', () => {
+    const slots = [
+      bookedHour('2026-11-12T09:00:00.000Z', '2026-11-12T13:00:00.000Z'),
+      bookedHour('2026-11-14T15:00:00.000Z', '2026-11-14T18:00:00.000Z'),
+    ];
+    expect(isSingleRequestedPeriod(slots)).toBe(false);
+    expect(clientRequestPeriodLines(slots, 'en', days)).toEqual([
+      '1. 12 Nov · 09:00\u201313:00',
+      '2. 14 Nov · 15:00\u201318:00',
+    ]);
+    expect(clientRequestPeriodLines(slots, 'fr', jours)).toEqual([
+      '1. 12 nov. · 09:00\u201313:00',
+      '2. 14 nov. · 15:00\u201318:00',
+    ]);
+    const gaps = [bookedDay('2026-11-12'), bookedDay('2026-11-20')];
+    expect(clientRequestPeriodLines(gaps, 'en', days)).toEqual(['1. 12 Nov · 1 day', '2. 20 Nov · 1 day']);
+    expect(clientRequestPeriodLines([], 'en', days)).toEqual([]);
+  });
+});
+
+describe('bookingRequestedPeriodLines', () => {
+  it('shows one booking span once instead of repeating it as line 1', () => {
+    const span = { start_at: '2026-11-12T08:00:00.000Z', end_at: '2026-11-13T08:00:00.000Z' };
+    expect(bookingPeriodWindows([], span)).toEqual([
+      { start_at: span.start_at, end_at: span.end_at },
+    ]);
+    expect(bookingRequestedPeriodLines([], span, 'en', days)).toEqual(['12 Nov · 1 day']);
+    expect(bookingRequestedPeriodLines([], span, 'fr', jours)).toEqual(['12 nov. · 1 jour']);
+  });
+
+  it('keeps selection windows and does not add the overall span', () => {
+    const windows = [bookedDay('2026-11-12'), bookedDay('2026-11-13'), bookedDay('2026-11-14')];
+    const span = { start_at: '2026-11-12T08:00:00.000Z', end_at: '2026-11-15T08:00:00.000Z' };
+    expect(bookingPeriodWindows(windows, span)).toBe(windows);
+    expect(bookingRequestedPeriodLines(windows, span, 'en', days)).toEqual(['12\u201314 Nov · 3 days']);
+  });
+
+  it('returns nothing when the booking has neither windows nor a span', () => {
+    expect(bookingPeriodWindows([], null)).toEqual([]);
+    expect(bookingRequestedPeriodLines([], { start_at: '', end_at: '' }, 'en', days)).toEqual([]);
   });
 });

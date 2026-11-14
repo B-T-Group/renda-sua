@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { FlashList } from '@shopify/flash-list';
 import Animated from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
@@ -20,7 +21,16 @@ import type { ClientRootStackParamList } from '@/navigation/types';
 import type { CatalogStore } from '@/types/stores';
 import { loadRecentSearches, rememberSearch } from '@/utils/recentSearches';
 
-export function SearchScreen() {
+export function SearchScreen({
+  showBack = false,
+  foodOnly = false,
+  onBack,
+}: {
+  showBack?: boolean;
+  /** Food lane opens search already limited to cooked food. */
+  foodOnly?: boolean;
+  onBack?: () => void;
+}) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
@@ -33,6 +43,7 @@ export function SearchScreen() {
   const catalog = useInventoryCatalog({
     search: submitted,
     sort: 'relevance',
+    food_only: foodOnly || undefined,
     enabled: submitted.length >= 2,
   });
 
@@ -73,7 +84,18 @@ export function SearchScreen() {
   const showResults = submitted.length >= 2;
   return (
     <View style={{ flex: 1, backgroundColor: colors.appBackground, paddingTop: insets.top }}>
-      <View style={{ padding: spacing.md }}>
+      <View style={{ padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+        {showBack ? (
+          <Pressable
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back', 'Back')}
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
+          </Pressable>
+        ) : null}
+        <View style={{ flex: 1, minWidth: 0 }}>
         <SearchInput
           value={query}
           onChangeText={setQuery}
@@ -82,6 +104,7 @@ export function SearchScreen() {
           placeholder={t('client.search.placeholder', 'Search products, stores, food')}
           autoFocus
         />
+        </View>
       </View>
       {showResults ? (
         <FlashList

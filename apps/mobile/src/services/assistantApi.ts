@@ -19,6 +19,7 @@ export type AssistantChatResponse = {
   reply: string;
   handoff: boolean;
   cards?: unknown;
+  rental?: unknown;
   /** Chat contract v2 (eng plan §5.2); absent on today's backend. */
   blocks?: unknown[];
 };
@@ -26,12 +27,21 @@ export type AssistantChatResponse = {
 export async function postAssistantChat(
   messages: AssistantChatMessagePayload[],
   marketContext?: AssistantMarketContext | null,
-  threadId?: string
+  threadId?: string,
+  rental?: { rentalDates?: { startDate?: string; endDate?: string } | null; rentalRefs?: Record<string, string> }
 ): Promise<AssistantChatResponse> {
   const token = await Auth0DirectService.getAccessToken();
-  const body: { messages: AssistantChatMessagePayload[]; market?: AssistantMarketContext; threadId?: string } = {
+  const body: {
+    messages: AssistantChatMessagePayload[];
+    market?: AssistantMarketContext;
+    threadId?: string;
+    rentalDates?: { startDate?: string; endDate?: string };
+    rentalRefs?: Record<string, string>;
+  } = {
     messages,
   };
+  if (rental?.rentalDates?.startDate) body.rentalDates = rental.rentalDates;
+  if (rental?.rentalRefs && Object.keys(rental.rentalRefs).length) body.rentalRefs = rental.rentalRefs;
   if (marketContext) {
     body.market = marketContext;
   }

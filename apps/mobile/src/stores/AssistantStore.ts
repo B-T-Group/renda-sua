@@ -9,6 +9,8 @@ import type { ReplyOutcome } from '../utils/assistantCharacterMachine';
 import { replyHasToolSuccess, replyOutcome } from '../utils/assistantReplyOutcome';
 import {
   readAssistantCards,
+  readAssistantRental,
+  type AssistantRentalMeta,
   type AssistantResultCard,
 } from '../utils/assistantResultCards';
 
@@ -17,6 +19,7 @@ export type AssistantMessage = {
   role: 'user' | 'assistant';
   content: string;
   cards?: AssistantResultCard[];
+  rental?: AssistantRentalMeta;
 };
 
 /** `network` = the request never reached the server (offline, DNS, timeout). */
@@ -25,7 +28,7 @@ export type AssistantErrorKind = 'network' | 'server';
 /** Sends the chat history; injected so the store stays testable without the API client. */
 export type AssistantChatTransport = (
   messages: Array<Pick<AssistantMessage, 'role' | 'content'>>
-) => Promise<{ reply?: string | null; handoff?: boolean | null; blocks?: unknown; cards?: unknown }>;
+) => Promise<{ reply?: string | null; handoff?: boolean | null; blocks?: unknown; cards?: unknown; rental?: unknown }>;
 
 /** How the latest request on this thread settled (drives the Renda character). */
 export type AssistantSettle = { seq: number; outcome: ReplyOutcome; toolSuccess: boolean };
@@ -64,6 +67,8 @@ export class AssistantStore {
   /** User message whose send failed; Retry re-sends the history that already contains it. */
   failedMessageId: string | null = null;
   handoff: boolean = false;
+  rentalDates: { startDate?: string; endDate?: string } | null = null;
+  rentalRefs: Record<string, string> = {};
   /** Latest settled request (reply / error / handoff); null after a thread rotation. */
   lastSettle: AssistantSettle | null = null;
 
@@ -97,14 +102,21 @@ export class AssistantStore {
     return msg;
   }
 
-  addAssistantMessage(content: string, cards?: AssistantResultCard[]): void {
+  addAssistantMessage(content: string, cards?: AssistantResultCard[], rental?: AssistantRentalMeta): void {
     this.messages.push({
       id: makeMessageId(),
       role: 'assistant',
       content,
       cards: cards?.length ? cards : undefined,
+      rental,
     });
+    if (rental?.refs) this.rentalRefs = { ...this.rentalRefs, ...rental.refs };
+    if (rental?.dates && 'startDate' in rental.dates) this.rentalDates = rental.dates;
     this.updateActivity();
+  }
+
+  setRentalDates(dates: { startDate: string; endDate: string } | null): void {
+    this.rentalDates = dates;
   }
 
   setIsSending(value: boolean): void {
@@ -138,6 +150,8 @@ export class AssistantStore {
     this.errorKind = null;
     this.failedMessageId = null;
     this.handoff = false;
+    this.rentalDates = null;
+    this.rentalRefs = {};
     this.isSending = false;
     this.activeRequestId = null;
     this.lastSettle = null;
@@ -204,7 +218,9 @@ export class AssistantStore {
   ): void {
     if (!this.isCurrent(requestId, threadId)) return;
     const reply = data?.reply?.trim();
-    if (reply) this.addAssistantMessage(reply, readAssistantCards(data?.cards));
+    const cards = readAssistantCards(data?.cards);
+    const rental = readAssistantRental(data?.rental);
+    if (reply || cards.length || rental) this.addAssistantMessage(reply || '', cards, rental);
     if (data?.handoff) this.handoff = true;
     this.lastSettle = {
       seq: requestId,

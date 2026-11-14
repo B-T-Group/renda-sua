@@ -160,6 +160,9 @@ export const SITE_EVENT_TYPES_V1 = [
   'assistant.deeplink.tap',
   'assistant.attributed.add_to_cart',
   'assistant.attributed.order_created',
+  'assistant.attributed.rental_request_created',
+  'assistant.rental.date_chip.edit',
+  'assistant.rental.price_changed_shown',
   'assistant.handoff.requested',
   'assistant.feedback.submitted',
   'assistant.error.shown',
@@ -178,6 +181,13 @@ export const SITE_EVENT_TYPES_V1 = [
   // MoMo Delivered → client Complete deep link (P6) — web + mobile
   'delivery_confirm_opened',
   'delivery_confirm_action',
+  // Rentals landing My rentals entry (mobile)
+  'rentals_my_rentals_entry_tap',
+  'next_rental_card_impression',
+  'rentals_client_tab_tap',
+  'rentals_client_tab_browse_tap',
+  'rental_accept_and_start_tap',
+  'rental_renter_reported_returned',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event
@@ -240,6 +250,10 @@ export const SERVER_SITE_EVENT_TYPES = [
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',
+  'assistant.rental.search',
+  'assistant.rental.clarify',
+  'assistant.rental.question',
+  'assistant.rental.zero_result',
   // Rejected-item recovery + appeals (B10, spec section 6)
   'item_moderation.rejected',
   'item_moderation.resubmitted',

@@ -1,5 +1,6 @@
-import { CalendarMonth, LocationOn, OpenInNew } from '@mui/icons-material';
+import { CalendarMonth, LocationOn } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -8,17 +9,23 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useApiClient } from '../../hooks/useApiClient';
+import { SITE_EVENT_ASSISTANT_RENTAL_PRICE_CHANGED, useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
+import { priceChangeMeta } from '../../utils/rentalAssistantAttribution';
+import { useClientFlags } from '../../hooks/useClientFlags';
+import { listReturnChip } from '../../utils/renterReturnPhase';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import {
-  formatRentalMoney,
+  formatRequestAmount,
   formatRentalRequestLocalDateTime,
   parseRentalSelectionWindows,
   parseRentalPricingSnapshot,
   proposedContractDeadlineIso,
 } from '../../utils/rentalRequestDisplay';
 import { resolveRentalPhase } from '../../utils/rentalPhase';
+import { clientRequestPeriodLines } from '../../utils/rentalRequestFormat';
 
 function phaseChipColor(
   phase: string
@@ -36,6 +43,25 @@ function phaseChipColor(
     default:
       return 'default';
   }
+}
+
+function RequestedPeriodLines({ lines, emptyLabel }: { lines: string[]; emptyLabel: string }) {
+  if (!lines.length) {
+    return (
+      <Typography variant="body2" fontWeight={500}>
+        {emptyLabel}
+      </Typography>
+    );
+  }
+  return (
+    <>
+      {lines.map((line, index) => (
+        <Typography key={`${index}-${line}`} variant="body2" fontWeight={500} display="block">
+          {line}
+        </Typography>
+      ))}
+    </>
+  );
 }
 
 export function isProposedContractOpen(row: ClientRentalRequestRow): boolean {
@@ -65,12 +91,27 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   onViewListing,
   onViewBooking,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
+  const api = useApiClient();
+  const { trackSiteEvent } = useTrackSiteEvent();
   const theme = useTheme();
   const listing = row.rental_location_listing;
   const itemName = listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental');
   const locName = listing?.business_location?.name;
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
+  const quoted = Number(row.quoted_total);
+  const accepted = Number(quote?.total);
+  const priceChanged = Number.isFinite(quoted) && Number.isFinite(accepted) && Math.abs(quoted - accepted) >= 0.01;
+  useEffect(() => {
+    if (!priceChanged) return;
+    void trackSiteEvent({
+      eventType: SITE_EVENT_ASSISTANT_RENTAL_PRICE_CHANGED,
+      metadata: { listing_id: listing?.id, ...priceChangeMeta(quoted, accepted) },
+    });
+    if (row.price_change_seen_at) return;
+    void api.post(`/rentals/requests/${row.id}/price-change-seen`, {}).catch(() => undefined);
+  }, [accepted, api, listing?.id, priceChanged, quoted, row.id, row.price_change_seen_at, trackSiteEvent]);
   const phase = resolveRentalPhase(
     {
       requestStatus: row.status,
@@ -84,9 +125,14 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   const reasonCode = row.unavailable_reason_code?.trim();
   const bookingId = row.rental_booking?.id;
   const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
+  const periodLines = clientRequestPeriodLines(selectionWindows, i18n.language, (count) =>
+    t('rentals.clientRequests.periodDayCount', {
+      count,
+      defaultValue: count === 1 ? '{{count}} day' : '{{count}} days',
+    })
+  );
 
   return (
-    <>
       <Paper
         elevation={0}
         sx={{
@@ -117,12 +163,37 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               </Stack>
             ) : null}
           </Box>
+          <Stack direction="row" spacing={0.5}>
           <Chip
             label={statusLabel}
             color={phaseChipColor(phase.phase)}
             size="small"
             sx={{ fontWeight: 600, flexShrink: 0 }}
           />
+          {flags.rentals_renter_return_report_enabled && row.rental_booking
+            ? (() => {
+                const chip = listReturnChip({
+                  status: row.rental_booking.status,
+                  endAt: row.rental_booking.end_at,
+                  reportedAt: row.rental_booking.renter_reported_returned_at,
+                  escalatedAt: row.rental_booking.renter_return_escalated_at,
+                });
+                if (!chip) return null;
+                const overdue = chip === 'overdue';
+                return (
+                  <Chip
+                    size="small"
+                    label={t(
+                      overdue ? 'rentals.returnReport.overdue' : 'rentals.returnReport.waitingChip',
+                      overdue ? 'Overdue' : 'Waiting'
+                    )}
+                    sx={{ color: overdue ? 'error.main' : '#0A4FB5', borderColor: overdue ? 'error.main' : '#0A4FB5' }}
+                    variant="outlined"
+                  />
+                );
+              })()
+            : null}
+          </Stack>
         </Stack>
 
         {phase.nextStepKey ? (
@@ -137,20 +208,10 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             <Typography variant="caption" color="text.secondary" display="block">
               {t('rentals.clientRequests.requestedPeriod', 'Requested period')}
             </Typography>
-            <Typography variant="body2" fontWeight={500}>
-              {selectionWindows.length
-                ? `${formatRentalRequestLocalDateTime(selectionWindows[0].start_at)} — ${formatRentalRequestLocalDateTime(selectionWindows[selectionWindows.length - 1].end_at)}`
-                : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
-            </Typography>
-            {selectionWindows.length ? (
-              <Box sx={{ mt: 0.25 }}>
-                {selectionWindows.map((window, index) => (
-                  <Typography key={`${window.start_at}-${window.end_at}-${index}`} variant="caption" color="text.secondary" display="block">
-                    {`${index + 1}. ${formatRentalRequestLocalDateTime(window.start_at)} — ${formatRentalRequestLocalDateTime(window.end_at)}`}
-                  </Typography>
-                ))}
-              </Box>
-            ) : null}
+            <RequestedPeriodLines
+              lines={periodLines}
+              emptyLabel={t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
+            />
           </Box>
         </Stack>
 
@@ -159,6 +220,18 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             <strong>{t('rentals.clientRequests.yourNote', 'Your note')}:</strong>{' '}
             {row.client_request_note.trim()}
           </Typography>
+        ) : null}
+
+        {priceChanged ? (
+          <Alert severity="warning">
+            {t('assistant.rental.priceChangedLead', 'The business changed the price:')}{' '}
+            <strong>{formatRequestAmount(accepted, listing?.rental_item.currency || 'XAF', i18n.language)}</strong>
+            {' '}
+            {t('assistant.rental.priceChangedMid', 'instead of the estimated')}{' '}
+            <s>{formatRequestAmount(quoted, listing?.rental_item.currency || 'XAF', i18n.language)}</s>
+            {'. '}
+            {t('assistant.rental.priceChangedTail', 'Check it before you confirm.')}
+          </Alert>
         ) : null}
 
         {quote ? (
@@ -176,7 +249,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               {t('rentals.clientRequests.quotedTotal', 'Quoted total')}
             </Typography>
             <Typography variant="subtitle1" fontWeight={800} color="success.dark">
-              {formatRentalMoney(quote.total, quote.currency)}
+              {formatRequestAmount(quote.total, quote.currency, i18n.language)}
             </Typography>
           </Box>
         ) : null}
@@ -213,7 +286,6 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             <Button
               size="small"
               variant="outlined"
-              endIcon={<OpenInNew sx={{ fontSize: 16 }} />}
               onClick={() => onViewListing(listing.id)}
             >
               {t('rentals.clientRequests.viewListing', 'View listing')}
@@ -262,6 +334,5 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
         </Stack>
         </Stack>
       </Paper>
-    </>
   );
 };

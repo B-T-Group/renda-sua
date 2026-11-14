@@ -63,12 +63,37 @@ describe('TrackSiteEventDto', () => {
     expect(errors[0].constraints?.isIn).toBeDefined();
   });
 
+  it('accepts the client Rentals tab events', async () => {
+    for (const eventType of [
+      'rentals_client_tab_tap',
+      'rentals_client_tab_browse_tap',
+      'rental_accept_and_start_tap',
+      'rental_renter_reported_returned',
+    ]) {
+      const dto = new TrackSiteEventDto();
+      dto.eventType = eventType as any;
+      dto.metadata = { source: 'tab', segment: 'action_needed', todo_count: 2 };
+      expect(await validate(dto)).toHaveLength(0);
+      expect(SITE_EVENT_TYPES_V1 as readonly string[]).toContain(eventType);
+    }
+  });
+
+  it('accepts the rentals My rentals entry events', async () => {
+    for (const eventType of ['rentals_my_rentals_entry_tap', 'next_rental_card_impression']) {
+      const dto = new TrackSiteEventDto();
+      dto.eventType = eventType as any;
+      dto.metadata = { source: 'header_icon' };
+      expect(await validate(dto)).toHaveLength(0);
+      expect(SITE_EVENT_TYPES_V1 as readonly string[]).toContain(eventType);
+    }
+  });
+
   it('counts assistant public event types correctly', () => {
     const assistantEvents = [...SITE_EVENT_TYPES_V1].filter((type) =>
       type.startsWith('assistant.')
     );
-    // 15 assistant event types in SITE_EVENT_TYPES_V1 (public events only, 2 moved to server-only)
-    expect(assistantEvents).toHaveLength(15);
+    // 18 assistant public events (15 original + rental request, date chip, price notice)
+    expect(assistantEvents).toHaveLength(18);
   });
 
   it('counts total new event types correctly', () => {
@@ -78,8 +103,8 @@ describe('TrackSiteEventDto', () => {
     const assistantEvents = [...SITE_EVENT_TYPES_V1].filter((type) =>
       type.startsWith('assistant.')
     );
-    // 3 reorder + 15 assistant = 18 new public types
-    expect(reorderEvents.length + assistantEvents.length).toBe(18);
+    // 3 reorder + 18 assistant = 21 public types in these two groups
+    expect(reorderEvents.length + assistantEvents.length).toBe(21);
   });
 
   describe('#594 dedicated agents UI events (#644, #645, #646)', () => {

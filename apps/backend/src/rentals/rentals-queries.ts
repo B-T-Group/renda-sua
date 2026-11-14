@@ -247,6 +247,7 @@ export const GET_RENTAL_REQUEST_FULL = `
       units_requested
       edit_version
       quoted_total
+      price_change_seen_at
       change_summary
       client_request_note
       expires_at
@@ -577,7 +578,7 @@ export const GET_RENTAL_BOOKING_FULL = `
       rental_start_overwrite_code_hash
       rental_start_overwrite_code_used_at
       period_ended_notified_at
-      client { id user_id }
+      client { id user_id user { first_name } }
       business { id user_id name }
       rental_location_listing {
         business_location_id
@@ -615,6 +616,8 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       payment_status
       actual_start_at
       actual_end_at
+      renter_reported_returned_at
+      renter_return_escalated_at
       units_booked
       inspection_policy_version
       return_handed_back_at
@@ -624,6 +627,7 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       business_id
       client {
         user {
+          id
           first_name
           last_name
           phone_number
@@ -645,6 +649,7 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
         }
         business_location {
           name
+          address { country }
         }
       }
       rental_hold {
@@ -1050,6 +1055,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       units_requested
       edit_version
       quoted_total
+      price_change_seen_at
       change_summary
       unavailable_reason_code
       rental_pricing_snapshot
@@ -1073,9 +1079,12 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       rental_booking {
         id
         status
+        end_at
         contract_expires_at
         payment_timing
         payment_status
+        renter_reported_returned_at
+        renter_return_escalated_at
       }
     }
   }
@@ -1097,7 +1106,10 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
       overtime_amount
       payment_timing
       payment_status
+      renter_reported_returned_at
+      renter_return_escalated_at
       created_at
+      updated_at
       rental_request_id
       rental_pricing_snapshot
       rental_location_listing {
@@ -1160,11 +1172,15 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         id
         status
         booking_number
+        end_at
         actual_start_at
         payment_timing
         payment_status
         total_amount
         overtime_amount
+        inspection_policy_version
+        renter_reported_returned_at
+        renter_return_escalated_at
       }
       rental_location_listing {
         id

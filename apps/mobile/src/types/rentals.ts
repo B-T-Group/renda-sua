@@ -101,6 +101,8 @@ export interface RentalListingRow {
   units_available?: number;
   pickup_instructions: string;
   dropoff_instructions: string;
+  /** 1 when new bookings in this country are inspected. Null keeps the start PIN. */
+  inspection_policy_version?: number | null;
   weekly_availability: RentalWeeklyAvailabilityRow[];
   updated_at?: string;
   rental_item: {
@@ -142,6 +144,14 @@ export interface RentalListingRow {
   distance_text?: string;
   duration_text?: string;
   distance_value?: number;
+  mode?: 'authorize_upfront' | 'charge_at_pickup';
+  payment_rail?: 'stripe' | 'mobile_money';
+  momo_available?: boolean;
+  inspection_enabled?: boolean;
+  latest_card_end_at?: string | null;
+  card_auth_window_days?: number;
+  stripe_review_hours?: number;
+  timezone?: string;
 }
 
 export interface ClientRentalRequestRow {
@@ -155,6 +165,7 @@ export interface ClientRentalRequestRow {
   units_requested?: number | null;
   edit_version?: number | null;
   quoted_total?: number | string | null;
+  price_change_seen_at?: string | null;
   change_summary?: { fields?: string[] } | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
@@ -170,6 +181,7 @@ export interface ClientRentalRequestRow {
     id: string;
     status: RentalBookingStatus | string;
     contract_expires_at?: string | null;
+    inspection_policy_version?: number | null;
   } | null;
 }
 
@@ -183,17 +195,20 @@ export interface ClientRentalBookingRow {
   currency: string;
   contract_expires_at?: string | null;
   created_at?: string;
+  updated_at?: string | null;
   rental_request_id?: string;
   rental_pricing_snapshot?: unknown;
   payment_timing?: RentalPaymentTiming | string | null;
   payment_status?: RentalBookingPaymentState | string | null;
+  renter_reported_returned_at?: string | null;
+  renter_return_escalated_at?: string | null;
   rental_location_listing?: {
     id: string;
     business_location?: { name: string } | null;
     rental_item?: {
       name: string;
       currency?: string;
-      rental_item_images?: Array<{ id: string; image_url: string }>;
+      rental_item_images?: Array<{ id: string; image_url: string; display_url?: string | null }>;
     } | null;
   } | null;
 }
@@ -219,6 +234,14 @@ export interface RentalBookingDetail {
   actual_end_at?: string | null;
   units_booked?: number | null;
   inspection_policy_version?: number | null;
+  not_received_report?: { id: string; reported_at: string } | null;
+  renter_reported_returned_at?: string | null;
+  renter_return_escalated_at?: string | null;
+  return_place?: { name: string; address: string | null; phone: string | null } | null;
+  accept_start_preview?: {
+    payment_rail: 'card' | 'wallet' | 'mobile_money';
+    amount_due_at_pickup: number;
+  } | null;
   return_handed_back_at?: string | null;
   return_resolution?: string | null;
   rental_pricing_snapshot?: unknown;
@@ -242,7 +265,7 @@ export interface RentalBookingDetail {
         alt_text?: string | null;
       }>;
     } | null;
-    business_location?: { name?: string | null } | null;
+    business_location?: { name?: string | null; address?: { country?: string | null } | null } | null;
   } | null;
   rental_hold?: {
     client_hold_amount: number;
@@ -481,6 +504,7 @@ export interface BusinessRentalRequestRow {
     status: string;
     booking_number?: string | null;
     actual_start_at?: string | null;
+    inspection_policy_version?: number | null;
   } | null;
 }
 
@@ -563,6 +587,7 @@ export interface CreateRentalRequestBody {
 export interface CreateRentalRequestResult {
   success: boolean;
   requestId: string;
+  inspection_policy_version?: number | null;
 }
 
 export interface CreateRentalBookingResult {

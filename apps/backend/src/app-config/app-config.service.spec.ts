@@ -36,6 +36,29 @@ describe('AppConfigService', () => {
     expect(flags.reorder_v1).toBe(DEFAULT_CLIENT_FLAGS.reorder_v1);
   });
 
+  it('prefers a country row over the global row for the client Rentals tab', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      application_configurations: [
+        {
+          config_key: 'rentals_client_tab_enabled',
+          boolean_value: false,
+          country_code: null,
+          status: 'active',
+        },
+        {
+          config_key: 'rentals_client_tab_enabled',
+          boolean_value: true,
+          country_code: 'CM',
+          status: 'active',
+        },
+      ],
+    });
+    const cameroon = await service.getClientFlags('cm');
+    expect(cameroon.rentals_client_tab_enabled).toBe(true);
+    const global = await service.getClientFlags();
+    expect(global.rentals_client_tab_enabled).toBe(false);
+  });
+
   it('honors configured reorder_v1 over environment default', async () => {
     hasura.executeQuery.mockResolvedValue({
       application_configurations: [

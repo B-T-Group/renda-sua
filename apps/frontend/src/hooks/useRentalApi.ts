@@ -221,8 +221,12 @@ export interface BusinessRentalRequestRow {
   rental_booking?: {
     id: string;
     status: string;
+    end_at?: string | null;
     booking_number?: string | null;
     actual_start_at?: string | null;
+    inspection_policy_version?: number | null;
+    renter_reported_returned_at?: string | null;
+    renter_return_escalated_at?: string | null;
   } | null;
 }
 
@@ -235,6 +239,8 @@ export interface ClientRentalRequestRow {
   unavailable_reason_code?: string | null;
   client_request_note?: string | null;
   units_requested?: number;
+  quoted_total?: number | string | null;
+  price_change_seen_at?: string | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
   expires_at?: string | null;
@@ -248,7 +254,11 @@ export interface ClientRentalRequestRow {
   rental_booking?: {
     id: string;
     status: string;
+    end_at?: string | null;
     contract_expires_at?: string | null;
+    inspection_policy_version?: number | null;
+    renter_reported_returned_at?: string | null;
+    renter_return_escalated_at?: string | null;
   } | null;
 }
 
@@ -321,6 +331,14 @@ export interface RentalBookingDetail {
   actual_end_at?: string | null;
   units_booked?: number | null;
   inspection_policy_version?: number | null;
+  not_received_report?: { id: string; reported_at: string } | null;
+  renter_reported_returned_at?: string | null;
+  renter_return_escalated_at?: string | null;
+  return_place?: { name: string; address: string | null; phone: string | null } | null;
+  accept_start_preview?: {
+    payment_rail: 'card' | 'wallet' | 'mobile_money';
+    amount_due_at_pickup: number;
+  } | null;
   return_handed_back_at?: string | null;
   return_resolution?: string | null;
   rental_pricing_snapshot?: unknown;
@@ -343,7 +361,7 @@ export interface RentalBookingDetail {
         alt_text?: string | null;
       }>;
     } | null;
-    business_location?: { name?: string | null } | null;
+    business_location?: { name?: string | null; address?: { country?: string | null } | null } | null;
   } | null;
   rental_hold?: {
     client_hold_amount: number;
@@ -578,6 +596,13 @@ export function useRentalApi() {
     [api]
   );
 
+  const fetchRequestInspectionPolicy = useCallback(async (requestId: string) => {
+    const { data } = await api.get<{ success: boolean; inspection_policy_version: number | null }>(
+      `/rentals/requests/${requestId}/inspection-policy`
+    );
+    return data.inspection_policy_version ?? null;
+  }, [api]);
+
   const createRequest = useCallback(
     async (body: {
       rentalLocationListingId: string;
@@ -593,7 +618,7 @@ export function useRentalApi() {
       clientRequestNote?: string;
     }) => {
       const { data } = await api.post('/rentals/requests', body);
-      return data as { success: boolean; requestId: string };
+      return data as { success: boolean; requestId: string; inspection_policy_version?: number | null };
     },
     [api]
   );
@@ -659,6 +684,49 @@ export function useRentalApi() {
         `/rentals/bookings/${bookingId}/pickup-payment`
       );
       return data as RentalBookingActionResult;
+    },
+    [api]
+  );
+
+  const reportReturned = useCallback(
+    async (bookingId: string) => {
+      const { data } = await api.post(`/rentals/bookings/${bookingId}/report-returned`);
+      return data as {
+        success: true;
+        alreadyReported: boolean;
+        wasOverdue: boolean;
+        report: { rentalBookingId: string; reportedAt: string };
+      };
+    },
+    [api]
+  );
+
+  const reportNotReceived = useCallback(
+    async (bookingId: string) => {
+      const { data } = await api.post(`/rentals/bookings/${bookingId}/report-not-received`);
+      return data as {
+        success: true;
+        alreadyReported: boolean;
+        report: { id: string; rentalBookingId: string; reportedAt: string };
+      };
+    },
+    [api]
+  );
+
+  const acceptAndStart = useCallback(
+    async (bookingId: string, versionId: string) => {
+      const { data } = await api.post(`/rentals/bookings/${bookingId}/accept-and-start`, {
+        versionId,
+      });
+      return data as {
+        success: true;
+        started: boolean;
+        alreadyStarted: boolean;
+        paymentPending: boolean;
+        payment_rail: 'card' | 'wallet' | 'mobile_money';
+        amount_due_at_pickup: number;
+        bookingId: string;
+      };
     },
     [api]
   );
@@ -785,6 +853,7 @@ export function useRentalApi() {
     acceptBusinessAiProposal,
     declineBusinessAiProposal,
     createRequest,
+    fetchRequestInspectionPolicy,
     respondRequest,
     createBooking,
     getBookingPaymentStatus,
@@ -792,6 +861,9 @@ export function useRentalApi() {
     cancelClientRentalRequest,
     cancelBooking,
     initiatePickupPayment,
+    acceptAndStart,
+    reportNotReceived,
+    reportReturned,
     getStartPin,
     fetchBookingDetail,
     verifyStartPin,

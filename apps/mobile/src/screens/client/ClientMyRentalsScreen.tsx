@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   Image,
   Pressable,
@@ -8,12 +9,14 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import Svg, { Path, Rect } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Dialog, Portal, Snackbar, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ClientRentalRequestRow as ClientRentalRequestRowView } from '../../components/rentals/ClientRentalRequestRow';
+import { MyRentalsHeader } from '../../components/rentals/MyRentalsHeader';
 import { RentalHubTabs } from '../../components/rentals/RentalHubTabs';
 import { RentalBookConfirmSheet } from '../../components/rentals/RentalBookConfirmSheet';
 import { StatusPill } from '../../components/common/StatusPill';
@@ -28,6 +31,7 @@ import {
   useRentalStripePayment,
 } from '../../hooks/useRentalStripePayment';
 import type { ClientRootStackParamList } from '../../navigation/types';
+import { fontFamily } from '../../theme/fonts';
 import type {
   ClientRentalBookingRow,
   ClientRentalRequestRow,
@@ -41,6 +45,10 @@ import {
   parseRentalSelectionWindows,
   type RentalHubGroup,
 } from '../../utils/rentals';
+import { listReturnChip } from '../../utils/rentals/renterReturnPhase';
+import { leaveMyRentals } from '../../utils/rentals/leaveMyRentals';
+import { myRentalsEntrySegment } from '../../utils/rentals/myRentalsEntry';
+import { trackRentalsClientTabBrowseTap } from '../../utils/rentals/clientRentalsTabAnalytics';
 import { rentalEditWindowOpen } from '../../utils/rentals/rentalRequestFormat';
 
 type HubSegment = RentalHubGroup;
@@ -72,7 +80,30 @@ function countHub(
   return count;
 }
 
-export default function ClientMyRentalsScreen() {
+function UpcomingMark() {
+  const { colors } = useTheme();
+  return (
+    <Svg width={56} height={56} viewBox="0 0 56 56">
+      <Rect x="10" y="14" width="28" height="30" rx="5" stroke={colors.text.disabled} strokeWidth={2.2} fill="none" />
+      <Path d="M10 22h28M18 11v8M30 11v8" stroke={colors.text.disabled} strokeWidth={2.2} strokeLinecap="round" />
+      <Path
+        d="M36 36.5l4.2 4.2 8-8.2"
+        stroke={colors.primary.main}
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export default function ClientMyRentalsScreen({
+  asTab = false,
+  todoCount = 0,
+}: {
+  asTab?: boolean;
+  todoCount?: number;
+}) {
   const { t } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
@@ -90,6 +121,60 @@ export default function ClientMyRentalsScreen() {
     setSnack(t('rentals.modify.saved', 'Request updated'));
     navigation.setParams({ notice: undefined });
   }, [navigation, route.params?.notice, t]);
+
+  const todoCountRef = useRef(todoCount);
+  todoCountRef.current = todoCount;
+  const segmentTouched = useRef(false);
+
+  useEffect(() => {
+    const segment = route.params?.segment;
+    if (segment !== 'action_needed' && segment !== 'upcoming' && segment !== 'past') return;
+    setHubSegment(segment);
+  }, [route.params?.segment]);
+
+  const chooseSegment = useCallback((next: HubSegment) => {
+    segmentTouched.current = true;
+    setHubSegment(next);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!asTab) return;
+      segmentTouched.current = false;
+      setHubSegment(myRentalsEntrySegment(todoCountRef.current));
+    }, [asTab])
+  );
+
+  useEffect(() => {
+    if (!asTab || segmentTouched.current) return;
+    setHubSegment(myRentalsEntrySegment(todoCount));
+  }, [asTab, todoCount]);
+
+  const onBack = useCallback(() => {
+    leaveMyRentals(navigation);
+  }, [navigation]);
+
+  const openRentalsLane = useCallback(
+    (source: 'header_icon' | 'empty_cta') => {
+      if (asTab) trackRentalsClientTabBrowseTap(source);
+      const nav = navigation as unknown as { navigate: (name: string, params?: object) => void };
+      if (asTab) {
+        nav.navigate('ClientBrowse', { segment: 'rentals' });
+        return;
+      }
+      nav.navigate('ClientMainTabs', { screen: 'ClientBrowse', params: { segment: 'rentals' } });
+    },
+    [asTab, navigation]
+  );
+
+  useEffect(() => {
+    if (asTab) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [asTab, onBack]);
 
   const {
     requests,
@@ -329,6 +414,30 @@ export default function ClientMyRentalsScreen() {
                 borderColor={statusColors.borderColor}
                 compact
               />
+              {flags.rentals_renter_return_report_enabled
+                ? (() => {
+                    const chip = listReturnChip({
+                      status: item.status,
+                      endAt: item.end_at,
+                      reportedAt: item.renter_reported_returned_at,
+                      escalatedAt: item.renter_return_escalated_at,
+                    });
+                    if (!chip) return null;
+                    const overdue = chip === 'overdue';
+                    return (
+                      <StatusPill
+                        label={t(
+                          overdue ? 'rentals.returnReport.overdue' : 'rentals.returnReport.waitingChip',
+                          overdue ? 'Overdue' : 'Waiting'
+                        )}
+                        backgroundColor={overdue ? '#FDECEC' : '#E8F1FB'}
+                        textColor={overdue ? colors.error.main : '#0A4FB5'}
+                        borderColor={overdue ? colors.error.main : '#0A4FB5'}
+                        compact
+                      />
+                    );
+                  })()
+                : null}
               <Text style={[typography.caption, { color: colors.text.primary, fontWeight: '700' }]}>
                 {formatRentalMoney(item.total_amount, item.currency || 'XAF')}
               </Text>
@@ -346,21 +455,27 @@ export default function ClientMyRentalsScreen() {
         </Pressable>
       );
     },
-    [borderRadius.md, colors, navigation, shadows.sm, spacing, t, typography]
+    [borderRadius.md, colors, flags.rentals_renter_return_report_enabled, navigation, shadows.sm, spacing, t, typography]
   );
 
   const loading = requestsLoading || bookingsLoading;
   const error = requestsError || bookingsError;
 
   return (
-    <View style={[styles.safe, { backgroundColor: colors.pageBackground }]}>
+    <View style={[styles.safe, { backgroundColor: colors.pageBackground, paddingTop: insets.top }]}>
       <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
-        <Text style={[typography.h6, { color: colors.text.primary, marginBottom: spacing.sm }]}>
-          {t('rentals.hub.title', 'My rentals')}
-        </Text>
+        <MyRentalsHeader
+          title={t('rentals.hub.title', 'My rentals')}
+          backLabel={asTab ? undefined : t('common.back', 'Back')}
+          onBack={asTab ? undefined : onBack}
+          findLabel={asTab ? t('rentals.clientRequests.browseRentals', 'Browse rentals') : undefined}
+          onFind={asTab ? () => openRentalsLane('header_icon') : undefined}
+          settingsLabel={t('nav.settings', 'Settings')}
+          onSettings={() => navigation.navigate('Profile')}
+        />
         <RentalHubTabs
           value={hubSegment}
-          onChange={setHubSegment}
+          onChange={chooseSegment}
           tabs={[
             { value: 'action_needed', label: t('rentals.hub.toDo', 'To do'), count: toDoCount },
             { value: 'upcoming', label: t('rentals.hub.upcoming', 'Upcoming') },
@@ -409,25 +524,46 @@ export default function ClientMyRentalsScreen() {
             <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary.main} />
           ) : (
             <View style={styles.empty}>
-              <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
+              {asTab && hubSegment === 'upcoming' ? <UpcomingMark /> : null}
+              <Text
+                style={{
+                  fontFamily:
+                    asTab && hubSegment === 'upcoming' ? fontFamily.bold : fontFamily.regular,
+                  fontSize: 14,
+                  lineHeight: 20,
+                  color: asTab && hubSegment === 'upcoming' ? colors.text.primary : colors.text.secondary,
+                  textAlign: 'center',
+                  marginTop: asTab && hubSegment === 'upcoming' ? spacing.md : 0,
+                }}
+              >
                 {hubSegment === 'action_needed'
                   ? t(
                       'rentals.hub.emptyActionNeeded',
                       'Nothing needs your attention right now.'
                     )
                   : hubSegment === 'upcoming'
-                    ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals.')
+                    ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals')
                     : t('rentals.hub.emptyPast', 'No past rentals yet.')}
               </Text>
+              {asTab && hubSegment === 'upcoming' ? (
+                <Text
+                  style={{
+                    fontFamily: fontFamily.regular,
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: colors.text.secondary,
+                    textAlign: 'center',
+                    marginTop: spacing.xs,
+                  }}
+                >
+                  {t('rentals.hub.emptyUpcomingHint', 'Request a rental and it will show up here.')}
+                </Text>
+              ) : null}
               <Button
-                mode="contained-tonal"
+                mode={asTab ? 'contained' : 'contained-tonal'}
                 style={{ marginTop: spacing.md }}
-                onPress={() =>
-                  navigation.navigate('ClientMainTabs', {
-                    screen: 'ClientBrowse',
-                    params: { segment: 'rentals' },
-                  })
-                }
+                labelStyle={{ fontFamily: fontFamily.semibold, fontWeight: 'normal' }}
+                onPress={() => openRentalsLane('empty_cta')}
               >
                 {t('rentals.clientRequests.browseRentals', 'Browse rentals')}
               </Button>

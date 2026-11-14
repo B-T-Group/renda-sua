@@ -42,10 +42,12 @@ location / agent GPS sharing (`expo-location`), maps, and **saved-account biomet
 
 ### Env switching
 
-Env defaults to prod. Switch at runtime via Developer Options (About → 7 taps on the version;
-persisted to AsyncStorage), or override URLs at build time with `EXPO_PUBLIC_API_URL` /
-`EXPO_PUBLIC_HASURA_URL` (restart the bundler after changing). `yarn web:local` points the API
-at `http://localhost:3000/api`.
+Env defaults to prod (`MANUAL_ENV` stays `null`). Switch at runtime via Developer Options
+(About → 7 taps on the version; persisted to AsyncStorage). Build-time switch:
+`EXPO_PUBLIC_ENV=dev|prod|local` (`yarn dev` / `yarn prod`). `EXPO_PUBLIC_API_URL`,
+`EXPO_PUBLIC_HASURA_URL`, and `EXPO_PUBLIC_AUTH0_DOMAIN` / `_CLIENT_ID` / `_AUDIENCE`
+override those values on top of the chosen env (restart the bundler after changing).
+`yarn web:local` points the API at `http://localhost:3000/api`.
 
 ### Multi-account biometric auth (native)
 

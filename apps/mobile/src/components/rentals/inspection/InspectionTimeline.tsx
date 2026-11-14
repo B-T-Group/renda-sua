@@ -31,7 +31,12 @@ export function InspectionTimeline({
 }) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
-  const accepted = pickup?.yourDecision === 'accept';
+  const started =
+    !!booking.actual_start_at ||
+    booking.status === 'active' ||
+    booking.status === 'awaiting_return' ||
+    booking.status === 'completed';
+  const accepted = pickup?.yourDecision === 'accept' || started;
   const handed = !!booking.return_handed_back_at;
   const resolution = booking.return_resolution;
   const openReview = resolution === 'disputed' || resolution === 'review' || resolution === 'pending';
@@ -39,16 +44,13 @@ export function InspectionTimeline({
     { done: true, title: t('rentalInspection.timelineBooked', 'Booked') },
     {
       done: pickup?.status === 'submitted' || accepted,
-      title: t('rentalInspection.timelinePickupSubmitted', 'Pickup inspection submitted'),
-      detail: role === 'business' && pickup?.versionNo
-        ? t('rentalInspection.version', 'v{{version}}', { version: pickup.versionNo })
-        : undefined,
+      title: t('rentalInspection.timelinePickupSubmitted', 'Condition report sent'),
     },
     {
       done: accepted,
       title: role === 'client'
         ? t('rentalInspection.timelineAccepted', 'You accepted the condition')
-        : t('rentalInspection.statusClientAck', 'Client acknowledged'),
+        : t('rentalInspection.statusClientAck', 'The renter accepted the condition report'),
     },
     {
       done: !!booking.actual_start_at || booking.status === 'active' || booking.status === 'awaiting_return' || booking.status === 'completed',

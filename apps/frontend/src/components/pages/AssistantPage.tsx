@@ -9,9 +9,14 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   InputBase,
   Stack,
+  TextField,
   Typography,
   alpha,
   useMediaQuery,
@@ -38,6 +43,7 @@ import { useRendaChatState } from '../assistant/useRendaChatState';
 import { AssistantMarkdown } from './AssistantMarkdown';
 import type { AssistantContext } from '../../utils/assistantChips';
 import { AssistantEntityCards } from '../assistant/AssistantEntityCards';
+import { AssistantRentalThread } from '../assistant/AssistantRentalThread';
 import { textBesideCards } from '../assistant/assistantResultCards';
 import {
   assistantChipPersona,
@@ -45,14 +51,15 @@ import {
   buildChipMessage,
 } from '../../utils/assistantChips';
 import { useOptionalUserProfileContext } from '../../contexts/UserProfileContext';
-import { useTrackSiteEvent, SITE_EVENT_ASSISTANT_CHAT_OPENED } from '../../hooks/useTrackSiteEvent';
+import { useTrackSiteEvent, SITE_EVENT_ASSISTANT_CHAT_OPENED, SITE_EVENT_ASSISTANT_RENTAL_DATE_CHIP } from '../../hooks/useTrackSiteEvent';
+import { rentalDayBucket } from '../../utils/rentalAssistantAttribution';
 import { useAssistantLauncherAnalytics } from '../assistant/useAssistantLauncherAnalytics';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 /** Thread and composer are capped and centred on desktop (Product & UX 3b/4b). */
 const THREAD_MAX_WIDTH = 760;
 
-function ThinkingIndicator() {
+function ThinkingIndicator({ rental }: { rental?: boolean }) {
   const { t } = useTranslation();
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
@@ -88,7 +95,9 @@ function ThinkingIndicator() {
             lineHeight: '22px',
           }}
         >
-          {t('assistant.thinking', 'Thinking…')}
+          {rental
+            ? t('assistant.rental.checking', 'Checking availability…')
+            : t('assistant.thinking', 'Thinking…')}
         </Typography>
         {!prefersReducedMotion && (
           <Stack direction="row" spacing={0.5}>
@@ -175,6 +184,12 @@ function MessageBubble({
   showOrb: boolean;
   character: boolean;
 }) {
+  const { t } = useTranslation();
+  const { sendMessage, setRentalDates, threadId } = useAssistantChat();
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const [editorOpen, setEditorOpen] = React.useState(false);
+  const [startDate, setStartDate] = React.useState(message.rental?.dates && 'startDate' in message.rental.dates ? message.rental.dates.startDate : '');
+  const [endDate, setEndDate] = React.useState(message.rental?.dates && 'endDate' in message.rental.dates ? message.rental.dates.endDate : '');
   const isUser = message.role === 'user';
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
@@ -246,9 +261,55 @@ function MessageBubble({
         </Box>
       </Stack>
       ) : null}
-      {!isUser && message.cards?.length ? (
+      {!isUser && message.rental ? (
+        <Box sx={{ maxWidth: { xs: '100%', sm: '720px' }, width: '100%', minWidth: 0, pl: showOrb ? 5 : 0 }}>
+          <AssistantRentalThread
+            cards={message.cards || []}
+            rental={message.rental}
+            onEditDates={() => setEditorOpen(true)}
+            onChip={(text, dates) => {
+              if (dates?.startDate && dates.endDate) {
+                setRentalDates({ startDate: dates.startDate, endDate: dates.endDate });
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_ASSISTANT_RENTAL_DATE_CHIP,
+                  metadata: { from: 'chip', day_bucket: rentalDayBucket(dates.startDate, dates.endDate), thread_id: threadId },
+                });
+              }
+              void sendMessage(text);
+            }}
+          />
+          <Dialog open={editorOpen} onClose={() => setEditorOpen(false)}>
+            <DialogTitle>{t('assistant.rental.chooseDates', 'Choose dates')}</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} sx={{ pt: 1 }}>
+                <TextField type="date" label={t('assistant.rental.start', 'Start')} value={startDate} onChange={(event) => setStartDate(event.target.value)} InputLabelProps={{ shrink: true }} />
+                <TextField type="date" label={t('assistant.rental.end', 'End')} value={endDate} onChange={(event) => setEndDate(event.target.value)} InputLabelProps={{ shrink: true }} />
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setEditorOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  if (!startDate || !endDate) return;
+                  setRentalDates({ startDate, endDate });
+                  void trackSiteEvent({
+                    eventType: SITE_EVENT_ASSISTANT_RENTAL_DATE_CHIP,
+                    metadata: { from: 'editor', day_bucket: rentalDayBucket(startDate, endDate), thread_id: threadId },
+                  });
+                  setEditorOpen(false);
+                  void sendMessage(`${startDate} → ${endDate}`);
+                }}
+              >
+                {t('assistant.rental.applyDates', 'Use these dates')}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Box>
+      ) : null}
+      {!isUser && !message.rental && message.cards?.some((card) => !card.rental) ? (
         <Box sx={{ maxWidth: { xs: '80%', sm: '560px' }, pl: showOrb ? 5 : 0 }}>
-          <AssistantEntityCards cards={message.cards} />
+          <AssistantEntityCards cards={message.cards.filter((card) => !card.rental)} />
         </Box>
       ) : null}
     </motion.div>
@@ -976,7 +1037,7 @@ const AssistantPage: React.FC = () => {
               ))}
               {isSending && (
                 <Box data-chat-item>
-                  <ThinkingIndicator />
+                  <ThinkingIndicator rental={/\b(rent|rental|louer|location)\b/i.test(messages.at(-1)?.content || '')} />
                 </Box>
               )}
               {error && !isSending && (

@@ -87,6 +87,7 @@ import StatusBadge from '../common/StatusBadge';
 import { TrackOrderModal } from '../dialogs/TrackOrderModal';
 import SEOHead from '../seo/SEOHead';
 import { MarketSelector } from '../market/MarketSelector';
+import { catalogSearchShouldFocus } from '../../utils/catalogSearchFocus';
 import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
 import type { Order } from '../../hooks/useOrders';
 import { useMarket } from '../../hooks/useMarket';
@@ -1081,6 +1082,7 @@ const ItemsPage: React.FC = () => {
               }
             }}
             onClearFilters={() => setBusinessLocationId(null)}
+            autoFocusSearch={catalogSearchShouldFocus(location.search)}
           />
 
           {/* Quick picks */}

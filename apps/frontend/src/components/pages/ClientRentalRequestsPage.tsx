@@ -32,8 +32,11 @@ import {
   resolveRentalPhase,
   type RentalHubGroup,
 } from '../../utils/rentalPhase';
+import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 
 function apiErrorMessage(err: unknown, fallback: string): string {
+  const friendly = cardWindowErrorMessage(err, navigator.language);
+  if (friendly) return friendly;
   const m = (err as { response?: { data?: { message?: string } } })?.response?.data
     ?.message;
   return typeof m === 'string' && m.trim() ? m : fallback;
@@ -46,6 +49,13 @@ function rentalBookingErrorIsExpired(err: unknown): boolean {
 
 const statusFilterFormSx = {
   width: '100%',
+} as const;
+
+const hubSegmentSx = {
+  whiteSpace: 'nowrap',
+  textTransform: 'none',
+  px: 0.75,
+  lineHeight: 1.2,
 } as const;
 
 const ClientRentalRequestsPage: React.FC = () => {
@@ -229,7 +239,7 @@ const ClientRentalRequestsPage: React.FC = () => {
       <Box
         sx={{
           minHeight: '100%',
-          pb: 4,
+          pb: { xs: '96px', md: 4 },
           bgcolor: alpha(theme.palette.divider, 0.04),
         }}
       >
@@ -277,14 +287,17 @@ const ClientRentalRequestsPage: React.FC = () => {
               onChange={(_e, value: RentalHubGroup | null) => {
                 if (value) setHubSegment(value);
               }}
+              sx={{ flexWrap: 'nowrap' }}
             >
-              <ToggleButton value="action_needed">
-                {t('rentals.hub.actionNeeded', 'Action needed')}
+              <ToggleButton value="action_needed" sx={hubSegmentSx}>
+                {t('rentals.hub.toDo', 'To do')}
               </ToggleButton>
-              <ToggleButton value="upcoming">
+              <ToggleButton value="upcoming" sx={hubSegmentSx}>
                 {t('rentals.hub.upcoming', 'Upcoming')}
               </ToggleButton>
-              <ToggleButton value="past">{t('rentals.hub.past', 'Past')}</ToggleButton>
+              <ToggleButton value="past" sx={hubSegmentSx}>
+                {t('rentals.hub.past', 'Past')}
+              </ToggleButton>
             </ToggleButtonGroup>
             {rows.length > 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
@@ -331,7 +344,7 @@ const ClientRentalRequestsPage: React.FC = () => {
                       'Nothing needs your attention right now.'
                     )
                   : hubSegment === 'upcoming'
-                    ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals.')
+                    ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals')
                     : t('rentals.hub.emptyPast', 'No past rentals yet.')}
               </Typography>
             </Box>

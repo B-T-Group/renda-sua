@@ -10,6 +10,9 @@ import {
   pickupGate,
   reportReadyToSubmit,
   returnHasDamage,
+  notReceivedErrorKey,
+  notReceivedFailure,
+  showDidntReceiveLink,
   showLegacyReturnPicker,
   unitPhotosMeetMinimum,
   type InspectionUnit,
@@ -70,10 +73,13 @@ describe('enrolled pickup gate', () => {
     expect(waiting.showCollectPayment).toBe(false);
     expect(waiting.showOverwrite).toBe(false);
     const ready = pickupGate({ enrolled: true, status: 'reserved', submitted: true, accepted: true });
-    expect(ready.showCollectPayment).toBe(true);
-    expect(pickupGate({ enrolled: true, status: 'confirmed', submitted: true, accepted: true }).showOverwrite).toBe(
-      false
-    );
+    expect(ready.showCollectPayment).toBe(false);
+    expect(ready.showStart).toBe(false);
+    expect(pickupGate({ enrolled: true, status: 'confirmed', submitted: true, accepted: true })).toMatchObject({
+      showStart: false,
+      showOverwrite: false,
+      showCollectPayment: false,
+    });
   });
 
   it('asks the business to capture when nothing is submitted', () => {
@@ -138,5 +144,47 @@ describe('client review and money copy', () => {
     );
     expect(classifyInspectionError({ response: { status: 409, data: { code: 'CONFLICT' } } })).toBe('conflict');
     expect(classifyInspectionError({ status: 400 })).toBe('other');
+    expect(classifyInspectionError({ status: 503 })).toBe('unavailable');
+    expect(classifyInspectionError({ code: 'ERR_NETWORK', message: 'Network Error' })).toBe('unavailable');
+  });
+
+  it('shows Didn\'t receive only for an inspected rental in the first 30 minutes', () => {
+    const start = '2026-11-12T14:20:00.000Z';
+    const soon = new Date('2026-11-12T14:40:00.000Z').getTime();
+    const late = new Date('2026-11-12T15:00:00.000Z').getTime();
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: soon })).toBe(true);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: late })).toBe(false);
+    expect(showDidntReceiveLink({ enrolled: false, startedAt: start, now: soon })).toBe(false);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: null, now: soon })).toBe(false);
+    const at = new Date(start).getTime();
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at })).toBe(true);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at + 30 * 60000 })).toBe(true);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at + 30 * 60000 + 1 })).toBe(
+      false
+    );
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at - 1 })).toBe(false);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: 'not-a-date', now: at })).toBe(false);
+    expect(showDidntReceiveLink({ enrolled: true, startedAt: '', now: at })).toBe(false);
+  });
+
+  it('maps a not-received rejection to its message', () => {
+    expect(notReceivedErrorKey('RENTAL_NOT_RECEIVED_WINDOW_CLOSED')).toBe(
+      'rentalInspection.didntReceiveWindow'
+    );
+    expect(notReceivedErrorKey('RENTAL_NOT_RECEIVED_NOT_INSPECTED')).toBe(
+      'rentalInspection.didntReceiveNotInspected'
+    );
+    expect(notReceivedErrorKey('RENTAL_NOT_RECEIVED_ALREADY')).toBe('rentalInspection.didntReceiveAlready');
+    expect(notReceivedErrorKey(null)).toBe('rentalInspection.didntReceiveStopped');
+    expect(notReceivedErrorKey('OTHER')).toBe('rentalInspection.didntReceiveStopped');
+    expect(notReceivedFailure(null)).toBe('retry');
+    expect(notReceivedFailure({ code: 'ERR_NETWORK' })).toBe('retry');
+    expect(notReceivedFailure({ status: 500 })).toBe('retry');
+    expect(notReceivedFailure({ response: { status: 503 } })).toBe('retry');
+    expect(notReceivedFailure({ status: 401 })).toBe('terminal');
+    expect(notReceivedFailure({ response: { status: 404 } })).toBe('terminal');
+    expect(notReceivedFailure({ response: { status: 409, data: { code: 'RENTAL_NOT_RECEIVED_WINDOW_CLOSED' } } })).toBe(
+      'terminal'
+    );
   });
 });

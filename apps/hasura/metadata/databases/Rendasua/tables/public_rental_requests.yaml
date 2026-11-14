@@ -42,6 +42,7 @@ select_permissions:
         - unavailable_reason_code
         - edit_version
         - quoted_total
+        - price_change_seen_at
         - change_summary
         - responded_at
         - responded_by_user_id
@@ -71,6 +72,7 @@ select_permissions:
         - unavailable_reason_code
         - edit_version
         - quoted_total
+        - price_change_seen_at
         - change_summary
         - responded_at
         - responded_by_user_id

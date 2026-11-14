@@ -33,10 +33,15 @@ import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment
 import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
 import { UpdateRentalRequestDto } from './dto/update-rental-request.dto';
 import { RespondRentalRequestDto } from './dto/respond-rental-request.dto';
+import { AcceptAndStartRentalDto } from './dto/accept-and-start-rental.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
+import { requestPolicyIdPipe } from './rental-request-policy';
+import { RentalNotReceivedService } from './inspection/rental-not-received.service';
+import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
+import { readLatestCardEndAt } from './rental-card-window';
 import { RentalsService } from './rentals.service';
 
 @ApiTags('rentals')
@@ -47,7 +52,9 @@ export class RentalsController {
   constructor(
     private readonly rentalsService: RentalsService,
     private readonly rentalBookingMessaging: RentalBookingMessagingService,
-    private readonly rentalStartPinShare: RentalStartPinShareService
+    private readonly rentalStartPinShare: RentalStartPinShareService,
+    private readonly notReceived: RentalNotReceivedService,
+    private readonly renterReturns: RentalRenterReturnService
   ) {}
 
   @Public()
@@ -221,14 +228,14 @@ export class RentalsController {
     @Query('country_code') country_code?: string,
     @Query('state') state?: string
   ) {
-    const windows = await this.rentalsService.listTakenRentalBookingWindowsForPublicListing(
+    const availability = await this.rentalsService.listTakenRentalBookingWindowsForPublicListing(
       listingId,
       { country_code, state }
     );
-    if (windows === null) {
+    if (availability === null) {
       throw new NotFoundException('Listing not found');
     }
-    return { success: true, data: { windows } };
+    return { success: true, data: { windows: availability.windows, ...availability.card } };
   }
 
   @Public()
@@ -258,7 +265,13 @@ export class RentalsController {
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
-    return { success: true, data: { listing } };
+    const country = listing.business_location?.address?.country;
+    const card = await this.rentalsService.cardWindowFieldsFor(country, readLatestCardEndAt(listing));
+    const inspection_policy_version = await this.rentalsService.listingInspectionPolicy(country);
+    return {
+      success: true,
+      data: { listing: Object.assign(listing, card, { inspection_policy_version }) },
+    };
   }
 
   @Get('business/items')
@@ -507,6 +520,19 @@ export class RentalsController {
     return this.rentalsService.retryBookingPayment(bookingId, body);
   }
 
+  @Get('requests/:id/inspection-policy')
+  @ApiOperation({ summary: 'Whether this client request would use a condition report' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Policy version, or null for the start-PIN flow' })
+  @ApiResponse({
+    status: 404,
+    description: 'Missing, unauthorized, or malformed request id',
+  })
+  async getRequestInspectionPolicy(@Param('id', requestPolicyIdPipe) requestId: string) {
+    const inspection_policy_version = await this.rentalsService.getRequestInspectionPolicy(requestId);
+    return { success: true, inspection_policy_version };
+  }
+
   @Post('requests')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a rental request (client)' })
@@ -538,6 +564,17 @@ export class RentalsController {
     @Body() dto: RespondRentalRequestDto
   ) {
     return this.rentalsService.respondToRentalRequest(requestId, dto);
+  }
+
+  @Post('requests/:id/price-change-seen')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Renter has seen the new rental price' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Price notice acknowledged' })
+  @ApiResponse({ status: 403, description: 'Only the renter can confirm the price' })
+  @ApiResponse({ status: 404, description: 'Request not found' })
+  async priceChangeSeen(@Param('id') requestId: string) {
+    return this.rentalsService.markRentalPriceChangeSeen(requestId);
   }
 
   @Post('requests/:id/cancel')
@@ -592,6 +629,64 @@ export class RentalsController {
     return this.rentalsService.initiateRentalPickupPayment(bookingId);
   }
 
+  @Post('bookings/:id/accept-and-start')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Renter accepts the current pickup report, pays if the contract is due at pickup, and starts an inspected booking',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: AcceptAndStartRentalDto })
+  @ApiResponse({ status: 200, description: 'Accepted. started or paymentPending' })
+  @ApiResponse({ status: 400, description: 'RENTAL_ACCEPT_START_NOT_ENROLLED' })
+  @ApiResponse({ status: 403, description: 'Only the renter' })
+  @ApiResponse({ status: 404, description: 'Not the renter of this booking' })
+  @ApiResponse({ status: 409, description: 'RENTAL_ACCEPT_START_CONFLICT' })
+  @ApiResponse({ status: 426, description: 'Not used on this route' })
+  async acceptAndStart(
+    @Param('id') bookingId: string,
+    @Body() body: AcceptAndStartRentalDto
+  ) {
+    return this.rentalsService.acceptAndStartRental(bookingId, body.versionId);
+  }
+
+  @Post('bookings/:id/report-not-received')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Renter reports the item was not received. Notifies support and the business. Does not change the booking.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Report stored. alreadyReported on a repeat.' })
+  @ApiResponse({ status: 403, description: 'Only the renter' })
+  @ApiResponse({ status: 404, description: 'Not the renter of this booking' })
+  @ApiResponse({
+    status: 409,
+    description: 'RENTAL_NOT_RECEIVED_NOT_INSPECTED or RENTAL_NOT_RECEIVED_WINDOW_CLOSED',
+  })
+  reportNotReceived(@Param('id') bookingId: string) {
+    return this.notReceived.report(bookingId);
+  }
+
+  @Post('bookings/:id/report-returned')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Renter reports the item was handed back. Notifies the business. Does not change status or the deposit.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Report stored. alreadyReported on a repeat.' })
+  @ApiResponse({ status: 403, description: 'Only the renter' })
+  @ApiResponse({ status: 404, description: 'Not the renter, or the flag is off' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'RENTAL_RETURN_REPORT_NOT_OUT, RENTAL_RETURN_REPORT_NOT_STARTED, or RENTAL_RETURN_ALREADY_CONFIRMED',
+  })
+  reportReturned(@Param('id') bookingId: string) {
+    return this.renterReturns.report(bookingId);
+  }
+
   @Get('bookings/:id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -605,7 +700,20 @@ export class RentalsController {
   @ApiResponse({ status: 404, description: 'Booking not found (or not visible)' })
   async getBooking(@Param('id') bookingId: string) {
     const booking = await this.rentalsService.getBookingDetailForViewer(bookingId);
-    return { success: true, data: { booking } };
+    const report = await this.notReceived.findForBooking(bookingId);
+    const returnPlace = await this.renterReturns.placeFor(bookingId);
+    return {
+      success: true,
+      data: {
+        booking: {
+          ...booking,
+          not_received_report: report
+            ? { id: report.id, reported_at: report.reported_at }
+            : null,
+          return_place: returnPlace,
+        },
+      },
+    };
   }
 
   @Get('bookings/:id/start-pin')

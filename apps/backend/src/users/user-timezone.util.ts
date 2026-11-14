@@ -1,15 +1,11 @@
 import { DateTime } from 'luxon';
+import { marketTimeZone } from '../common/market-timezones';
 
 export const DEFAULT_USER_TIMEZONE = 'Africa/Douala';
 
-/** Maps address country code to default IANA timezone for the user's first address. */
+/** Maps address country code to the market time zone, or Douala when the code is unknown. */
 export function timezoneFromAddressCountryCode(countryCode: string): string {
-  const c = (countryCode ?? '').trim().toUpperCase();
-  if (c === 'CM') return 'Africa/Douala';
-  if (c === 'GA') return 'Africa/Libreville';
-  if (c === 'CA') return 'America/Toronto';
-  if (c === 'CD') return 'Africa/Kinshasa';
-  return DEFAULT_USER_TIMEZONE;
+  return marketTimeZone(countryCode) ?? DEFAULT_USER_TIMEZONE;
 }
 
 export function isValidIanaTimezone(zone: string): boolean {

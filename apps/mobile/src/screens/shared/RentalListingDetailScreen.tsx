@@ -415,8 +415,12 @@ export default function RentalListingDetailScreen() {
               </Text>
               <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
                 {t(
-                  'rentals.detail.securityDepositHint',
-                  'Held on your card with the rental total and only used for extra hours past your booked end time.'
+                  listing.inspection_policy_version != null
+                    ? 'rentals.detail.securityDepositHintInspected'
+                    : 'rentals.detail.securityDepositHint',
+                  listing.inspection_policy_version != null
+                    ? 'Held on your card with the rental total. The rental is charged at return. The deposit is released unless there\'s damage or a late return.'
+                    : 'Held on your card with the rental total and only used for extra hours past your booked end time.'
                 )}
               </Text>
             </>
@@ -467,6 +471,11 @@ export default function RentalListingDetailScreen() {
                 {`${n}. `}
                 {n === 4
                   ? t(step4Key, step4Default)
+                  : n === 3 && listing.inspection_policy_version != null
+                    ? t(
+                        'rentals.detail.howItWorksStep3Inspected',
+                        'At pickup, review and accept the condition report to start. Return by the booked end time.'
+                      )
                   : t(
                       `rentals.detail.howItWorksStep${n}`,
                       n === 1

@@ -11,7 +11,9 @@
  * Le basculement se fait dans Developer Options (About → 7 taps sur la version).
  * Le choix est persisté (AsyncStorage) et appliqué au prochain démarrage.
  *
- * Surcharge API sans changer d’« env » : variable `EXPO_PUBLIC_API_URL` (voir `getEnv()` dans auth0.ts).
+ * Surcharges build (MANUAL_ENV inchangé) : `EXPO_PUBLIC_ENV` (`dev` | `prod` | `local`),
+ * `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_HASURA_URL`, `EXPO_PUBLIC_AUTH0_DOMAIN`,
+ * `EXPO_PUBLIC_AUTH0_CLIENT_ID`, `EXPO_PUBLIC_AUTH0_AUDIENCE` (voir `getEnv()`).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

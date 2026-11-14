@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 import { RichTextEditor } from '../common/RichTextEditor';
 import type {
   BusinessRentalRequestRow,
@@ -124,7 +125,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   onStale,
   respondRequest,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [contractHours, setContractHours] = useState('48');
   const [availableNote, setAvailableNote] = useState('');
   const [reasonCode, setReasonCode] = useState<UnavailableRentalReasonCode | ''>('');
@@ -168,6 +169,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
         return;
       }
       const msg =
+        cardWindowErrorMessage(e, i18n.language) ||
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         t('business.rentals.respondFailed', 'Could not send response');
       setError(typeof msg === 'string' ? msg : String(msg));
@@ -204,6 +206,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
         return;
       }
       const msg =
+        cardWindowErrorMessage(e, i18n.language) ||
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         t('business.rentals.respondFailed', 'Could not send response');
       setError(typeof msg === 'string' ? msg : String(msg));

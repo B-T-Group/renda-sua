@@ -62,6 +62,42 @@ describe('rental inspection enrolment', () => {
     expect(decision).toMatchObject({ outcome: 'reject', code: INSPECTION_CODES.SELF_RENTAL });
   });
 
+  it('still rejects a self-rental when self-booking is explicitly off', () => {
+    const decision = enrol({
+      clientUserId: 'same',
+      businessUserId: 'same',
+      allowSelfBooking: false,
+    });
+    expect(decision).toMatchObject({ outcome: 'reject', code: INSPECTION_CODES.SELF_RENTAL });
+  });
+
+  it('enrols a self-rental as inspected when self-booking is allowed', () => {
+    expect(
+      enrol({ clientUserId: 'same', businessUserId: 'same', allowSelfBooking: true })
+    ).toEqual({ outcome: 'enrol', policyVersion: INSPECTION_POLICY_VERSION });
+  });
+
+  it('still rejects multiple windows when self-booking is allowed', () => {
+    const decision = enrol({
+      clientUserId: 'same',
+      businessUserId: 'same',
+      allowSelfBooking: true,
+      windowCount: 2,
+    });
+    expect(decision).toMatchObject({ outcome: 'reject', code: INSPECTION_CODES.MULTI_WINDOW });
+  });
+
+  it('still rejects a card window that does not fit when self-booking is allowed', () => {
+    const endAt = new Date(NOW.getTime() + 4 * DAY);
+    expect(
+      enrol({ clientUserId: 'same', businessUserId: 'same', allowSelfBooking: true, rail: 'stripe', endAt })
+    ).toMatchObject({ outcome: 'reject', code: INSPECTION_CODES.STRIPE_WINDOW });
+  });
+
+  it('still rejects a missing participant when self-booking is allowed', () => {
+    expect(enrol({ clientUserId: null, allowSelfBooking: true }).outcome).toBe('reject');
+  });
+
   it('rejects an enrolled card booking whose end plus 72h misses the 6-day auth window', () => {
     const endAt = new Date(NOW.getTime() + 4 * DAY);
     expect(stripeReviewFits({ endAt, now: NOW })).toBe(false);
@@ -75,6 +111,12 @@ describe('rental inspection enrolment', () => {
     const endAt = new Date(NOW.getTime() + 2 * DAY);
     expect(stripeReviewFits({ endAt, now: NOW })).toBe(true);
     expect(enrol({ rail: 'stripe', endAt }).outcome).toBe('enrol');
+  });
+
+  it('enrols a far Stripe end when the shared policy clears latest_card_end_at', () => {
+    const far = new Date(NOW.getTime() + 20 * DAY);
+    expect(stripeReviewFits({ endAt: far, now: NOW, latest_card_end_at: null })).toBe(true);
+    expect(enrol({ rail: 'stripe', endAt: far, latest_card_end_at: null }).outcome).toBe('enrol');
   });
 
   it('does not apply the card window to wallet or mobile-money bookings', () => {

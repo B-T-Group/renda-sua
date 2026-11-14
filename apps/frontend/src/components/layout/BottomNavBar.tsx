@@ -1,4 +1,4 @@
-import { Box, Paper } from '@mui/material';
+import { Badge, Box, Paper } from '@mui/material';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -8,6 +8,9 @@ export interface BottomNavTab {
   path: string;
   icon: React.ReactNode;
   active: boolean;
+  /** Hidden when empty. Capped labels such as 9+ are passed through. */
+  badge?: string | null;
+  onPress?: () => void;
 }
 
 interface BottomNavBarProps {
@@ -52,7 +55,10 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({ tabs }) => {
             key={tab.key}
             role="button"
             aria-current={tab.active ? 'page' : undefined}
-            onClick={() => navigate(tab.path)}
+            onClick={() => {
+              tab.onPress?.();
+              navigate(tab.path);
+            }}
             sx={{
               flex: 1,
               display: 'flex',
@@ -78,7 +84,25 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({ tabs }) => {
                 },
               }}
             >
-              {tab.icon}
+              {tab.badge ? (
+                <Badge
+                  badgeContent={tab.badge}
+                  color="primary"
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      fontSize: 9,
+                      fontWeight: 800,
+                      minWidth: 16,
+                      height: 16,
+                      padding: '0 4px',
+                    },
+                  }}
+                >
+                  {tab.icon}
+                </Badge>
+              ) : (
+                tab.icon
+              )}
             </Box>
             <Box
               component="span"

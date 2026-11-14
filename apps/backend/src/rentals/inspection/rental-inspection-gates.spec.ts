@@ -94,48 +94,28 @@ describe('enrolled rental gates', () => {
     expect(svc.verifyPinAttempt).not.toHaveBeenCalled();
   });
 
-  it('refunds the PIN attempt when a new report replaces acceptance before start commits', async () => {
-    svc.deliveryPinService = { hashPin: () => 'hash', verifyPin: () => true };
+  it('returns 426 for an enrolled booking even after the report is accepted', async () => {
     svc.fetchBooking.mockResolvedValue({
       id: 'b1',
       business_id: 'biz',
       status: 'confirmed',
       rental_start_pin_hash: 'hash',
-      rental_start_pin_attempts: 1,
+      rental_start_pin_attempts: 0,
     });
     svc.verifyPinAttempt = jest.fn().mockResolvedValue(undefined);
-    svc.hasuraSystemService.executeQuery
-      .mockResolvedValueOnce({
-        rental_bookings_by_pk: {
-          inspection_policy_version: 1,
-          pickup_ack_current: true,
-          pickup_accepted_version_id: 'v1',
-          pickup_current_version_id: 'v1',
-        },
-      })
-      .mockResolvedValueOnce({
-        rental_bookings_by_pk: { inspection_policy_version: 1 },
-      })
-      .mockResolvedValueOnce({
-        rental_bookings_by_pk: {
-          inspection_policy_version: 1,
-          pickup_ack_current: false,
-          pickup_accepted_version_id: null,
-          pickup_current_version_id: 'v2',
-        },
-      });
-    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
-      if (String(query).includes('rental_mark_started')) return { rental_mark_started: [] };
-      return { update_rental_bookings: { affected_rows: 1 } };
+    svc.hasuraSystemService.executeQuery.mockResolvedValue({
+      rental_bookings_by_pk: {
+        inspection_policy_version: 1,
+        pickup_ack_current: true,
+        pickup_accepted_version_id: 'v1',
+        pickup_current_version_id: 'v1',
+      },
     });
     await expect(svc.verifyRentalStartPin('b1', { pin: '1234' })).rejects.toMatchObject({
       status: 426,
     });
-    expect(svc.casBooking).not.toHaveBeenCalled();
-    const refund = svc.hasuraSystemService.executeMutation.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .find((query: string) => query.includes('RefundRentalPinAttempt'));
-    expect(refund).toBeTruthy();
+    expect(svc.verifyPinAttempt).not.toHaveBeenCalled();
+    expect(svc.hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
   it('collects pickup payment only after the client accepted the report', async () => {
@@ -320,31 +300,21 @@ describe('enrolled rental gates', () => {
     expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
   });
 
-  it('does not fall back to a legacy start when an enrolled booking cannot see the start function', async () => {
+  it('does not start an enrolled booking from the legacy PIN path when the start function is missing', async () => {
     svc.fetchBooking.mockResolvedValue({
       id: 'b1',
       business_id: 'biz',
       status: 'confirmed',
     });
-    svc.verifyPinAttempt = jest.fn().mockResolvedValue(undefined);
+    svc.verifyPinAttempt = jest.fn();
     svc.hasuraSystemService.executeQuery.mockResolvedValue({
-      rental_bookings_by_pk: {
-        inspection_policy_version: 1,
-        pickup_ack_current: true,
-        pickup_accepted_version_id: 'v1',
-        pickup_current_version_id: 'v1',
-      },
-    });
-    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
-      if (String(query).includes('rental_mark_started')) {
-        throw new Error("field 'rental_mark_started' not found in type mutation_root");
-      }
-      return { update_rental_bookings: { affected_rows: 1 } };
+      rental_bookings_by_pk: { inspection_policy_version: 1 },
     });
     await expect(svc.verifyRentalStartPin('b1', { pin: '1234' })).rejects.toMatchObject({
-      status: 503,
+      status: 426,
     });
     expect(svc.casBooking).not.toHaveBeenCalled();
+    expect(svc.verifyPinAttempt).not.toHaveBeenCalled();
   });
 
   it('still uses the legacy start claim when the policy is null and the function is not installed', async () => {

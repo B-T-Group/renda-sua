@@ -33,6 +33,12 @@ import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher
 import type { AssistantContext } from '@/utils/assistantChips';
 import { assistantChipPersona, getContextualChips, buildChipMessage } from '@/utils/assistantChips';
 import { AssistantEntityCards, openAssistantCard } from '@/components/assistant/AssistantEntityCards';
+import { AssistantRentalThread } from '@/components/assistant/AssistantRentalThread';
+import { RentalSearchDateSheet } from '@/components/rentals/search/RentalSearchDateSheet';
+import type { RentalDateRange } from '@/utils/rentals/rentalSearchDates';
+import { rememberPendingRentalRequest } from '@/utils/pendingRentalRequest';
+import { rememberRentalCardTap, rentalDayBucket } from '@/utils/rentalAssistantAttribution';
+import { trackSiteEvent } from '@/services/analytics/AppEventsService';
 import { textBesideCards, type AssistantResultCard } from '@/utils/assistantResultCards';
 import { trackChipTap, type LauncherEventContext } from '@/services/analytics/assistantLauncherAnalytics';
 import { useReorderOrder } from '@/hooks/useReorderOrder';
@@ -95,7 +101,10 @@ function useAssistantTransport() {
               state: market.selectedStateCode || undefined,
             }
           : null;
-      return postAssistantChat(messages, marketContext, assistant.threadId);
+      return postAssistantChat(messages, marketContext, assistant.threadId, {
+        rentalDates: assistant.rentalDates,
+        rentalRefs: assistant.rentalRefs,
+      });
     },
     [market.selectedCountryCode, market.selectedStateCode, assistant.threadId]
   );
@@ -106,7 +115,7 @@ const MESSAGE_AVATAR = 28;
 const MESSAGE_AVATAR_WIDTH = Math.round(MESSAGE_AVATAR * 0.82);
 const HERO_SIZE = 128;
 
-function TypingIndicator() {
+function TypingIndicator({ rental }: { rental?: boolean }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
@@ -166,6 +175,11 @@ function TypingIndicator() {
         <Animated.View style={dotStyle(dot2)} />
         <Animated.View style={dotStyle(dot3)} />
       </View>
+      {rental ? (
+        <Text style={{ color: colors.text.secondary, marginLeft: 8 }}>
+          {t('assistant.rental.checking', 'Checking availability…')}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -179,6 +193,10 @@ interface MessageBubbleProps {
   analyticsCtx?: LauncherEventContext;
   onOpenCard?: (card: AssistantResultCard) => void;
   onReorder?: (href: string) => void;
+  onRentalRequest?: (card: AssistantResultCard) => void;
+  onRentalShift?: (card: AssistantResultCard) => void;
+  onEditDates?: () => void;
+  onRentalChip?: (message: string, dates?: { startDate?: string; endDate?: string }) => void;
 }
 
 function MessageBubble({
@@ -190,6 +208,10 @@ function MessageBubble({
   analyticsCtx,
   onOpenCard,
   onReorder,
+  onRentalRequest,
+  onRentalShift,
+  onEditDates,
+  onRentalChip,
 }: MessageBubbleProps) {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
@@ -268,8 +290,19 @@ function MessageBubble({
       </View>
       </View>
       ) : null}
-      {!isUser && item.cards?.length && onOpenCard ? (
-        <AssistantEntityCards cards={item.cards} onOpen={onOpenCard} onReorder={onReorder} />
+      {!isUser && item.rental && onOpenCard && onRentalRequest && onRentalShift && onEditDates && onRentalChip ? (
+        <AssistantRentalThread
+          cards={item.cards || []}
+          rental={item.rental}
+          onOpen={onOpenCard}
+          onRequest={onRentalRequest}
+          onShift={onRentalShift}
+          onEditDates={onEditDates}
+          onChip={onRentalChip}
+        />
+      ) : null}
+      {!isUser && !item.rental && item.cards?.some((card) => !card.rental) && onOpenCard ? (
+        <AssistantEntityCards cards={item.cards.filter((card) => !card.rental)} onOpen={onOpenCard} onReorder={onReorder} />
       ) : null}
     </Animated.View>
   );
@@ -405,6 +438,8 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   const { cart } = store;
   const listRef = useRef<FlatList<AssistantMessage>>(null);
   const [draft, setDraft] = useState('');
+  const [dateSheetOpen, setDateSheetOpen] = useState(false);
+  const [dateDraft, setDateDraft] = useState<RentalDateRange | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const character = useShowsRendaCharacter();
   const assistantTransport = useAssistantTransport();
@@ -680,11 +715,54 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
             onReorder={(href) => {
               void handleReorderLink(href);
             }}
+            onRentalRequest={(card) => {
+              const listingId = card.rental?.listingId || card.id;
+              rememberRentalCardTap(listingId, assistant.threadId);
+              trackSiteEvent({
+                eventType: 'assistant.deeplink.tap',
+                metadata: { type: 'rental', target_id: listingId, availability: card.rental?.availability || 'available' },
+              });
+              if (!auth.isAuthenticated || card.rental?.cta === 'sign_in') {
+                rememberPendingRentalRequest({
+                  listingId: card.rental?.listingId || card.id,
+                  startDate: card.rental?.startDate,
+                  endDate: card.rental?.endDate,
+                });
+                (navigation as { navigate: (name: string, params?: object) => void }).navigate('GuestTabs', {
+                  screen: 'GuestAuth',
+                  params: { screen: 'Login' },
+                });
+                return;
+              }
+              openAssistantCard(
+                navigation as unknown as Parameters<typeof openAssistantCard>[0],
+                card,
+                persona.activePersona
+              );
+            }}
+            onRentalShift={(card) => {
+              const start = card.rental?.shiftStart;
+              const end = card.rental?.shiftEnd;
+              if (!start || !end) return;
+              assistant.setRentalDates({ startDate: start, endDate: end });
+              void assistant.sendMessage(`${start} → ${end}`, assistantTransport);
+            }}
+            onEditDates={() => setDateSheetOpen(true)}
+            onRentalChip={(message, dates) => {
+              if (dates?.startDate && dates.endDate) {
+                assistant.setRentalDates({ startDate: dates.startDate, endDate: dates.endDate });
+                trackSiteEvent({
+                  eventType: 'assistant.rental.date_chip.edit',
+                  metadata: { from: 'chip', day_bucket: rentalDayBucket(dates.startDate, dates.endDate), thread_id: assistant.threadId },
+                });
+              }
+              void assistant.sendMessage(message, assistantTransport);
+            }}
           />
         </View>
       );
     },
-    [assistant.messages, character, handleReorderLink, analyticsCtx, navigation, persona.activePersona]
+    [assistant, assistantTransport, auth.isAuthenticated, character, handleReorderLink, analyticsCtx, navigation, persona.activePersona]
   );
 
   const onRetry = useCallback(() => {
@@ -709,7 +787,11 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
         contentContainerStyle={styles.listContent}
         renderItem={renderItem}
         ListEmptyComponent={<EmptyState onPick={(text) => void onSend(text)} context={context} />}
-        ListFooterComponent={assistant.isSending ? <TypingIndicator /> : null}
+        ListFooterComponent={
+          assistant.isSending ? (
+            <TypingIndicator rental={/\b(rent|rental|louer|location|hammer|marteau)\b/i.test(assistant.messages.at(-1)?.content || '')} />
+          ) : null
+        }
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
       />
 
@@ -843,6 +925,27 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
         </Pressable>
       </View>
       </KeyboardAvoidingView>
+      <RentalSearchDateSheet
+        visible={dateSheetOpen}
+        value={dateDraft}
+        timeZone="Africa/Douala"
+        onChange={setDateDraft}
+        onClose={() => setDateSheetOpen(false)}
+        onApply={() => {
+          if (!dateDraft) return;
+          assistant.setRentalDates({ startDate: dateDraft.startDate, endDate: dateDraft.endDate });
+          trackSiteEvent({
+            eventType: 'assistant.rental.date_chip.edit',
+            metadata: {
+              from: 'editor',
+              day_bucket: rentalDayBucket(dateDraft.startDate, dateDraft.endDate),
+              thread_id: assistant.threadId,
+            },
+          });
+          setDateSheetOpen(false);
+          void assistant.sendMessage(`${dateDraft.startDate} → ${dateDraft.endDate}`, assistantTransport);
+        }}
+      />
       <ReorderCartConflictSheet
         visible={sheetOpen}
         allowAdd={allowAdd}
