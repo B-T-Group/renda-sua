@@ -9,10 +9,14 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +25,7 @@ import type { useRentalInspection } from '../../hooks/useRentalInspection';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { formatListingDue } from '../../utils/rentalRequestFormat';
+import { confirmationTimeZone, formatConfirmationDue } from '../../utils/rentals/confirmationFormat';
 import {
   CORRECTION_REASON_CODES,
   REQUIRED_PHOTO_ROLES,
@@ -54,6 +59,9 @@ interface PanelBooking {
   end_at?: string | null;
   total_amount?: number | string | null;
   currency?: string | null;
+  rental_location_listing?: {
+    business_location?: { address?: { country?: string | null } | null } | null;
+  } | null;
   client?: { user?: { first_name?: string | null } | null } | null;
   accept_start_preview?: {
     payment_rail: 'card' | 'wallet' | 'mobile_money';
@@ -424,6 +432,11 @@ export function RentalInspectionPanel({
             unit={unit}
             minPhotos={minPhotos}
             readOnly={role === 'client' || view.status === 'submitted'}
+            submittedAt={view.submittedAt}
+            timeZone={confirmationTimeZone(
+              booking.rental_location_listing?.business_location?.address?.country,
+              booking.currency
+            )}
             onFile={(photoRole, file) => void upload(photoRole, file)}
           />
           {role === 'business' && !(stage === 'pickup' && view.status === 'submitted') ? (
@@ -757,28 +770,84 @@ function itemFromDraft(draft: Draft, unitId: string, stage: InspectionStage, pic
   };
 }
 
+interface PhotoSlide {
+  role: string;
+  url: string;
+}
+
+function photoSlides(unit: InspectionUnit, roles: PhotoRole[]): PhotoSlide[] {
+  return roles.flatMap((role) => {
+    const photo = unit.photos.find((row) => row.role === role);
+    return photo?.url ? [{ role, url: photo.url }] : [];
+  });
+}
+
+function slideIndex(slides: PhotoSlide[], role: string): number {
+  const index = slides.findIndex((row) => row.role === role);
+  return index < 0 ? 0 : index;
+}
+
 function PhotoRow({
   unit,
   minPhotos,
   readOnly,
+  submittedAt,
+  timeZone,
   onFile,
 }: {
   unit: InspectionUnit;
   minPhotos: number | null;
   readOnly: boolean;
+  submittedAt: string | null;
+  timeZone: string;
   onFile: (role: PhotoRole, file: File) => void;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
   const roles = minPhotos == null ? REQUIRED_PHOTO_ROLES : photoRolesForMinimum(minPhotos);
+  const slides = photoSlides(unit, roles);
   return (
     <>
-      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
-        {roles.map((role) => (
-          <PhotoTile key={role} role={role} photo={unit.photos.find((row) => row.role === role)} readOnly={readOnly} onFile={onFile} onOpen={setOpen} />
-        ))}
-      </Stack>
-      <PhotoLightbox url={open} onClose={() => setOpen(null)} />
+      <PhotoTiles roles={roles} unit={unit} readOnly={readOnly} slides={slides} onFile={onFile} onOpen={setOpen} />
+      <PhotoLightbox
+        slides={slides}
+        index={open}
+        submittedAt={submittedAt}
+        timeZone={timeZone}
+        onClose={() => setOpen(null)}
+        onMove={setOpen}
+      />
     </>
+  );
+}
+
+function PhotoTiles({
+  roles,
+  unit,
+  readOnly,
+  slides,
+  onFile,
+  onOpen,
+}: {
+  roles: PhotoRole[];
+  unit: InspectionUnit;
+  readOnly: boolean;
+  slides: PhotoSlide[];
+  onFile: (role: PhotoRole, file: File) => void;
+  onOpen: (index: number) => void;
+}) {
+  return (
+    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
+      {roles.map((role) => (
+        <PhotoTile
+          key={role}
+          role={role}
+          photo={unit.photos.find((row) => row.role === role)}
+          readOnly={readOnly}
+          onFile={onFile}
+          onOpen={() => onOpen(slideIndex(slides, role))}
+        />
+      ))}
+    </Stack>
   );
 }
 
@@ -793,38 +862,149 @@ function PhotoTile({
   photo: InspectionUnit['photos'][number] | undefined;
   readOnly: boolean;
   onFile: (role: PhotoRole, file: File) => void;
-  onOpen: (url: string) => void;
+  onOpen: () => void;
 }) {
   const { t } = useTranslation();
   const label = t(ROLE_KEY[role][0], ROLE_KEY[role][1]);
-  const thumb = photo?.url ? <Box component="img" src={photo.url} alt={label} sx={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 1 }} /> : label;
-  if (readOnly && photo?.url) {
-    return (
-      <Button variant="outlined" sx={{ minHeight: 96, minWidth: 96, p: 0.5 }} onClick={() => onOpen(photo.url!)} aria-label={label}>
-        {thumb}
-      </Button>
-    );
-  }
+  const thumb = photoThumb(photo?.url, label);
+  return (
+    <Stack spacing={0.5} alignItems="center" sx={{ width: 96 }}>
+      {readOnly && photo?.url ? (
+        <Button variant="outlined" sx={{ minHeight: 96, minWidth: 96, p: 0.5 }} onClick={onOpen} aria-label={label}>
+          {thumb}
+        </Button>
+      ) : (
+        <UploadTile label={label} role={role} readOnly={readOnly} onFile={onFile} thumb={thumb} />
+      )}
+      {photo?.url ? <Typography variant="caption" color="text.secondary" align="center">{label}</Typography> : null}
+    </Stack>
+  );
+}
+
+function photoThumb(url: string | undefined, label: string) {
+  if (!url) return label;
+  return <Box component="img" src={url} alt={label} sx={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 1 }} />;
+}
+
+function UploadTile({
+  label,
+  role,
+  readOnly,
+  onFile,
+  thumb,
+}: {
+  label: string;
+  role: PhotoRole;
+  readOnly: boolean;
+  onFile: (role: PhotoRole, file: File) => void;
+  thumb: React.ReactNode;
+}) {
   return (
     <Button component="label" variant="outlined" sx={{ minHeight: 96, minWidth: 96, p: 0.5 }}>
-      {thumb}
-      {readOnly ? null : (
-        <input hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) onFile(role, file);
-        }} />
-      )}
+      {thumb || label}
+      {readOnly ? null : <PhotoFileInput role={role} onFile={onFile} />}
     </Button>
   );
 }
 
-function PhotoLightbox({ url, onClose }: { url: string | null; onClose: () => void }) {
+function PhotoFileInput({ role, onFile }: { role: PhotoRole; onFile: (role: PhotoRole, file: File) => void }) {
   return (
-    <Dialog open={!!url} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogContent sx={{ p: 1 }}>
-        {url ? <Box component="img" src={url} alt="" sx={{ width: '100%', maxHeight: '80vh', objectFit: 'contain' }} /> : null}
-      </DialogContent>
+    <input hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
+      const file = event.target.files?.[0];
+      if (file) onFile(role, file);
+    }} />
+  );
+}
+
+function PhotoLightbox({
+  slides,
+  index,
+  submittedAt,
+  timeZone,
+  onClose,
+  onMove,
+}: {
+  slides: PhotoSlide[];
+  index: number | null;
+  submittedAt: string | null;
+  timeZone: string;
+  onClose: () => void;
+  onMove: (index: number) => void;
+}) {
+  const slide = index == null ? null : slides[index] ?? null;
+  return (
+    <Dialog
+      open={index != null}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      transitionDuration={0}
+      onKeyDown={(event) => moveLightbox(event, index, slides.length, onMove)}
+      sx={LIGHTBOX_SX}
+      slotProps={{
+        backdrop: { sx: { backgroundColor: '#0B0B0D', opacity: 1 } },
+        paper: { sx: { bgcolor: '#0B0B0D', backgroundImage: 'none', color: '#fff', position: 'relative' } },
+      }}
+    >
+      <LightboxBody slide={slide} submittedAt={submittedAt} timeZone={timeZone} index={index ?? 0} count={slides.length} onClose={onClose} onMove={onMove} />
     </Dialog>
+  );
+}
+
+const LIGHTBOX_SX = {
+  '& .MuiBackdrop-root': { backgroundColor: '#0B0B0D', opacity: 1 },
+  '& .MuiDialog-paper': { backgroundColor: '#0B0B0D', backgroundImage: 'none', color: '#fff' },
+};
+
+function moveLightbox(event: React.KeyboardEvent, index: number | null, count: number, onMove: (index: number) => void) {
+  if (index == null) return;
+  if (event.key === 'ArrowRight' && index < count - 1) onMove(index + 1);
+  if (event.key === 'ArrowLeft' && index > 0) onMove(index - 1);
+}
+
+function LightboxBody({
+  slide,
+  submittedAt,
+  timeZone,
+  index,
+  count,
+  onClose,
+  onMove,
+}: {
+  slide: PhotoSlide | null;
+  submittedAt: string | null;
+  timeZone: string;
+  index: number;
+  count: number;
+  onClose: () => void;
+  onMove: (index: number) => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const label = slide ? t(ROLE_KEY[slide.role][0], ROLE_KEY[slide.role][1]) : '';
+  const when = formatConfirmationDue(submittedAt, timeZone, i18n.language);
+  return (
+    <DialogContent sx={{ p: 2, color: '#fff' }}>
+      <IconButton aria-label={t('common.close', 'Close')} onClick={onClose} sx={{ position: 'absolute', top: 8, right: 8, color: '#fff' }}>
+        <CloseIcon />
+      </IconButton>
+      {slide ? <Box component="img" src={slide.url} alt={label} sx={{ width: '100%', maxHeight: '70vh', objectFit: 'contain' }} /> : null}
+      <Typography align="center" sx={{ mt: 1.5, color: '#fff' }}>{when ? `${label} · ${when}` : label}</Typography>
+      <LightboxArrows index={index} count={count} onMove={onMove} />
+    </DialogContent>
+  );
+}
+
+function LightboxArrows({ index, count, onMove }: { index: number; count: number; onMove: (index: number) => void }) {
+  const { t } = useTranslation();
+  return (
+    <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
+      <IconButton aria-label={t('rentalInspection.previousPhoto', 'Previous photo')} disabled={index <= 0} onClick={() => onMove(index - 1)} sx={{ color: '#fff' }}>
+        <ChevronLeftIcon />
+      </IconButton>
+      <IconButton aria-label={t('rentalInspection.nextPhoto', 'Next photo')} disabled={index >= count - 1} onClick={() => onMove(index + 1)} sx={{ color: '#fff' }}>
+        <ChevronRightIcon />
+      </IconButton>
+    </Stack>
   );
 }
 
@@ -919,10 +1099,10 @@ function Timeline({
   const openReview = booking.return_resolution === 'disputed' || booking.return_resolution === 'review' || booking.return_resolution === 'pending';
   const rows = [
     t('rentalInspection.timelineBooked', 'Booked'),
-    t('rentalInspection.timelinePickupSubmitted', 'Pickup inspection submitted'),
+    t('rentalInspection.timelinePickupSubmitted', 'Condition report sent'),
     role === 'client'
       ? t('rentalInspection.timelineAccepted', 'You accepted the condition')
-      : t('rentalInspection.statusClientAck', 'Client acknowledged'),
+      : t('rentalInspection.statusClientAck', 'The renter accepted the condition report'),
     t('rentalInspection.timelineStarted', 'Rental started'),
     t('rentalInspection.timelineHandback', 'Physical handback recorded'),
     t('rentalInspection.timelineReturnDamage', 'Return inspection'),

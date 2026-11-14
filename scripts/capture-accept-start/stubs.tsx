@@ -437,7 +437,11 @@ export function useRentalInspection() {
   const labels: [string, string] = french ? ['Unité 1', 'Unité 2'] : ['Unit 1', 'Unit 2'];
   const one = current === 'clientReview' || current === 'businessWait';
   const full = viewFor(labels);
-  const pickup = current === 'legacy' ? null : one ? { ...full, units: [full.units[0]] } : full;
+  const pickup = current === 'legacy'
+    ? null
+    : one
+      ? { ...full, units: [full.units[0]], submittedAt: '2026-11-17T15:32:00.000Z' }
+      : full;
   const enrolled = current !== 'legacy' && !captureParams().get('return');
   return {
     api: {

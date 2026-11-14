@@ -50,8 +50,17 @@ const NEXT_STEP_DEFAULTS: Record<string, string> = {
   'rentalInspection.bannerReview':
     'Review the condition report, then accept it to start the rental.',
   'rentalInspection.bannerWaiting':
-    'Waiting for the renter to accept the condition. No PIN is needed.',
+    'Waiting for the renter to accept the condition report. No PIN is needed.',
 };
+
+const REVIEW_PILL = { backgroundColor: '#0A4FB518', textColor: '#0A4FB5', borderColor: '#0A4FB544' };
+const WAITING_PILL = { backgroundColor: '#B4530918', textColor: '#B45309', borderColor: '#B4530944' };
+
+function inspectionChipTone(nextStepKey?: string): 'review' | 'waiting' | null {
+  if (nextStepKey === 'rentalInspection.bannerWaiting') return 'waiting';
+  if (nextStepKey === 'rentalInspection.bannerReview') return 'review';
+  return null;
+}
 
 interface Props {
   bookingStatus?: string | null;
@@ -80,6 +89,8 @@ export function RentalPhaseBanner({
       : resolveRentalPhase({ requestStatus, bookingStatus }, role);
 
   const stepKey = nextStepKey ?? info.nextStepKey;
+  const tone = inspectionChipTone(nextStepKey);
+  const toneColors = tone === 'waiting' ? WAITING_PILL : tone === 'review' ? REVIEW_PILL : null;
   if (!stepKey && info.phase === 'done' && !bookingStatus) {
     return null;
   }
@@ -103,9 +114,9 @@ export function RentalPhaseBanner({
       <View style={styles.row}>
         <StatusPill
           label={chipLabel || t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
-          backgroundColor={chipLabel ? '#B4530918' : phaseColors.backgroundColor}
-          textColor={chipLabel ? '#B45309' : phaseColors.textColor}
-          borderColor={chipLabel ? '#B4530944' : phaseColors.borderColor}
+          backgroundColor={toneColors?.backgroundColor ?? phaseColors.backgroundColor}
+          textColor={toneColors?.textColor ?? phaseColors.textColor}
+          borderColor={toneColors?.borderColor ?? phaseColors.borderColor}
         />
         <Text
           style={[

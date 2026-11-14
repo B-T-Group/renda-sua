@@ -44,13 +44,13 @@ export function InspectionTimeline({
     { done: true, title: t('rentalInspection.timelineBooked', 'Booked') },
     {
       done: pickup?.status === 'submitted' || accepted,
-      title: t('rentalInspection.timelinePickupSubmitted', 'Pickup inspection submitted'),
+      title: t('rentalInspection.timelinePickupSubmitted', 'Condition report sent'),
     },
     {
       done: accepted,
       title: role === 'client'
         ? t('rentalInspection.timelineAccepted', 'You accepted the condition')
-        : t('rentalInspection.statusClientAck', 'Client acknowledged'),
+        : t('rentalInspection.statusClientAck', 'The renter accepted the condition report'),
     },
     {
       done: !!booking.actual_start_at || booking.status === 'active' || booking.status === 'awaiting_return' || booking.status === 'completed',

@@ -6325,7 +6325,8 @@
       "howItWorksStep4": "Au retrait, envoyez votre code PIN dans la discussion. Ramenez l’article avant la fin prévue.",
       "howItWorksStep4TakeHome": "Récupérez l’article, utilisez-le hors site et rendez-le avant la fin réservée.",
       "securityDeposit": "Caution (locations par carte)",
-      "securityDepositHint": "Retenue sur votre carte avec le total de la location et utilisée uniquement pour les heures supplémentaires après la fin prévue."
+      "securityDepositHint": "Retenue sur votre carte avec le total de la location et utilisée uniquement pour les heures supplémentaires après la fin prévue.",
+      "securityDepositHintInspected": "Bloqué sur votre carte avec le total de la location. La location est débitée au retour. La caution est libérée sauf en cas de dommage ou de retard."
     },
     "rateSuccess": "Merci pour votre avis",
     "bookingStatus": {
@@ -6484,6 +6485,7 @@
     "bookingDetail": {
       "securityDeposit": "Caution",
       "authorizedOnCard": "Réservé sur votre carte (location + caution) : {{amount}}. Le montant final au retour est au minimum le total de la location ; la caution ne couvre que les heures supplémentaires.",
+      "authorizedOnCardInspected": "Bloqué sur votre carte : {{amount}} (location + caution). La location est débitée au retour. La caution est libérée sauf en cas de dommage ou de retard.",
       "payAtPickup": "Rien n’est payé pour le moment — le total de la location est dû au retrait.",
       "overtimeDue": "Heures supplémentaires : {{amount}}",
       "reservedClientHint": "Votre réservation est conservée gratuitement. Payez le total de la location au retrait pour recevoir votre code PIN de démarrage.",
@@ -8534,7 +8536,7 @@
     "waitingTitle": "En attente de l’acceptation du locataire",
     "waitingBody": "{{name}} vérifie l’état des lieux. Vous verrez quand la location démarre — remettez alors l’article.",
     "bannerReview": "Vérifiez l’état des lieux, puis acceptez-le pour démarrer la location.",
-    "bannerWaiting": "En attente que le locataire accepte l’état. Aucun code PIN n’est nécessaire.",
+    "bannerWaiting": "En attente que le locataire accepte l’état des lieux. Aucun code PIN n’est nécessaire.",
     "noPinNote_one": "Photos de départ envoyées · {{count}} unité sur {{total}}.",
     "noPinNote_other": "Photos de départ envoyées · {{count}} unités sur {{total}}.",
     "noPinNote_plural": "Photos de départ envoyées · {{count}} unités sur {{total}}.",

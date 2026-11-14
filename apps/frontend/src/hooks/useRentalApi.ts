@@ -256,6 +256,7 @@ export interface ClientRentalRequestRow {
     status: string;
     end_at?: string | null;
     contract_expires_at?: string | null;
+    inspection_policy_version?: number | null;
     renter_reported_returned_at?: string | null;
     renter_return_escalated_at?: string | null;
   } | null;

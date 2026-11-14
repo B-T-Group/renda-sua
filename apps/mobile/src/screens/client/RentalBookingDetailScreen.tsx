@@ -731,8 +731,12 @@ export default function RentalBookingDetailScreen() {
           {authorizedAmount > 0 ? (
             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
               {t(
-                'rentals.bookingDetail.authorizedOnCard',
-                'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
+                booking.inspection_policy_version != null
+                  ? 'rentals.bookingDetail.authorizedOnCardInspected'
+                  : 'rentals.bookingDetail.authorizedOnCard',
+                booking.inspection_policy_version != null
+                  ? 'Held on your card: {{amount}} (rental + deposit). The rental is charged at return. The deposit is released unless there\'s damage or a late return.'
+                  : 'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
                 {
                   amount: formatDetailMoney(authorizedAmount),
                 }
