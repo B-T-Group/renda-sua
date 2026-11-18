@@ -22,4 +22,6 @@ ALTER TABLE public.rental_bookings
   DROP COLUMN IF EXISTS refund_status_at,
   DROP COLUMN IF EXISTS refund_requested_at,
   DROP COLUMN IF EXISTS refund_status,
+  DROP COLUMN IF EXISTS refund_next_at,
+  DROP COLUMN IF EXISTS refund_attempts,
   DROP COLUMN IF EXISTS condition_declined_at;

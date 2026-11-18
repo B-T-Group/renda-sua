@@ -10,7 +10,9 @@ ALTER TABLE public.rental_bookings
   ADD COLUMN IF NOT EXISTS refund_amount numeric,
   ADD COLUMN IF NOT EXISTS refund_currency text,
   ADD COLUMN IF NOT EXISTS refund_provider text,
-  ADD COLUMN IF NOT EXISTS refund_provider_ref text;
+  ADD COLUMN IF NOT EXISTS refund_provider_ref text,
+  ADD COLUMN IF NOT EXISTS refund_attempts integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS refund_next_at timestamptz;
 
 ALTER TABLE public.rental_bookings
   DROP CONSTRAINT IF EXISTS rental_bookings_refund_status_check;
@@ -37,7 +39,9 @@ CREATE TABLE IF NOT EXISTS public.rental_condition_declines (
   phone_mask text,
   declined_by_user_id uuid NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT rental_condition_declines_booking_version_uidx UNIQUE (rental_booking_id, version_id)
+  CONSTRAINT rental_condition_declines_booking_uidx UNIQUE (rental_booking_id),
+  CONSTRAINT rental_condition_declines_version_fkey
+    FOREIGN KEY (version_id) REFERENCES public.rental_inspection_versions(id)
 );
 
 ALTER TABLE public.rental_condition_declines
@@ -65,7 +69,23 @@ CREATE INDEX IF NOT EXISTS rental_condition_declines_created_idx
   ON public.rental_condition_declines (created_at DESC);
 
 COMMENT ON TABLE public.rental_condition_declines IS
-  'Renter rejected the pickup condition. One row per booking version. A repeat of that version is the same decline.';
+  'Renter rejected the pickup condition. One row per booking. A repeat is the same decline.';
+
+ALTER TABLE public.rental_condition_declines
+  DROP CONSTRAINT IF EXISTS rental_condition_declines_booking_version_uidx;
+
+ALTER TABLE public.rental_condition_declines
+  DROP CONSTRAINT IF EXISTS rental_condition_declines_booking_uidx;
+
+ALTER TABLE public.rental_condition_declines
+  ADD CONSTRAINT rental_condition_declines_booking_uidx UNIQUE (rental_booking_id);
+
+ALTER TABLE public.rental_condition_declines
+  DROP CONSTRAINT IF EXISTS rental_condition_declines_version_fkey;
+
+ALTER TABLE public.rental_condition_declines
+  ADD CONSTRAINT rental_condition_declines_version_fkey
+  FOREIGN KEY (version_id) REFERENCES public.rental_inspection_versions(id);
 
 CREATE TABLE IF NOT EXISTS public.rental_condition_decline_photos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
