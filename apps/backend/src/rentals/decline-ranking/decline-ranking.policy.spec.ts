@@ -68,11 +68,7 @@ describe('decline exclusion rules', () => {
     );
     expect(down).toContain("status = 'inactive'");
     expect(down).not.toContain('DELETE FROM');
-    const guards = readFileSync(
-      join(__dirname, '../../../../hasura/migrations/Rendasua/20261118180000_rentals_decline_ranking_guards/up.sql'),
-      'utf8'
-    );
-    expect(guards).toContain('rentals_decline_rank_weight_range');
-    expect(guards).toContain('number_value <= 0.9');
+    expect(sql).toContain('rentals_decline_rank_weight_range');
+    expect(sql).toContain('number_value <= 0.9');
   });
 });
