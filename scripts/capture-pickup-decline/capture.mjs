@@ -83,6 +83,7 @@ const WEB = [
   ['refund-nophone', '03g-web-refund-nophone'],
   ['refunded-nophone', '03h-web-refunded-nophone'],
   ['neutral', '03i-web-neutral'],
+  ['refund-checking', '03j-web-refund-checking'],
   ['business', '04-web-business-detail'],
   ['push', '04-web-push-copy'],
   ['listing', '05-web-listing'],
@@ -112,6 +113,7 @@ const MOBILE = [
   ['refund-nophone', '03g-refund-nophone'],
   ['refunded-nophone', '03h-refunded-nophone'],
   ['neutral', '03i-neutral'],
+  ['refund-checking', '03j-refund-checking'],
   ['business', '04-business-detail'],
   ['listing', '05-listing'],
   ['lightbox', '05b-lightbox'],
@@ -332,6 +334,13 @@ async function assertScene(page, scene, lang, mobile) {
     if (!text.includes(past)) throw new Error(`${scene} ${lang} is not past tense`);
     if (text.toLowerCase().includes(lang === 'fr' ? 'rembourserons' : "we'll refund")) {
       throw new Error(`${scene} ${lang} is still future tense`);
+    }
+  }
+  if (scene === 'refund-checking') {
+    const line = lang === 'fr' ? 'Nous vérifions votre remboursement' : "We're checking your refund";
+    if (!text.includes(line)) throw new Error(`${scene} ${lang} is not the checking copy`);
+    if (text.toLowerCase().includes(lang === 'fr' ? 'en route' : 'on its way')) {
+      throw new Error(`${scene} ${lang} still says the money is on its way`);
     }
   }
   if (scene === 'neutral') {

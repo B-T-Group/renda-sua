@@ -1,4 +1,7 @@
 -- Follow-up for the decline refund claim. 20261119140000 is already applied on DEV.
+-- Its up.sql is not edited. 20261119135000 deletes duplicate decline-history rows
+-- before that unique index, including on a database that has not applied 140000 yet.
+-- This file repeats the delete so it still works on its own.
 -- SET LOCAL so lock_timeout does not stay on the pooled Hasura session.
 -- Do not DROP the live unique index. On DEV it already forbids duplicates.
 -- This file also runs safely when 20261119140000 was never applied.

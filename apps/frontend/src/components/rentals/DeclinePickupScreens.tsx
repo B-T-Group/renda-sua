@@ -38,6 +38,7 @@ export interface DeclineMoney {
   currency: string;
   timeZone: string;
   phoneMask?: string | null;
+  refundSent?: boolean;
   place: string;
   item: string;
   bookingNumber: string;
@@ -179,6 +180,7 @@ export function declineCardView(booking: {
     currency?: string | null;
     phoneMask?: string | null;
     walletCredited?: boolean;
+    refundSent?: boolean;
   } | null;
 }) {
   const decline = booking.condition_decline;
@@ -188,6 +190,7 @@ export function declineCardView(booking: {
     amount: Number(decline?.amount) || Number(booking.refund_amount) || Number(booking.authorized_amount) || 0,
     currency: decline?.currency || booking.refund_currency || booking.currency,
     phoneMask: decline?.phoneMask ?? null,
+    refundSent: decline?.refundSent,
     refundStatus: credited ? 'manual' as const : declineRefundView(booking.refund_status),
   };
 }
@@ -554,6 +557,9 @@ function paidLine(money: DeclineMoney, amount: string, t: any): string {
 }
 
 function sentLine(status: string, money: DeclineMoney, amount: string, t: any): string {
+  if (status === 'refund_pending' && money.refundSent === false) {
+    return t('pickupDecline.refundChecking', "We're checking your refund of {{amount}}.", { amount });
+  }
   const phone = (money.phoneMask ?? '').trim();
   if (money.rail === 'momo_paid' && phone && status === 'refund_pending') {
     return t('pickupDecline.refundProgressBody', '{{amount}} is on its way to {{phone}}.', { amount, phone });

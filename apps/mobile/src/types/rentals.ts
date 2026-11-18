@@ -246,6 +246,7 @@ export interface RentalBookingDetail {
     currency?: string | null;
     phoneMask?: string | null;
     walletCredited?: boolean;
+    refundSent?: boolean;
     photos: Array<{ url: string; capturedAt: string; slotKey?: string }>;
   } | null;
   not_received_report?: { id: string; reported_at: string } | null;

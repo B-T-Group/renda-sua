@@ -9813,6 +9813,7 @@
     "refundProgress": "Refund in progress",
     "refunded": "Refunded",
     "refundProgressBody": "{{amount}} is on its way to {{phone}}.",
+    "refundChecking": "We're checking your refund of {{amount}}.",
     "refundedBody": "{{amount}} was sent to {{phone}}.",
     "walletReturned": "We couldn't send {{amount}} back to your Mobile Money number, so it's in your Rendasua wallet. You can withdraw it or use it on your next booking.",
     "viewWallet": "View wallet",

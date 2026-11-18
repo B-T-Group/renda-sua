@@ -9821,6 +9821,7 @@
     "refundProgress": "Remboursement en cours",
     "refunded": "Remboursé",
     "refundProgressBody": "{{amount}} est en route vers {{phone}}.",
+    "refundChecking": "Nous vérifions votre remboursement de {{amount}}.",
     "refundedBody": "{{amount}} a été envoyé au {{phone}}.",
     "walletReturned": "Nous n'avons pas pu renvoyer {{amount}} sur votre numéro Mobile Money. Le montant est donc dans votre portefeuille Rendasua. Vous pouvez le retirer ou l'utiliser pour votre prochaine réservation.",
     "viewWallet": "Voir le portefeuille",

@@ -40,6 +40,11 @@ export const MOMO_PAID = {
   phoneMask: '····· 67 12',
 };
 
+export const MOMO_CHECKING = {
+  ...MOMO_PAID,
+  refundSent: false as const,
+};
+
 export const MOMO_NO_PHONE = {
   ...MOMO_PAID,
   phoneMask: '',

@@ -52,6 +52,7 @@ function harness(options: {
   historyFails?: number;
   pinFails?: number;
   claimLoses?: boolean;
+  stampFails?: boolean;
   stealClaim?: boolean;
   dropOwnedWrite?: boolean;
   noticeFails?: boolean;
@@ -64,6 +65,7 @@ function harness(options: {
   let pinFails = options.pinFails ?? 0;
   let restoreFails = options.restoreThrows ? 1 : 0;
   const notes = new Set<string>();
+  const historyNotes: string[] = [];
   const wallet: DeclineWallet = { available: 0, withheld: options.hold ?? 0 };
   const calls = {
     release: 0,
@@ -161,6 +163,7 @@ function harness(options: {
         return { update_rental_bookings: { affected_rows: 1 } };
       }
       if (query.includes('StampDeclineRefundSent')) {
+        if (options.stampFails) return { update_rental_bookings: { affected_rows: 0 } };
         const row = refundRow((vars as { id?: string }).id);
         const token = (vars as { token?: string }).token;
         if (row.refund_claim_token !== token || row.refund_sent_at) return { update_rental_bookings: { affected_rows: 0 } };
@@ -231,7 +234,11 @@ function harness(options: {
         historyFails -= 1;
         throw new Error('history fk');
       }
-      if (query.includes('InsertRentalStatusHistory')) notes.add('Renter declined the pickup condition');
+      if (query.includes('InsertRentalStatusHistory')) {
+        const text = String((vars as { object?: { notes?: string } }).object?.notes ?? '');
+        historyNotes.push(text);
+        if (text === 'Renter declined the pickup condition') notes.add(text);
+      }
       return { update_rental_bookings: { affected_rows: 1 }, insert_rental_status_history_one: { id: 'h' } };
     }),
   };
@@ -300,7 +307,7 @@ function harness(options: {
     } as never,
     { getEffectiveAccess: jest.fn(async () => ({ isSuperuser: options.refunds !== false, permissions: [] })) } as never
   );
-  return { service, state, calls, momo, hasura, wallet };
+  return { service, state, calls, momo, hasura, wallet, historyNotes };
 }
 
 const input = { versionId: VERSION, reason: 'damaged' };
@@ -665,24 +672,53 @@ describe('RentalPickupDeclineService', () => {
     expect(row.refund_status).toBe('refund_pending');
   });
 
-  it('refuses to mark a sent refund failed unless the provider reference is given', async () => {
+  it('refuses to mark a sent refund failed unless FreemoPay says it failed', async () => {
     const sent = harness({
-      booking: { status: 'cancelled', refund_status: 'refund_pending', refund_amount: 100, refund_sent_at: '2026-11-18T00:00:00.000Z' },
-    });
-    await expect(sent.service.markRefund(BOOKING, { status: 'failed', note: 'guess' })).rejects.toMatchObject({ status: 409 });
-    expect(sent.calls.restore).toBe(0);
-    const { service, calls, state } = harness({
+      poll: 'missing',
       booking: {
         status: 'cancelled',
         refund_status: 'refund_pending',
         refund_amount: 100,
+        refund_provider: 'freemopay',
+        refund_provider_ref: stableRefundReference(BOOKING),
         refund_sent_at: '2026-11-18T00:00:00.000Z',
-        refund_provider_ref: 'FP-1',
       },
     });
-    await expect(service.markRefund(BOOKING, { status: 'failed', providerRef: 'FP-1' })).resolves.toEqual({ refundStatus: 'failed' });
+    await expect(sent.service.markRefund(BOOKING, { status: 'failed', note: 'guess', providerRef: 'none' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(sent.calls.restore).toBe(0);
+    const paid = harness({
+      poll: 'refunded',
+      booking: {
+        status: 'cancelled',
+        refund_status: 'refund_pending',
+        refund_provider: 'freemopay',
+        refund_provider_ref: 'FP-1',
+        refund_sent_at: '2026-11-18T00:00:00.000Z',
+      },
+    });
+    await expect(paid.service.markRefund(BOOKING, { status: 'failed', providerRef: 'FP-1' })).rejects.toMatchObject({ status: 409 });
+    expect(paid.calls.restore).toBe(0);
+    const { service, calls, state, historyNotes } = harness({
+      poll: 'failed',
+      booking: {
+        status: 'cancelled',
+        refund_status: 'refund_pending',
+        refund_amount: 100,
+        refund_provider: 'freemopay',
+        refund_provider_ref: 'FP-1',
+        refund_sent_at: '2026-11-18T00:00:00.000Z',
+      },
+    });
+    await expect(service.markRefund(BOOKING, { status: 'failed', providerRef: 'none', note: 'portal' })).resolves.toEqual({
+      refundStatus: 'failed',
+    });
     expect(calls.restore).toBe(1);
     expect(state.refund_status).toBe('failed');
+    expect(state.refund_provider_ref).toBe('FP-1');
+    expect(historyNotes.join(' ')).toContain('provider reported failed');
+    expect(historyNotes.join(' ')).not.toContain('none');
   });
 
   it('does not tell support again for a duplicate late collect', async () => {
@@ -745,6 +781,38 @@ describe('RentalPickupDeclineService', () => {
     expect(kept.calls.supportPayload?.outcome).toBe('manual_check');
   });
 
+  it('resends an MTN payout with the same reference when the lookup is missing', async () => {
+    const ref = stableRefundReference(BOOKING);
+    const row = pendingRefund({ refund_provider: 'mtn', refund_provider_ref: ref, refund_sent_at: null });
+    const { service, calls } = harness({
+      pending: [row],
+      poll: 'missing',
+      collects: [{ amount: 100, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'tx' }],
+      refund: { status: 'refund_pending', provider: 'mtn', providerRef: ref, unsupported: false },
+    });
+    expect(await service.reconcilePending()).toBe(0);
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { referenceId?: string }).referenceId).toBe(ref);
+    expect(calls.support).toBe(0);
+  });
+
+  it('clears the stable reference when the sent stamp does not land', async () => {
+    const row = pendingRefund({
+      refund_provider: 'freemopay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 0,
+    });
+    const { service, calls } = harness({
+      pending: [row],
+      stampFails: true,
+      collects: [{ amount: 100, currency: 'XAF', provider: 'freemopay', customer_phone: '2376700006712', transaction_id: 'tx' }],
+    });
+    expect(await service.reconcilePending()).toBe(0);
+    expect(calls.refund).toHaveLength(0);
+    expect(row.refund_provider_ref).toBeNull();
+  });
+
   it('keeps polling a refund past five attempts and does not send another payout', async () => {
     const row = pendingRefund({
       refund_provider: 'freemopay',
@@ -794,12 +862,28 @@ describe('RentalPickupDeclineService', () => {
         refund_status: 'refund_pending',
         refund_provider: 'freemopay',
         refund_provider_ref: stableRefundReference(BOOKING),
+        refund_sent_at: '2026-11-18T00:00:00.000Z',
       },
     });
     await expect(unknown.service.markRefund(BOOKING, { status: 'unpaid', note: 'checked' })).rejects.toMatchObject({
       status: 409,
     });
     expect(unknown.calls.restore).toBe(0);
+    const neverSent = harness({
+      poll: 'missing',
+      booking: {
+        status: 'cancelled',
+        refund_status: 'refund_pending',
+        refund_amount: 100,
+        refund_provider: 'freemopay',
+        refund_provider_ref: stableRefundReference(BOOKING),
+        refund_sent_at: null,
+      },
+    });
+    await expect(neverSent.service.markRefund(BOOKING, { status: 'unpaid', note: 'both lookups empty' })).resolves.toEqual({
+      refundStatus: 'failed',
+    });
+    expect(neverSent.calls.restore).toBe(1);
     expect(unpaid.calls.restore).toBe(1);
     expect(unpaid.state.refund_status).toBe('failed');
     expect(unpaid.state.refund_credited_at).toBeTruthy();
@@ -811,7 +895,10 @@ describe('RentalPickupDeclineService', () => {
     expect(paid.state.refund_claim_token).toBeNull();
     expect(paid.calls.restore).toBe(0);
     const lost = harness({ booking: { status: 'cancelled', refund_status: 'refund_pending' }, claimLoses: true });
-    await expect(lost.service.markRefund(BOOKING, { status: 'refunded', providerRef: 'FP-9' })).rejects.toMatchObject({ status: 409 });
+    await expect(lost.service.markRefund(BOOKING, { status: 'refunded', providerRef: 'FP-9' })).rejects.toMatchObject({
+      status: 409,
+      message: 'This refund is being processed. Retry shortly.',
+    });
   });
 
   it('still finishes the decline when the support notice fails, and releases that notice', async () => {

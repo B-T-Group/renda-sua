@@ -48,14 +48,22 @@ describe('freemopayRequestUnsent', () => {
     expect(freemopayRequestUnsent({ code: 'ECONNREFUSED' })).toBe(true);
     expect(freemopayRequestUnsent({ code: 'ENOTFOUND' })).toBe(true);
     expect(freemopayRequestUnsent({ code: 'EAI_AGAIN' })).toBe(true);
-    expect(freemopayRequestUnsent({ code: 'ETIMEDOUT' })).toBe(true);
-    expect(freemopayRequestUnsent({ code: 'ETIMEDOUT', request: {} })).toBe(false);
-    expect(freemopayRequestUnsent({ code: 'ECONNABORTED', request: {}, message: 'timeout' })).toBe(false);
+    expect(freemopayRequestUnsent({ code: 'ETIMEDOUT' })).toBe(false);
+    expect(freemopayRequestUnsent({ code: 'ECONNABORTED' })).toBe(false);
     expect(freemopayRequestUnsent({ response: { status: 503 }, code: 'ERR_BAD_RESPONSE' })).toBe(false);
   });
 });
 
 describe('RentalMomoRefundService', () => {
+  it('treats an MTN transfer with no HTTP response as unsent', async () => {
+    const { api, mtn } = service({
+      mtn: { transfer: jest.fn(async () => ({ status: false, financialTransactionId: 'mtn-ref' })) },
+    });
+    const result = await api.refund({ ...request, referenceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
+    expect(result.unsent).toBe(true);
+    expect(mtn.transfer).toHaveBeenCalledWith(expect.objectContaining({ referenceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }));
+  });
+
   it('sends an MTN disbursement and waits for SUCCESSFUL', async () => {
     const { api, mtn } = service();
     const result = await api.refund(request);

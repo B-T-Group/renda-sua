@@ -88,10 +88,9 @@ export class RentalMomoRefundService {
       payerMessage: 'Rental condition decline refund',
       payeeNote: request.bookingId,
     });
+    if (!sent.status && !sent.statusCode) return this.unsentResult('mtn');
     const code = Number(sent.statusCode);
-    if (!sent.status && code >= 400 && code < 500) {
-      return this.failed('mtn', sent.financialTransactionId ?? null);
-    }
+    if (!sent.status && code >= 400 && code < 500) return this.failed('mtn', sent.financialTransactionId ?? null);
     return this.pending('mtn', sent.financialTransactionId ?? null, false);
   }
 

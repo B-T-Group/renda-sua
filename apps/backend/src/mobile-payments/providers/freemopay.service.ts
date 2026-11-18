@@ -41,13 +41,11 @@ export interface FreemopayPaymentResponse {
 
 const CONNECT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT', 'ERR_SOCKET_CONNECTION_TIMEOUT']);
 
-/** True only when the HTTP request never left this process. Any response, including 503, is ambiguous. */
+/** True only for a connect failure with no HTTP response. Timeouts stay ambiguous: axios always sets request. */
 export function freemopayRequestUnsent(error: any): boolean {
   if (error?.response || Number(error?.response?.status) > 0) return false;
   const code = String(error?.code ?? error?.cause?.code ?? '');
-  if (CONNECT_CODES.has(code)) return true;
-  const beforeSend = code === 'ETIMEDOUT' || code === 'ECONNABORTED';
-  return beforeSend && !error?.request;
+  return CONNECT_CODES.has(code);
 }
 
 export interface FreemopayWithdrawalResponse {

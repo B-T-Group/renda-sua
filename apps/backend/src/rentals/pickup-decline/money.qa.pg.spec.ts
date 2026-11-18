@@ -22,10 +22,9 @@ const TEMPLATE = process.env.DEDICATED_PG_TEMPLATE?.trim();
 const OPTED = process.env.DECLINE_REFUND_PG === '1';
 const HOST = (process.env.PGHOST ?? '').trim();
 const HARDENING = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119160000_rentals_decline_refund_hardening/up.sql');
-const MIGRATIONS = [
-  join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql'),
-  HARDENING,
-];
+const PREDEDUPE = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119135000_rentals_decline_history_prededupe/up.sql');
+const CLAIM_MIGRATION = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql');
+const MIGRATIONS = [PREDEDUPE, CLAIM_MIGRATION, HARDENING];
 
 describe('decline refund postgres job', () => {
   it('is configured when CI runs this workflow', () => {
@@ -141,7 +140,7 @@ suite('decline refund claim on real Postgres', () => {
   });
 
   it('aborts the write and the credit when the claim token was taken', async () => {
-    const id = await seed(pool);
+    const id = await seed(pool, { refund_sent_at: new Date().toISOString() });
     const provider = fakeProvider();
     let release: (value: { status: string }) => void = () => undefined;
     provider.check = () => new Promise((resolve) => {
@@ -276,6 +275,8 @@ suite('decline refund claim on real Postgres', () => {
 
   it('dedupes decline history without dropping the live unique index', async () => {
     const sql = readFileSync(HARDENING, 'utf8');
+    expect(readFileSync(PREDEDUPE, 'utf8')).toContain('row_number()');
+    expect(readFileSync(CLAIM_MIGRATION, 'utf8')).not.toContain('row_number()');
     expect(sql).not.toMatch(/DROP INDEX/i);
     expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS rental_status_history_one_decline');
     const id = await seed(pool);
