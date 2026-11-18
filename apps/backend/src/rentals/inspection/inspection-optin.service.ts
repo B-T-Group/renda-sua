@@ -14,6 +14,7 @@ import {
   PICKUP_REUSE_BLOCKED_DAMAGE,
   PICKUP_REUSE_UNAVAILABLE,
   baselineReady,
+  completeUnitCopies,
   isBeforeRentalStart,
   itemOptInStamps,
   latestReturnsBySlot,
@@ -22,7 +23,6 @@ import {
   returnIsClean,
   reuseChoice,
   reusedColumns,
-  rolesComplete,
   zoneForCountry,
   type CaptureColumns,
 } from './inspection-optin';
@@ -154,9 +154,15 @@ export class InspectionOptInService {
     const plan = await this.reusePlan(booking);
     if (!plan.choice.ok) this.rejectReuse(plan.choice.code);
     await openDraft();
-    const copies = await this.buildCopies(booking, plan);
-    const count = await this.applyReuse(booking.id, copies);
-    return { reused: true, source: plan.choice.source, count };
+    const grouped = await this.buildCopies(booking, plan);
+    if (!grouped.units.some((unit) => unit.reused)) this.rejectReuse(PICKUP_REUSE_UNAVAILABLE);
+    const count = await this.applyReuse(booking.id, grouped.kept);
+    return {
+      reused: grouped.units.every((unit) => unit.reused),
+      source: plan.choice.source,
+      count,
+      units: grouped.units,
+    };
   }
 
   captureFor(input: CaptureRequest, country: string | null, clock: Date): CaptureColumns {
@@ -188,13 +194,12 @@ export class InspectionOptInService {
     return { choice, returns, photoCount: returns.filter((row) => row.clean).length };
   }
 
-  private async buildCopies(booking: OptBooking, plan: ReusePlan): Promise<ReuseCopy[]> {
+  private async buildCopies(booking: OptBooking, plan: ReusePlan) {
     const targets = await this.targetUnits(booking.id);
     const copies = plan.choice.ok && plan.choice.source === 'return'
       ? await this.returnCopies(booking.id, plan.returns, targets)
       : await this.baselineCopies(booking.id, booking.itemId ?? '', targets);
-    if (!copies.length || !copiesGroupedComplete(copies)) this.rejectReuse(PICKUP_REUSE_UNAVAILABLE);
-    return copies;
+    return completeUnitCopies(copies, targets);
   }
 
   private async returnCopies(bookingId: string, returns: CleanReturn[], targets: TargetUnit[]): Promise<ReuseCopy[]> {
@@ -248,13 +253,13 @@ export class InspectionOptInService {
 
   private async applyReuse(bookingId: string, copies: ReuseCopy[]): Promise<number> {
     try {
-      const result = await this.hasura.executeMutation<{ rental_apply_pickup_reuse: number[] }>(
+      const result = await this.hasura.executeMutation<{ rental_apply_pickup_reuse: Array<{ id: string }> }>(
         `mutation ApplyPickupReuse($bookingId: uuid!, $copies: jsonb!) {
-          rental_apply_pickup_reuse(args: { p_booking_id: $bookingId, p_copies: $copies })
+          rental_apply_pickup_reuse(args: { p_booking_id: $bookingId, p_copies: $copies }) { id }
         }`,
         { bookingId, copies }
       );
-      const count = Number(result?.rental_apply_pickup_reuse?.[0] ?? 0);
+      const count = result?.rental_apply_pickup_reuse?.length ?? 0;
       if (count < 1) this.rejectReuse(PICKUP_REUSE_UNAVAILABLE);
       return count;
     } catch (error: any) {
@@ -717,12 +722,3 @@ function hitRows(hit: ReturnHit): RawReturn[] {
   }));
 }
 
-function copiesGroupedComplete(copies: ReuseCopy[]): boolean {
-  const byUnit = new Map<string, string[]>();
-  for (const copy of copies) {
-    const slots = byUnit.get(copy.unitId) ?? [];
-    slots.push(copy.slot_key ?? '');
-    byUnit.set(copy.unitId, slots);
-  }
-  return byUnit.size > 0 && [...byUnit.values()].every((slots) => rolesComplete(slots));
-}

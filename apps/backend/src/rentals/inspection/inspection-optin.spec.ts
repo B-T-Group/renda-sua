@@ -6,13 +6,16 @@ import {
   PICKUP_PHOTO_AFTER_START,
   PICKUP_REUSE_BLOCKED_DAMAGE,
   baselineReady,
+  completeUnitCopies,
   isBeforeRentalStart,
   itemOptInStamps,
+  listingWindowInspected,
   optInCaptureColumns,
   optOutKeepsStamp,
   parseExifCapture,
   reuseChoice,
   reuseDamage,
+  snapshotInspected,
 } from './inspection-optin';
 import { PickupPhotoRulesService } from './pickup-photo-rules.service';
 
@@ -101,7 +104,7 @@ describe('inspection opt-in service', () => {
         return {
           insert_rental_item_baseline_photos_one: { id: 'photo-1' },
           update_rental_items_by_pk: { id: ITEM },
-          rental_apply_pickup_reuse: [copies],
+          rental_apply_pickup_reuse: Array.from({ length: copies }, (_, index) => ({ id: `copy-${index}` })),
         };
       }),
     };
@@ -264,7 +267,10 @@ describe('inspection opt-in service', () => {
       ItemBaseline: { rental_item_baseline_photos: [] },
     });
     await expect(built.svc.reuse(booking.rental_bookings_by_pk.id, async () => undefined)).resolves.toEqual({
-      reused: true, source: 'return', count: 3,
+      reused: true,
+      source: 'return',
+      count: 3,
+      units: [{ unitId: 'unit-1', reused: true, count: 3 }],
     });
     const query = built.hasura.executeQuery.mock.calls.map((call) => String(call[0])).join('\n');
     expect(query).toContain('"locked"');
@@ -281,6 +287,54 @@ describe('inspection opt-in service', () => {
       captured_at: '2026-11-02T15:00:00.000Z',
     }));
     expect(String(copies[0].derivativeKey)).toMatch(/\.view\.png$/);
+  });
+
+  it('reports success only for units that were fully copied', async () => {
+    const booking = bookingRow();
+    const built = harness({
+      OptInBooking: booking,
+      LatestUnitReturns: {
+        rental_inspection_versions: [{
+          ...version('ver-1', '2026-11-02T15:00:00.000Z', 'accepted', 'good'),
+          items: [
+            { condition: 'good', unit: { slot_index: 1, physical_label: 'A' } },
+            { condition: 'good', unit: { slot_index: 2, physical_label: 'B' } },
+          ],
+        }],
+      },
+      ReturnUnitMedia: { rental_inspection_media: [...lockedMedia('ver-1', 1), lockedMedia('ver-1', 2)[0]] },
+      TargetUnits: {
+        rental_booking_units: [
+          { id: 'unit-1', slot_index: 1, physical_label: 'A' },
+          { id: 'unit-2', slot_index: 2, physical_label: 'B' },
+        ],
+      },
+      ItemBaseline: { rental_item_baseline_photos: [] },
+    });
+    const result = await built.svc.reuse(booking.rental_bookings_by_pk.id, async () => undefined);
+    expect(result.reused).toBe(false);
+    expect(result.units).toEqual([
+      { unitId: 'unit-1', reused: true, count: 3 },
+      { unitId: 'unit-2', reused: false, count: 0 },
+    ]);
+    const copies = built.mutations.find((row) => row.query.includes('rental_apply_pickup_reuse'))?.variables.copies;
+    expect(copies.every((copy: { unitId: string }) => copy.unitId === 'unit-1')).toBe(true);
+    expect(copies).toHaveLength(3);
+  });
+
+  it('keeps a pre-migration request uninspected and uses the item opt-in on listings', () => {
+    expect(snapshotInspected(null)).toBe(false);
+    expect(snapshotInspected(1)).toBe(true);
+    expect(snapshotInspected(undefined)).toBeUndefined();
+    expect(listingWindowInspected(false, true)).toBeUndefined();
+    expect(listingWindowInspected(true, true)).toBe(true);
+    expect(listingWindowInspected(true, false)).toBe(false);
+    const partial = completeUnitCopies(
+      [{ unitId: 'unit-1', slot_key: 'overview' }],
+      [{ id: 'unit-1' }, { id: 'unit-2' }]
+    );
+    expect(partial.units.every((unit) => unit.reused)).toBe(false);
+    expect(partial.kept).toEqual([]);
   });
 
   it('does not report reused when a locked role is missing', async () => {
@@ -383,13 +437,13 @@ describe('inspection opt-in service', () => {
 describe('opt-in upload gate on pickup rules', () => {
   const id = '11111111-1111-4111-8111-111111111111';
 
-  function rules(optInOn: boolean) {
+  function rules(optInOn: boolean, status = 'confirmed') {
     const hasura = {
       executeQuery: jest.fn(async (query: string) => {
         if (!query.includes('PickupRulesBooking')) throw new Error(query.slice(0, 40));
         return {
           rental_bookings_by_pk: {
-            id, start_at: START, status: 'confirmed', business_id: 'biz-1',
+            id, start_at: START, status, business_id: 'biz-1',
             rental_location_listing_id: '22222222-2222-4222-8222-222222222222',
             inspection_policy_version: 1,
             rental_location_listing: { business_location: { address: { country: 'Canada' } } },
@@ -424,6 +478,14 @@ describe('opt-in upload gate on pickup rules', () => {
       exif_captured_at: '2026-11-10T14:30:00.000Z',
       reused: false,
     }));
+  });
+
+  it('allows return uploads on active and awaiting_return with the flag on and off', async () => {
+    const gate = { bookingId: id, role: 'overview', platform: 'ios', slotKey: 'overview', stage: 'return' as const };
+    for (const status of ['active', 'awaiting_return']) {
+      await expect(rules(true, status).assertUpload(gate, new Date(START))).resolves.toBeUndefined();
+      await expect(rules(false, status).assertUpload(gate, new Date(START))).resolves.toBeUndefined();
+    }
   });
 
   it('still rejects a started or cancelled booking after the scheduled start', async () => {

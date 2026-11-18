@@ -44,9 +44,13 @@ describe('inspection opt-in migration', () => {
 describe('pickup reuse snapshot migration', () => {
   const root = join(__dirname, '../../../../hasura/migrations/Rendasua/20261118160000_rentals_inspection_reuse_snapshot');
   const up = readFileSync(join(root, 'up.sql'), 'utf8');
+  const down = readFileSync(join(root, 'down.sql'), 'utf8');
 
   it('locks the latest return and stores the request snapshot', () => {
     expect(up).toContain('CREATE OR REPLACE FUNCTION public.rental_apply_pickup_reuse');
+    expect(up).toContain('RETURNS SETOF public.rental_inspection_media');
+    expect(up).not.toContain('RETURNS SETOF integer');
+    expect(up).toContain('RETURNING *');
     expect(up).toContain('FOR UPDATE');
     expect(up).toContain('PICKUP_REUSE_BLOCKED_DAMAGE');
     expect(up).toContain('DELETE FROM public.rental_inspection_media');
@@ -55,5 +59,24 @@ describe('pickup reuse snapshot migration', () => {
     expect(up).toContain('ADD COLUMN IF NOT EXISTS exif_captured_at');
     expect(up).toContain('.view\\.(jpg|png|webp)');
     expect(up).not.toContain('return_resolution = \'accepted\'');
+  });
+
+  it('tracks the reuse function because it returns the media table', () => {
+    const tracked = readFileSync(
+      join(__dirname, '../../../../hasura/metadata/databases/Rendasua/functions/public_rental_apply_pickup_reuse.yaml'),
+      'utf8'
+    );
+    const index = readFileSync(
+      join(__dirname, '../../../../hasura/metadata/databases/Rendasua/functions/functions.yaml'),
+      'utf8'
+    );
+    expect(tracked).toContain('name: rental_apply_pickup_reuse');
+    expect(index).toContain('public_rental_apply_pickup_reuse.yaml');
+  });
+
+  it('refuses to restore the jpg-only check when png or webp views exist', () => {
+    expect(down).toContain('.view.png or .view.webp');
+    expect(down).toContain('the jpg-only check cannot be restored');
+    expect(down.indexOf('RAISE EXCEPTION')).toBeLessThan(down.indexOf('ADD CONSTRAINT'));
   });
 });

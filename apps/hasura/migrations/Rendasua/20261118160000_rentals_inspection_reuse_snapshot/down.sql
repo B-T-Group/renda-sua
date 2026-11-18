@@ -1,5 +1,16 @@
 DROP FUNCTION IF EXISTS public.rental_apply_pickup_reuse(uuid, jsonb);
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.rental_inspection_media
+    WHERE derivative_key ~ '\.view\.(png|webp)$'
+  ) THEN
+    RAISE EXCEPTION 'rental_inspection_media has .view.png or .view.webp rows; the jpg-only check cannot be restored';
+  END IF;
+END $$;
+
 ALTER TABLE public.rental_inspection_media
   DROP CONSTRAINT IF EXISTS rental_inspection_media_derivative_check;
 

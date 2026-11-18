@@ -70,6 +70,7 @@ export interface UploadGate {
   role: string;
   platform?: string | string[];
   slotKey?: string | null;
+  stage?: 'pickup' | 'return';
 }
 
 @Injectable()
@@ -85,6 +86,7 @@ export class PickupPhotoRulesService {
   async assertUpload(input: UploadGate, now = new Date()): Promise<void> {
     if (input.role === 'counter') return;
     const booking = await this.loadBooking(input.bookingId);
+    if (this.returnUpload(input, booking)) return;
     if (await this.optInOn(booking)) return this.rejectOptInUpload(booking, input);
     if (!this.pickupOpen(booking.status)) return;
     if (!(await this.enabled(booking))) return;
@@ -286,6 +288,12 @@ export class PickupPhotoRulesService {
 
   private async optInOn(booking: BookingContext): Promise<boolean> {
     return this.flags.optInEnabled(isoCountryCode(booking.country));
+  }
+
+  private returnUpload(input: UploadGate, booking: BookingContext): boolean {
+    if (input.stage === 'return') return true;
+    if (input.stage === 'pickup') return false;
+    return !this.pickupOpen(booking.status);
   }
 
   private rejectOptInUpload(booking: BookingContext, input: UploadGate): void {

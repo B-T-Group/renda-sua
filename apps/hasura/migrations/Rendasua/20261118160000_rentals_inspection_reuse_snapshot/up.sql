@@ -31,8 +31,10 @@ ALTER TABLE public.rental_inspection_media
     OR derivative_key ~ '^(dev|prod)/rental-inspection/[0-9a-f-]{36}/[0-9a-f-]{36}\.view\.(jpg|png|webp)$'
   );
 
+DROP FUNCTION IF EXISTS public.rental_apply_pickup_reuse(uuid, jsonb);
+
 CREATE OR REPLACE FUNCTION public.rental_apply_pickup_reuse(p_booking_id uuid, p_copies jsonb)
-RETURNS SETOF integer
+RETURNS SETOF public.rental_inspection_media
 LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -169,6 +171,7 @@ BEGIN
     AND m.reused = true
     AND m.version_id IS NULL;
 
+  RETURN QUERY
   INSERT INTO public.rental_inspection_media (
     inspection_id, unit_id, role, slot_key, object_key, derivative_key,
     content_type, byte_size, sha256, status, reused, reused_from_media_id,
@@ -190,13 +193,13 @@ BEGIN
     (copy->>'captured_at')::timestamptz,
     copy->>'captured_at_source',
     copy->>'capture_source'
-  FROM jsonb_array_elements(p_copies) AS copy;
+  FROM jsonb_array_elements(p_copies) AS copy
+  RETURNING *;
 
   GET DIAGNOSTICS v_count = ROW_COUNT;
   IF v_count < 1 THEN
     RAISE EXCEPTION 'PICKUP_REUSE_UNAVAILABLE';
   END IF;
-  RETURN QUERY SELECT v_count;
 END;
 $function$;
 

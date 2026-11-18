@@ -93,6 +93,48 @@ export function rolesComplete(slots: string[]): boolean {
   return BASELINE_SLOTS.every((slot) => have.has(slot));
 }
 
+export interface UnitReuseResult {
+  unitId: string;
+  reused: boolean;
+  count: number;
+}
+
+/** A request created before the snapshot column stays not inspected. */
+export function snapshotInspected(policyVersion: number | null | undefined): boolean | undefined {
+  if (policyVersion === undefined) return undefined;
+  return policyVersion != null;
+}
+
+/** Listings use the item opt-in only while the opt-in flag is on. */
+export function listingWindowInspected(optInOn: boolean, itemStamps: boolean): boolean | undefined {
+  return optInOn ? itemStamps : undefined;
+}
+
+export function completeUnitCopies<T extends { unitId: string; slot_key?: string | null }>(
+  copies: T[],
+  targets: Array<{ id: string }>
+): { kept: T[]; units: UnitReuseResult[] } {
+  const byUnit = groupCopies(copies);
+  const units = targets.map((target) => unitResult(target.id, byUnit.get(target.id) ?? []));
+  const reused = new Set(units.filter((unit) => unit.reused).map((unit) => unit.unitId));
+  return { kept: copies.filter((copy) => reused.has(copy.unitId)), units };
+}
+
+function groupCopies<T extends { unitId: string }>(copies: T[]): Map<string, T[]> {
+  const byUnit = new Map<string, T[]>();
+  for (const copy of copies) {
+    const rows = byUnit.get(copy.unitId) ?? [];
+    rows.push(copy);
+    byUnit.set(copy.unitId, rows);
+  }
+  return byUnit;
+}
+
+function unitResult<T extends { slot_key?: string | null }>(unitId: string, rows: T[]): UnitReuseResult {
+  const reused = rolesComplete(rows.map((row) => row.slot_key ?? ''));
+  return { unitId, reused, count: reused ? rows.length : 0 };
+}
+
 export function matchTargetUnit(
   source: { slotIndex: number; label: string | null },
   targets: Array<{ id: string; slotIndex: number; label: string | null }>,
