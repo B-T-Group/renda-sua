@@ -199,6 +199,7 @@ export interface BusinessRentalRequestRow {
   listing_timezone?: string | null;
   dates_available?: boolean | null;
   payment_rail?: string | null;
+  total_override_ceiling?: number | null;
   unavailable_reason_code?: string | null;
   expires_at?: string | null;
   responded_at?: string | null;

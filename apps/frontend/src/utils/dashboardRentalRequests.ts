@@ -8,9 +8,11 @@ const HOUR_MS = 60 * 60 * 1000;
 const CONTRACT_HOUR_CAP = 48;
 export const TOTAL_OVERRIDE_RATIO = 10;
 
-export function totalOverrideTooHigh(quote: number, value: number): boolean {
-  if (value <= quote) return false;
-  return quote > 0 && value > quote * TOTAL_OVERRIDE_RATIO;
+export function totalOverrideTooHigh(quote: number, value: number, ceiling: number | null = null): boolean {
+  if (!(value > quote)) return false;
+  if (ceiling != null && value > ceiling) return true;
+  if (!(quote > 0)) return ceiling == null;
+  return value > quote * TOTAL_OVERRIDE_RATIO;
 }
 
 export function contractHoursOffer(startIso: string | null, now = new Date()): {

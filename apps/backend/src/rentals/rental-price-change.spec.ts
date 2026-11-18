@@ -43,6 +43,10 @@ describe('rental price change', () => {
     expect(quoteWithTotalOverride(quote, 1_800_000, true, 1_000_000).total).toBe(1_800_000);
     expect(() => quoteWithTotalOverride(quote, 5_000_000, true, 3_000_000)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
     expect(quoteWithTotalOverride(quote, 5_000_000, true, null).total).toBe(5_000_000);
+    const free = { ...snap, total: 0, lines: [] as typeof snap.lines };
+    expect(() => quoteWithTotalOverride(free, 1_000_000, true, null)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
+    expect(quoteWithTotalOverride(free, 40_000, true, 50_000).total).toBe(40_000);
+    expect(() => quoteWithTotalOverride(free, 60_000, true, 50_000)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
   });
 
   it('blocks payment until the renter has seen the new price', () => {

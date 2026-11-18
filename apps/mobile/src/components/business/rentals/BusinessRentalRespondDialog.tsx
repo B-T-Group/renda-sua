@@ -111,7 +111,8 @@ export function BusinessRentalRespondDialog({
   }, [mode, request]);
 
   const typedOverride = typeof parseTotalOverride(totalOverride) === 'number' ? Number(parseTotalOverride(totalOverride)) : null;
-  const overrideTooHigh = typedOverride != null && totalOverrideTooHigh(offerPreview?.total ?? 0, typedOverride);
+  const ceiling = request?.total_override_ceiling ?? null;
+  const overrideTooHigh = typedOverride != null && totalOverrideTooHigh(offerPreview?.total ?? 0, typedOverride, ceiling);
 
   const resetAndClose = useCallback(() => {
     setContractHours(String(contractHoursOffer(request ? requestStartIso(request) : null).hours || 1));
@@ -132,10 +133,10 @@ export function BusinessRentalRespondDialog({
       return;
     }
     const overridden = parseTotalOverride(totalOverride);
-    const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(buildPricingSnapshot(request).total, overridden);
+    const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(buildPricingSnapshot(request).total, overridden, request.total_override_ceiling ?? null);
     if (overridden === 'invalid' || tooHigh) {
       setError(tooHigh
-        ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, and at most 10 times the quote.')
+        ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.')
         : t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.'));
       return;
     }
@@ -248,7 +249,7 @@ export function BusinessRentalRespondDialog({
                 {canChangeTotal ? (
                 <Text variant="bodySmall" style={{ color: overrideTooHigh ? colors.error.main : colors.text.secondary, marginBottom: 8 }}>
                   {overrideTooHigh
-                    ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, and at most 10 times the quote.')
+                    ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.')
                     : t(
                     'business.rentals.changeTotalHelper',
                     'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'

@@ -1,4 +1,4 @@
-import { countrySpellings } from '../orders/delivery-pricing.util';
+import { countryKeys } from '../orders/delivery-pricing.util';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 
 export interface DashboardRequestFlagRow {
@@ -46,5 +46,5 @@ export function expiryCountryFilter(rows: DashboardRequestFlagRow[]): ExpiryCoun
 }
 
 function spellings(rows: DashboardRequestFlagRow[]): string[] {
-  return [...new Set(rows.flatMap((row) => countrySpellings(row.country_code ?? '')))];
+  return [...new Set(rows.flatMap((row) => countryKeys(row.country_code ?? '')))];
 }

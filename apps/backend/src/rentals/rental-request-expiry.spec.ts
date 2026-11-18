@@ -14,6 +14,8 @@ import {
   buildBusinessRentalRequestExpiredPush,
   buildRentalRequestNoResponsePush,
 } from '../notifications/rental-push.messages';
+import { countryKeys, countrySpellings, normalizeCountryKey } from '../orders/delivery-pricing.util';
+import { RENTAL_TOTAL_OVERRIDE_MAX } from './rentals-queries';
 
 function row(overrides: Partial<UnansweredRentalRequest> = {}): UnansweredRentalRequest {
   return {
@@ -303,6 +305,45 @@ describe('N5 stored respond_by after an edit', () => {
   });
 });
 
+describe('N20 country name keys', () => {
+  it('N20 title-cases Bénin and shares one trimmed uppercase key', () => {
+    expect(countrySpellings('BJ')).toContain('Bénin');
+    expect(countrySpellings('BJ')).not.toContain('BéNin');
+    expect(countrySpellings('CI')).toContain("Côte D'Ivoire");
+    expect(countrySpellings('CI')).not.toContain("CôTe D'Ivoire");
+    expect(normalizeCountryKey('  Cameroun ')).toBe('CAMEROUN');
+    expect(normalizeCountryKey(' cm ')).toBe('CM');
+    expect(countryKeys('CM')).toEqual(expect.arrayContaining(['CM', 'CAMEROON', 'CAMEROUN']));
+  });
+});
+
+describe('override ceiling lookup', () => {
+  it('prefers the listing country, orders the query, and names a failed lookup', async () => {
+    expect(RENTAL_TOTAL_OVERRIDE_MAX).toContain('order_by');
+    expect(RENTAL_TOTAL_OVERRIDE_MAX).toContain('_ilike');
+    const service = Object.create(RentalsService.prototype) as RentalsService & {
+      hasuraSystemService: { executeQuery: jest.Mock };
+      overrideCeiling: (currency: string, country?: string | null) => Promise<number | null>;
+      overrideErrorMessage: (error: { message?: string }) => string;
+    };
+    service.hasuraSystemService = {
+      executeQuery: jest.fn().mockResolvedValue({
+        application_configurations: [
+          { number_value: 100, country_code: null, string_value: 'xaf' },
+          { number_value: 50, country_code: 'CM', string_value: 'XAF' },
+        ],
+      }),
+    };
+    await expect(service.overrideCeiling('xaf', 'CM')).resolves.toBe(50);
+    await expect(service.overrideCeiling('XAF', 'GA')).resolves.toBe(100);
+    service.hasuraSystemService.executeQuery.mockRejectedValue(new Error('hasura down'));
+    await expect(service.overrideCeiling('XAF', 'CM')).rejects.toThrow('TOTAL_OVERRIDE_CEILING_UNAVAILABLE');
+    const message = service.overrideErrorMessage({ message: 'TOTAL_OVERRIDE_CEILING_UNAVAILABLE' });
+    expect(message).toBe('The currency limit could not be loaded. Try again.');
+    expect(message).not.toContain('greater than zero');
+  });
+});
+
 describe('N6 expiry scan country filter', () => {
   it('N6 limits the SQL where to enabled countries before the batch', () => {
     const flags = [
@@ -318,8 +359,9 @@ describe('N6 expiry scan country filter', () => {
     ];
     const where = pendingExpiryWhere(new Date('2026-11-18T00:00:00.000Z'), expiryClauses(flags, config, new Date('2026-11-18T00:00:00.000Z')));
     const json = JSON.stringify(where);
-    expect(json).toContain('Cameroon');
-    expect(json).not.toContain('Gabon');
+    expect(json).toContain('country_key');
+    expect(json).toContain('CAMEROON');
+    expect(json).not.toContain('GABON');
   });
 
   it('N13 keeps each country on its own cutoff', () => {
@@ -336,8 +378,9 @@ describe('N6 expiry scan country filter', () => {
       _or: Array<{ respond_by: { _gte: string } }>;
     };
     const clauses = where._or.map((clause) => ({ since: clause.respond_by._gte, text: JSON.stringify(clause) }));
-    expect(clauses.find((clause) => clause.text.includes('Gabon'))?.since).toBe('2026-11-18T00:00:00.000Z');
-    expect(clauses.find((clause) => clause.text.includes('Cameroon'))?.since).toBe('2026-11-01T00:00:00.000Z');
+    expect(clauses.find((clause) => clause.text.includes('GABON'))?.since).toBe('2026-11-18T00:00:00.000Z');
+    expect(clauses.find((clause) => clause.text.includes('CAMEROON'))?.since).toBe('2026-11-01T00:00:00.000Z');
+    expect(clauses[0].text).toContain('country_key');
   });
 });
 

@@ -117,4 +117,5 @@ jobs:
       - name: Rentals unit tests
         env:
           RENTAL_QA_DATABASE_URL: postgres://rental_qa:rental_qa@localhost:5432/rental_qa
+          RENTAL_QA_ALLOW_DROP: '1'
         run: npx nx test backend --testPathPattern=src/rentals --skip-nx-cache

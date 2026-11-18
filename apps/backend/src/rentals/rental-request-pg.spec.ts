@@ -7,20 +7,38 @@ const root = join(__dirname, '../../../hasura/migrations/Rendasua');
 
 export function assertDisposableQaDatabase(connectionString: string): void {
   const parsed = new URL(connectionString);
-  const host = parsed.hostname;
+  const host = parsed.hostname.replace(/^\[|\]$/g, '');
   const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
-  const local = host === 'localhost' || host === '127.0.0.1';
-  if (local || /test|qa/i.test(name)) return;
+  const local = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  const optedIn = process.env.RENTAL_QA_ALLOW_DROP === '1';
+  if (local && isQaDatabaseName(name) && optedIn) return;
   throw new Error('Refusing to drop schema: RENTAL_QA_DATABASE_URL is not a disposable database');
 }
 
+function isQaDatabaseName(name: string): boolean {
+  if (!name || name.toLowerCase() === 'postgres') return false;
+  return /(^|[^a-z0-9])(qa|test)([^a-z0-9]|$)/i.test(name);
+}
+
 describe('N14 disposable database guard', () => {
-  it('N14 refuses to drop a schema unless the database is local or named like a test', () => {
-    const refuse = 'postgres://user:secret@db.internal:5432/rendasua';
-    expect(() => assertDisposableQaDatabase(refuse)).toThrow(/disposable/);
-    expect(() => assertDisposableQaDatabase('postgres://user:secret@127.0.0.1:5432/rendasua')).not.toThrow();
-    expect(() => assertDisposableQaDatabase('postgres://user:secret@localhost/rendasua')).not.toThrow();
-    expect(() => assertDisposableQaDatabase('postgres://user:secret@db.internal:5432/rental_qa')).not.toThrow();
+  const allow = 'RENTAL_QA_ALLOW_DROP';
+  const previous = process.env[allow];
+
+  afterEach(() => {
+    if (previous == null) delete process.env[allow];
+    else process.env[allow] = previous;
+  });
+
+  it('N14 drops a schema only for a local qa database with an explicit opt-in', () => {
+    process.env[allow] = '1';
+    expect(() => assertDisposableQaDatabase('postgres://user:secret@127.0.0.1:5432/rental_qa')).not.toThrow();
+    expect(() => assertDisposableQaDatabase('postgres://user:secret@localhost:5432/rental_test')).not.toThrow();
+    expect(() => assertDisposableQaDatabase('postgres://user:secret@127.0.0.1:5432/postgres')).toThrow(/disposable/);
+    expect(() => assertDisposableQaDatabase('postgres://user:secret@127.0.0.1:5432/rendasua')).toThrow(/disposable/);
+    expect(() => assertDisposableQaDatabase('postgres://user:secret@db.internal:5432/rental_qa')).toThrow(/disposable/);
+    expect(() => assertDisposableQaDatabase('postgres://user:secret@127.0.0.1:5432/latest_aqua')).toThrow(/disposable/);
+    delete process.env[allow];
+    expect(() => assertDisposableQaDatabase('postgres://user:secret@127.0.0.1:5432/rental_qa')).toThrow(/disposable/);
   });
 });
 
@@ -91,6 +109,15 @@ describe('rental request SQL on Postgres', () => {
     await client.query(readFileSync(join(root, '20261114200000_rental_requests_respond_by_index/up.sql'), 'utf8'));
     await client.query(readFileSync(join(root, '20261118210000_rental_request_qa_round2/up.sql'), 'utf8'));
     await client.query(readFileSync(join(root, '20261118220000_rental_request_fair_window/up.sql'), 'utf8'));
+    await client.query(readFileSync(join(root, '20261118230000_rental_request_response_clock/up.sql'), 'utf8'));
+    await client.query(`
+      DROP TRIGGER IF EXISTS stamp_rental_autodecline_since ON public.application_configurations;
+      CREATE TRIGGER stamp_rental_autodecline_since
+        AFTER INSERT OR UPDATE OF boolean_value, status
+        ON public.application_configurations
+        FOR EACH ROW
+        EXECUTE FUNCTION public.stamp_rental_autodecline_since();
+    `);
   });
 
   afterAll(async () => {
@@ -185,27 +212,82 @@ describe('rental request SQL on Postgres', () => {
   });
 
   it('N11 gives an overdue pre-cutoff request a later respond_by', async () => {
-    const cutoff = '2026-11-18T00:00:00Z';
+    const cutoff = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const later = new Date(Date.parse(cutoff) + 5 * 24 * 60 * 60 * 1000).toISOString();
+    const soon = new Date(Date.parse(cutoff) + 6 * 60 * 60 * 1000).toISOString();
     const cameroon = await insertListing(client, 'Cameroon');
     const gabon = await insertListing(client, 'Gabon');
-    const open = await insertPending(client, cameroon, '2026-11-10T00:00:00Z', '2026-11-25T00:00:00Z');
-    const capped = await insertPending(client, cameroon, '2026-11-10T00:00:00Z', '2026-11-18T06:00:00Z');
-    const other = await insertPending(client, gabon, '2026-11-10T00:00:00Z', '2026-11-25T00:00:00Z');
+    const open = await insertPending(client, cameroon, '2026-11-10T00:00:00Z', later);
+    const capped = await insertPending(client, cameroon, '2026-11-10T00:00:00Z', soon);
+    const other = await insertPending(client, gabon, '2026-11-10T00:00:00Z', later);
     await client.query('SELECT public.extend_overdue_rental_respond_by($1::timestamptz, $2)', [cutoff, 'CM']);
-    expect(await respondBy(client, open)).toBe('2026-11-19T00:00:00.000Z');
-    expect(await respondBy(client, capped)).toBe('2026-11-18T06:00:00.000Z');
+    expect(await respondBy(client, open)).toBe(new Date(Date.parse(cutoff) + 24 * 60 * 60 * 1000).toISOString());
+    expect(await respondBy(client, capped)).toBe(new Date(soon).toISOString());
     expect(await respondBy(client, other)).toBe('2026-11-10T00:00:00.000Z');
-    const stillOpen = await client.query(
-      'SELECT respond_by > $2::timestamptz AS open FROM public.rental_requests WHERE id = $1',
-      [open, cutoff]
-    );
-    expect(stillOpen.rows[0].open).toBe(true);
     const due = await client.query(
       `SELECT id FROM public.rental_requests
         WHERE id = $1 AND status = 'pending' AND respond_by >= $2::timestamptz AND respond_by <= $3::timestamptz`,
-      [open, cutoff, '2026-11-19T00:00:01Z']
+      [open, cutoff, new Date(Date.parse(cutoff) + 24 * 60 * 60 * 1000 + 1000).toISOString()]
     );
     expect(due.rows).toHaveLength(1);
+  });
+
+  it('N17 keeps a past start at the cutoff under Africa/Douala', async () => {
+    await client.query("SET TIME ZONE 'Africa/Douala'");
+    try {
+      const listing = await insertListing(client, 'Gabon');
+      const past = await insertPending(client, listing, '2020-01-01T00:00:00Z', '2020-01-02T00:00:00Z');
+      await client.query(
+        `INSERT INTO public.application_configurations (config_key, boolean_value, status, country_code, data_type)
+         VALUES ('rentals_dashboard_requests_enabled', true, 'active', 'GA', 'boolean')`
+      );
+      const stamped = await client.query(
+        `SELECT string_value, string_value::timestamptz AS cutoff, now() AS db_now
+           FROM public.application_configurations
+          WHERE config_key = 'rentals_dashboard_requests_autodecline_since' AND country_code = 'GA'`
+      );
+      expect(stamped.rows[0].string_value).toMatch(/Z$/);
+      const cutoff = stamped.rows[0].cutoff.getTime();
+      expect(Math.abs(cutoff - stamped.rows[0].db_now.getTime())).toBeLessThan(5000);
+      const saved = Date.parse(await respondBy(client, past));
+      expect(Math.abs(saved - cutoff)).toBeLessThan(1000);
+      expect(saved).toBeGreaterThanOrEqual(cutoff - 1000);
+    } finally {
+      await client.query("SET TIME ZONE 'UTC'");
+    }
+  });
+
+  it('N18 measures the fair window from now when the cutoff is already old', async () => {
+    const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const start = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+    const listing = await insertListing(client, '  cm ');
+    const id = await insertPending(client, listing, new Date(Date.parse(cutoff) + 24 * 60 * 60 * 1000).toISOString(), start);
+    await client.query('SELECT public.extend_overdue_rental_respond_by($1::timestamptz, $2)', [cutoff, 'CM']);
+    expect(Date.parse(await respondBy(client, id))).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1000);
+  });
+
+  it('N19 gives a fresh window when a country is turned back on', async () => {
+    const listing = await insertListing(client, 'Cameroun');
+    const start = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+    const id = await insertPending(client, listing, new Date(Date.now() - 60 * 60 * 1000).toISOString(), start);
+    await client.query(
+      `UPDATE public.application_configurations SET boolean_value = false
+        WHERE config_key = 'rentals_dashboard_requests_enabled' AND country_code = 'CM'`
+    );
+    await client.query(
+      `UPDATE public.application_configurations SET boolean_value = true
+        WHERE config_key = 'rentals_dashboard_requests_enabled' AND country_code = 'CM'`
+    );
+    expect(Date.parse(await respondBy(client, id))).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1000);
+  });
+
+  it('N20 extends trimmed and mixed-case country names', async () => {
+    const cutoff = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const start = new Date(Date.parse(cutoff) + 4 * 24 * 60 * 60 * 1000).toISOString();
+    const spaced = await insertListing(client, ' Cameroun ');
+    const id = await insertPending(client, spaced, '2026-11-10T00:00:00Z', start);
+    await client.query('SELECT public.extend_overdue_rental_respond_by($1::timestamptz, $2)', [cutoff, 'cm']);
+    expect(await respondBy(client, id)).toBe(new Date(Date.parse(cutoff) + 24 * 60 * 60 * 1000).toISOString());
   });
 });
 

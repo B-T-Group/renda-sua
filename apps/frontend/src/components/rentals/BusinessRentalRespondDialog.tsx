@@ -168,11 +168,11 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     }
     const overridden = parseTotalOverride(totalOverride);
     const quote = buildPricingSnapshot(request).total;
-    const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(quote, overridden);
+    const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(quote, overridden, request.total_override_ceiling ?? null);
     if (overridden === 'invalid' || tooHigh) {
       setError(overridden === 'invalid'
         ? t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.')
-        : t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, and at most 10 times the quote.'));
+        : t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.'));
       return;
     }
     setSubmitting(true);
@@ -267,7 +267,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
 
   const typedOverride = typeof parseTotalOverride(totalOverride) === 'number' ? parseTotalOverride(totalOverride) as number : null;
   const quoteTotal = offerPreview?.ok ? offerPreview.total : 0;
-  const overrideTooHigh = typedOverride != null && totalOverrideTooHigh(quoteTotal, typedOverride);
+  const overrideTooHigh = typedOverride != null && totalOverrideTooHigh(quoteTotal, typedOverride, request?.total_override_ceiling ?? null);
 
   if (!open || !mode || !request) return null;
 
@@ -336,7 +336,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
               inputProps={{ min: 0.01, step: '0.01' }}
               error={overrideTooHigh}
               helperText={overrideTooHigh
-                ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, and at most 10 times the quote.')
+                ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.')
                 : t('business.rentals.changeTotalHelper', 'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.')
               }
               fullWidth

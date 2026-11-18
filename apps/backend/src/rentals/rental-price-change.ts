@@ -30,9 +30,10 @@ export function totalOverrideTooHigh(
   totalOverride: number,
   ceiling: number | null = null
 ): boolean {
-  if (totalOverride <= quote) return false;
-  if (quote > 0 && totalOverride > quote * TOTAL_OVERRIDE_RATIO) return true;
-  return ceiling != null && totalOverride > ceiling;
+  if (!(totalOverride > quote)) return false;
+  if (ceiling != null && totalOverride > ceiling) return true;
+  if (!(quote > 0)) return ceiling == null;
+  return totalOverride > quote * TOTAL_OVERRIDE_RATIO;
 }
 
 export function quoteWithTotalOverride(

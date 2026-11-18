@@ -481,6 +481,7 @@ export interface BusinessRentalRequestRow {
   listing_timezone?: string | null;
   dates_available?: boolean | null;
   payment_rail?: string | null;
+  total_override_ceiling?: number | null;
   change_summary?: {
     fields?: string[];
     dates?: { from: RentalSelectionWindow[]; to: RentalSelectionWindow[] };

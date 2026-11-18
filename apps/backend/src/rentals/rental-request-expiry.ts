@@ -1,4 +1,4 @@
-import { countrySpellings } from '../orders/delivery-pricing.util';
+import { countryKeys } from '../orders/delivery-pricing.util';
 import type { DashboardRequestFlagRow } from './rental-dashboard-flag';
 import {
   earliestRequestStartIso,
@@ -129,7 +129,7 @@ export async function failedDeliveries<T extends string>(
 }
 
 function addressCountry(country: Record<string, unknown>): Record<string, unknown> {
-  return { business_location: { address: { country } } };
+  return { business_location: { address: { country_key: country } } };
 }
 
 function enabledCountries(flags: DashboardRequestFlagRow[]): string[] {
@@ -144,7 +144,7 @@ function globalFlagOn(flags: DashboardRequestFlagRow[]): boolean {
 }
 
 function countryClause(rows: AutodeclineConfigRow[], iso: string, now: Date): ExpiryClause {
-  return { since: cutoffForCountry(rows, iso, now), countries: countrySpellings(iso), exclude: false };
+  return { since: cutoffForCountry(rows, iso, now), countries: countryKeys(iso), exclude: false };
 }
 
 function globalClause(
@@ -164,7 +164,7 @@ function globalClause(
 function offSpellings(flags: DashboardRequestFlagRow[]): string[] {
   return flags
     .filter((row) => row.country_code && row.boolean_value === false)
-    .flatMap((row) => countrySpellings(row.country_code ?? ''));
+    .flatMap((row) => countryKeys(row.country_code ?? ''));
 }
 
 function clauseWhere(now: Date, clause: ExpiryClause): Record<string, unknown> {

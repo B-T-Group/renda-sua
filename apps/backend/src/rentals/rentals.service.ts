@@ -282,6 +282,11 @@ interface RentalListingForRequestEmail {
  * `GET_RENTAL_REQUEST_FULL` shape used when a business responds (available / unavailable)
  * and for client notification emails.
  */
+interface CeilingRow {
+  number_value: number | null;
+  country_code: string | null;
+}
+
 interface RentalRequestRowForClientNotification {
   id: string;
   client_id: string;
@@ -1499,7 +1504,8 @@ export class RentalsService {
     computed: RentalPricingSnapshotDto
   ): Promise<RentalPricingSnapshotDto> {
     try {
-      const ceiling = await this.overrideCeiling(computed.currency);
+      const country = resolveItemCountry(req.rental_location_listing?.business_location?.address?.country);
+      const ceiling = await this.overrideCeiling(computed.currency, country);
       const enabled = await this.totalOverrideEnabled(req);
       return quoteWithTotalOverride(computed, dto.totalOverride, enabled, ceiling);
     } catch (error: any) {
@@ -1512,6 +1518,9 @@ export class RentalsService {
     if (error?.message === 'TOTAL_OVERRIDE_TOO_HIGH') {
       return 'Enter a total up to the quote, at most 10 times the quote, or within the configured currency limit';
     }
+    if (error?.message === 'TOTAL_OVERRIDE_CEILING_UNAVAILABLE') {
+      return 'The currency limit could not be loaded. Try again.';
+    }
     return 'Enter a total greater than zero';
   }
 
@@ -1522,13 +1531,32 @@ export class RentalsService {
     return listingDashboardFlag(flags, country);
   }
 
-  private async overrideCeiling(currency: string | undefined): Promise<number | null> {
+  private async overrideCeiling(currency: string | undefined, country?: string | null): Promise<number | null> {
     const code = (currency ?? '').trim().toUpperCase();
     if (!code) return null;
-    const res = await this.hasuraSystemService.executeQuery<{
-      application_configurations: Array<{ number_value: number | null }>;
-    }>(Q.RENTAL_TOTAL_OVERRIDE_MAX, { currency: code });
-    const value = Number(res.application_configurations?.[0]?.number_value);
+    const rows = await this.loadOverrideCeilings(code, country);
+    return this.pickedCeiling(rows, country);
+  }
+
+  private async loadOverrideCeilings(currency: string, country?: string | null): Promise<CeilingRow[]> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        application_configurations: CeilingRow[];
+      }>(Q.RENTAL_TOTAL_OVERRIDE_MAX, { currency, country: (country ?? '').trim().toUpperCase() });
+      return res.application_configurations ?? [];
+    } catch (error: any) {
+      throw new Error('TOTAL_OVERRIDE_CEILING_UNAVAILABLE');
+    }
+  }
+
+  private pickedCeiling(rows: CeilingRow[], country?: string | null): number | null {
+    const code = (country ?? '').trim().toUpperCase();
+    const scoped = code ? rows.find((row) => (row.country_code ?? '').toUpperCase() === code) : undefined;
+    return this.positiveCeiling(scoped) ?? this.positiveCeiling(rows.find((row) => row.country_code == null));
+  }
+
+  private positiveCeiling(row?: CeilingRow): number | null {
+    const value = Number(row?.number_value);
     if (!Number.isFinite(value) || value <= 0) return null;
     return value;
   }
@@ -1675,7 +1703,8 @@ export class RentalsService {
     const shown = rows.filter((row) => this.rowDashboardOn(flags, row));
     const rails = await this.railsByCountry(shown);
     const held = await this.heldWindowsByListing(shown);
-    return Promise.all(rows.map((row) => this.withCardFacts(row, flags, rails, held)));
+    const ceilings = await this.ceilingsByListing(shown);
+    return Promise.all(rows.map((row) => this.withCardFacts(row, flags, rails, held, ceilings)));
   }
 
   private rowDashboardOn(flags: DashboardRequestFlagRow[], row: any): boolean {
@@ -1733,7 +1762,8 @@ export class RentalsService {
     row: any,
     flags: DashboardRequestFlagRow[],
     rails: Map<string, string | null>,
-    held: Map<string, Array<{ startMs: number; endMs: number; units: number }>>
+    held: Map<string, Array<{ startMs: number; endMs: number; units: number }>>,
+    ceilings: Map<string, number | null>
   ): Promise<any> {
     if (!this.rowDashboardOn(flags, row)) return row;
     const code = resolveItemCountry(row.rental_location_listing?.business_location?.address?.country);
@@ -1741,7 +1771,32 @@ export class RentalsService {
       ...row,
       payment_rail: code ? rails.get(code) ?? null : null,
       dates_available: await this.datesFromHeld(row, held),
+      total_override_ceiling: ceilings.get(this.ceilingKey(row)) ?? null,
     };
+  }
+
+  private async ceilingsByListing(rows: any[]): Promise<Map<string, number | null>> {
+    const map = new Map<string, number | null>();
+    for (const row of rows) {
+      const key = this.ceilingKey(row);
+      if (!map.has(key)) map.set(key, await this.safeCeiling(row));
+    }
+    return map;
+  }
+
+  private ceilingKey(row: any): string {
+    const country = resolveItemCountry(row.rental_location_listing?.business_location?.address?.country) ?? '';
+    const currency = String(row.rental_location_listing?.rental_item?.currency ?? '').trim().toUpperCase();
+    return `${country}:${currency}`;
+  }
+
+  private async safeCeiling(row: any): Promise<number | null> {
+    const country = resolveItemCountry(row.rental_location_listing?.business_location?.address?.country);
+    try {
+      return await this.overrideCeiling(row.rental_location_listing?.rental_item?.currency, country);
+    } catch (error: any) {
+      return null;
+    }
   }
 
   private async datesFromHeld(
