@@ -1,11 +1,17 @@
 export const HERO = '/hero.png';
 export const CAPTURED = '2026-11-14T16:00:00.000Z';
 export const CAPTURED_DOUALA = '2026-11-14T10:00:00.000Z';
+export const DECLINE_CAPTURED = '2026-11-18T16:00:00.000Z';
 
 export const PHOTOS = [
   { slotKey: 'overview', url: HERO, capturedAt: CAPTURED },
   { slotKey: 'other_side', url: HERO, capturedAt: CAPTURED },
   { slotKey: 'accessories', url: HERO, capturedAt: CAPTURED },
+];
+
+export const RENTER_PHOTOS = [
+  { slotKey: 'decline-1', url: '/decline-1.png', capturedAt: DECLINE_CAPTURED },
+  { slotKey: 'decline-2', url: '/decline-2.png', capturedAt: DECLINE_CAPTURED },
 ];
 
 export const CARD = {

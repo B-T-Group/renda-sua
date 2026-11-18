@@ -8772,6 +8772,8 @@
     "renterPhotos": "Photos du locataire",
     "yourPickupPhotos": "Vos photos de retrait",
     "viewBooking": "Voir la réservation",
+    "cardHold": "Empreinte carte : {{amount}}",
+    "photoNumber": "Photo {{n}} · {{date}}",
     "conditionPhotos": "Photos d'état",
     "takenByBusiness": "Prises par le commerce · {{date}}",
     "removePhoto": "Retirer la photo",

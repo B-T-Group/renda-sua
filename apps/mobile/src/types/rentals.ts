@@ -238,7 +238,7 @@ export interface RentalBookingDetail {
   condition_decline?: {
     reason: string;
     reasonText?: string | null;
-    photos: Array<{ slotKey: string; url: string; capturedAt: string }>;
+    photos: Array<{ url: string; capturedAt: string; slotKey?: string }>;
   } | null;
   not_received_report?: { id: string; reported_at: string } | null;
   renter_reported_returned_at?: string | null;

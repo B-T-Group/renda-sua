@@ -25,7 +25,7 @@ export const DECLINE_REASONS = ['damaged', 'missing_accessory', 'not_the_item', 
 export type DeclineReason = (typeof DECLINE_REASONS)[number];
 
 export interface DeclinePhoto {
-  slotKey: string;
+  slotKey?: string;
   url: string;
   capturedAt: string;
 }
@@ -204,7 +204,7 @@ export function BusinessDeclineBanner({
       <Typography>{t('pickupDecline.reasonLine', 'Reason: {{reason}}', { reason: reasonLabel })}</Typography>
       {note?.trim() ? <Typography>{t('pickupDecline.noteLine', 'Note: {{note}}', { note: note.trim() })}</Typography> : null}
       {baselinePhotos.length > 0 ? <PhotoGroup label={t('pickupDecline.yourPickupPhotos', 'Your pickup photos')} photos={baselinePhotos} timeZone={timeZone} /> : null}
-      <PhotoGroup label={t('pickupDecline.renterPhotos', "Renter's photos")} photos={photos} timeZone={timeZone} />
+      <PhotoGroup label={t('pickupDecline.renterPhotos', "Renter's photos")} photos={photos} timeZone={timeZone} numbered />
       {bookingHref ? (
         <Button color="primary" href={bookingHref}>{t('pickupDecline.viewBooking', 'View booking')}</Button>
       ) : null}
@@ -212,29 +212,30 @@ export function BusinessDeclineBanner({
   );
 }
 
-export function ConditionPhotoStrip({ photos, timeZone, onOpen }: { photos: DeclinePhoto[]; timeZone: string; onOpen?: (index: number) => void }) {
+export function ConditionPhotoStrip({
+  photos,
+  timeZone,
+  onOpen,
+  numbered = false,
+}: {
+  photos: DeclinePhoto[];
+  timeZone: string;
+  onOpen?: (index: number) => void;
+  numbered?: boolean;
+}) {
   const { t, i18n } = useTranslation();
   return (
     <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap' }}>
-      {photos.map((photo, index) => {
-        const day = declineDay(photo.capturedAt, timeZone, i18n.language);
-        const label = t(`pickupDecline.slots.${photo.slotKey}`, photo.slotKey);
-        return (
-          <Stack key={photo.slotKey} spacing={0.5} alignItems="center" sx={{ width: 112 }}>
-            <Box
-              component="button"
-              onClick={() => onOpen?.(index)}
-              sx={{ p: 0, border: 0, bgcolor: 'transparent', cursor: 'pointer' }}
-            >
-              <Box component="img" src={photo.url} alt={label} sx={{ width: 104, height: 104, objectFit: 'cover', borderRadius: 1, display: 'block' }} />
-            </Box>
-            <Typography variant="caption" align="center">{label}</Typography>
-            <Typography variant="caption" color="text.secondary" align="center">
-              {t('pickupDecline.captured', 'Captured {{date}}', { date: day })}
-            </Typography>
-          </Stack>
-        );
-      })}
+      {photos.map((photo, index) => (
+        <PhotoTile
+          key={photo.slotKey || photo.url}
+          photo={photo}
+          index={index}
+          day={declineDay(photo.capturedAt, timeZone, i18n.language)}
+          numbered={numbered}
+          onOpen={onOpen}
+        />
+      ))}
     </Stack>
   );
 }
@@ -397,13 +398,58 @@ function AddedShots({ shots, onRemove }: { shots: DeclineShot[]; onRemove: (id: 
   );
 }
 
-function PhotoGroup({ label, photos, timeZone }: { label: string; photos: DeclinePhoto[]; timeZone: string }) {
+function PhotoGroup({
+  label,
+  photos,
+  timeZone,
+  numbered = false,
+}: {
+  label: string;
+  photos: DeclinePhoto[];
+  timeZone: string;
+  numbered?: boolean;
+}) {
   return (
     <Stack spacing={0.5}>
       <Typography variant="subtitle2">{label}</Typography>
-      <ConditionPhotoStrip photos={photos} timeZone={timeZone} />
+      <ConditionPhotoStrip photos={photos} timeZone={timeZone} numbered={numbered} />
     </Stack>
   );
+}
+
+function PhotoTile({
+  photo,
+  index,
+  day,
+  numbered,
+  onOpen,
+}: {
+  photo: DeclinePhoto;
+  index: number;
+  day: string;
+  numbered: boolean;
+  onOpen?: (index: number) => void;
+}) {
+  const { t } = useTranslation();
+  const label = tileCaption(numbered, index, photo.slotKey, day, t);
+  return (
+    <Stack spacing={0.5} alignItems="center" sx={{ width: numbered ? 128 : 112 }}>
+      <Box component="button" onClick={() => onOpen?.(index)} sx={{ p: 0, border: 0, bgcolor: 'transparent', cursor: 'pointer' }}>
+        <Box component="img" src={photo.url} alt={label} sx={{ width: 104, height: 104, objectFit: 'cover', borderRadius: 1, display: 'block' }} />
+      </Box>
+      <Typography variant="caption" align="center">{label}</Typography>
+      {numbered ? null : (
+        <Typography variant="caption" color="text.secondary" align="center">
+          {t('pickupDecline.captured', 'Captured {{date}}', { date: day })}
+        </Typography>
+      )}
+    </Stack>
+  );
+}
+
+function tileCaption(numbered: boolean, index: number, slotKey: string | undefined, day: string, t: any): string {
+  if (numbered) return t('pickupDecline.photoNumber', 'Photo {{n}} · {{date}}', { n: index + 1, date: day });
+  return t(`pickupDecline.slots.${slotKey}`, slotKey ?? '');
 }
 
 function DeclineArt() {
@@ -425,6 +471,7 @@ export interface DeclineShot {
 function reviewLine(money: DeclineMoney, amount: string, t: any): string {
   if (money.rail === 'momo_unpaid') return t('rentalInspection.payNow', "You'll pay {{amount}} now", { amount });
   if (money.rail === 'momo_paid') return t('rentalInspection.paidAmount', '{{amount}} paid', { amount });
+  if (money.rail === 'card') return t('pickupDecline.cardHold', 'Card hold: {{amount}}', { amount });
   return t('rentalInspection.heldAmount', '{{amount}} held', { amount });
 }
 

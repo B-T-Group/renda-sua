@@ -188,6 +188,7 @@ export const DECLINE_PHOTO_ROWS = `
   query DeclinePhotoRows($declineId: uuid!) {
     rental_condition_decline_photos(
       where: { decline_id: { _eq: $declineId }, status: { _eq: "ready" } }
+      order_by: { created_at: asc }
     ) {
       id
       object_key

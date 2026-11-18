@@ -24,6 +24,13 @@ export interface PublicConditionPhoto {
   expiresAt: string;
 }
 
+interface DeclineEvidencePhoto {
+  id: string;
+  url: string;
+  expiresAt: string;
+  capturedAt: string;
+}
+
 interface BaselineRow {
   id: string;
   slot_key: string;
@@ -92,15 +99,13 @@ export class RentalConditionPhotosService {
     return { photoId, status: 'ready' };
   }
 
-  async signedForDecline(declineId: string): Promise<Array<{ id: string; url: string; expiresAt: string }>> {
+  async signedForDecline(declineId: string): Promise<DeclineEvidencePhoto[]> {
     const result = await this.hasura.executeQuery<{
-      rental_condition_decline_photos: Array<{ id: string; object_key: string }>;
+      rental_condition_decline_photos: Array<{ id: string; object_key: string; created_at: string }>;
     }>(Q.DECLINE_PHOTO_ROWS, { declineId });
-    const rows = (result.rental_condition_decline_photos ?? []).filter(
-      (row) => row.object_key.includes('/decline/') && !row.object_key.includes('/pending/')
-    );
+    const rows = (result.rental_condition_decline_photos ?? []).filter((row) => this.evidenceKey(row.object_key));
     const signed = [];
-    for (const row of rows) signed.push(await this.signPrivate(row.id, row.object_key));
+    for (const row of rows) signed.push(await this.evidencePhoto(row));
     return signed;
   }
 
@@ -132,6 +137,15 @@ export class RentalConditionPhotosService {
       url: signed.url,
       expiresAt: signed.expiresAt.toISOString(),
     };
+  }
+
+  private evidenceKey(key: string): boolean {
+    return key.includes('/decline/') && !key.includes('/pending/');
+  }
+
+  private async evidencePhoto(row: { id: string; object_key: string; created_at: string }): Promise<DeclineEvidencePhoto> {
+    const signed = await this.signPrivate(row.id, row.object_key);
+    return { ...signed, capturedAt: row.created_at };
   }
 
   private async signPrivate(id: string, key: string) {

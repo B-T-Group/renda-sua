@@ -19,6 +19,8 @@ const outDir = process.env.OUT_DIR ?? '/opt/cursor/artifacts/pickup-decline/v1';
 const webJs = '/tmp/capture-pickup-decline/web.js';
 const mobileJs = '/tmp/capture-pickup-decline/mobile.js';
 const hero = readFileSync(path.join(root, 'scripts/capture-inspection-optin/hero.png'));
+const decline1 = await sharp({ create: { width: 320, height: 320, channels: 3, background: { r: 176, g: 48, b: 36 } } }).png().toBuffer();
+const decline2 = await sharp({ create: { width: 320, height: 320, channels: 3, background: { r: 20, g: 78, b: 150 } } }).png().toBuffer();
 const font = readFileSync(
   path.join(
     root,
@@ -41,9 +43,9 @@ html,body,#root{margin:0;background:#FAF9F7}
 function listen(js, port) {
   const server = createServer((req, res) => {
     const url = req.url?.split('?')[0] ?? '/';
-    if (url === '/hero.png') {
+    if (url === '/hero.png' || url === '/decline-1.png' || url === '/decline-2.png') {
       res.setHeader('content-type', 'image/png');
-      res.end(hero);
+      res.end(url === '/decline-1.png' ? decline1 : url === '/decline-2.png' ? decline2 : hero);
       return;
     }
     if (url === '/MaterialCommunityIcons.ttf') {
@@ -112,12 +114,13 @@ const browser = await chromium.launch({
 try {
   for (const lang of ['en', 'fr']) {
     if (process.env.ONLY !== 'mobile') for (const [scene, name] of WEB) {
+      if (process.env.SCENE && !process.env.SCENE.split(',').includes(scene)) continue;
       const tall = scene === 'listing' || scene === 'insights' || scene === 'business' || scene.startsWith('decline');
       await shoot({ browser, lang, scene, file: `${name}-${lang}.png`, port: 8771, width: 1100, height: tall ? 1400 : 900, mobile: false });
     }
     if (process.env.ONLY === 'web') continue;
     for (const [scene, name] of MOBILE) {
-      if (process.env.SCENE && scene !== process.env.SCENE) continue;
+      if (process.env.SCENE && !process.env.SCENE.split(',').includes(scene)) continue;
       const tall = scene === 'insights' || scene === 'business' || scene.startsWith('decline');
       await shoot({ browser, lang, scene, file: `${name}-${lang}.png`, port: 8772, width: 390, height: tall ? 1600 : 1100, mobile: true });
     }
@@ -168,9 +171,9 @@ async function assertScene(page, scene, lang, mobile) {
     if (text.includes('CA$') || /\bCAD\b/.test(text)) throw new Error(`${scene} ${lang} showed CAD code`);
   }
   if (scene === 'review') {
-    const hold = lang === 'fr' ? 'retenus' : 'held';
-    if (!text.includes(hold)) throw new Error(`${scene} ${lang} missing the hold line`);
-    if (/released|libérée|empreinte|Your card hold/i.test(text)) throw new Error(`${scene} ${lang} showed the release line`);
+    const hold = lang === 'fr' ? 'Empreinte carte' : 'Card hold:';
+    if (!text.includes(hold)) throw new Error(`${scene} ${lang} missing the card hold line`);
+    if (/is released|est libérée|libérée/i.test(text)) throw new Error(`${scene} ${lang} showed the release line`);
   }
   if (scene === 'decline-card' || scene.startsWith('decline-other') || scene === 'decline-photos') {
     const release = lang === 'fr' ? 'empreinte' : 'is released';
@@ -211,6 +214,16 @@ async function assertScene(page, scene, lang, mobile) {
       if (!text.includes(bit)) throw new Error(`${scene} ${lang} missing ${bit}`);
     }
     if (text.includes('Unit freed') || text.includes('Unité libérée')) throw new Error(`${scene} ${lang} still shows Unit freed`);
+    const photo1 = lang === 'fr' ? 'Photo 1 · 18 nov.' : 'Photo 1 · 18 Nov';
+    const photo2 = lang === 'fr' ? 'Photo 2 · 18 nov.' : 'Photo 2 · 18 Nov';
+    if (!text.includes(photo1) || !text.includes(photo2)) throw new Error(`${scene} ${lang} missing numbered decline captions`);
+    const srcs = await page.locator('img').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('src') || ''));
+    if (!srcs.includes('/decline-1.png') || !srcs.includes('/decline-2.png')) {
+      throw new Error(`${scene} ${lang} decline photos are not distinct`);
+    }
+    if ((text.match(/Overview|Vue d’ensemble/g) || []).length > 1) {
+      throw new Error(`${scene} ${lang} used a baseline role on a renter photo`);
+    }
   }
   if (scene === 'listing') {
     const header = lang === 'fr' ? "Photos d'état" : 'Condition photos';

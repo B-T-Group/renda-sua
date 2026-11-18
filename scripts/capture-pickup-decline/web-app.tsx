@@ -20,7 +20,7 @@ import {
 } from '../../apps/frontend/src/components/rentals/DeclinePickupScreens';
 import en from '../../apps/frontend/public/locales/en.json';
 import fr from '../../apps/frontend/public/locales/fr.json';
-import { ADMIN_ROWS, CARD, MOMO_PAID, MOMO_UNPAID, OTHER_TEXT, PHOTOS, RENTER_NOTE, RENTER_NOTE_FR, sceneName } from './fixtures';
+import { ADMIN_ROWS, CARD, MOMO_PAID, MOMO_UNPAID, OTHER_TEXT, PHOTOS, RENTER_NOTE, RENTER_NOTE_FR, RENTER_PHOTOS, sceneName } from './fixtures';
 
 const boot = new URLSearchParams(window.location.search).get('lang') === 'fr' ? 'fr' : 'en';
 
@@ -97,7 +97,7 @@ function CaptureApp() {
             <BusinessDeclineBanner
               reason="damaged"
               note={note}
-              photos={photos.slice(0, 2)}
+              photos={RENTER_PHOTOS}
               baselinePhotos={photos}
               timeZone="America/Toronto"
               bookingHref="/rentals/bookings/RB-25496259"

@@ -9820,6 +9820,8 @@
     "renterPhotos": "Renter's photos",
     "yourPickupPhotos": "Your pickup photos",
     "viewBooking": "View booking",
+    "cardHold": "Card hold: {{amount}}",
+    "photoNumber": "Photo {{n}} · {{date}}",
     "conditionPhotos": "Condition photos",
     "takenByBusiness": "Taken by the business · {{date}}",
     "removePhoto": "Remove photo",

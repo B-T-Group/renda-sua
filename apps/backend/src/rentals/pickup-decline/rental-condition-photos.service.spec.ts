@@ -168,4 +168,24 @@ describe('decline photo uploads', () => {
     await service.finalize('11111111-1111-4111-8111-111111111111', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc');
     expect(deleted).toContain('pending/original.jpg');
   });
+
+  it('returns the decline photo time so the caption is not a pickup role', async () => {
+    const hasura = {
+      executeQuery: jest.fn(async () => ({
+        rental_condition_decline_photos: [
+          { id: 'p1', object_key: 'dev/rental-inspection/decline/booking/p1.jpg', created_at: '2026-11-18T16:00:00.000Z' },
+        ],
+      })),
+    };
+    const service = new RentalConditionPhotosService(
+      hasura as never,
+      {} as never,
+      {} as never,
+      { generatePresignedDownloadUrl: jest.fn(async () => ({ url: 'https://signed/p1', expiresAt: new Date('2026-11-18T18:00:00.000Z') })) } as never,
+      {} as never
+    );
+    const photos = await service.signedForDecline('decline');
+    expect(photos[0].capturedAt).toBe('2026-11-18T16:00:00.000Z');
+    expect(photos[0]).not.toHaveProperty('slotKey');
+  });
 });

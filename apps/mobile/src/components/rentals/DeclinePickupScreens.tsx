@@ -12,7 +12,7 @@ export type DeclineReason = 'damaged' | 'missing_accessory' | 'not_the_item' | '
 const REASONS: DeclineReason[] = ['damaged', 'missing_accessory', 'not_the_item', 'other'];
 
 export interface DeclinePhoto {
-  slotKey: string;
+  slotKey?: string;
   url: string;
   capturedAt: string;
 }
@@ -170,7 +170,7 @@ export function BusinessDeclineBanner({
       <Text>{t('pickupDecline.reasonLine', 'Reason: {{reason}}', { reason: reasonLabel })}</Text>
       {note?.trim() ? <Text>{t('pickupDecline.noteLine', 'Note: {{note}}', { note: note.trim() })}</Text> : null}
       {baselinePhotos.length > 0 ? <PhotoGroup label={t('pickupDecline.yourPickupPhotos', 'Your pickup photos')} photos={baselinePhotos} timeZone={timeZone} /> : null}
-      <PhotoGroup label={t('pickupDecline.renterPhotos', "Renter's photos")} photos={photos} timeZone={timeZone} />
+      <PhotoGroup label={t('pickupDecline.renterPhotos', "Renter's photos")} photos={photos} timeZone={timeZone} numbered />
       {onViewBooking ? (
         <Button textColor={colors.primary.main} onPress={onViewBooking}>{t('pickupDecline.viewBooking', 'View booking')}</Button>
       ) : null}
@@ -178,21 +178,19 @@ export function BusinessDeclineBanner({
   );
 }
 
-export function ConditionPhotoStrip({ photos, timeZone }: { photos: DeclinePhoto[]; timeZone: string }) {
+export function ConditionPhotoStrip({ photos, timeZone, numbered = false }: { photos: DeclinePhoto[]; timeZone: string; numbered?: boolean }) {
   const { t, i18n } = useTranslation();
   return (
     <View style={styles.row}>
-      {photos.map((photo) => {
-        const day = declineDay(photo.capturedAt, timeZone, i18n.language);
-        const label = t(`pickupDecline.slots.${photo.slotKey}`, photo.slotKey);
-        return (
-          <View key={photo.slotKey} style={styles.tile}>
-            <Image source={{ uri: photo.url }} accessibilityLabel={label} style={styles.image} />
-            <Text variant="labelSmall">{label}</Text>
-            <Text variant="labelSmall">{t('pickupDecline.captured', 'Captured {{date}}', { date: day })}</Text>
-          </View>
-        );
-      })}
+      {photos.map((photo, index) => (
+        <MobilePhotoTile
+          key={photo.slotKey || photo.url}
+          photo={photo}
+          index={index}
+          day={declineDay(photo.capturedAt, timeZone, i18n.language)}
+          numbered={numbered}
+        />
+      ))}
     </View>
   );
 }
@@ -263,7 +261,32 @@ export function DeclineAdminTable({ rows, timeZone }: { rows: Array<{ name: stri
 function reviewLine(money: DeclineMoney, amount: string, t: any): string {
   if (money.rail === 'momo_unpaid') return t('rentalInspection.payNow', "You'll pay {{amount}} now", { amount });
   if (money.rail === 'momo_paid') return t('rentalInspection.paidAmount', '{{amount}} paid', { amount });
+  if (money.rail === 'card') return t('pickupDecline.cardHold', 'Card hold: {{amount}}', { amount });
   return t('rentalInspection.heldAmount', '{{amount}} held', { amount });
+}
+
+function MobilePhotoTile({
+  photo,
+  index,
+  day,
+  numbered,
+}: {
+  photo: DeclinePhoto;
+  index: number;
+  day: string;
+  numbered: boolean;
+}) {
+  const { t } = useTranslation();
+  const label = numbered
+    ? t('pickupDecline.photoNumber', 'Photo {{n}} · {{date}}', { n: index + 1, date: day })
+    : t(`pickupDecline.slots.${photo.slotKey}`, photo.slotKey);
+  return (
+    <View style={styles.tile}>
+      <Image source={{ uri: photo.url }} accessibilityLabel={label} style={styles.image} />
+      <Text variant="labelSmall">{label}</Text>
+      {numbered ? null : <Text variant="labelSmall">{t('pickupDecline.captured', 'Captured {{date}}', { date: day })}</Text>}
+    </View>
+  );
 }
 
 function ReasonRow({ reason, onChange }: { reason: DeclineReason; onChange: (reason: DeclineReason) => void }) {
@@ -310,11 +333,21 @@ function ShotRow({ shots, onRemove }: { shots: DeclineShot[]; onRemove: (id: str
   );
 }
 
-function PhotoGroup({ label, photos, timeZone }: { label: string; photos: DeclinePhoto[]; timeZone: string }) {
+function PhotoGroup({
+  label,
+  photos,
+  timeZone,
+  numbered = false,
+}: {
+  label: string;
+  photos: DeclinePhoto[];
+  timeZone: string;
+  numbered?: boolean;
+}) {
   return (
     <View>
       <Text variant="titleSmall">{label}</Text>
-      <ConditionPhotoStrip photos={photos} timeZone={timeZone} />
+      <ConditionPhotoStrip photos={photos} timeZone={timeZone} numbered={numbered} />
     </View>
   );
 }
