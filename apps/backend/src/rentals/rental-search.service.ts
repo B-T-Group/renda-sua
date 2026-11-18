@@ -27,6 +27,8 @@ export interface RentalSearchHit extends Partial<CardPaymentPolicy> {
   pricePerDay: number;
   totalForDates: number | null;
   dayCount: number | null;
+  /** Item inspection opt-in. False when the item has not opted in. */
+  inspection_enabled?: boolean;
 }
 
 @Injectable()
@@ -185,7 +187,7 @@ export class RentalSearchService {
       q: query.q,
       matchCategoryName: true,
       category_id: query.category_id,
-      sort: query.sort,
+      sort: query.sort === 'recommended' ? 'newest' : query.sort,
       operation_mode: query.operation_mode,
       min_price: query.min_price,
       max_price: query.max_price,
@@ -248,7 +250,7 @@ export class RentalSearchService {
     const key = `${code}|${latest ?? ''}|${String(inspected)}`;
     const fields = cache.get(key) ?? (await this.cardWindow(code, latest, inspected));
     cache.set(key, fields);
-    return { ...hit, ...fields };
+    return { ...hit, ...fields, inspection_enabled: inspected === true };
   }
 
   private isoCountry(listing: PublicRentalListingRow, fallback?: string | null): string {
@@ -334,6 +336,7 @@ function stripCatalogIndex(hit: RentalSearchHit & { catalogIndex: number }): Ren
     momo_available: hit.momo_available,
     stripe_review_hours: hit.stripe_review_hours,
     timezone: hit.timezone,
+    inspection_enabled: hit.inspection_enabled === true,
   };
 }
 

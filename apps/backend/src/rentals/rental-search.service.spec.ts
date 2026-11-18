@@ -405,4 +405,65 @@ describe('RentalSearchService', () => {
     const steady = await ranked.search({ country_code: 'CM' });
     expect(steady.listings.map((row) => row.listing.id)).toEqual(['a', 'b', 'c', 'd']);
   });
+
+  it('recommended keeps every listing: available, then decline rank, then newest', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 10, 10));
+    const penalized = listing('penalized', 'Penalized', 10);
+    penalized.rental_item.business = { id: 'penalized', name: 'P' };
+    const clean = listing('clean', 'Clean', 20);
+    clean.rental_item.business = { id: 'clean', name: 'C' };
+    const booked = listing('booked', 'Booked', 30);
+    booked.rental_item.business = { id: 'booked-biz', name: 'B' };
+    rentals.collectPublicRentalListings.mockResolvedValue([penalized, clean, booked]);
+    hasura.executeQuery.mockResolvedValue({
+      rental_booking_windows: [
+        {
+          start_at: '2026-11-12T00:00:00.000Z',
+          end_at: '2026-11-15T00:00:00.000Z',
+          rental_booking: { rental_location_listing_id: 'booked', units_booked: 1 },
+        },
+      ],
+    });
+    const ranking = { multipliersFor: jest.fn().mockResolvedValue(new Map([['penalized', 0.4]])) };
+    const ranked = new RentalSearchService(
+      rentals as never,
+      hasura as never,
+      undefined,
+      undefined,
+      ranking as unknown as DeclineRankingService
+    );
+    const query = { country_code: 'CM', sort: 'recommended', start_date: '2026-11-12', end_date: '2026-11-15' };
+    const moved = await ranked.search(query);
+    expect(rentals.collectPublicRentalListings).toHaveBeenCalledWith(expect.objectContaining({ sort: 'newest' }));
+    expect(moved.listings.map((row) => row.listing.id)).toEqual(['clean', 'penalized', 'booked']);
+    expect(moved.total).toBe(3);
+    ranking.multipliersFor.mockResolvedValue(new Map());
+    const steady = await ranked.search(query);
+    expect(steady.listings.map((row) => row.listing.id)).toEqual(['penalized', 'clean', 'booked']);
+    expect(steady.total).toBe(3);
+    await ranked.search({ country_code: 'CM', sort: 'relevance' });
+    expect(rentals.collectPublicRentalListings).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'relevance' })
+    );
+    jest.restoreAllMocks();
+  });
+
+  it('keeps inspection_enabled from the item opt-in on search hits', async () => {
+    const rows = [listing('a', 'A'), listing('b', 'B')];
+    const withWindows = {
+      collectPublicRentalListings: jest.fn().mockResolvedValue(rows),
+      listingWindowByItem: jest.fn().mockResolvedValue(
+        new Map<string, boolean | undefined>([
+          ['a-item', true],
+          ['b-item', false],
+        ])
+      ),
+    };
+    const svc = new RentalSearchService(withWindows as never, hasura as never);
+    const result = await svc.search({ country_code: 'CM' });
+    const byId = (id: string) => result.listings.find((row) => row.listing.id === id);
+    expect(byId('a')?.inspection_enabled).toBe(true);
+    expect(byId('b')?.inspection_enabled).toBe(false);
+    expect(result.total).toBe(2);
+  });
 });

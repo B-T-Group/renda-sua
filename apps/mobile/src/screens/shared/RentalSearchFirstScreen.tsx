@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { useDefaultRentalCatalog } from '../../hooks/useDefaultRentalCatalog';
 import { useSearchFirstMyRentals } from '../../hooks/useMyRentalsLandingEntry';
 import {
   RentalSearchFirstView,
@@ -45,15 +46,20 @@ import {
   quoteRentalSelections,
 } from '../../utils/rentals/rentalSearchPreset';
 
-const SORTS = ['relevance', 'newest', 'cheapest', 'expensive'] as const;
-type SortName = (typeof SORTS)[number];
+const LEGACY_SORTS = ['relevance', 'newest', 'cheapest', 'expensive'] as const;
+const LIST_SORTS = ['recommended', 'relevance'] as const;
+type SortName = (typeof LEGACY_SORTS)[number] | (typeof LIST_SORTS)[number];
 
 export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen({
   withAuth = false,
   applyTopSafeArea = true,
+  initialQuery = '',
+  initialDates = null,
 }: {
   withAuth?: boolean;
   applyTopSafeArea?: boolean;
+  initialQuery?: string;
+  initialDates?: RentalDateRange | null;
 }) {
   const { i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -69,36 +75,47 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   );
   const { selectedMarket } = useMarket();
   const geo = useRentalCatalogGeoParams();
-  const [mode, setMode] = useState<RentalSearchMode>('landing');
+  const defaultList = flags.rentals_default_list_enabled === true;
+  const [mode, setMode] = useState<RentalSearchMode>(initialQuery ? 'results' : 'landing');
   const [returnMode, setReturnMode] = useState<RentalSearchMode>('landing');
-  const [query, setQuery] = useState('');
-  const [dates, setDates] = useState<RentalDateRange | null>(null);
+  const [query, setQuery] = useState(initialQuery);
+  const [dates, setDates] = useState<RentalDateRange | null>(initialDates);
   const [draftDates, setDraftDates] = useState<RentalDateRange | null>(null);
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
   const [pendingRentId, setPendingRentId] = useState<string | null>(null);
   const [categories, setCategories] = useState<RentalTopCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<RentalSuggestion[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
   const [hits, setHits] = useState<RentalSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [sort, setSort] = useState<SortName>('relevance');
+  const [sort, setSort] = useState<SortName>(defaultList ? 'recommended' : 'relevance');
+  const promotedSort = useRef(defaultList);
   const [takeHome, setTakeHome] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [datesSkipped, setDatesSkipped] = useState(false);
+  const [datesSkipped, setDatesSkipped] = useState(Boolean(initialDates));
   const [notifyState, setNotifyState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   useEffect(() => {
     if (!geo.ready) return;
     const ctrl = new AbortController();
+    setCategoriesLoading(true);
     void topRentalCategories(
       { country_code: geo.country_code, state: geo.state, limit: 12 },
       { signal: ctrl.signal }
     )
       .then(setCategories)
-      .catch(() => setCategories([]));
+      .catch(() => setCategories([]))
+      .finally(() => setCategoriesLoading(false));
     return () => ctrl.abort();
   }, [geo.ready, geo.country_code, geo.state]);
+
+  useEffect(() => {
+    if (!defaultList || promotedSort.current) return;
+    promotedSort.current = true;
+    setSort('recommended');
+  }, [defaultList]);
 
   useEffect(() => {
     void loadRecentSearches(storage).then(setRecent);
@@ -114,7 +131,20 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
     []
   );
 
+  const catalog = useDefaultRentalCatalog({
+    enabled: defaultList,
+    ready: geo.ready,
+    active: mode !== 'typing',
+    country: geo.country_code,
+    state: geo.state,
+    query,
+    categoryId,
+    dates,
+    sort,
+  });
+
   useEffect(() => {
+    if (defaultList) return;
     if (mode !== 'results' && mode !== 'browse') return;
     if (!geo.ready) return;
     const ctrl = new AbortController();
@@ -137,7 +167,7 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
       .catch(() => setHits([]))
       .finally(() => setLoading(false));
     return () => ctrl.abort();
-  }, [mode, query, categoryId, sort, takeHome, dates, geo.ready, geo.country_code, geo.state]);
+  }, [defaultList, mode, query, categoryId, sort, takeHome, dates, geo.ready, geo.country_code, geo.state]);
 
   useEffect(() => {
     if (mode !== 'typing' || query.trim().length < 2 || !geo.ready) {
@@ -201,9 +231,10 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
     }
   }, [draftDates, openListing, pendingRentId]);
 
+  const visibleHits = defaultList ? catalog.hits : hits;
   const cards: RentalSearchCardModel[] = useMemo(
-    () => hits.map((hit) => toCard(hit, dates, i18n.language)),
-    [dates, hits, i18n.language]
+    () => visibleHits.map((hit) => toCard(hit, dates, i18n.language, defaultList)),
+    [dates, defaultList, i18n.language, visibleHits]
   );
   const { shown, extra } = splitTopCategories(categories);
 
@@ -212,7 +243,7 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
       <RentalSearchFirstView
         topInset={applyTopSafeArea ? insets.top : 0}
         timeZone={marketTimeZone(geo.country_code)}
-        marketLabel={selectedMarket?.name ?? ''}
+        marketLabel={marketCaption(selectedMarket)}
         mode={mode}
         query={query}
         dates={dates}
@@ -228,13 +259,27 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
         takeHome={takeHome}
         sortLabel={sort}
         datesSkipped={datesSkipped}
-        loading={loading}
+        loading={defaultList ? catalog.loading : loading}
+        defaultList={defaultList}
+        total={catalog.total}
+        loadingMore={catalog.loadingMore}
+        hasMore={catalog.hasMore}
+        categoriesLoading={categoriesLoading}
         notifyState={notifyState}
         nearby={dates ? nearbyRanges(dates) : []}
         similar={categories.filter((row) => row.id !== categoryId).slice(0, 3)}
         bottomInset={tabBarHeight}
         myRentals={myRentals}
         onQueryChange={setQuery}
+        onClearQuery={
+          defaultList
+            ? () => {
+                setQuery('');
+                setMode('landing');
+              }
+            : undefined
+        }
+        onLoadMore={catalog.loadMore}
         onFocusQuery={() => {
           if (mode !== 'typing') setReturnMode(mode);
           setMode('typing');
@@ -254,6 +299,10 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
         }}
         onCategory={(id) => {
           setCategoryId(categoryId === id ? null : id);
+          if (defaultList) {
+            if (mode === 'typing') setMode(query.trim() ? 'results' : 'landing');
+            return;
+          }
           if (mode === 'landing' || mode === 'typing') setMode('browse');
         }}
         onMore={() => setMoreOpen((open) => !open)}
@@ -285,13 +334,19 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
           openListing(id, dates);
         }}
         onSeeDates={(id) => {
-          const hit = hits.find((row) => row.listing.id === id);
+          const hit = visibleHits.find((row) => row.listing.id === id);
           const next = rangeFromNextStart(hit?.nextAvailableDate ?? '', dates?.dayCount ?? hit?.dayCount ?? 1);
           if (next) setDates(next);
         }}
         onToggleTakeHome={() => setTakeHome((value) => !value)}
         onToggleCheapest={() => setSort((value) => (value === 'cheapest' ? 'relevance' : 'cheapest'))}
-        onCycleSort={() => setSort((value) => SORTS[(SORTS.indexOf(value) + 1) % SORTS.length])}
+        onCycleSort={() =>
+          setSort((value) => {
+            const order = defaultList ? LIST_SORTS : LEGACY_SORTS;
+            const index = order.indexOf(value as (typeof order)[number]);
+            return order[(index + 1) % order.length];
+          })
+        }
         onNearby={setDates}
         onNotify={() => {
           if (!dates) return;
@@ -316,7 +371,12 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   );
 });
 
-function toCard(hit: RentalSearchHit, range: RentalDateRange | null, locale: string): RentalSearchCardModel {
+function toCard(
+  hit: RentalSearchHit,
+  range: RentalDateRange | null,
+  locale: string,
+  catalog: boolean
+): RentalSearchCardModel {
   const image = hit.listing?.rental_item?.rental_item_images?.[0];
   const pricePerDay = Number(hit.pricePerDay) || Number(hit.listing.base_price_per_day) || 0;
   const pricePerHour = Number(hit.listing.base_price_per_hour) || 0;
@@ -336,5 +396,15 @@ function toCard(hit: RentalSearchHit, range: RentalDateRange | null, locale: str
     dayCount: hit.dayCount,
     nextAvailableDate: hit.nextAvailableDate,
     rangeLabel: range ? formatRangeDates(range, locale) : null,
+    business: hit.listing.business_location?.name || hit.listing.rental_item?.business?.name || '',
+    city: hit.listing.business_location?.address?.city || '',
+    inspection: hit.inspection_enabled === true,
+    catalog,
   };
+}
+
+function marketCaption(market: { name?: string; stateName?: string | null; stateCode?: string | null } | null): string {
+  if (!market?.name) return '';
+  const state = market.stateName || market.stateCode;
+  return state ? `${market.name} \u00b7 ${state}` : market.name;
 }

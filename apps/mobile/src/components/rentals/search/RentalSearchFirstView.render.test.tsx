@@ -137,7 +137,7 @@ describe('search-first rentals', () => {
     expect(view.getByTestId('rental-search-browse-all')).toBeTruthy();
     expect(view.getByText('Cameras')).toBeTruthy();
     expect(view.getByText('Search or pick a category')).toBeTruthy();
-    expect(view.getByTestId('rental-search-more')).toBeTruthy();
+    expect(view.queryByTestId('rental-search-more')).toBeNull();
     expect(view.getByTestId('rental-search-pinned')).toBeTruthy();
     expect(view.queryByText('No scrolling feed on landing')).toBeNull();
     expect(view.queryByText('My rentals')).toBeNull();
@@ -432,6 +432,7 @@ describe('search-first rentals', () => {
     const view = await renderSearch({
       mode: 'browse',
       categories: [{ id: 'equip', name: 'Equipment' }],
+      moreCategories: [{ id: 'sound', name: 'Sound' }],
       activeCategoryId: 'equip',
       cards: [],
     });
@@ -586,5 +587,95 @@ describe('search-first rentals', () => {
     });
     expect(view.getByText('Mes locations').props.numberOfLines).toBe(1);
     expect(view.getByText('Prochaine location')).toBeTruthy();
+  });
+});
+
+function moneyText(node: { props: { children?: unknown } }): string {
+  const children = node.props.children;
+  return Array.isArray(children) ? String(children[0]) : String(children);
+}
+
+const sony: RentalSearchCardModel = {
+  ...canon,
+  id: 'sony',
+  name: 'Sony A7 IV kit',
+  pricePerDay: 45000,
+  currency: 'XAF',
+  catalog: true,
+  business: 'Studio Akwa',
+  city: 'Douala',
+  inspection: true,
+  rangeLabel: null,
+  totalForDates: null,
+  dayCount: null,
+  available: null,
+};
+
+describe('default rental list', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  afterEach(async () => {
+    await act(async () => undefined);
+    cleanup();
+  });
+
+  it('shows the market list instead of the empty landing', async () => {
+    const onLoadMore = jest.fn();
+    const view = await renderSearch({
+      defaultList: true,
+      cards: [sony],
+      total: 12,
+      hasMore: true,
+      onLoadMore,
+    });
+    expect(view.queryByTestId('rental-search-browse-all')).toBeNull();
+    expect(view.queryByText('Search or pick a category')).toBeNull();
+    expect(view.getByText('Sony A7 IV kit')).toBeTruthy();
+    expect(view.getByText('Studio Akwa, Douala')).toBeTruthy();
+    expect(view.getByTestId('rental-search-inspection-sony')).toBeTruthy();
+    expect(view.getByText('12 rentals · add dates to sort by availability')).toBeTruthy();
+    fireEvent.press(view.getByTestId('rental-search-load-more'));
+    expect(onLoadMore).toHaveBeenCalled();
+  });
+
+  it('shows skeletons while the list loads', async () => {
+    const loading = await renderSearch({ defaultList: true, loading: true, cards: [] });
+    expect(loading.getByTestId('rental-search-skeletons')).toBeTruthy();
+  });
+
+  it('shows the empty market when nothing is listed', async () => {
+    const empty = await renderSearch({ defaultList: true, cards: [], loading: false });
+    expect(empty.getByTestId('rental-search-empty-market')).toBeTruthy();
+    expect(empty.getByText('No rentals here yet')).toBeTruthy();
+  });
+
+  it('hides categories for a text search and clears back to the list', async () => {
+    const onClearQuery = jest.fn();
+    const results = await renderSearch({
+      defaultList: true,
+      mode: 'results',
+      query: 'camera',
+      cards: [sony],
+      onClearQuery,
+    });
+    expect(results.queryByText('CATEGORIES')).toBeNull();
+    fireEvent.press(results.getByTestId('rental-search-clear'));
+    expect(onClearQuery).toHaveBeenCalled();
+  });
+
+  it('formats XAF with a non-breaking space', async () => {
+    const xaf = await renderSearch({ defaultList: true, cards: [sony] });
+    expect(moneyText(xaf.getByText(/FCFA/))).toBe('45\u00A0000\u00A0FCFA');
+  });
+
+  it('formats French CAD with a non-breaking space', async () => {
+    await i18n.changeLanguage('fr');
+    const cad = await renderSearch({
+      defaultList: true,
+      cards: [{ ...sony, id: 'jbl', name: 'JBL', pricePerDay: 45, currency: 'CAD', inspection: false, business: 'Parkdale', city: 'Toronto' }],
+    });
+    expect(moneyText(cad.getByText(/45,00/))).toBe('45,00\u00A0$');
   });
 });

@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
@@ -67,6 +67,13 @@ export interface RentalSearchFirstViewProps {
   similar: RentalSearchCategory[];
   onNotify: () => void;
   bottomInset: number;
+  defaultList?: boolean;
+  total?: number;
+  loadingMore?: boolean;
+  hasMore?: boolean;
+  categoriesLoading?: boolean;
+  onLoadMore?: () => void;
+  onClearQuery?: () => void;
   topInset?: number;
   timeZone?: string;
   myRentals?: {
@@ -88,8 +95,10 @@ export interface RentalSearchFirstViewProps {
 export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
-  const title =
-    props.mode === 'results'
+  const listChrome = Boolean(props.defaultList) && props.mode !== 'typing';
+  const title = listChrome
+    ? t('rentals.browseTitle', 'Rentals')
+    : props.mode === 'results'
       ? t('rentals.searchFirst.results', 'Results')
       : props.mode === 'browse'
         ? t('rentals.searchFirst.browseAll', 'Browse all')
@@ -117,7 +126,7 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
       >
         <View style={styles.header}>
           <View style={[styles.headerSide, props.myRentals?.onPress ? styles.headerSideEntry : null]}>
-            {props.mode === 'landing' ? null : (
+            {props.mode === 'landing' || listChrome ? null : (
               <Pressable onPress={props.onBack} accessibilityRole="button" testID="rental-search-back" style={styles.backHit}>
                 <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
               </Pressable>
@@ -135,7 +144,7 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
             ) : null}
           </View>
         </View>
-        {props.mode === 'landing' ? (
+        {props.mode === 'landing' || listChrome ? (
           <Text style={{ color: colors.text.secondary, marginBottom: spacing.sm }}>{marketLabel}</Text>
         ) : null}
         {props.myRentals?.next ? <NextRentalCard {...props.myRentals.next} /> : null}
@@ -148,16 +157,22 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
             onFocus={props.onFocusQuery}
             onSubmitEditing={props.onSubmitQuery}
             placeholder={
-              props.mode === 'browse'
-                ? t('rentals.searchFirst.searchInAll', 'Search in all rentals...')
-                : t('rentals.searchFirst.searchPlaceholder', 'Search cameras, tools, sound...')
+              props.defaultList
+                ? t('rentals.searchFirst.listPlaceholder', 'Search cameras, tools, sound...')
+                : props.mode === 'browse'
+                  ? t('rentals.searchFirst.searchInAll', 'Search in all rentals...')
+                  : t('rentals.searchFirst.searchPlaceholder', 'Search cameras, tools, sound...')
             }
             placeholderTextColor={colors.text.secondary}
             style={[styles.input, { color: colors.text.primary }]}
             returnKeyType="search"
           />
           {props.query ? (
-            <Pressable onPress={() => props.onQueryChange('')} accessibilityLabel={t('common.clear', 'Clear')}>
+            <Pressable
+              onPress={() => (props.onClearQuery ? props.onClearQuery() : props.onQueryChange(''))}
+              accessibilityLabel={t('common.clear', 'Clear')}
+              testID="rental-search-clear"
+            >
               <MaterialCommunityIcons name="close" size={18} color={colors.text.secondary} />
             </Pressable>
           ) : null}
@@ -167,11 +182,14 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: props.bottomInset + spacing.lg }}
         keyboardShouldPersistTaps="handled"
+        onScroll={props.defaultList ? (event) => onCatalogEnd(event, props) : undefined}
+        scrollEventThrottle={props.defaultList ? 80 : undefined}
       >
         {props.mode === 'typing' ? <Typing {...props} /> : null}
-        {props.mode === 'landing' ? <Landing {...props} /> : null}
-        {props.mode === 'browse' || props.mode === 'results' ? <Filters {...props} /> : null}
-        {props.mode === 'results' || props.mode === 'browse' ? <ResultList {...props} /> : null}
+        {props.mode === 'landing' && !props.defaultList ? <Landing {...props} /> : null}
+        {props.defaultList && props.mode !== 'typing' ? <DefaultCatalog {...props} /> : null}
+        {!props.defaultList && (props.mode === 'browse' || props.mode === 'results') ? <Filters {...props} /> : null}
+        {!props.defaultList && (props.mode === 'results' || props.mode === 'browse') ? <ResultList {...props} /> : null}
       </ScrollView>
       <RentalSearchDateSheet
         visible={props.dateSheetOpen}
@@ -185,11 +203,11 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
   );
 }
 
-function DateRow({ dates, mode, datesSkipped, onOpenDates, onSkipDates, label }: RentalSearchFirstViewProps & { label: string | null }) {
+function DateRow({ dates, mode, datesSkipped, onOpenDates, onSkipDates, label, defaultList }: RentalSearchFirstViewProps & { label: string | null }) {
   const { t } = useTranslation();
   const { colors, borderRadius, spacing } = useTheme();
-  const optional = datesSkipped || (mode === 'browse' && !dates);
-  const showSkip = mode === 'landing' && !dates && !datesSkipped;
+  const optional = Boolean(defaultList) || datesSkipped || (mode === 'browse' && !dates);
+  const showSkip = !defaultList && mode === 'landing' && !dates && !datesSkipped;
   return (
     <View style={[styles.dateRow, { borderColor: colors.primary.main, backgroundColor: colors.primary.main + '12', borderRadius: borderRadius.lg, marginTop: spacing.sm }]}>
       <MaterialCommunityIcons name="calendar" size={22} color={colors.primary.main} />
@@ -275,12 +293,14 @@ function CategoryRow({ categories, moreCategories, moreOpen, activeCategoryId, o
           </Pressable>
         );
       })}
-      <Pressable onPress={onMore} testID="rental-search-more" style={styles.iconItem}>
-        <View style={[styles.iconBubble, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
-          <MaterialCommunityIcons name="dots-horizontal" size={22} color={colors.text.primary} />
-        </View>
-        <Text style={{ color: colors.text.primary, fontSize: 12 }}>{t('rentals.searchFirst.more', 'More')}</Text>
-      </Pressable>
+      {moreCategories.length > 0 ? (
+        <Pressable onPress={onMore} testID="rental-search-more" style={styles.iconItem}>
+          <View style={[styles.iconBubble, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
+            <MaterialCommunityIcons name="dots-horizontal" size={22} color={colors.text.primary} />
+          </View>
+          <Text style={{ color: colors.text.primary, fontSize: 12 }}>{t('rentals.searchFirst.more', 'More')}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -420,6 +440,144 @@ function ResultList(props: RentalSearchFirstViewProps) {
   );
 }
 
+function onCatalogEnd(event: NativeSyntheticEvent<NativeScrollEvent>, props: RentalSearchFirstViewProps) {
+  if (!props.hasMore || props.loadingMore || props.loading) return;
+  const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+  const nearEnd = layoutMeasurement.height + contentOffset.y >= contentSize.height - 120;
+  if (nearEnd) props.onLoadMore?.();
+}
+
+function DefaultCatalog(props: RentalSearchFirstViewProps) {
+  const showChips = props.query.trim().length === 0;
+  return (
+    <View>
+      {showChips ? <CategoryBlock {...props} /> : null}
+      <CatalogBody {...props} />
+    </View>
+  );
+}
+
+function CategoryBlock(props: RentalSearchFirstViewProps) {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  if (props.categoriesLoading && props.categories.length === 0) return <SkeletonChips />;
+  return (
+    <View>
+      <Text style={[styles.section, { color: colors.text.secondary, marginTop: spacing.md }]}>
+        {t('rentals.searchFirst.categories', 'CATEGORIES')}
+      </Text>
+      <CategoryRow {...props} />
+    </View>
+  );
+}
+
+function CatalogBody(props: RentalSearchFirstViewProps) {
+  if (props.loading && props.cards.length === 0) return <CardSkeletons />;
+  if (!props.loading && props.cards.length === 0 && !props.query.trim() && !props.activeCategoryId) {
+    return <EmptyMarket />;
+  }
+  if (!props.loading && props.cards.length === 0) return <NoCatalogMatches />;
+  return <CatalogRows {...props} />;
+}
+
+function CatalogRows(props: RentalSearchFirstViewProps) {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  const count = props.total ?? props.cards.length;
+  const countLabel = props.dates
+    ? t('rentals.searchFirst.matches', '{{count}} matches · available for your dates first', { count })
+    : t('rentals.searchFirst.countOnly', '{{count}} rentals · add dates to sort by availability', { count });
+  return (
+    <View>
+      <View style={styles.countRow}>
+        <Text style={{ color: colors.text.secondary, flex: 1, marginVertical: spacing.sm }}>{countLabel}</Text>
+        <Pressable onPress={props.onCycleSort} testID="rental-search-sort">
+          <Text style={{ color: colors.primary.main, fontWeight: '700' }}>{sortCaption(props.sortLabel, t)}</Text>
+        </Pressable>
+      </View>
+      {props.cards.map((card) => (
+        <RentalSearchResultCard key={card.id} card={card} onRent={props.onRent} onSeeDates={props.onSeeDates} />
+      ))}
+      {props.loadingMore ? (
+        <Text testID="rental-search-loading-more" style={{ color: colors.text.secondary, textAlign: 'center', marginVertical: 12 }}>
+          {t('rentals.searchFirst.loadingMore', 'Loading more…')}
+        </Text>
+      ) : null}
+      {props.hasMore && !props.loadingMore ? (
+        <Pressable onPress={props.onLoadMore} testID="rental-search-load-more" style={[styles.loadMore, { borderColor: colors.divider }]}>
+          <Text style={{ color: colors.primary.main, fontWeight: '700' }}>{t('rentals.searchFirst.loadMore', 'Load more')}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function sortCaption(label: string, t: (key: string, fallback: string) => string): string {
+  if (label === 'recommended') return t('rentals.searchFirst.sortRecommended', 'Recommended');
+  if (label === 'relevance') return t('rentals.searchFirst.sortRelevance', 'Relevance');
+  return label;
+}
+
+function EmptyMarket() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <View testID="rental-search-empty-market" style={styles.landingEmpty}>
+      <View style={[styles.emptyBubble, { backgroundColor: colors.primary.main + '18' }]}>
+        <MaterialCommunityIcons name="magnify" size={36} color={colors.primary.main} />
+      </View>
+      <Text variant="titleMedium" style={{ color: colors.text.primary, textAlign: 'center', marginTop: 12 }}>
+        {t('rentals.searchFirst.emptyMarketTitle', 'No rentals here yet')}
+      </Text>
+      <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: 6 }}>
+        {t(
+          'rentals.searchFirst.emptyMarketBody',
+          'Nothing is listed in this market right now. Try another city, or keep the search handy — you can still look by name.'
+        )}
+      </Text>
+    </View>
+  );
+}
+
+function NoCatalogMatches() {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  return (
+    <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: spacing.lg }}>
+      {t('rentals.searchFirst.nothingFree', 'Nothing free for those dates')}
+    </Text>
+  );
+}
+
+function SkeletonChips() {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.iconRow} testID="rental-search-chip-skeletons">
+      {Array.from({ length: 5 }, (_, index) => (
+        <View key={index} style={[styles.iconBubble, { backgroundColor: colors.disabled, borderColor: colors.disabled }]} />
+      ))}
+    </View>
+  );
+}
+
+function CardSkeletons() {
+  const { colors } = useTheme();
+  return (
+    <View testID="rental-search-skeletons">
+      {Array.from({ length: 3 }, (_, index) => (
+        <View key={index} style={[styles.skeletonCard, { borderColor: colors.divider }]}>
+          <View style={[styles.photoBlock, { backgroundColor: colors.disabled }]} />
+          <View style={{ flex: 1, gap: 8 }}>
+            <View style={[styles.skeletonLine, { width: '80%', backgroundColor: colors.disabled }]} />
+            <View style={[styles.skeletonLine, { width: '50%', backgroundColor: colors.disabled }]} />
+            <View style={[styles.skeletonLine, { width: '40%', backgroundColor: colors.disabled }]} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   headerSide: { width: 24, minHeight: 24, justifyContent: 'center' },
@@ -436,7 +594,13 @@ const styles = StyleSheet.create({
   iconBubble: { width: 48, height: 48, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   browseRow: { marginTop: 12 },
   tip: { marginTop: 16, borderRadius: 12, padding: 12 },
-  landingEmpty: { alignItems: 'center', marginTop: 16 },
+  landingEmpty: { alignItems: 'center', marginTop: 28, paddingHorizontal: 12 },
+  emptyBubble: { width: 72, height: 72, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  countRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  loadMore: { borderWidth: 1, borderRadius: 12, alignItems: 'center', paddingVertical: 14, marginTop: 8 },
+  skeletonCard: { flexDirection: 'row', gap: 12, borderWidth: 1, borderRadius: 16, padding: 10, marginTop: 12 },
+  photoBlock: { width: 88, height: 88, borderRadius: 12 },
+  skeletonLine: { height: 12, borderRadius: 6 },
   suggest: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12, marginBottom: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },

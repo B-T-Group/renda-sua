@@ -4,6 +4,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { formatSearchMoney } from '../../../utils/rentals';
+import { formatCatalogMoney } from '../../../utils/rentals/rentalRequestFormat';
 import { formatSingleDate } from '../../../utils/rentals/rentalSearchDates';
 
 export interface RentalSearchCardModel {
@@ -19,6 +20,10 @@ export interface RentalSearchCardModel {
   dayCount: number | null;
   nextAvailableDate: string | null;
   rangeLabel: string | null;
+  business?: string;
+  city?: string;
+  inspection?: boolean;
+  catalog?: boolean;
 }
 
 export function RentalSearchResultCard({
@@ -32,7 +37,9 @@ export function RentalSearchResultCard({
 }) {
   const { t, i18n } = useTranslation();
   const { colors, borderRadius, spacing } = useTheme();
-  const daily = formatSearchMoney(card.pricePerDay, card.currency, i18n.language);
+  const formatMoney = card.catalog ? formatCatalogMoney : formatSearchMoney;
+  const daily = formatMoney(card.pricePerDay, card.currency, i18n.language);
+  const place = [card.business, card.city].filter(Boolean).join(', ');
   const showAvailability = card.available != null && card.rangeLabel;
   return (
     <View
@@ -48,15 +55,22 @@ export function RentalSearchResultCard({
     >
       <View style={[styles.photo, { backgroundColor: colors.disabled }]}>
         {card.imageUrl ? (
-          <Image source={{ uri: card.imageUrl }} style={styles.photo} resizeMode="cover" />
+          <Image source={{ uri: card.imageUrl }} style={styles.photoImage} resizeMode="cover" />
         ) : (
           <MaterialCommunityIcons name="camera" size={28} color={colors.text.secondary} />
         )}
+        {card.inspection ? (
+          <View style={styles.inspect} testID={`rental-search-inspection-${card.id}`}>
+            <MaterialCommunityIcons name="clipboard-check-outline" size={12} color="#fff" />
+            <Text style={styles.inspectText}>{t('rentals.searchFirst.inspection', 'Inspection')}</Text>
+          </View>
+        ) : null}
       </View>
       <View style={styles.body}>
         <Text variant="titleMedium" style={{ color: colors.text.primary }} numberOfLines={2}>
           {card.name}
         </Text>
+        {place ? <Text style={{ color: colors.text.secondary }}>{place}</Text> : null}
         {showAvailability && card.available ? (
           <Text style={[styles.badge, { backgroundColor: colors.cta.soft, color: colors.cta.dark }]}>
             {t('rentals.searchFirst.freeFor', 'Free {{range}}', { range: card.rangeLabel })}
@@ -76,16 +90,16 @@ export function RentalSearchResultCard({
           <Text style={{ color: colors.text.secondary }} testID={`rental-search-total-${card.id}`}>
             {card.totalIsEstimate
               ? t('rentals.searchFirst.totalEstimate', 'Est. {{amount}} for {{count}} days', {
-                  amount: formatSearchMoney(card.totalForDates, card.currency, i18n.language),
+                  amount: formatMoney(card.totalForDates, card.currency, i18n.language),
                   count: card.dayCount,
                 })
               : t('rentals.searchFirst.totalFor', 'Total · {{amount}} for {{count}} days', {
-                  amount: formatSearchMoney(card.totalForDates, card.currency, i18n.language),
+                  amount: formatMoney(card.totalForDates, card.currency, i18n.language),
                   count: card.dayCount,
                 })}
           </Text>
         ) : null}
-        {!card.rangeLabel ? (
+        {!card.rangeLabel && !card.catalog ? (
           <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
             {t('rentals.searchFirst.totalsAfterDates', 'Totals appear once you add dates')}
           </Text>
@@ -119,7 +133,21 @@ export function RentalSearchResultCard({
 
 const styles = StyleSheet.create({
   card: { flexDirection: 'row', borderWidth: 1, padding: 10, gap: 12 },
-  photo: { width: 92, height: 92, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  photo: { width: 92, height: 92, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  photoImage: { width: '100%', height: '100%' },
+  inspect: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  inspectText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   body: { flex: 1, minWidth: 0 },
   badge: { alignSelf: 'flex-start', overflow: 'hidden', borderRadius: 8, marginTop: 6, paddingHorizontal: 8, paddingVertical: 3, fontWeight: '600' },
   action: { alignSelf: 'flex-start', marginTop: 8 },
