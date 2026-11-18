@@ -24,7 +24,7 @@ export class RentalSearchQueryDto {
   category_id?: string;
 
   @IsOptional()
-  @IsIn(['relevance', 'newest', 'cheapest', 'expensive'])
+  @IsIn(['relevance', 'newest', 'cheapest', 'expensive', 'recommended'])
   sort?: string;
 
   @IsOptional()

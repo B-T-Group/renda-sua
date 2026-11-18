@@ -2,6 +2,8 @@ import {
   calendarDateInTimeZone,
   describeRentalDateRange,
   formatRangeDates,
+  formatSearchStay,
+  formatSearchStayRange,
   formatSheetDateLine,
   marketTimeZone,
   nearbyRanges,
@@ -27,6 +29,15 @@ describe('rental search dates', () => {
   it('keeps Sunday as the remaining weekend day', () => {
     expect(weekendRange(new Date(2026, 10, 15)).dayCount).toBe(1);
     expect(weekendRange(new Date(2026, 10, 14)).dayCount).toBe(2);
+  });
+
+  it('labels the booked days the same way a booking does', () => {
+    const range = { startDate: '2026-11-22', endDate: '2026-11-25', dayCount: 3 };
+    const days = (count: number) => (count === 1 ? '1 day' : `${count} days`);
+    const jours = (count: number) => (count === 1 ? '1 jour' : `${count} jours`);
+    expect(formatSearchStay(range, 'en', days)).toBe('22\u201324 Nov · 3 days');
+    expect(formatSearchStay(range, 'fr', jours)).toBe('22\u201324 nov. · 3 jours');
+    expect(formatSearchStayRange(range, 'en')).toBe('22\u201324 Nov');
   });
 
   it('labels 12–15 Nov as three days and suggests later windows', () => {

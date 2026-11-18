@@ -1,4 +1,5 @@
 import {
+  AssignmentTurnedInOutlined,
   Business,
   InfoOutlined,
   LocationOn as LocationOnIcon,
@@ -8,6 +9,7 @@ import {
   Box,
   Button,
   Card,
+  CardActionArea,
   CardContent,
   CardMedia,
   Chip,
@@ -17,6 +19,8 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RentalListingRow } from '../../hooks/useRentalListings';
+import { formatCatalogMoney } from '../../utils/rentalRequestDisplay';
+import { formatRentalDay } from '../../utils/rentalRequestFormat';
 
 function formatListingPrice(amount: string | number, currency: string): string {
   const n = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -46,18 +50,47 @@ function formatLocationAddressLines(
   return { line1, line2 };
 }
 
+export interface RentalCardAvailability {
+  available: boolean | null;
+  nextAvailableDate: string | null;
+  totalForDates: number | null;
+  dayCount: number | null;
+  rangeLabel: string | null;
+}
+
 export interface RentalItemCardProps {
   listing: RentalListingRow;
   onViewDetails: () => void;
   onRequestRental: () => void;
+  variant?: 'hourly' | 'daily';
+  availability?: RentalCardAvailability;
 }
 
 export const RentalItemCard: React.FC<RentalItemCardProps> = ({
   listing,
   onViewDetails,
   onRequestRental,
+  variant = 'hourly',
+  availability,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  if (variant === 'daily') {
+    return (
+      <DailyRentalCard
+        listing={listing}
+        onOpen={onViewDetails}
+        locale={i18n.language}
+        availability={availability}
+        perDay={t('rentals.catalog.perDayShort', '/ day')}
+        inspectionLabel={t('rentals.catalog.inspection', 'Inspection')}
+        freeLabel={(range) => t('rentals.catalog.freeRange', 'Free {{range}}', { range })}
+        waitLabel={(date) => t('rentals.catalog.availableFrom', 'Available from {{date}}', { date })}
+        totalLabel={(amount, count) =>
+          t('rentals.catalog.totalFor', 'Total · {{amount}} for {{count}} days', { amount, count })
+        }
+      />
+    );
+  }
   const item = listing.rental_item;
   const images = item.rental_item_images ?? [];
   const firstImg = images[0];
@@ -292,3 +325,101 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
     </Card>
   );
 };
+
+function DailyRentalCard({
+  listing,
+  onOpen,
+  locale,
+  availability,
+  perDay,
+  inspectionLabel,
+  freeLabel,
+  waitLabel,
+  totalLabel,
+}: {
+  listing: RentalListingRow;
+  onOpen: () => void;
+  locale: string;
+  availability?: RentalCardAvailability;
+  perDay: string;
+  inspectionLabel: string;
+  freeLabel: (range: string) => string;
+  waitLabel: (date: string) => string;
+  totalLabel: (amount: string, count: number) => string;
+}) {
+  const item = listing.rental_item;
+  const image = item.rental_item_images?.[0]?.image_url;
+  const price = `${formatCatalogMoney(Number(listing.base_price_per_day) || 0, item.currency, locale)} ${perDay}`;
+  const place = catalogPlace(listing);
+  const total =
+    availability?.available && availability.totalForDates != null && availability.dayCount
+      ? totalLabel(formatCatalogMoney(availability.totalForDates, item.currency, locale), availability.dayCount)
+      : null;
+  return (
+    <Card sx={{ width: '100%', height: '100%', borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <CardActionArea onClick={onOpen} sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start' }}>
+        <Box sx={{ position: 'relative' }}>
+          <CardMedia
+            component="div"
+            sx={{ height: 168, background: image ? undefined : photoWash(item.rental_category?.name) }}
+            image={image || undefined}
+          />
+          {listing.inspection_enabled ? (
+            <Chip
+              icon={<AssignmentTurnedInOutlined sx={{ color: '#fff !important' }} />}
+              label={inspectionLabel}
+              size="small"
+              sx={{ position: 'absolute', top: 12, left: 12, bgcolor: 'rgba(15,23,42,0.72)', color: '#fff' }}
+            />
+          ) : null}
+          <Chip label={price} sx={{ position: 'absolute', left: 12, bottom: 12, bgcolor: '#fff', fontWeight: 700 }} />
+        </Box>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={700}>{item.name}</Typography>
+          {place ? <Typography variant="body2" color="text.secondary">{place}</Typography> : null}
+          {availability?.available && availability.rangeLabel ? (
+            <Chip label={freeLabel(availability.rangeLabel)} size="small" sx={freeChipSx} />
+          ) : null}
+          {availability?.available === false ? (
+            <Chip label={waitLabel(formatRentalDay(availability.nextAvailableDate ?? '', locale))} size="small" sx={waitChipSx} />
+          ) : null}
+          {total ? <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{total}</Typography> : null}
+        </CardContent>
+      </CardActionArea>
+    </Card>
+  );
+}
+
+const freeChipSx = {
+  mt: 1,
+  alignSelf: 'flex-start',
+  height: 'auto',
+  bgcolor: '#DCF5E5',
+  color: '#085C2C',
+  fontWeight: 700,
+  '& .MuiChip-label': { whiteSpace: 'normal', lineHeight: 1.3, py: 0.5 },
+};
+
+const waitChipSx = {
+  mt: 1,
+  alignSelf: 'flex-start',
+  height: 'auto',
+  bgcolor: '#FEF3C7',
+  color: '#92400E',
+  '& .MuiChip-label': { whiteSpace: 'normal', lineHeight: 1.3, py: 0.5 },
+};
+
+function catalogPlace(listing: RentalListingRow): string {
+  const business = listing.business_location?.name || listing.rental_item.business?.name || '';
+  const city = listing.business_location?.address?.city || '';
+  if (business && city && !business.toLowerCase().includes(city.toLowerCase())) return `${business}, ${city}`;
+  return business || city;
+}
+
+function photoWash(category?: string): string {
+  const name = (category || '').toLowerCase();
+  if (/camera|photo|appareil/.test(name)) return 'linear-gradient(160deg,#16325c,#2f6fed)';
+  if (/sound|audio|sono/.test(name)) return 'linear-gradient(160deg,#c2410c,#f97316)';
+  if (/tool|outil/.test(name)) return 'linear-gradient(160deg,#047857,#34d399)';
+  return 'linear-gradient(160deg,#1d4ed8,#38bdf8)';
+}

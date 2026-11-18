@@ -33,6 +33,23 @@ export function formatRequestAmount(amount: number, currency: string, _language:
   return formatRentalMoney(amount, currency);
 }
 
+/** Catalog cards: `45 000 FCFA`, `$45.00`, or `45,00 $`. */
+export function formatCatalogMoney(amount: number, currency: string, locale: string): string {
+  const code = currency.trim().toUpperCase();
+  const value = Number.isFinite(amount) ? amount : 0;
+  if (code === 'CAD') return formatCatalogCad(value, locale);
+  if (code === 'XAF' || code === 'XOF' || code === 'FCFA') {
+    return `${groupedDigits(value, '\u00A0')}\u00A0FCFA`;
+  }
+  return formatRequestAmount(value, currency, locale);
+}
+
+function formatCatalogCad(amount: number, locale: string): string {
+  const digits = amount.toFixed(2);
+  if (locale.toLowerCase().startsWith('fr')) return `${digits.replace('.', ',')}\u00A0$`;
+  return `$${digits}`;
+}
+
 /** `Wed 11 Nov` / `Mer. 11 nov.` Never an ISO date. */
 export function formatRequestDay(iso: string, locale: string): string {
   const date = utcDate(iso);

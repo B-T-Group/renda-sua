@@ -10,7 +10,8 @@ const RULES: Array<[RegExp, IconName]> = [
   [/equipment|équipement|equipement/i, 'toolbox'],
   [/tool|outil|wrench/i, 'wrench'],
   [/sound|audio|speaker|sono|\bson\b/i, 'volume-high'],
-  [/event|fête|party|mariage/i, 'party-popper'],
+  [/véhicule|vehicule|vehicle/i, 'car'],
+  [/event|événement|evenement|fête|party|mariage/i, 'home-outline'],
   [/power|générat|generat|électr|electric/i, 'lightning-bolt'],
   [/drone/i, 'quadcopter'],
   [/video|film|ciné/i, 'movie-open'],
@@ -30,6 +31,9 @@ const SEEDED_CATEGORY_KEYS: Record<string, string> = {
   equipment: 'rentals.searchFirst.categoryEquipment',
   events: 'rentals.searchFirst.categoryEvents',
   other: 'rentals.searchFirst.categoryOther',
+  cameras: 'rentals.searchFirst.categoryCameras',
+  tools: 'rentals.searchFirst.categoryTools',
+  sound: 'rentals.searchFirst.categorySound',
 };
 
 export function rentalCategoryLabel(
