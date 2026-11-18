@@ -48,9 +48,9 @@ export class DeclinePhotoPresignDto {
 }
 
 export class MarkDeclineRefundDto {
-  @ApiProperty({ enum: ['refunded', 'failed'] })
-  @IsIn(['refunded', 'failed'])
-  status!: 'refunded' | 'failed';
+  @ApiProperty({ enum: ['refunded', 'failed', 'unpaid'], description: 'unpaid credits the wallet through the claim' })
+  @IsIn(['refunded', 'failed', 'unpaid'])
+  status!: 'refunded' | 'failed' | 'unpaid';
 
   @ApiPropertyOptional({ description: 'Provider payout reference' })
   @IsOptional()

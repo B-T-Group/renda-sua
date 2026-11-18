@@ -22,6 +22,8 @@ export interface MomoRefundResult {
   provider: string;
   providerRef: string | null;
   unsupported: boolean;
+  /** The withdrawal never reached the provider. The caller may clear refund_sent_at. */
+  unsent?: boolean;
 }
 
 @Injectable()
@@ -37,7 +39,7 @@ export class RentalMomoRefundService {
     const plan = providerRefundPlan(request.provider);
     if (plan === 'unsupported') return this.unsupported(request.provider);
     const started = await this.initiate(plan, request);
-    if (!started.providerRef || started.status !== 'refund_pending') return started;
+    if (started.unsent || !started.providerRef || started.status !== 'refund_pending') return started;
     return this.finishPoll(plan, started.providerRef);
   }
 
@@ -120,6 +122,7 @@ export class RentalMomoRefundService {
       callback: this.callbackUrl('freemopay'),
     });
     const ref = sent.reference || sent.transactionId || externalId;
+    if (sent.unsent) return this.unsentResult('freemopay');
     if (!sent.success && sent.ambiguous) return this.pending('freemopay', externalId, false);
     if (!sent.success) return this.failed('freemopay', sent.reference ?? sent.transactionId ?? null);
     return this.pending('freemopay', ref, false);
@@ -150,8 +153,8 @@ export class RentalMomoRefundService {
   }
 
   /**
-   * GET /api/v2/payment/:reference is documented for FreemoPay's own reference.
-   * A 404, a transport error, or a 200 with no status is unknown, not "not sent".
+   * GET /api/v2/payment/:reference is FreemoPay's own reference.
+   * A 404 is missing. A transport error or a blank status stays unknown.
    */
   private async lookupFreemopay(ref: string): Promise<PollLook> {
     try {
@@ -160,7 +163,8 @@ export class RentalMomoRefundService {
       if (!code || code.toUpperCase() === 'UNKNOWN') return { kind: 'unknown' };
       return { kind: 'code', code };
     } catch (error: any) {
-      void error;
+      const http = Number(error?.status ?? error?.response?.status ?? 0);
+      if (http === 404) return { kind: 'missing' };
       return { kind: 'unknown' };
     }
   }
@@ -181,6 +185,10 @@ export class RentalMomoRefundService {
 
   private stableId(request: MomoRefundRequest): string {
     return request.referenceId?.trim() || this.externalId(request.bookingId);
+  }
+
+  private unsentResult(provider: string): MomoRefundResult {
+    return { status: 'refund_pending', provider, providerRef: null, unsupported: false, unsent: true };
   }
 
   private pending(provider: string, providerRef: string | null, unsupported: boolean): MomoRefundResult {

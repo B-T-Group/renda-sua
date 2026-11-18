@@ -241,6 +241,11 @@ export interface RentalBookingDetail {
   condition_decline?: {
     reason: string;
     reasonText?: string | null;
+    rail?: 'card' | 'wallet' | 'momo_unpaid' | 'momo_paid';
+    amount?: number;
+    currency?: string | null;
+    phoneMask?: string | null;
+    walletCredited?: boolean;
     photos: Array<{ url: string; capturedAt: string; slotKey?: string }>;
   } | null;
   not_received_report?: { id: string; reported_at: string } | null;

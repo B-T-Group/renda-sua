@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { declineAmount, declineDay, momoRail } from './declinePickup.format';
+import { declineAmount, declineDay } from './declinePickup.format';
 
 export const DECLINE_REASONS = ['damaged', 'missing_accessory', 'not_the_item', 'other'] as const;
 export type DeclineReason = (typeof DECLINE_REASONS)[number];
@@ -165,6 +165,31 @@ export type DeclineRefundView = 'none' | 'refund_pending' | 'refunded' | 'failed
 export function declineRefundView(status?: string | null): DeclineRefundView {
   if (status === 'refund_pending' || status === 'refunded' || status === 'failed' || status === 'manual') return status;
   return 'none';
+}
+
+export function declineCardView(booking: {
+  currency: string;
+  refund_status?: string | null;
+  refund_amount?: number | string | null;
+  refund_currency?: string | null;
+  authorized_amount?: number | string | null;
+  condition_decline?: {
+    rail?: DeclineMoney['rail'];
+    amount?: number;
+    currency?: string | null;
+    phoneMask?: string | null;
+    walletCredited?: boolean;
+  } | null;
+}) {
+  const decline = booking.condition_decline;
+  const credited = Boolean(decline?.walletCredited) && declineRefundView(booking.refund_status) !== 'refunded';
+  return {
+    rail: decline?.rail ?? 'card',
+    amount: Number(decline?.amount) || Number(booking.refund_amount) || Number(booking.authorized_amount) || 0,
+    currency: decline?.currency || booking.refund_currency || booking.currency,
+    phoneMask: decline?.phoneMask ?? null,
+    refundStatus: credited ? 'manual' as const : declineRefundView(booking.refund_status),
+  };
 }
 
 export function DeclineOutcomeCard({
@@ -486,7 +511,7 @@ function WalletMark() {
   return (
     <Box sx={{ position: 'relative', width: 40, height: 40 }} aria-hidden>
       <AccountBalanceWalletIcon sx={{ fontSize: 40, color: 'primary.main' }} />
-      <CheckCircleIcon sx={{ position: 'absolute', right: -6, bottom: -2, fontSize: 18, color: 'success.main', bgcolor: '#FAF9F7', borderRadius: '50%' }} />
+      <CheckCircleIcon sx={{ position: 'absolute', right: -6, bottom: -2, fontSize: 18, color: '#0B7A3B', bgcolor: '#FAF9F7', borderRadius: '50%' }} />
     </Box>
   );
 }
@@ -515,14 +540,25 @@ function reviewLine(money: DeclineMoney, amount: string, t: any): string {
 }
 
 function moneyLine(money: DeclineMoney, amount: string, t: any): string {
-  if (money.rail === 'momo_paid' && momoRail(money.currency, money.rail)) {
-    return t('pickupDecline.momoPaid', "We'll refund {{amount}} to {{phone}}.", { amount, phone: money.phoneMask ?? '' });
-  }
-  if (money.rail === 'momo_unpaid' && momoRail(money.currency, money.rail)) {
-    return t('pickupDecline.momoUnpaid', "You haven't paid anything.");
-  }
+  if (money.rail === 'momo_paid') return paidLine(money, amount, t);
+  if (money.rail === 'momo_unpaid') return t('pickupDecline.momoUnpaid', "You haven't paid anything.");
   if (money.rail === 'wallet') return t('pickupDecline.walletMoney', 'The hold on your wallet is released. You will not be charged.');
   return t('pickupDecline.cardMoney', 'Your card hold of {{amount}} is released. You will not be charged.', { amount });
+}
+
+function paidLine(money: DeclineMoney, amount: string, t: any): string {
+  const phone = (money.phoneMask ?? '').trim();
+  if (!phone) return t('pickupDecline.momoPaidNoPhone', "We'll refund {{amount}}.", { amount });
+  return t('pickupDecline.momoPaid', "We'll refund {{amount}} to {{phone}}.", { amount, phone });
+}
+
+function sentLine(status: string, money: DeclineMoney, amount: string, t: any): string {
+  const phone = (money.phoneMask ?? '').trim();
+  if (money.rail !== 'momo_paid' || !phone) return moneyLine(money, amount, t);
+  if (status === 'refund_pending') {
+    return t('pickupDecline.refundProgressBody', '{{amount}} is on its way to {{phone}}.', { amount, phone });
+  }
+  return t('pickupDecline.refundedBody', '{{amount}} was sent to {{phone}}.', { amount, phone });
 }
 
 function outcomeBody(
@@ -531,11 +567,8 @@ function outcomeBody(
   refundStatus: string,
   t: any
 ): string {
-  if (refundStatus === 'refund_pending') {
-    return t('pickupDecline.refundProgressBody', '{{amount}} is on its way to {{phone}}.', { amount, phone: money.phoneMask ?? '' });
-  }
-  if (refundStatus === 'refunded') {
-    return t('pickupDecline.refundedBody', '{{amount}} was sent to {{phone}}.', { amount, phone: money.phoneMask ?? '' });
+  if (refundStatus === 'refund_pending' || refundStatus === 'refunded') {
+    return sentLine(refundStatus, money, amount, t);
   }
   if (refundStatus === 'failed' || refundStatus === 'manual') {
     return t(

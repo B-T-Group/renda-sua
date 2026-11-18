@@ -48,6 +48,8 @@ export interface FreemopayWithdrawalResponse {
   status?: string;
   /** True when a timeout, network error, or 5xx may have created the payout. */
   ambiguous?: boolean;
+  /** The request never reached FreemoPay, so the same external id can be sent again. */
+  unsent?: boolean;
 }
 
 export interface FreemopayTransactionStatus {
@@ -444,24 +446,30 @@ export class FreemopayService implements OnModuleInit {
         status: data?.status,
       };
     } catch (error: any) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to initiate Freemopay withdrawal: ${sanitized.message}`);
-      const http = Number(sanitized.status ?? error.response?.status);
-      const definite = http >= 400 && http < 500;
-      return {
-        success: false,
-        ambiguous: !definite,
-        message: normalizeProviderMessage(
-          error.response?.data?.message,
-          'Failed to initiate withdrawal'
-        ),
-        errorCode:
-          error.response?.data?.statusCode?.toString() ||
-          error.response?.status?.toString() ||
-          'WITHDRAWAL_FAILED',
-        status: definite ? 'FAILED' : 'UNKNOWN',
-      };
+      return this.withdrawalFailure(error);
     }
+  }
+
+  private withdrawalFailure(error: any): FreemopayWithdrawalResponse {
+    const sanitized = sanitizeProviderError(error);
+    this.logger.error(`Failed to initiate Freemopay withdrawal: ${sanitized.message}`);
+    const http = Number(sanitized.status ?? error?.response?.status ?? 0);
+    const code = String(error?.code ?? error?.cause?.code ?? '');
+    const unsent = this.neverReached(http, code);
+    const definite = !unsent && http >= 400 && http < 500;
+    return {
+      success: false,
+      ambiguous: !unsent && !definite,
+      unsent,
+      message: normalizeProviderMessage(error?.response?.data?.message, 'Failed to initiate withdrawal'),
+      errorCode: error?.response?.data?.statusCode?.toString() || String(http || 'WITHDRAWAL_FAILED'),
+      status: definite || unsent ? 'FAILED' : 'UNKNOWN',
+    };
+  }
+
+  private neverReached(http: number, code: string): boolean {
+    if (http === 503) return true;
+    return code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN';
   }
 
   /**

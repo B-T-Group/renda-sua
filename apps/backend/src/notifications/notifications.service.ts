@@ -4456,12 +4456,14 @@ export class NotificationsService {
     outcome: string;
     externalId?: string;
     walletCredited?: boolean;
-  }): Promise<void> {
+  }): Promise<boolean> {
     try {
       await this.emailSupportRefund(payload);
       await this.pushSupportRefund(payload);
+      return true;
     } catch (error: any) {
       this.logger.error(`notifySupportConditionRefund: ${error?.message ?? error}`);
+      return false;
     }
   }
 

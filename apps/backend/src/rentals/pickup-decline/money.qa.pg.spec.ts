@@ -15,14 +15,16 @@ import { Client, Pool } from 'pg';
 import { RentalMomoRefundService } from './rental-momo-refund.service';
 import { RentalPickupDeclineService } from './rental-pickup-decline.service';
 import { stableRefundReference } from './pickup-decline.money';
+import { noticeMutationShape, CLAIM_NOTICE } from './pickup-decline.queries';
 import * as Q from './pickup-decline.queries';
 
 const TEMPLATE = process.env.DEDICATED_PG_TEMPLATE?.trim();
 const OPTED = process.env.DECLINE_REFUND_PG === '1';
 const HOST = (process.env.PGHOST ?? '').trim();
+const HARDENING = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119160000_rentals_decline_refund_hardening/up.sql');
 const MIGRATIONS = [
   join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql'),
-  join(__dirname, '../../../../hasura/migrations/Rendasua/20261119160000_rentals_decline_refund_hardening/up.sql'),
+  HARDENING,
 ];
 
 describe('decline refund postgres job', () => {
@@ -212,7 +214,98 @@ suite('decline refund claim on real Postgres', () => {
     expect(Q.KEEP_REFUND_CLAIM).toContain('refund_claim_token');
     expect(Q.STAMP_REFUND).toContain('refund_status');
   });
+
+  it('appends a jsonb notice the way Hasura _append does, and rejects a text array', async () => {
+    noticeMutationShape(CLAIM_NOTICE);
+    const textArray = CLAIM_NOTICE.replace('$outcome: jsonb!', '$outcome: String!').replace(
+      '_append: { refund_notices: $outcome }',
+      '_append: { refund_notices: [$outcome] }'
+    );
+    expect(() => noticeMutationShape(textArray)).toThrow('rental_bookings_append_input');
+    const column = await pool.query(
+      `SELECT data_type, is_nullable FROM information_schema.columns
+       WHERE table_name = 'rental_bookings' AND column_name = 'refund_notices'`
+    );
+    expect(column.rows[0]).toMatchObject({ data_type: 'jsonb', is_nullable: 'NO' });
+    await expect(pool.query(`SELECT array_append('[]'::jsonb, 'failed')`)).rejects.toThrow();
+    const id = await seed(pool);
+    const hasura = sqlHasura(pool);
+    const first = await hasura.executeMutation(CLAIM_NOTICE, { id, outcome: ['failed'] });
+    const second = await hasura.executeMutation(CLAIM_NOTICE, { id, outcome: ['failed'] });
+    expect(first.update_rental_bookings.affected_rows).toBe(1);
+    expect(second.update_rental_bookings.affected_rows).toBe(0);
+    const stored = await pool.query(`SELECT refund_notices FROM rental_bookings WHERE id = $1`, [id]);
+    expect(stored.rows[0].refund_notices).toEqual(['failed']);
+  });
+
+  it('backfills refund_sent_at and polls that FreemoPay row before sending again', async () => {
+    const id = await seed(pool, { refund_provider_ref: 'FP-2', refund_attempts: 1, refund_sent_at: null });
+    await pool.query(`UPDATE rental_bookings SET refund_sent_at = NULL WHERE id = $1`, [id]);
+    await pool.query(
+      `UPDATE rental_bookings SET refund_next_at = now() + interval '1 day'
+       WHERE id <> $1 AND refund_status = 'refund_pending'`,
+      [id]
+    );
+    await pool.query(sentBackfill());
+    expect(await sentAt(pool, id)).toBeTruthy();
+    const provider = fakeProvider();
+    provider.check = async () => ({ status: 'SUCCESS' });
+    const service = build(pool, provider, { credits: 0 });
+    expect(await service.reconcilePending()).toBe(1);
+    expect(provider.withdraws).toHaveLength(0);
+    expect(await statusOf(pool, id)).toBe('refunded');
+  });
+
+  it('resends a stamped stable id when FreemoPay has no record of it', async () => {
+    const id = await seed(pool);
+    await pool.query(`UPDATE rental_bookings SET refund_sent_at = now() WHERE id = $1`, [id]);
+    await pool.query(
+      `UPDATE rental_bookings SET refund_next_at = now() + interval '1 day'
+       WHERE id <> $1 AND refund_status = 'refund_pending'`,
+      [id]
+    );
+    const provider = fakeProvider();
+    const service = build(pool, provider, { credits: 0 }, [
+      { amount: 1000, currency: 'XAF', provider: 'freemopay', customer_phone: '237600000000', transaction_id: 'tx' },
+    ]);
+    expect(await service.reconcilePending()).toBe(0);
+    expect(provider.withdraws).toHaveLength(1);
+    expect(provider.withdraws[0].externalId).toBe(stableRefundReference(id));
+  });
+
+  it('dedupes decline history without dropping the live unique index', async () => {
+    const sql = readFileSync(HARDENING, 'utf8');
+    expect(sql).not.toMatch(/DROP INDEX/i);
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS rental_status_history_one_decline');
+    const id = await seed(pool);
+    await pool.query('DROP INDEX IF EXISTS public.rental_status_history_one_decline');
+    await pool.query(
+      `INSERT INTO rental_status_history (rental_booking_id, notes) VALUES ($1, $2), ($1, $2)`,
+      [id, 'Renter declined the pickup condition']
+    );
+    await pool.query(historyDedupe(sql));
+    const left = await pool.query(`SELECT count(*)::int AS n FROM rental_status_history WHERE rental_booking_id = $1`, [id]);
+    expect(left.rows[0].n).toBe(1);
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS rental_status_history_one_decline
+       ON public.rental_status_history (rental_booking_id)
+       WHERE notes = 'Renter declined the pickup condition'`
+    );
+  });
 });
+
+function sentBackfill(): string {
+  const sql = readFileSync(HARDENING, 'utf8');
+  const match = sql.match(/UPDATE public\.rental_bookings[\s\S]*?refund_claim_at IS NOT NULL\s*\);/);
+  if (!match) throw new Error('missing refund_sent_at backfill');
+  return match[0];
+}
+
+function historyDedupe(sql: string): string {
+  const match = sql.match(/DELETE FROM public\.rental_status_history[\s\S]*?ranked\.n > 1\s*\);/);
+  if (!match) throw new Error('missing history dedupe');
+  return match[0];
+}
 
 function assertCanDrop(dbName: string, host: string, opted: boolean): void {
   const local = host === '127.0.0.1' || host === 'localhost' || host.startsWith('/');
@@ -389,20 +482,25 @@ async function ageClaim(pool: Pool, id: string): Promise<void> {
   );
 }
 
-function build(pool: Pool, provider: ReturnType<typeof fakeProvider>, wallet: { credits: number }) {
+function build(
+  pool: Pool,
+  provider: ReturnType<typeof fakeProvider>,
+  wallet: { credits: number },
+  collects: Array<Record<string, unknown>> = []
+) {
   const freemopay = {
     withdraw: (body: { externalId: string }) => provider.withdraw(body),
     checkTransactionStatus: () => provider.check(),
   };
   const momo = new RentalMomoRefundService(unused('mtn') as never, freemopay as never, unused('feda') as never, unused('mypvit') as never);
-  const hasura = sqlHasura(pool);
+  const hasura = sqlHasura(pool, collects);
   return new RentalPickupDeclineService(
     hasura as never,
     { getUser: async () => ({ id: 'user-1' }) } as never,
     {} as never,
     momo,
     {} as never,
-    { notifySupportConditionRefund: async () => undefined, sendConditionDeclinedNotice: async () => undefined } as never,
+    { notifySupportConditionRefund: async () => true, sendConditionDeclinedNotice: async () => undefined } as never,
     { clearPinForOrder: async () => undefined } as never,
     {
       consumeDeclineHold: async () => undefined,
@@ -419,12 +517,12 @@ function unused(name: string) {
   return new Proxy({}, { get: () => () => Promise.reject(new Error(`${name} unused`)) });
 }
 
-function sqlHasura(pool: Pool) {
+function sqlHasura(pool: Pool, collects: Array<Record<string, unknown>> = []) {
   return {
     executeQuery: async (query: string, vars: Record<string, string> = {}) => {
       if (query.includes('DeclineBooking')) return { rental_bookings_by_pk: await shaped(pool, vars.id) };
-      if (query.includes('PendingDeclineRefunds')) return { rental_bookings: await pending(pool, vars.now, vars.stale) };
-      if (query.includes('DeclineCollects')) return { mobile_payment_transactions: [] };
+      if (query.includes('PendingDeclineRefunds')) return { rental_bookings: await pending(pool, query, vars.now, vars.stale) };
+      if (query.includes('DeclineCollects')) return { mobile_payment_transactions: collects };
       if (query.includes('DeclineHold')) return { rental_holds: [] };
       if (query.includes('FindConditionDecline') || query.includes('FindDeclineForBooking')) return { rental_condition_declines: [] };
       return {};
@@ -438,10 +536,11 @@ async function shaped(pool: Pool, id: string) {
   return shape(result.rows[0]);
 }
 
-async function pending(pool: Pool, now: string, stale: string) {
+async function pending(pool: Pool, query: string, now: string, stale: string) {
+  const capped = query.includes('refund_attempts: { _lt: 5 }') ? 'AND refund_attempts < 5' : '';
   const result = await pool.query(
     `SELECT * FROM rental_bookings
-     WHERE refund_status = 'refund_pending' AND condition_declined_at IS NOT NULL AND refund_attempts < 5
+     WHERE refund_status = 'refund_pending' AND condition_declined_at IS NOT NULL ${capped}
        AND (refund_next_at IS NULL OR refund_next_at <= $1)
        AND (refund_claim_at IS NULL OR refund_claim_at < $2)`,
     [now, stale]
@@ -467,7 +566,10 @@ async function applyMutation(pool: Pool, query: string, vars: Record<string, unk
   if (query.includes('KeepDeclineRefundClaim')) return { update_rental_bookings: { affected_rows: await keep(pool, vars) } };
   if (query.includes('ApplyOwnedDeclineRefund')) return { update_rental_bookings: { affected_rows: await owned(pool, vars) } };
   if (query.includes('KeepDeclineProviderRef')) return { update_rental_bookings: { affected_rows: await keepRef(pool, vars) } };
-  if (query.includes('NoteDeclineRefundOnce')) return { update_rental_bookings: { affected_rows: await claimNotice(pool, vars) } };
+  if (query.includes('NoteDeclineRefundOnce')) return { update_rental_bookings: { affected_rows: await claimNotice(pool, query, vars) } };
+  if (query.includes('ReleaseDeclineRefundNotice')) return { update_rental_bookings: { affected_rows: await releaseNotice(pool, vars) } };
+  if (query.includes('ClearDeclineRefundSent')) return { update_rental_bookings: { affected_rows: await clearSent(pool, vars) } };
+  if (query.includes('MarkDeclineWalletCredit')) return { update_rental_bookings: { affected_rows: await markCredited(pool, vars) } };
   return { update_rental_bookings: { affected_rows: 0 } };
 }
 
@@ -529,12 +631,49 @@ async function keepRef(pool: Pool, vars: Record<string, unknown>): Promise<numbe
   return result.rowCount ?? 0;
 }
 
-async function claimNotice(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+async function claimNotice(pool: Pool, query: string, vars: Record<string, unknown>): Promise<number> {
+  noticeMutationShape(query);
+  const column = await pool.query(
+    `SELECT data_type FROM information_schema.columns
+     WHERE table_name = 'rental_bookings' AND column_name = 'refund_notices'`
+  );
+  if (column.rows[0]?.data_type !== 'jsonb') {
+    throw new Error("field 'refund_notices' not found in type: 'rental_bookings_append_input'");
+  }
   const result = await pool.query(
     `UPDATE rental_bookings
-     SET refund_notices = array_append(COALESCE(refund_notices, '{}'), $2)
-     WHERE id = $1 AND NOT ($2 = ANY(COALESCE(refund_notices, '{}')))`,
+     SET refund_notices = refund_notices || $2::jsonb
+     WHERE id = $1 AND NOT (refund_notices @> $2::jsonb)`,
+    [vars.id, JSON.stringify(vars.outcome)]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function releaseNotice(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings
+     SET refund_notices = COALESCE((
+       SELECT jsonb_agg(elem) FROM jsonb_array_elements(refund_notices) elem WHERE elem <> to_jsonb($2::text)
+     ), '[]'::jsonb)
+     WHERE id = $1`,
     [vars.id, vars.outcome]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function clearSent(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_sent_at = NULL
+     WHERE id = $1 AND refund_claim_token = $2 AND refund_status = 'refund_pending'`,
+    [vars.id, vars.token]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function markCredited(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_credited_at = $2 WHERE id = $1 AND refund_credited_at IS NULL`,
+    [vars.id, vars.at]
   );
   return result.rowCount ?? 0;
 }

@@ -18,6 +18,7 @@ export const DECLINE_BOOKING = `
       refund_provider
       refund_provider_ref
       refund_sent_at
+      refund_credited_at
       authorized_amount
       total_amount
       currency
@@ -243,19 +244,57 @@ export const KEEP_PROVIDER_REF = `
 `;
 
 export const CLAIM_NOTICE = `
-  mutation NoteDeclineRefundOnce($id: uuid!, $outcome: String!) {
+  mutation NoteDeclineRefundOnce($id: uuid!, $outcome: jsonb!) {
     update_rental_bookings(
       where: {
         id: { _eq: $id }
-        _or: [
-          { refund_notices: { _is_null: true } }
-          { _not: { refund_notices: { _contains: [$outcome] } } }
-        ]
+        _not: { refund_notices: { _contains: $outcome } }
       }
-      _append: { refund_notices: [$outcome] }
+      _append: { refund_notices: $outcome }
     ) { affected_rows }
   }
 `;
+
+export const RELEASE_NOTICE = `
+  mutation ReleaseDeclineRefundNotice($id: uuid!, $outcome: String!) {
+    update_rental_bookings(
+      where: { id: { _eq: $id } }
+      _delete_elem: { refund_notices: $outcome }
+    ) { affected_rows }
+  }
+`;
+
+export const CLEAR_SENT = `
+  mutation ClearDeclineRefundSent($id: uuid!, $token: uuid!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_sent_at: null }
+    ) { affected_rows }
+  }
+`;
+
+export const MARK_CREDITED = `
+  mutation MarkDeclineWalletCredit($id: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: { id: { _eq: $id }, refund_credited_at: { _is_null: true } }
+      _set: { refund_credited_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+/** Hasura _append exists only on jsonb. A text[] document is the error CI used to miss. */
+export function noticeMutationShape(document: string): void {
+  const jsonb = document.includes('$outcome: jsonb!');
+  const contains = document.includes('_contains: $outcome');
+  const append = document.includes('_append: { refund_notices: $outcome }');
+  if (!jsonb || !contains || !append) {
+    throw new Error("field 'refund_notices' not found in type: 'rental_bookings_append_input'");
+  }
+}
 
 export const KEEP_REFUND_CLAIM = `
   mutation KeepDeclineRefundClaim($id: uuid!, $token: uuid!, $at: timestamptz!) {
@@ -338,7 +377,6 @@ export const PENDING_REFUNDS = `
       where: {
         refund_status: { _eq: "refund_pending" }
         condition_declined_at: { _is_null: false }
-        refund_attempts: { _lt: 5 }
         _and: [
           { _or: [
             { refund_next_at: { _is_null: true } }

@@ -9806,6 +9806,7 @@
     "walletMoney": "The hold on your wallet is released. You will not be charged.",
     "momoUnpaid": "You haven't paid anything.",
     "momoPaid": "We'll refund {{amount}} to {{phone}}.",
+    "momoPaidNoPhone": "We'll refund {{amount}}.",
     "cancelledTitle": "Booking cancelled",
     "refundProgress": "Refund in progress",
     "refunded": "Refunded",

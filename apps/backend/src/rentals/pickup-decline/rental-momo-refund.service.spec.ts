@@ -169,7 +169,20 @@ describe('RentalMomoRefundService', () => {
     expect(freemopay.withdraw).not.toHaveBeenCalled();
   });
 
-  it('treats a FreemoPay status outage, a 404, and a blank status as unknown', async () => {
+  it('retries a withdrawal that never reached FreemoPay', async () => {
+    const refused = service({
+      freemopay: {
+        withdraw: jest.fn(async () => ({ success: false, unsent: true, ambiguous: false, status: 'FAILED' })),
+        checkTransactionStatus: jest.fn(),
+      },
+    });
+    const result = await refused.api.refund({ ...request, provider: 'freemopay' });
+    expect(result.unsent).toBe(true);
+    expect(result.providerRef).toBeNull();
+    expect(refused.freemopay.checkTransactionStatus).not.toHaveBeenCalled();
+  });
+
+  it('treats a FreemoPay status outage and a blank status as unknown, and a 404 as missing', async () => {
     const down = service({
       freemopay: {
         withdraw: jest.fn(),
@@ -180,7 +193,7 @@ describe('RentalMomoRefundService', () => {
     });
     expect(await down.api.probe('freemopay', 'fp-1')).toBe('refund_pending');
     const missing = service();
-    expect(await missing.api.probe('freemopay', 'fp-1')).toBe('refund_pending');
+    expect(await missing.api.probe('freemopay', 'fp-1')).toBe('missing');
     const blank = service({
       freemopay: {
         withdraw: jest.fn(),

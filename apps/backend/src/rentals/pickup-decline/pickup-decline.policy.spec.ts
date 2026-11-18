@@ -50,7 +50,7 @@ describe('pickup decline money', () => {
     expect(fedapayChannel('22890000000', 'togocel')).toBe('togocel');
     expect(fedapayChannel('22890000000', null)).toBe('togocel');
     expect(nextRefundAt(1, 0)).toBe(new Date(60_000).toISOString());
-    expect(nextRefundAt(REFUND_ATTEMPT_LIMIT, 0)).toBeNull();
+    expect(nextRefundAt(REFUND_ATTEMPT_LIMIT, 0)).toBe(new Date(24 * 60 * 60_000).toISOString());
   });
 });
 

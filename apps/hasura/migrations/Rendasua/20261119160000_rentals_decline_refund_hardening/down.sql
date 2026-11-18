@@ -3,5 +3,6 @@
 SET LOCAL lock_timeout = '3s';
 
 ALTER TABLE public.rental_bookings
+  DROP COLUMN IF EXISTS refund_credited_at,
   DROP COLUMN IF EXISTS refund_notices,
   DROP COLUMN IF EXISTS refund_sent_at;

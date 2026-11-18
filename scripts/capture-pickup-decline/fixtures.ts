@@ -40,6 +40,22 @@ export const MOMO_PAID = {
   phoneMask: '····· 67 12',
 };
 
+export const MOMO_NO_PHONE = {
+  ...MOMO_PAID,
+  phoneMask: '',
+};
+
+export const WALLET_XAF = {
+  ...MOMO_UNPAID,
+  rail: 'wallet' as const,
+};
+
+export const CARD_XAF = {
+  ...MOMO_UNPAID,
+  rail: 'card' as const,
+  amount: 45000,
+};
+
 export const ADMIN_ROWS = [
   { name: 'Jean Mbarga', role: 'renter' as const, declineCount: 1, pickupsReached: null, lastDeclineAt: CAPTURED, flagged: false },
   { name: 'Atelier Nord', role: 'business' as const, declineCount: 5, pickupsReached: 12, lastDeclineAt: CAPTURED, flagged: true },

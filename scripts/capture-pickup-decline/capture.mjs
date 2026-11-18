@@ -77,6 +77,10 @@ const WEB = [
   ['decline-photos', '02f-web-decline-photos'],
   ['cancelled-card', '03-web-cancelled-card'],
   ['cancelled-momo-refund', '03c-web-cancelled-momo-refund'],
+  ['xaf-wallet', '03d-web-xaf-wallet'],
+  ['xaf-card', '03e-web-xaf-card'],
+  ['xaf-unpaid', '03f-web-xaf-unpaid'],
+  ['refund-nophone', '03g-web-refund-nophone'],
   ['business', '04-web-business-detail'],
   ['push', '04-web-push-copy'],
   ['listing', '05-web-listing'],
@@ -100,6 +104,10 @@ const MOBILE = [
   ['cancelled-card', '03-cancelled-card'],
   ['cancelled-momo', '03b-cancelled-momo'],
   ['cancelled-momo-refund', '03c-cancelled-momo-refund'],
+  ['xaf-wallet', '03d-xaf-wallet'],
+  ['xaf-card', '03e-xaf-card'],
+  ['xaf-unpaid', '03f-xaf-unpaid'],
+  ['refund-nophone', '03g-refund-nophone'],
   ['business', '04-business-detail'],
   ['listing', '05-listing'],
   ['lightbox', '05b-lightbox'],
@@ -299,6 +307,21 @@ async function assertScene(page, scene, lang, mobile) {
     if (text.includes('670') || text.toLowerCase().includes('phone')) {
       throw new Error(`${scene} ${lang} still names the phone`);
     }
+  }
+  if (scene === 'xaf-wallet' || scene === 'xaf-card' || scene === 'xaf-unpaid' || scene === 'refund-nophone') {
+    if (text.includes('to .') || text.includes('au .')) throw new Error(`${scene} ${lang} shows an empty phone`);
+  }
+  if (scene === 'xaf-wallet' && !text.toLowerCase().includes(lang === 'fr' ? 'portefeuille' : 'wallet')) {
+    throw new Error(`${scene} ${lang} is not the wallet copy`);
+  }
+  if (scene === 'xaf-unpaid' && !text.toLowerCase().includes(lang === 'fr' ? 'rien payé' : "haven't paid")) {
+    throw new Error(`${scene} ${lang} is not the unpaid copy`);
+  }
+  if (scene === 'xaf-card' && !text.toLowerCase().includes(lang === 'fr' ? 'carte' : 'card')) {
+    throw new Error(`${scene} ${lang} is not the card copy`);
+  }
+  if (scene === 'refund-nophone' && (text.includes('67') || text.includes('to .') || text.includes('au .'))) {
+    throw new Error(`${scene} ${lang} still names a phone`);
   }
 }
 
