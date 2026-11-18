@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { capRefund, declineRail, mapRefundPoll, maskMomoPhone, providerRefundPlan, refundFromLedger, sumCollected } from './pickup-decline.money';
-import { DECLINE_FLAG_THRESHOLD, declineGuard } from './pickup-decline.policy';
+import { DECLINE_FLAG_THRESHOLD, declineGuard, renterPartyName } from './pickup-decline.policy';
 import { isDeclineEvidenceKey, isPublicBaselineKey } from './pickup-decline.keys';
 import { BASELINE_PHOTOS } from './pickup-decline.queries';
 
@@ -58,6 +58,12 @@ describe('pickup decline guards', () => {
     expect(DECLINE_FLAG_THRESHOLD).toBe(5);
     expect(4 >= DECLINE_FLAG_THRESHOLD).toBe(false);
     expect(5 >= DECLINE_FLAG_THRESHOLD).toBe(true);
+  });
+
+  it('shows a renter full name, or the id when a name is missing', () => {
+    expect(renterPartyName('Marie', 'Ngo', 'client-1')).toBe('Marie Ngo');
+    expect(renterPartyName('Marie', '', 'client-1')).toBe('client-1');
+    expect(renterPartyName(null, null, 'client-1')).toBe('client-1');
   });
 
   it('keeps public baseline keys separate from evidence', () => {

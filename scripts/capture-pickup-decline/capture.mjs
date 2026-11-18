@@ -70,6 +70,9 @@ const WEB = [
   ['decline-card', '02-web-decline-card'],
   ['decline-momo', '02b-web-decline-momo'],
   ['decline-momo-paid', '02c-web-decline-momo-paid'],
+  ['decline-other', '02d-web-decline-other'],
+  ['decline-other-filled', '02e-web-decline-other-filled'],
+  ['decline-photos', '02f-web-decline-photos'],
   ['cancelled-card', '03-web-cancelled-card'],
   ['cancelled-momo-refund', '03c-web-cancelled-momo-refund'],
   ['business', '04-web-business-detail'],
@@ -87,6 +90,9 @@ const MOBILE = [
   ['decline-card', '02-decline-card'],
   ['decline-momo', '02b-decline-momo'],
   ['decline-momo-paid', '02c-decline-momo-paid'],
+  ['decline-other', '02d-decline-other'],
+  ['decline-other-filled', '02e-decline-other-filled'],
+  ['decline-photos', '02f-decline-photos'],
   ['cancelled-card', '03-cancelled-card'],
   ['cancelled-momo', '03b-cancelled-momo'],
   ['cancelled-momo-refund', '03c-cancelled-momo-refund'],
@@ -105,14 +111,20 @@ const browser = await chromium.launch({
 
 try {
   for (const lang of ['en', 'fr']) {
-    for (const [scene, name] of WEB) {
-      await shoot({ browser, lang, scene, file: `${name}-${lang}.png`, port: 8771, width: 1100, height: 900, mobile: false });
+    if (process.env.ONLY !== 'mobile') for (const [scene, name] of WEB) {
+      const tall = scene === 'listing' || scene === 'insights' || scene === 'business' || scene.startsWith('decline');
+      await shoot({ browser, lang, scene, file: `${name}-${lang}.png`, port: 8771, width: 1100, height: tall ? 1400 : 900, mobile: false });
     }
+    if (process.env.ONLY === 'web') continue;
     for (const [scene, name] of MOBILE) {
-      await shoot({ browser, lang, scene, file: `${name}-${lang}.png`, port: 8772, width: 390, height: 1100, mobile: true });
+      if (process.env.SCENE && scene !== process.env.SCENE) continue;
+      const tall = scene === 'insights' || scene === 'business' || scene.startsWith('decline');
+      await shoot({ browser, lang, scene, file: `${name}-${lang}.png`, port: 8772, width: 390, height: tall ? 1600 : 1100, mobile: true });
     }
   }
-  await shoot({ browser, lang: 'en', scene: 'push', file: '04-push-copy.png', port: 8772, width: 390, height: 900, mobile: true });
+  if (!process.env.SCENE) {
+    await shoot({ browser, lang: 'en', scene: 'push', file: '04-push-copy.png', port: 8772, width: 390, height: 900, mobile: true });
+  }
 } finally {
   await browser.close();
   webServer.close();
@@ -122,13 +134,19 @@ try {
 async function shoot({ browser, lang, scene, file, port, width, height, mobile }) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('pageerror', (error) => errors.push(error.stack || error.message));
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text());
+  });
   await page.goto(`http://127.0.0.1:${port}/?scene=${scene}&lang=${lang}`, { waitUntil: 'networkidle' });
   await page.evaluate(async () => {
     await document.fonts.load('24px MaterialCommunityIcons');
     await document.fonts.load('24px material-community');
   });
   await page.waitForTimeout(200);
+  if (errors.length) throw new Error(`${file}: ${errors.slice(0, 4).join(' | ')}`);
+  const preview = await page.evaluate(() => document.body.innerText.slice(0, 80) || document.body.innerHTML.slice(0, 400));
+  if (!preview.trim() || preview.startsWith('<')) throw new Error(`${file} blank: ${preview}`);
   await assertScene(page, scene, lang, mobile);
   const png = await page.screenshot({ type: 'png' });
   await writeCompressed(path.join(outDir, file), png);
@@ -144,10 +162,96 @@ async function assertScene(page, scene, lang, mobile) {
     const showsAmount = scene.includes('paid') || scene.includes('refund');
     if (showsAmount && !text.includes('FCFA')) throw new Error(`${scene} ${lang} missing FCFA`);
   }
-  if (scene === 'review' || scene === 'decline-card' || scene === 'cancelled-card') {
+  if (scene === 'review' || scene === 'decline-card' || scene === 'cancelled-card' || scene.startsWith('decline-other') || scene === 'decline-photos') {
     const expected = lang === 'fr' ? '65,00' : '$65.00';
     if (!text.includes(expected)) throw new Error(`${scene} ${lang} money was ${JSON.stringify(text.slice(0, 180))}`);
     if (text.includes('CA$') || /\bCAD\b/.test(text)) throw new Error(`${scene} ${lang} showed CAD code`);
+  }
+  if (scene === 'review') {
+    const hold = lang === 'fr' ? 'retenus' : 'held';
+    if (!text.includes(hold)) throw new Error(`${scene} ${lang} missing the hold line`);
+    if (/released|libérée|empreinte|Your card hold/i.test(text)) throw new Error(`${scene} ${lang} showed the release line`);
+  }
+  if (scene === 'decline-card' || scene.startsWith('decline-other') || scene === 'decline-photos') {
+    const release = lang === 'fr' ? 'empreinte' : 'is released';
+    if (!text.toLowerCase().includes(release)) throw new Error(`${scene} ${lang} missing the release line`);
+  }
+  if (scene === 'decline-other' || scene === 'decline-other-filled') {
+    const label = lang === 'fr' ? 'Refuser' : 'Decline';
+    const box = await page.getByRole('button', { name: label, exact: true }).boundingBox();
+    if (!box) throw new Error(`${scene} ${lang} Decline button missing`);
+    const sample = await page.screenshot({
+      clip: { x: box.x + 14, y: box.y + box.height / 2 - 2, width: 4, height: 4 },
+    });
+    const { data } = await sharp(sample).raw().toBuffer({ resolveWithObject: true });
+    const grey = data[0] > 180 && data[1] > 180 && data[2] > 180;
+    const red = data[0] > 140 && data[1] < 90 && data[2] < 90;
+    if (scene === 'decline-other' && !grey) throw new Error(`${scene} ${lang} Decline is not greyed (${data[0]},${data[1]},${data[2]})`);
+    if (scene === 'decline-other-filled' && !red) throw new Error(`${scene} ${lang} Decline is not enabled (${data[0]},${data[1]},${data[2]})`);
+    if (scene === 'decline-other-filled') {
+      const values = await page.locator('textarea, input').evaluateAll((nodes) => nodes.map((node) => node.value || ''));
+      const shown = text.includes('speaker cone') || values.some((value) => value.includes('speaker cone'));
+      if (!shown) throw new Error(`${scene} ${lang} missing the other note (${JSON.stringify(values)})`);
+    }
+  }
+  if (scene === 'decline-photos') {
+    const images = await page.locator('img').count();
+    if (images < 2) throw new Error(`${scene} ${lang} expected two thumbnails, saw ${images}`);
+    const remove = lang === 'fr' ? 'Retirer la photo' : 'Remove photo';
+    const removes = await page.locator(`[aria-label="${remove}"]`).count();
+    if (!text.includes(remove) && removes < 2) throw new Error(`${scene} ${lang} missing remove`);
+  }
+  if (scene === 'business') {
+    const reason = lang === 'fr' ? 'Motif' : 'Reason:';
+    const renter = lang === 'fr' ? 'Photos du locataire' : "Renter's photos";
+    const yours = lang === 'fr' ? 'Vos photos de retrait' : 'Your pickup photos';
+    const link = lang === 'fr' ? 'Voir la réservation' : 'View booking';
+    const note = lang === 'fr' ? 'fissurée' : 'grille is cracked';
+    for (const bit of [reason, renter, yours, link, note]) {
+      if (!text.includes(bit)) throw new Error(`${scene} ${lang} missing ${bit}`);
+    }
+    if (text.includes('Unit freed') || text.includes('Unité libérée')) throw new Error(`${scene} ${lang} still shows Unit freed`);
+  }
+  if (scene === 'listing') {
+    const header = lang === 'fr' ? "Photos d'état" : 'Condition photos';
+    const by = lang === 'fr' ? 'Prises par le commerce' : 'Taken by the business';
+    if (!text.includes(header) || !text.includes(by)) throw new Error(`${scene} ${lang} missing listing header`);
+    if (!text.includes('About this rental') && !text.includes('À propos')) {
+      throw new Error(`${scene} ${lang} is not inside the listing page`);
+    }
+  }
+  if (scene === 'insights') {
+    const welcome = lang === 'fr' ? 'tableau' : 'dashboard';
+    const stat = lang === 'fr' ? 'Refus' : 'Condition declines';
+    if (!text.toLowerCase().includes(welcome) && !text.includes('Performance') && !text.includes('Disponibilité')) {
+      throw new Error(`${scene} ${lang} is not inside the insights page`);
+    }
+    if (!text.includes('2') || !text.includes(stat)) throw new Error(`${scene} ${lang} missing the decline stat`);
+  }
+  if (scene === 'admin') {
+    if (!text.includes('Marie Ngo') || !text.includes('6')) throw new Error('admin row is not Marie Ngo / 6');
+  }
+  if (scene === 'cancelled-card' || scene === 'decline-card') {
+    const label = scene === 'decline-card'
+      ? (lang === 'fr' ? 'Continuer l’examen' : 'Keep reviewing')
+      : (lang === 'fr' ? 'Parcourir les locations' : 'Browse rentals');
+    if (mobile && scene === 'cancelled-card') {
+      const swatch = await page.getByRole('button', { name: label, exact: true }).boundingBox();
+      if (!swatch) throw new Error(`${scene} ${lang} missing ${label}`);
+      const chip = await page.screenshot({ clip: { x: swatch.x + 14, y: swatch.y + swatch.height / 2 - 2, width: 4, height: 4 } });
+      const { data: px } = await sharp(chip).raw().toBuffer({ resolveWithObject: true });
+      const blue = px[2] > 140 && px[0] < 40 && px[1] < 120;
+      if (!blue) throw new Error(`${scene} ${lang} is not primary blue (${px[0]},${px[1]},${px[2]})`);
+    } else {
+      const paint = await page.evaluate((name) => {
+        const el = [...document.querySelectorAll('button,[role="button"]')].find((node) => (node.textContent || '').includes(name));
+        if (!el) return '';
+        return [el, ...el.querySelectorAll('*')]
+          .map((node) => `${getComputedStyle(node).color}|${getComputedStyle(node).backgroundColor}`)
+          .join(' ');
+      }, label);
+      if (!paint.includes('10, 79, 181')) throw new Error(`${scene} ${lang} is not primary blue (${paint})`);
+    }
   }
   if (scene === 'listing' || scene === 'lightbox' || scene === 'review' || scene === 'business') {
     const day = lang === 'fr' ? '14 nov.' : '14 Nov';

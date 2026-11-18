@@ -99,7 +99,7 @@ export function DeclineReviewScreen({ money, photos, onDecline }: { money: Decli
       <Typography variant="h6">{money.item}</Typography>
       <Typography color="text.secondary">{money.place} · {money.bookingNumber}</Typography>
       <ConditionPhotoStrip photos={photos} timeZone={money.timeZone} />
-      <Typography>{moneyLine(money, amount, t)}</Typography>
+      <Typography>{reviewLine(money, amount, t)}</Typography>
       <DeclineReviewActions
         acceptLabel={t('rentalInspection.acceptAndStart', 'Accept condition & start rental')}
         reportLabel={t('rentalInspection.reportProblem', 'Report a problem')}
@@ -118,15 +118,22 @@ export function DeclineConditionSheet({
   money,
   onClose,
   onConfirm,
+  initialReason = 'damaged',
+  initialText = '',
+  initialPhotos = [],
 }: {
   open: boolean;
   money: DeclineMoney;
   onClose: () => void;
   onConfirm: (reason: DeclineReason, text: string) => void;
+  initialReason?: DeclineReason;
+  initialText?: string;
+  initialPhotos?: DeclineShot[];
 }) {
   const { t, i18n } = useTranslation();
-  const [reason, setReason] = useState<DeclineReason>('damaged');
-  const [text, setText] = useState('');
+  const [reason, setReason] = useState<DeclineReason>(initialReason);
+  const [text, setText] = useState(initialText);
+  const [shots, setShots] = useState<DeclineShot[]>(initialPhotos);
   const amount = declineAmount(money.amount, money.currency, i18n.language);
   const otherBlocked = reason === 'other' && text.trim().length === 0;
   return (
@@ -137,22 +144,14 @@ export function DeclineConditionSheet({
           <Typography color="text.secondary">{money.place} · {money.bookingNumber}</Typography>
           <Typography color="text.secondary">{t('pickupDecline.lead', 'The booking is cancelled and the unit is freed.')}</Typography>
           <ReasonChips reason={reason} onChange={setReason} />
-          {reason === 'other' ? (
-            <TextField
-              label={t('pickupDecline.otherPlaceholder', 'What is different?')}
-              helperText={t('pickupDecline.otherHint', 'Required when you choose Other.')}
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              multiline
-              minRows={2}
-            />
-          ) : null}
+          {reason === 'other' ? <OtherField text={text} onChange={setText} /> : null}
           <PhotoAddRow />
+          <AddedShots shots={shots} onRemove={(id) => setShots((rows) => rows.filter((row) => row.id !== id))} />
           <Typography>{moneyLine(money, amount, t)}</Typography>
           <Button variant="contained" color="error" disabled={otherBlocked} onClick={() => onConfirm(reason, text)}>
             {t('pickupDecline.confirm', 'Decline')}
           </Button>
-          <Button onClick={onClose}>{t('pickupDecline.keep', 'Keep reviewing')}</Button>
+          <Button color="primary" onClick={onClose}>{t('pickupDecline.keep', 'Keep reviewing')}</Button>
         </Stack>
       </DialogContent>
     </Dialog>
@@ -175,28 +174,40 @@ export function DeclineOutcomeCard({ money, refundStatus }: { money: DeclineMone
       <Typography variant="h5">{title}</Typography>
       <Typography color="text.secondary">{money.place} · {money.bookingNumber}</Typography>
       <Typography>{outcomeBody(money, amount, refundStatus, t)}</Typography>
-      <Button variant="contained">{t('pickupDecline.browse', 'Browse rentals')}</Button>
+      <Button variant="contained" color="primary">{t('pickupDecline.browse', 'Browse rentals')}</Button>
     </Stack>
   );
 }
 
 export function BusinessDeclineBanner({
   reason,
+  note,
   photos,
+  baselinePhotos = [],
   timeZone,
+  bookingHref,
 }: {
   reason: string;
+  note?: string | null;
   photos: DeclinePhoto[];
+  baselinePhotos?: DeclinePhoto[];
   timeZone: string;
+  bookingHref?: string;
 }) {
   const { t } = useTranslation();
+  const pair = REASON_KEY[reason as DeclineReason];
+  const reasonLabel = pair ? t(pair[0], pair[1]) : reason;
   return (
     <Stack spacing={1.5} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
       <Typography variant="h6">{t('pickupDecline.businessTitle', 'Renter declined the condition')}</Typography>
       <Typography>{t('pickupDecline.businessBody', 'The booking is cancelled and the unit is free. No charge.')}</Typography>
-      <Chip label={reason} />
-      <ConditionPhotoStrip photos={photos} timeZone={timeZone} />
-      <Chip color="success" label={t('pickupDecline.unitFreed', 'Unit freed')} />
+      <Typography>{t('pickupDecline.reasonLine', 'Reason: {{reason}}', { reason: reasonLabel })}</Typography>
+      {note?.trim() ? <Typography>{t('pickupDecline.noteLine', 'Note: {{note}}', { note: note.trim() })}</Typography> : null}
+      {baselinePhotos.length > 0 ? <PhotoGroup label={t('pickupDecline.yourPickupPhotos', 'Your pickup photos')} photos={baselinePhotos} timeZone={timeZone} /> : null}
+      <PhotoGroup label={t('pickupDecline.renterPhotos', "Renter's photos")} photos={photos} timeZone={timeZone} />
+      {bookingHref ? (
+        <Button color="primary" href={bookingHref}>{t('pickupDecline.viewBooking', 'View booking')}</Button>
+      ) : null}
     </Stack>
   );
 }
@@ -345,12 +356,52 @@ function ReasonChips({ reason, onChange }: { reason: DeclineReason; onChange: (r
   );
 }
 
+function OtherField({ text, onChange }: { text: string; onChange: (value: string) => void }) {
+  const { t } = useTranslation();
+  return (
+    <TextField
+      label={t('pickupDecline.otherPlaceholder', 'What is different?')}
+      helperText={t('pickupDecline.otherHint', 'Required when you choose Other.')}
+      value={text}
+      onChange={(event) => onChange(event.target.value)}
+      multiline
+      minRows={2}
+    />
+  );
+}
+
 function PhotoAddRow() {
   const { t } = useTranslation();
   return (
     <Stack direction="row" spacing={1}>
-      <Button variant="outlined" startIcon={<PhotoCameraOutlinedIcon />}>{t('pickupDecline.camera', 'Camera')}</Button>
-      <Button variant="outlined" startIcon={<PhotoLibraryOutlinedIcon />}>{t('pickupDecline.gallery', 'Gallery')}</Button>
+      <Button color="primary" variant="outlined" startIcon={<PhotoCameraOutlinedIcon />}>{t('pickupDecline.camera', 'Camera')}</Button>
+      <Button color="primary" variant="outlined" startIcon={<PhotoLibraryOutlinedIcon />}>{t('pickupDecline.gallery', 'Gallery')}</Button>
+    </Stack>
+  );
+}
+
+function AddedShots({ shots, onRemove }: { shots: DeclineShot[]; onRemove: (id: string) => void }) {
+  const { t } = useTranslation();
+  if (shots.length === 0) return null;
+  return (
+    <Stack direction="row" spacing={1}>
+      {shots.map((shot) => (
+        <Box key={shot.id} sx={{ position: 'relative' }}>
+          <Box component="img" src={shot.url} alt="" sx={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 1, display: 'block' }} />
+          <IconButton aria-label={t('pickupDecline.removePhoto', 'Remove photo')} size="small" onClick={() => onRemove(shot.id)} sx={{ position: 'absolute', top: 0, right: 0, bgcolor: 'background.paper' }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
+function PhotoGroup({ label, photos, timeZone }: { label: string; photos: DeclinePhoto[]; timeZone: string }) {
+  return (
+    <Stack spacing={0.5}>
+      <Typography variant="subtitle2">{label}</Typography>
+      <ConditionPhotoStrip photos={photos} timeZone={timeZone} />
     </Stack>
   );
 }
@@ -364,6 +415,17 @@ function DeclineArt() {
       <path d="M84 40l4 4 8-8" stroke="#FAF9F7" strokeWidth="2" fill="none" />
     </Box>
   );
+}
+
+export interface DeclineShot {
+  id: string;
+  url: string;
+}
+
+function reviewLine(money: DeclineMoney, amount: string, t: any): string {
+  if (money.rail === 'momo_unpaid') return t('rentalInspection.payNow', "You'll pay {{amount}} now", { amount });
+  if (money.rail === 'momo_paid') return t('rentalInspection.paidAmount', '{{amount}} paid', { amount });
+  return t('rentalInspection.heldAmount', '{{amount}} held', { amount });
 }
 
 function moneyLine(money: DeclineMoney, amount: string, t: any): string {

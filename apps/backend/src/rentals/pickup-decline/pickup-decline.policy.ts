@@ -34,3 +34,11 @@ export function otherReasonText(reason: string, text: string | undefined): strin
 export function isDeclineReason(value: string): value is DeclineReason {
   return (DECLINE_REASONS as readonly string[]).includes(value);
 }
+
+/** Full name, or the party id when either name is missing. */
+export function renterPartyName(first?: string | null, last?: string | null, id?: string | null): string {
+  const given = (first ?? '').trim();
+  const family = (last ?? '').trim();
+  if (given && family) return `${given} ${family}`;
+  return (id ?? '').trim();
+}

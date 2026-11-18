@@ -72,7 +72,7 @@ export function DeclineReviewScreen({ money, photos, onDecline }: { money: Decli
       <Text variant="titleLarge">{money.item}</Text>
       <Text>{money.place} · {money.bookingNumber}</Text>
       <ConditionPhotoStrip photos={photos} timeZone={money.timeZone} />
-      <Text>{moneyLine(money, amount, t)}</Text>
+      <Text>{reviewLine(money, amount, t)}</Text>
       <DeclineReviewActions
         acceptLabel={t('rentalInspection.acceptAndStart', 'Accept condition & start rental')}
         reportLabel={t('rentalInspection.reportProblem', 'Report a problem')}
@@ -84,45 +84,44 @@ export function DeclineReviewScreen({ money, photos, onDecline }: { money: Decli
   );
 }
 
-export function DeclineConditionSheet({ money, onClose }: { money: DeclineMoney; onClose: () => void }) {
+export interface DeclineShot {
+  id: string;
+  url: string;
+}
+
+export function DeclineConditionSheet({
+  money,
+  onClose,
+  initialReason = 'damaged',
+  initialText = '',
+  initialPhotos = [],
+}: {
+  money: DeclineMoney;
+  onClose: () => void;
+  initialReason?: DeclineReason;
+  initialText?: string;
+  initialPhotos?: DeclineShot[];
+}) {
   const { t, i18n } = useTranslation();
-  const [reason, setReason] = useState<DeclineReason>('damaged');
-  const [text, setText] = useState('');
+  const [reason, setReason] = useState<DeclineReason>(initialReason);
+  const [text, setText] = useState(initialText);
+  const [shots, setShots] = useState<DeclineShot[]>(initialPhotos);
   const amount = declineAmount(money.amount, money.currency, i18n.language);
+  const otherBlocked = reason === 'other' && text.trim().length === 0;
   return (
     <ScrollView contentContainerStyle={styles.pad}>
       <Text variant="titleLarge">{t('pickupDecline.title', 'Decline this rental?')}</Text>
       <Text>{money.place} · {money.bookingNumber}</Text>
       <Text>{t('pickupDecline.lead', 'The booking is cancelled and the unit is freed.')}</Text>
-      <View style={styles.row}>
-        {REASONS.map((code) => (
-          <Pressable key={code} onPress={() => setReason(code)} style={[styles.chip, reason === code ? styles.chipOn : null]}>
-            <Text style={{ color: reason === code ? colors.error.main : colors.text.primary }}>
-              {t(REASON_COPY[code][0], REASON_COPY[code][1])}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <ReasonRow reason={reason} onChange={setReason} />
       {reason === 'other' ? (
-        <TextInput
-          mode="outlined"
-          label={t('pickupDecline.otherPlaceholder', 'What is different?')}
-          value={text}
-          onChangeText={setText}
-          multiline
-        />
+        <TextInput mode="outlined" label={t('pickupDecline.otherPlaceholder', 'What is different?')} value={text} onChangeText={setText} multiline />
       ) : null}
-      <View style={styles.row}>
-        <Button mode="outlined" icon={() => <MaterialCommunityIcons name="camera" size={18} color={colors.text.primary} />}>
-          {t('pickupDecline.camera', 'Camera')}
-        </Button>
-        <Button mode="outlined" icon={() => <MaterialCommunityIcons name="image" size={18} color={colors.text.primary} />}>
-          {t('pickupDecline.gallery', 'Gallery')}
-        </Button>
-      </View>
+      <PhotoButtons />
+      <ShotRow shots={shots} onRemove={(id) => setShots((rows) => rows.filter((row) => row.id !== id))} />
       <Text>{moneyLine(money, amount, t)}</Text>
-      <Button mode="contained" buttonColor={colors.error.main}>{t('pickupDecline.confirm', 'Decline')}</Button>
-      <Button onPress={onClose}>{t('pickupDecline.keep', 'Keep reviewing')}</Button>
+      <Button mode="contained" buttonColor={colors.error.main} disabled={otherBlocked}>{t('pickupDecline.confirm', 'Decline')}</Button>
+      <Button textColor={colors.primary.main} onPress={onClose}>{t('pickupDecline.keep', 'Keep reviewing')}</Button>
     </ScrollView>
   );
 }
@@ -141,20 +140,40 @@ export function DeclineOutcomeCard({ money, refundStatus }: { money: DeclineMone
       <Text variant="headlineSmall">{title}</Text>
       <Text>{money.place} · {money.bookingNumber}</Text>
       <Text>{outcomeBody(money, amount, refundStatus, t)}</Text>
-      <Button mode="contained">{t('pickupDecline.browse', 'Browse rentals')}</Button>
+      <Button mode="contained" buttonColor={colors.primary.main}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
     </View>
   );
 }
 
-export function BusinessDeclineBanner({ reason, photos, timeZone }: { reason: string; photos: DeclinePhoto[]; timeZone: string }) {
+export function BusinessDeclineBanner({
+  reason,
+  note,
+  photos,
+  baselinePhotos = [],
+  timeZone,
+  onViewBooking,
+}: {
+  reason: string;
+  note?: string | null;
+  photos: DeclinePhoto[];
+  baselinePhotos?: DeclinePhoto[];
+  timeZone: string;
+  onViewBooking?: () => void;
+}) {
   const { t } = useTranslation();
+  const pair = REASON_COPY[reason as DeclineReason];
+  const reasonLabel = pair ? t(pair[0], pair[1]) : reason;
   return (
     <View style={styles.pad}>
       <Text variant="titleLarge">{t('pickupDecline.businessTitle', 'Renter declined the condition')}</Text>
       <Text>{t('pickupDecline.businessBody', 'The booking is cancelled and the unit is free. No charge.')}</Text>
-      <Text>{reason}</Text>
-      <ConditionPhotoStrip photos={photos} timeZone={timeZone} />
-      <Text>{t('pickupDecline.unitFreed', 'Unit freed')}</Text>
+      <Text>{t('pickupDecline.reasonLine', 'Reason: {{reason}}', { reason: reasonLabel })}</Text>
+      {note?.trim() ? <Text>{t('pickupDecline.noteLine', 'Note: {{note}}', { note: note.trim() })}</Text> : null}
+      {baselinePhotos.length > 0 ? <PhotoGroup label={t('pickupDecline.yourPickupPhotos', 'Your pickup photos')} photos={baselinePhotos} timeZone={timeZone} /> : null}
+      <PhotoGroup label={t('pickupDecline.renterPhotos', "Renter's photos")} photos={photos} timeZone={timeZone} />
+      {onViewBooking ? (
+        <Button textColor={colors.primary.main} onPress={onViewBooking}>{t('pickupDecline.viewBooking', 'View booking')}</Button>
+      ) : null}
     </View>
   );
 }
@@ -237,6 +256,65 @@ export function DeclineAdminTable({ rows, timeZone }: { rows: Array<{ name: stri
           {row.name} · {row.declineCount}{row.flagged ? ` · ${t('pickupDecline.flag', 'Flag')}` : ''} · {row.pickupsReached ?? '—'} · {declineDay(row.lastDeclineAt, timeZone, i18n.language)}
         </Text>
       ))}
+    </View>
+  );
+}
+
+function reviewLine(money: DeclineMoney, amount: string, t: any): string {
+  if (money.rail === 'momo_unpaid') return t('rentalInspection.payNow', "You'll pay {{amount}} now", { amount });
+  if (money.rail === 'momo_paid') return t('rentalInspection.paidAmount', '{{amount}} paid', { amount });
+  return t('rentalInspection.heldAmount', '{{amount}} held', { amount });
+}
+
+function ReasonRow({ reason, onChange }: { reason: DeclineReason; onChange: (reason: DeclineReason) => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.row}>
+      {REASONS.map((code) => (
+        <Pressable key={code} onPress={() => onChange(code)} style={[styles.chip, reason === code ? styles.chipOn : null]}>
+          <Text style={{ color: reason === code ? colors.error.main : colors.text.primary }}>{t(REASON_COPY[code][0], REASON_COPY[code][1])}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function PhotoButtons() {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.row}>
+      <Button mode="outlined" textColor={colors.primary.main} icon={() => <MaterialCommunityIcons name="camera" size={18} color={colors.primary.main} />}>
+        {t('pickupDecline.camera', 'Camera')}
+      </Button>
+      <Button mode="outlined" textColor={colors.primary.main} icon={() => <MaterialCommunityIcons name="image" size={18} color={colors.primary.main} />}>
+        {t('pickupDecline.gallery', 'Gallery')}
+      </Button>
+    </View>
+  );
+}
+
+function ShotRow({ shots, onRemove }: { shots: DeclineShot[]; onRemove: (id: string) => void }) {
+  const { t } = useTranslation();
+  if (shots.length === 0) return null;
+  return (
+    <View style={styles.row}>
+      {shots.map((shot) => (
+        <View key={shot.id} style={styles.tile}>
+          <Image source={{ uri: shot.url }} style={styles.image} />
+          <Pressable onPress={() => onRemove(shot.id)} accessibilityLabel={t('pickupDecline.removePhoto', 'Remove photo')}>
+            <Text style={{ color: colors.primary.main }}>{t('pickupDecline.removePhoto', 'Remove photo')}</Text>
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function PhotoGroup({ label, photos, timeZone }: { label: string; photos: DeclinePhoto[]; timeZone: string }) {
+  return (
+    <View>
+      <Text variant="titleSmall">{label}</Text>
+      <ConditionPhotoStrip photos={photos} timeZone={timeZone} />
     </View>
   );
 }

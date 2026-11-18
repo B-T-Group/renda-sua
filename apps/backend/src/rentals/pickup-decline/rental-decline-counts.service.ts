@@ -1,7 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { RentalInspectionFlags } from '../inspection/rental-inspection-flags.service';
-import { DECLINE_FLAG_THRESHOLD } from './pickup-decline.policy';
+import { DECLINE_FLAG_THRESHOLD, renterPartyName } from './pickup-decline.policy';
 import * as Q from './pickup-decline.queries';
 
 const EMPTY = '00000000-0000-0000-0000-000000000000';
@@ -94,7 +94,10 @@ export class RentalDeclineCountsService {
     });
     const names = new Map<string, string>();
     for (const client of result.clients ?? []) {
-      names.set(`renter:${client.id}`, [client.user?.first_name, client.user?.last_name].filter(Boolean).join(' '));
+      names.set(
+        `renter:${client.id}`,
+        renterPartyName(client.user?.first_name, client.user?.last_name, client.id)
+      );
     }
     for (const business of result.businesses ?? []) names.set(`business:${business.id}`, business.name ?? '');
     return names;

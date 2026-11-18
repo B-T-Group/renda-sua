@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusPill } from '../../components/common/StatusPill';
 import { OrderMessageComposer } from '../../components/messaging/OrderMessageComposer';
 import { BusinessReturnedBanner } from '../../components/rentals/BusinessReturnedBanner';
+import { BusinessDeclineBanner } from '../../components/rentals/DeclinePickupScreens';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
@@ -375,6 +376,15 @@ export default function BusinessRentalBookingDetailScreen() {
         />
       }
     >
+      {booking.condition_declined_at && booking.condition_decline ? (
+        <BusinessDeclineBanner
+          reason={booking.condition_decline.reason}
+          note={booking.condition_decline.reasonText}
+          photos={booking.condition_decline.photos}
+          timeZone={booking.currency === 'XAF' || booking.currency === 'XOF' ? 'Africa/Douala' : 'America/Toronto'}
+          onViewBooking={() => navigation.navigate('BusinessRentalBookingDetail', { bookingId: booking.id })}
+        />
+      ) : null}
       <View
         style={[
           styles.card,

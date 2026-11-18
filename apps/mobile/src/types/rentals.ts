@@ -234,6 +234,12 @@ export interface RentalBookingDetail {
   actual_end_at?: string | null;
   units_booked?: number | null;
   inspection_policy_version?: number | null;
+  condition_declined_at?: string | null;
+  condition_decline?: {
+    reason: string;
+    reasonText?: string | null;
+    photos: Array<{ slotKey: string; url: string; capturedAt: string }>;
+  } | null;
   not_received_report?: { id: string; reported_at: string } | null;
   renter_reported_returned_at?: string | null;
   renter_return_escalated_at?: string | null;

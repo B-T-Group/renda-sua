@@ -778,9 +778,11 @@ const RentalBookingDetailPage: React.FC = () => {
 
           {booking.condition_declined_at && booking.condition_decline ? (
             <BusinessDeclineBanner
-              reason={booking.condition_decline.reasonText || booking.condition_decline.reason}
+              reason={booking.condition_decline.reason}
+              note={booking.condition_decline.reasonText}
               photos={booking.condition_decline.photos}
               timeZone={booking.currency === 'XAF' ? 'Africa/Douala' : 'America/Toronto'}
+              bookingHref={bookingId ? `/rentals/bookings/${bookingId}` : undefined}
             />
           ) : null}
           {isClient && booking.condition_declined_at ? (

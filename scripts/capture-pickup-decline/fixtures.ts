@@ -35,11 +35,15 @@ export const MOMO_PAID = {
 };
 
 export const ADMIN_ROWS = [
-  { name: 'Marie', role: 'renter' as const, declineCount: 1, pickupsReached: null, lastDeclineAt: CAPTURED, flagged: false },
+  { name: 'Jean Mbarga', role: 'renter' as const, declineCount: 1, pickupsReached: null, lastDeclineAt: CAPTURED, flagged: false },
   { name: 'Atelier Nord', role: 'business' as const, declineCount: 5, pickupsReached: 12, lastDeclineAt: CAPTURED, flagged: true },
   { name: 'Studio Akwa', role: 'business' as const, declineCount: 2, pickupsReached: 8, lastDeclineAt: CAPTURED_DOUALA, flagged: false },
-  { name: 'Jean', role: 'renter' as const, declineCount: 6, pickupsReached: null, lastDeclineAt: CAPTURED, flagged: true },
+  { name: 'Marie Ngo', role: 'renter' as const, declineCount: 6, pickupsReached: null, lastDeclineAt: CAPTURED, flagged: true },
 ];
+
+export const RENTER_NOTE = 'The grille is cracked.';
+export const RENTER_NOTE_FR = 'La grille est fissurée.';
+export const OTHER_TEXT = 'The speaker cone is torn.';
 
 export function sceneName(): string {
   return new URLSearchParams(window.location.search).get('scene') ?? 'review';
