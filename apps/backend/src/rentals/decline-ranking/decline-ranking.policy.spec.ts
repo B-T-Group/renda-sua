@@ -31,6 +31,18 @@ describe('decline ranking formula', () => {
     expect(rankMultiplier({ ...base, n: 10, d: 20, p: 0.1 })).toBeCloseTo(0.7, 5);
   });
 
+  it('rejects NaN on its own and keeps a full penalty above zero', () => {
+    const nan = clampRankConfig({
+      w: Number.NaN,
+      minSample: Number.NaN,
+      start: Number.NaN,
+      full: Number.NaN,
+    });
+    expect(nan.warnings).toEqual(['weight', 'min_sample', 'start', 'full']);
+    expect(nan.w).toBe(0.3);
+    expect(rankMultiplier({ ...base, n: 100, d: 100, p: 1, w: 1 })).toBeCloseTo(0.1, 5);
+  });
+
   it('floors the platform rate at 0.05', () => {
     expect(platformRate([{ n: 0, d: 0 }])).toBe(0.05);
     expect(platformRate([{ n: 10, d: 0 }])).toBe(0.05);
@@ -68,6 +80,7 @@ describe('decline exclusion rules', () => {
     );
     expect(down).toContain("status = 'inactive'");
     expect(down).not.toContain('DELETE FROM');
+    expect(sql).toContain("SET status = 'active'");
     expect(sql).toContain('rentals_decline_rank_weight_range');
     expect(sql).toContain('number_value <= 0.9');
   });

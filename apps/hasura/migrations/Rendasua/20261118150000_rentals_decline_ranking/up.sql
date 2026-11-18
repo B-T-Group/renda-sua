@@ -66,6 +66,17 @@ WHERE NOT EXISTS (
   WHERE c.config_key = v.k AND c.country_code IS NULL
 );
 
+-- A down leaves these rows inactive. Applying this file again turns them back on.
+UPDATE public.application_configurations
+SET status = 'active'
+WHERE config_key IN (
+  'rentals_decline_ranking_enabled',
+  'rentals_decline_rank_weight',
+  'rentals_decline_rank_min_sample',
+  'rentals_decline_rank_start',
+  'rentals_decline_rank_full'
+);
+
 UPDATE public.application_configurations
 SET number_value = 0.30
 WHERE config_key = 'rentals_decline_rank_weight'

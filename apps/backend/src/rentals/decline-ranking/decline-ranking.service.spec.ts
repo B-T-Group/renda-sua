@@ -51,4 +51,19 @@ describe('DeclineRankingService', () => {
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  it('keeps one cache per country', async () => {
+    flags.declineRankingEnabled.mockImplementation(async (country?: string) => country === 'CM');
+    hasura.executeQuery.mockResolvedValue({
+      application_configurations: [],
+      rental_condition_decline_counts_90d: [{ party_id: 'busy', decline_count: 7 }],
+      rental_business_pickup_reach_90d: [{ business_id: 'busy', pickups_reached: 10 }],
+    });
+    const gabon = await service.multipliersFor(['busy'], 'GA');
+    const cameroon = await service.multipliersFor(['busy'], 'CM');
+    expect(gabon.size).toBe(0);
+    expect(cameroon.get('busy')).toBeLessThan(1);
+    expect(flags.declineRankingEnabled).toHaveBeenNthCalledWith(1, 'GA');
+    expect(flags.declineRankingEnabled).toHaveBeenNthCalledWith(2, 'CM');
+  });
 });

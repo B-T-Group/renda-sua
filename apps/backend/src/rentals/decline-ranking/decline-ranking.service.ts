@@ -29,8 +29,8 @@ interface BusinessStat {
 @Injectable()
 export class DeclineRankingService {
   private readonly logger = new Logger(DeclineRankingService.name);
-  /** One process, 60 seconds. The platform rate is pooled across countries. */
-  private cache: { at: number; multipliers: Map<string, number> } | null = null;
+  /** One entry per country, 60 seconds. The platform rate stays pooled. */
+  private cache = new Map<string, { at: number; multipliers: Map<string, number> }>();
 
   constructor(
     private readonly hasura: HasuraSystemService,
@@ -43,13 +43,15 @@ export class DeclineRankingService {
   }
 
   clearCache(): void {
-    this.cache = null;
+    this.cache.clear();
   }
 
   private async cached(countryCode?: string | null): Promise<Map<string, number>> {
-    if (this.cache && Date.now() - this.cache.at < CACHE_MS) return this.cache.multipliers;
+    const key = (countryCode ?? '').trim().toUpperCase() || '*';
+    const hit = this.cache.get(key);
+    if (hit && Date.now() - hit.at < CACHE_MS) return hit.multipliers;
     const multipliers = await this.load(countryCode);
-    this.cache = { at: Date.now(), multipliers };
+    this.cache.set(key, { at: Date.now(), multipliers });
     return multipliers;
   }
 
