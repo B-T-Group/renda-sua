@@ -17,6 +17,8 @@ export interface DashboardAggregates {
   pendingFailedDeliveriesCount: number;
   /** Distinct clients who ordered or rented from this business. */
   uniqueClientCount: number;
+  conditionDeclines90d?: number | null;
+  pickupsReached90d?: number | null;
   totalProductViews: number;
   productViewsLast7d: number;
   topViewedProducts: TopViewedProduct[];

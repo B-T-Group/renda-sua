@@ -26,6 +26,7 @@ import type { useRentalInspection } from '../../hooks/useRentalInspection';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { PickupWebNotice } from './PickupWebNotice';
+import { DeclineConditionSheet, DeclineReviewActions, type DeclineReason } from './DeclinePickupScreens';
 import { blockedScreenRows, submitLeftCount } from '../../utils/rentals/blockedGuideRows';
 import { formatListingDay, formatListingStamp, photoCaption, photoCaptionSx, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
@@ -112,7 +113,7 @@ export function RentalInspectionPanel({
 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { acceptAndStart, fetchBookingDetail, getBookingPaymentStatus } = useRentalApi();
+  const { acceptAndStart, fetchBookingDetail, getBookingPaymentStatus, declineCondition } = useRentalApi();
   const { trackSiteEvent } = useTrackSiteEvent();
   const { flags } = useClientFlags();
   const [photoRules, setPhotoRules] = useState<PickupPhotoRules | null>(null);
@@ -136,6 +137,7 @@ export function RentalInspectionPanel({
   const [details, setDetails] = useState('');
   const [claim, setClaim] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [declineOpen, setDeclineOpen] = useState(false);
   const [momoPhase, setMomoPhase] = useState<'waiting' | 'failed' | 'stalled' | null>(null);
   const [startRail, setStartRail] = useState<string | null>(null);
   const waitingSince = useRef<number | null>(null);
@@ -630,45 +632,53 @@ export function RentalInspectionPanel({
               })}
             </Typography>
           ) : null}
-          <Button
-            fullWidth
-            variant="contained"
-            sx={{ minHeight: 48 }}
+          <DeclineReviewActions
+            acceptLabel={
+              damaged
+                ? damageRail(booking) === 'card'
+                  ? t('rentalInspection.agreeCapture', 'I agree · capture {{amount}}', { amount: view.claimedDamageAmount ?? '' })
+                  : t('rentalInspection.agreeRecord', 'I agree · record claim')
+                : stage === 'pickup'
+                  ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
+                  : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')
+            }
+            reportLabel={
+              damaged
+                ? t('rentalInspection.disputeClaim', 'Dispute this claim')
+                : stage === 'pickup'
+                  ? t('rentalInspection.reportProblem', 'Report a problem')
+                  : t('rentalInspection.requestCorrection', 'Request a correction')
+            }
+            showDecline={stage === 'pickup' && !damaged && flags.rentals_pickup_decline_enabled}
+            reportDanger={damaged || stage !== 'pickup'}
             disabled={busy || !reviewed || !view.versionId}
-            onClick={() => {
+            onAccept={() => {
               if (stage === 'pickup' && !damaged) {
                 setConfirmOpen(true);
                 return;
               }
               void run(() => model.api.acknowledge(bookingId, stage, { versionId: view.versionId!, decision: 'accept' }).then(() => undefined), 'accepted');
             }}
-          >
-            {damaged
-              ? damageRail(booking) === 'card'
-                ? t('rentalInspection.agreeCapture', 'I agree · capture {{amount}}', { amount: view.claimedDamageAmount ?? '' })
-                : t('rentalInspection.agreeRecord', 'I agree · record claim')
-              : stage === 'pickup'
-                ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
-                : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
-          </Button>
-          <Button
-            fullWidth
-            variant="outlined"
-            color={stage === 'pickup' && !damaged ? 'inherit' : 'error'}
-            sx={{
-              minHeight: 48,
-              ...(stage === 'pickup' && !damaged ? { color: 'text.primary', borderColor: 'divider' } : {}),
-            }}
-            onClick={() => setPanel(damaged ? 'dispute' : 'correction')}
-          >
-            {damaged
-              ? t('rentalInspection.disputeClaim', 'Dispute this claim')
-              : stage === 'pickup'
-                ? t('rentalInspection.reportProblem', 'Report a problem')
-                : t('rentalInspection.requestCorrection', 'Request a correction')}
-          </Button>
+            onReport={() => setPanel(damaged ? 'dispute' : 'correction')}
+            onDecline={() => setDeclineOpen(true)}
+          />
         </Stack>
       ) : null}
+      <DeclineConditionSheet
+        open={declineOpen}
+        money={declineMoneyPreview(booking)}
+        onClose={() => setDeclineOpen(false)}
+        onConfirm={(reason: DeclineReason, text: string) => {
+          void run(
+            () =>
+              declineCondition(bookingId, { versionId: view?.versionId ?? '', reason, text: text || undefined }).then(
+                () => undefined
+              ),
+            'declined'
+          );
+          setDeclineOpen(false);
+        }}
+      />
       <AcceptStartDialog
         open={confirmOpen}
         busy={busy}
@@ -682,6 +692,25 @@ export function RentalInspectionPanel({
 
 function listedAmount(amount: number, currency: string, language: string): string {
   return formatConfirmationMoney(amount, currency, language);
+}
+
+function declineMoneyPreview(booking: PanelBooking) {
+  const currency = booking.currency ?? 'CAD';
+  const code = currency.toUpperCase();
+  const momo = code === 'XAF' || code === 'XOF';
+  const authorized = Number(booking.authorized_amount) || 0;
+  const rail = momo
+    ? booking.payment_status === 'paid' ? 'momo_paid' as const : 'momo_unpaid' as const
+    : authorized > 0 ? 'card' as const : 'wallet' as const;
+  return {
+    rail,
+    amount: momo ? Number(booking.total_amount) || 0 : authorized,
+    currency,
+    timeZone: momo ? 'Africa/Douala' : 'America/Toronto',
+    place: '',
+    item: '',
+    bookingNumber: '',
+  };
 }
 
 function AcceptStartDialog({

@@ -37,6 +37,7 @@ import {
 import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
 import { RenterReturnPanel } from '../rentals/RenterReturnPanel';
 import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
+import { BusinessDeclineBanner, DeclineOutcomeCard } from '../rentals/DeclinePickupScreens';
 import { ReportSentConfirmation } from '../rentals/ReportSentConfirmation';
 import { RentalStartedConfirmation } from '../rentals/RentalStartedConfirmation';
 import SEOHead from '../seo/SEOHead';
@@ -775,6 +776,31 @@ const RentalBookingDetailPage: React.FC = () => {
           </Box>
           )}
 
+          {booking.condition_declined_at && booking.condition_decline ? (
+            <BusinessDeclineBanner
+              reason={booking.condition_decline.reasonText || booking.condition_decline.reason}
+              photos={booking.condition_decline.photos}
+              timeZone={booking.currency === 'XAF' ? 'Africa/Douala' : 'America/Toronto'}
+            />
+          ) : null}
+          {isClient && booking.condition_declined_at ? (
+            <DeclineOutcomeCard
+              money={{
+                rail: booking.currency === 'XAF' || booking.currency === 'XOF' ? 'momo_paid' : 'card',
+                amount: Number(booking.refund_amount) || Number(booking.authorized_amount) || 0,
+                currency: booking.refund_currency || booking.currency,
+                timeZone: booking.currency === 'XAF' ? 'Africa/Douala' : 'America/Toronto',
+                place: '',
+                item: booking.rental_location_listing?.rental_item?.name ?? '',
+                bookingNumber: booking.booking_number ?? '',
+              }}
+              refundStatus={
+                booking.refund_status === 'refund_pending' || booking.refund_status === 'refunded'
+                  ? booking.refund_status
+                  : 'none'
+              }
+            />
+          ) : null}
           {bookingId && inspection.enrolled ? (
             <Box id="rental-inspection">
               <RentalInspectionPanel

@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { ListingConditionPhotos } from '../../components/rentals/ListingConditionPhotos';
 import { Button, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageLightbox } from '../../components/common/ImageLightbox';
@@ -27,6 +28,7 @@ import type { ClientRootStackParamList } from '../../navigation/types';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
 import { formatRentalMoney } from '../../utils/rentals';
 import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { confirmationTimeZone } from '../../utils/rentals/confirmationFormat';
 import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
 
 type DetailParams = {
@@ -376,6 +378,12 @@ export default function RentalListingDetailScreen() {
               {item.description.trim()}
             </Text>
           </View>
+        ) : null}
+        {listingId ? (
+          <ListingConditionPhotos
+            listingId={listingId}
+            timeZone={confirmationTimeZone(addr?.country, currency)}
+          />
         ) : null}
 
         <View

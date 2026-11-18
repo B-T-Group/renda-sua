@@ -289,6 +289,18 @@ export async function createBooking(body: {
   });
 }
 
+export async function getConditionPhotos(listingId: string): Promise<Array<{ slotKey: string; url: string; capturedAt: string }>> {
+  try {
+    const res = await apiRequest<{ photos?: Array<{ slotKey: string; url: string; capturedAt: string | null }> }>(
+      `/rentals/listings/${encodeURIComponent(listingId)}/condition-photos`,
+      { method: 'GET' }
+    );
+    return (res.photos ?? []).map((photo) => ({ ...photo, capturedAt: photo.capturedAt ?? '' }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getBooking(
   id: string,
   init?: Init
