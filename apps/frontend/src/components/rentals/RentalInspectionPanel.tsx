@@ -1106,15 +1106,16 @@ function PhotoTile({
 }
 
 function PhotoDate({ origin, day }: { origin: string; day: string }) {
+  const text = day ? `${origin} · ${day}` : origin;
   return (
-    <Stack direction="row" justifyContent="center" sx={{ maxWidth: 148 }}>
-      <Typography variant="caption" color="text.secondary" noWrap sx={{ minWidth: 0 }}>{origin}</Typography>
-      {day ? (
-        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
-          {` · ${day}`}
-        </Typography>
-      ) : null}
-    </Stack>
+    <Typography
+      variant="caption"
+      color="text.secondary"
+      align="center"
+      sx={{ maxWidth: 148, whiteSpace: 'nowrap' }}
+    >
+      {text}
+    </Typography>
   );
 }
 
