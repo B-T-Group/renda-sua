@@ -19,6 +19,10 @@ describe('comparableCountry', () => {
     expect(comparableCountry('Democratic Republic of the Congo')).toBe('CD');
     expect(normalizeDeliveryCountryCode('RDC')).toBe('CD');
     expect(comparableCountry("Cote d'Ivoire")).toBe('CI');
+    expect(comparableCountry('United States')).toBe('US');
+    expect(comparableCountry('USA')).toBe('US');
+    expect(isoCountryCode('United States')).toBe('US');
+    expect(isoCountryCode(' usa ')).toBe('US');
   });
 
   it('keeps the DRC distinct from Congo, including the names delivery config slices', () => {

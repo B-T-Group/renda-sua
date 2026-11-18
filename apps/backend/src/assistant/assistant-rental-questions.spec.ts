@@ -14,6 +14,9 @@ describe('rental question grounding', () => {
     expect(rentalAnswerGrounded(listing, 'included')).toBe(false);
     expect(rentalQuestionSay(listing, 'included', 'en')).toMatch(/doesn't say/);
     expect(rentalQuestionSay(listing, 'deposit', 'en')).toBeNull();
+    const momo = { ...listing, rental_item: { description: '', currency: 'XAF' } };
+    expect(rentalAnswerGrounded(momo, 'deposit')).toBe(false);
+    expect(rentalQuestionSay(momo, 'deposit', 'en')).toMatch(/doesn't say/);
   });
 
   it('answers pickup from the listing area when the note is blank', () => {

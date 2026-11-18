@@ -5,6 +5,7 @@ import {
   type CardWindowFields,
   type CardWindowOffer,
 } from '../rentals/rental-card-window';
+import { shownSecurityDeposit } from '../rentals/rental-deposit';
 import type { PublicRentalListingRow } from '../rentals/rentals.service';
 import type {
   AssistantCard,
@@ -251,7 +252,7 @@ function cardFromListing(
 ): AssistantCard {
   const currency = listing.rental_item.currency || 'XAF';
   const perDay = Number(listing.base_price_per_day) || 0;
-  const deposit = Math.max(0, Number(listing.security_deposit_amount) || 0);
+  const deposit = shownSecurityDeposit(currency, listing.security_deposit_amount);
   const shift = extra.allowShift === false ? null : shiftRange(extra.nextAvailableDate, extra.dayCount, extra.cardEndDate);
   const rental: AssistantRentalCardDetails = {
     listingId: listing.id,

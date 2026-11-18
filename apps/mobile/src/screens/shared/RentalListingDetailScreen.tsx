@@ -26,6 +26,7 @@ import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
 import { formatRentalMoney } from '../../utils/rentals';
+import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
 
 type DetailParams = {
@@ -192,7 +193,9 @@ export default function RentalListingDetailScreen() {
   const acceptsOrders = merchantCanAcceptOrders(item.business);
   const hourlyPrice = toNumber(listing.base_price_per_hour);
   const dailyPrice = toNumber(listing.base_price_per_day);
-  const depositAmount = toNumber(listing.security_deposit_amount ?? 0);
+  const depositAmount = showsCardDeposit(currency)
+    ? toNumber(listing.security_deposit_amount ?? 0)
+    : 0;
   const closeToday = todayCloseLabel(weeklySorted);
   const priceSnapshotParts = [
     t('rentals.detail.fromHourly', 'From {{price}}/h', {

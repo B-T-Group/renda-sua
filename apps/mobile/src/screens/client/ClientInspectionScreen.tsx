@@ -17,6 +17,7 @@ import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { acceptAndStart, getBooking, getPaymentStatus } from '../../services/rentalsApi';
 import { formatListingDue } from '../../utils/rentals/rentalRequestFormat';
 import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
+import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import {
   confirmationDepositHeld,
   confirmationTimeZone,
@@ -159,7 +160,7 @@ export default function ClientInspectionScreen() {
     const due = formatConfirmationDue(model.booking.end_at, confirmationTimeZone(country, model.booking.currency), i18n.language);
     const paid = formatConfirmationMoney(Number(model.booking.total_amount) || 0, model.booking.currency, i18n.language);
     const depositAmount = Number(model.booking.security_deposit_amount) || 0;
-    const deposit = depositAmount > 0
+    const deposit = depositAmount > 0 && showsCardDeposit(model.booking.currency)
       ? formatConfirmationMoney(depositAmount, model.booking.currency, i18n.language)
       : '';
     return (

@@ -30,6 +30,7 @@ import { useRentalBookingDetail } from '../../hooks/useRentalBookingDetail';
 import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
 import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
+import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import {
   settleRentalStripePayment,
   useRentalStripePayment,
@@ -237,7 +238,9 @@ export default function RentalBookingDetailScreen() {
     reviewAction === 'review_pickup' ? 'pickup' : reviewAction === 'review_return' ? 'return' : null;
   const canShowPin = gate.showStart && !snapshot.loading;
   const isReserved = booking?.status === 'reserved';
-  const depositAmount = toAmount(booking?.security_deposit_amount);
+  const depositAmount = showsCardDeposit(booking?.currency)
+    ? toAmount(booking?.security_deposit_amount)
+    : 0;
   const authorizedAmount = toAmount(booking?.authorized_amount);
   const overtimeAmount = toAmount(booking?.overtime_amount);
   const returnPhase = renterReturnPhase({
@@ -532,7 +535,7 @@ export default function RentalBookingDetailScreen() {
             phone={booking.return_place?.phone ?? null}
             endAt={booking.end_at}
             reportedAt={booking.renter_reported_returned_at}
-            depositLabel={formatDetailMoney(depositAmount)}
+            depositLabel={depositAmount > 0 ? formatDetailMoney(depositAmount) : ''}
             onReported={() => void refetch()}
             onAlreadyConfirmed={() => void refetch()}
             onMessage={() => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true })}

@@ -13,7 +13,7 @@ import type { AddRentalLocationForm } from '../../../hooks/business/useBusinessA
 import { useTheme } from '../../../contexts/ThemeContext';
 import { ListingPreviewSheet } from '../ListingPreviewSheet';
 import { RentalWeeklyHoursSummary } from './RentalWeeklyHoursSummary';
-import { showsCardDeposit } from '../../../utils/rentals/cardDeposit';
+import { depositInputError, showsListingDeposit } from '../../../utils/rentals/cardDeposit';
 
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
 
@@ -68,7 +68,8 @@ export function AddRentalLocationStep({
   const selected = locations.find((l) => l.id === locationId);
   const hourlyNum = parseFloat(hourly);
   const dailyNum = daily.trim() ? parseFloat(daily) : hourlyNum * 12;
-  const depositNum = deposit.trim() ? parseFloat(deposit) : undefined;
+  const depositInvalid = depositInputError(item.currency, deposit);
+  const depositNum = deposit.trim() ? Number(deposit) : undefined;
   const unitsNum = Math.floor(Number(units));
   const canSubmit =
     !busy &&
@@ -76,8 +77,8 @@ export function AddRentalLocationStep({
     !!locationId &&
     Number.isFinite(hourlyNum) &&
     hourlyNum >= 0 &&
-    (depositNum === undefined ||
-      (Number.isFinite(depositNum) && depositNum >= 0)) &&
+    !depositInvalid &&
+    (depositNum === undefined || (Number.isFinite(depositNum) && depositNum >= 0)) &&
     Number.isInteger(unitsNum) &&
     unitsNum >= 1;
 
@@ -231,7 +232,7 @@ export function AddRentalLocationStep({
         disabled={busy}
         style={styles.field}
       />
-      {showsCardDeposit(item.currency) ? (
+      {showsListingDeposit(item.currency) ? (
         <>
           <TextInput
             label={t(
@@ -242,17 +243,20 @@ export function AddRentalLocationStep({
             onChangeText={setDeposit}
             keyboardType="decimal-pad"
             mode="outlined"
+            error={depositInvalid}
             disabled={busy}
             style={styles.field}
           />
           <Text
             variant="bodySmall"
-            style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
+            style={{ color: depositInvalid ? colors.error.main : colors.text.secondary, marginBottom: spacing.sm }}
           >
-            {t(
-              'business.rentals.wizard.location.depositHelp',
-              'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-            )}
+            {depositInvalid
+              ? t('business.rentals.wizard.location.depositInvalid', 'Enter a valid security deposit.')
+              : t(
+                  'business.rentals.wizard.location.depositHelp',
+                  'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                )}
           </Text>
         </>
       ) : null}

@@ -8,6 +8,7 @@ import type { BusinessLocation } from '../../types/business/locations';
 import type { BusinessRentalItemDetail } from '../../types/rentals';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import { defaultWeeklyAvailability } from '../../utils/rentals';
+import { depositInputError } from '../../utils/rentals/cardDeposit';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalAddListing'>;
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
@@ -42,7 +43,8 @@ export function useBusinessRentalAddListing() {
   const selected = availableLocations.find((l) => l.id === locationId);
   const hourlyNum = parseFloat(hourly);
   const dailyNum = daily.trim() ? parseFloat(daily) : hourlyNum * 12;
-  const depositNum = deposit.trim() ? parseFloat(deposit) : undefined;
+  const depositNum = deposit.trim() ? Number(deposit) : undefined;
+  const depositInvalid = depositInputError(itemCurrency, deposit);
   const unitsNum = Math.floor(Number(units));
   const canSubmit =
     !busy &&
@@ -50,8 +52,8 @@ export function useBusinessRentalAddListing() {
     !!locationId &&
     Number.isFinite(hourlyNum) &&
     hourlyNum >= 0 &&
-    (depositNum === undefined ||
-      (Number.isFinite(depositNum) && depositNum >= 0)) &&
+    !depositInvalid &&
+    (depositNum === undefined || (Number.isFinite(depositNum) && depositNum >= 0)) &&
     Number.isInteger(unitsNum) &&
     unitsNum >= 1;
 
@@ -168,6 +170,7 @@ export function useBusinessRentalAddListing() {
     setDaily,
     deposit,
     setDeposit,
+    depositInvalid,
     units,
     setUnits,
     pickup,

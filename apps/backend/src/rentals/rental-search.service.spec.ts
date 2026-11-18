@@ -135,6 +135,34 @@ describe('RentalSearchService', () => {
     expect(result.listings[0].mode).toBe('authorize_upfront');
   });
 
+  it('loads opt-in for the page instead of the whole catalog', async () => {
+    const routing = { resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money') };
+    const flags = {
+      cardWindowGuardEnabled: jest.fn().mockResolvedValue(false),
+      chargeAtPickupEnabled: jest.fn().mockResolvedValue(false),
+      isEnabled: jest.fn().mockResolvedValue(false),
+      optInEnabled: jest.fn().mockResolvedValue(false),
+      numberConfig: jest.fn().mockResolvedValue(72),
+    };
+    const listingWindowByItem = jest.fn(async () => new Map());
+    const localRentals = {
+      collectPublicRentalListings: jest.fn(),
+      listingWindowByItem,
+    };
+    const searched = new RentalSearchService(localRentals as any, { executeQuery: jest.fn() } as any, routing as any, flags as any);
+    const catalog = Array.from({ length: 50 }, (_, index) => {
+      const row = listing(`row-${index}`, `Item ${index}`);
+      row.business_location.address.country = 'Cameroon';
+      return row;
+    });
+    localRentals.collectPublicRentalListings.mockResolvedValue(catalog);
+    await searched.search({ country_code: 'CM', limit: 20 });
+    expect(listingWindowByItem).toHaveBeenCalledTimes(1);
+    expect(listingWindowByItem.mock.calls[0][0]).toHaveLength(20);
+    expect(listingWindowByItem.mock.calls[0][0][0].country).toBe('Cameroon');
+    expect(flags.optInEnabled).not.toHaveBeenCalled();
+  });
+
   it('suggests categories and in-market titles', async () => {
     hasura.executeQuery.mockResolvedValue({
       rental_categories: [{ id: 'cat-cam', name: 'Cameras' }],

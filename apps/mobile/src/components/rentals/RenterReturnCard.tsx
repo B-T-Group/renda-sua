@@ -148,11 +148,21 @@ function bodyFor(
   when: string,
   amount: string
 ): string {
+  if (phase === 'waiting' && !amount) {
+    return t('rentals.returnReport.waitingBodyNoDeposit', 'You reported the return on {{time}}. The business will check the item.', { time: when });
+  }
   if (phase === 'waiting') {
     return t(
       'rentals.returnReport.waitingBody',
       'You reported the return on {{time}}. The business will check the item. Your {{amount}} deposit is released only after they confirm.',
       { time: when, amount }
+    );
+  }
+  if (phase === 'escalated' && !amount) {
+    return t(
+      'rentals.returnReport.escalatedBodyNoDeposit',
+      'You reported the return on {{time}}. The business has not confirmed within 24 hours. Support is following up.',
+      { time: when }
     );
   }
   if (phase === 'escalated') {
@@ -166,6 +176,20 @@ function bodyFor(
     return t('rentals.returnReport.overdueBody', 'Bring the item to {{location}} as soon as you can.', { location });
   }
   return '';
+}
+
+function sheetCopy(t: (key: string, def: string, opts?: Record<string, string>) => string, amount: string): string {
+  if (!amount) {
+    return t(
+      'rentals.returnReport.sheetBodyNoDeposit',
+      'The business will check the item and confirm. This does not end the rental by itself.'
+    );
+  }
+  return t(
+    'rentals.returnReport.sheetBody',
+    'The business will check the item and confirm. Your {{amount}} deposit is released only after they confirm. This does not end the rental by itself.',
+    { amount }
+  );
 }
 
 function openMaps(destination: string) {
@@ -203,13 +227,7 @@ function ConfirmSheet(props: {
       <Pressable style={styles.backdrop} onPress={props.onClose} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]} testID="renter-return-confirm-sheet">
         <Text style={styles.sheetTitle}>{t('rentals.returnReport.sheetTitle', 'Did you hand the item to the business?')}</Text>
-        <Text style={{ marginTop: 8 }}>
-          {t(
-            'rentals.returnReport.sheetBody',
-            'The business will check the item and confirm. Your {{amount}} deposit is released only after they confirm. This does not end the rental by itself.',
-            { amount: props.depositLabel }
-          )}
-        </Text>
+        <Text style={{ marginTop: 8 }}>{sheetCopy(t, props.depositLabel)}</Text>
         {props.retry ? (
           <Text style={{ color: '#B42318', marginTop: 8 }}>
             {t('rentals.returnReport.networkBody', 'Check your connection and try again.')}
