@@ -18,6 +18,19 @@ export function listingCity(timeZone: string): string {
   return CITY_BY_ZONE[timeZone] ?? timeZone.split('/').pop()?.replace(/_/g, ' ') ?? timeZone;
 }
 
+export function photoCaption(origin: string, day: string): string {
+  return day ? `${origin} · ${day}` : origin;
+}
+
+export function photoCaptionSx() {
+  return {
+    maxWidth: 148,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  } as const;
+}
+
 export function formatListingDay(iso: string, timeZone: string, language: string): string {
   const date = new Date(iso);
   if (language.startsWith('fr')) return frenchDay(date, timeZone);

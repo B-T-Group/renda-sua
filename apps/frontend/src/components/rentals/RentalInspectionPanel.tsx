@@ -27,7 +27,7 @@ import { useClientFlags } from '../../hooks/useClientFlags';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { PickupWebNotice } from './PickupWebNotice';
 import { blockedScreenRows, submitLeftCount } from '../../utils/rentals/blockedGuideRows';
-import { formatListingDay, formatListingStamp, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
+import { formatListingDay, formatListingStamp, photoCaption, photoCaptionSx, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { formatListingDue } from '../../utils/rentalRequestFormat';
@@ -1106,14 +1106,9 @@ function PhotoTile({
 }
 
 function PhotoDate({ origin, day }: { origin: string; day: string }) {
-  const text = day ? `${origin} · ${day}` : origin;
+  const text = photoCaption(origin, day);
   return (
-    <Typography
-      variant="caption"
-      color="text.secondary"
-      align="center"
-      sx={{ maxWidth: 148, whiteSpace: 'nowrap' }}
-    >
+    <Typography variant="caption" color="text.secondary" align="center" title={text} sx={photoCaptionSx()}>
       {text}
     </Typography>
   );
