@@ -12,6 +12,7 @@ import { GoogleDistanceService } from '../google/google-distance.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService, MobilePaymentRequest } from '../mobile-payments/mobile-payments.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
+import { isCardDepositCurrency, shownSecurityDeposit } from './rental-deposit';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -56,7 +57,8 @@ import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
 import type { ListingCardWindow } from './rental-card-window';
-import { listingWindowInspected, snapshotInspected } from './inspection/inspection-optin';
+import { attachListingCardWindows, inspectedByItem } from './inspection/listing-card-batch';
+import { snapshotInspected } from './inspection/inspection-optin';
 import { InspectionOptInService } from './inspection/inspection-optin.service';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
@@ -127,8 +129,7 @@ export const RENTAL_OVERWRITE_BUSINESS_FORBIDDEN =
 const RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER = 8;
 
 function cardDepositCurrency(currency: string | null | undefined): boolean {
-  const code = (currency ?? '').trim().toUpperCase();
-  return code !== 'XAF' && code !== 'XOF';
+  return isCardDepositCurrency(currency);
 }
 
 const ACCEPT_PICKUP_VERSION = `mutation AcceptPickup($id: uuid!, $version: uuid!, $actor: uuid!) {
@@ -448,7 +449,8 @@ export class RentalsService {
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
     const items = await this.collectPublicRentalListings(query);
     const start = (page - 1) * limit;
-    return { items: items.slice(start, start + limit), total: items.length, page, limit };
+    const pageRows = items.slice(start, start + limit);
+    return { items: await this.attachCardWindows(pageRows), total: items.length, page, limit };
   }
 
   /** Full filtered catalog, already sorted. Dated search reorders this by availability. */
@@ -473,7 +475,7 @@ export class RentalsService {
     rows = await this.filterListingsByPaymentsEnabled(rows);
     rows = await this.enrichRentalListingsWithDistance(rows, query);
     rows = this.sortRentalListingRows(rows, sort);
-    return this.attachCardWindows(this.filterListingsByPrice(rows, query.min_price, query.max_price));
+    return this.hideMomoDeposits(this.filterListingsByPrice(rows, query.min_price, query.max_price));
   }
 
   async getTopRentalLocations(
@@ -795,30 +797,43 @@ export class RentalsService {
 
   private async attachCardWindows(rows: PublicRentalListingRow[]): Promise<PublicRentalListingRow[]> {
     if (!rows.length || !this.cardWindow) return rows;
-    const inspected = await this.listingOptIn(rows);
-    return Promise.all(rows.map((row) => this.rowCard(row, inspected)));
+    return attachListingCardWindows(rows, {
+      optInEnabled: (country) => this.optInFlag(country),
+      stampsForItems: (ids) => this.stampsOrEmpty(ids),
+      forCountry: (country, inspected) => this.cardWindow.forCountry(country, new Date(), inspected),
+    });
   }
 
-  private async listingOptIn(rows: PublicRentalListingRow[]): Promise<Map<string, boolean | undefined>> {
-    const map = new Map<string, boolean | undefined>();
-    for (const row of rows) {
-      const itemId = row.rental_item?.id;
-      if (!itemId || map.has(itemId)) continue;
-      map.set(itemId, await this.optInForListing(row.business_location?.address?.country, itemId));
-    }
-    return map;
+  async listingWindowByItem(
+    rows: Array<{ country?: string | null; itemId?: string | null }>
+  ): Promise<Map<string, boolean | undefined>> {
+    return inspectedByItem(rows.map((row) => this.cardListing(row)), {
+      optInEnabled: (country) => this.optInFlag(country),
+      stampsForItems: (ids) => this.stampsOrEmpty(ids),
+    });
   }
 
-  private async optInForListing(country: string | null | undefined, itemId: string): Promise<boolean | undefined> {
-    const on = await this.optInFlag(country);
-    const stamps = on ? await this.inspectionOptIn.stampsNewBooking(itemId) : false;
-    return listingWindowInspected(on, stamps);
+  private cardListing(row: { country?: string | null; itemId?: string | null }) {
+    return {
+      rental_item: { id: row.itemId },
+      business_location: { address: { country: row.country } },
+    };
   }
 
-  private async rowCard(row: PublicRentalListingRow, inspected: Map<string, boolean | undefined>) {
-    const country = row.business_location?.address?.country;
-    const fields = await this.cardWindow.forCountry(country, new Date(), inspected.get(row.rental_item?.id));
-    return { ...row, ...fields };
+  private stampsOrEmpty(ids: string[]): Promise<Map<string, boolean>> {
+    const batch = this.inspectionOptIn?.stampsForItems;
+    if (typeof batch !== 'function') return Promise.resolve(new Map());
+    return batch.call(this.inspectionOptIn, ids);
+  }
+
+  private hideMomoDeposits(rows: PublicRentalListingRow[]): PublicRentalListingRow[] {
+    return rows.map((row) => this.hideMomoDeposit(row));
+  }
+
+  private hideMomoDeposit(row: PublicRentalListingRow): PublicRentalListingRow {
+    const amount = shownSecurityDeposit(row.rental_item?.currency, row.security_deposit_amount);
+    if (amount === Number(row.security_deposit_amount)) return row;
+    return { ...row, security_deposit_amount: amount };
   }
 
   private async rejectUnfitCardRequest(
@@ -912,7 +927,7 @@ export class RentalsService {
       return null;
     }
     const enriched = await this.enrichRentalListingsWithDistance([row], query);
-    const visible = enriched[0] ?? row;
+    const visible = this.hideMomoDeposit(enriched[0] ?? row);
     const [withCard] = await this.attachCardWindows([visible]);
     return withCard ?? visible;
   }
@@ -4892,9 +4907,9 @@ export class RentalsService {
         });
       }
     }
-    const depositPerUnit = Math.max(
-      0,
-      Number(listing.security_deposit_amount) || 0
+    const depositPerUnit = shownSecurityDeposit(
+      listing.rental_item?.currency,
+      listing.security_deposit_amount
     );
     return {
       version: 4,

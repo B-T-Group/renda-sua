@@ -160,16 +160,18 @@ describe('inspection opt-in service', () => {
     const ready = ['overview', 'other_side', 'accessories'].map((slot, index) => ({
       id: String(index), slot_key: slot, status: 'ready', object_key: 'k', captured_at: null, capture_source: 'camera', captured_at_source: 'upload',
     }));
+    const slots = ready.map((row) => ({ rental_item_id: ITEM, slot_key: row.slot_key }));
     const on = harness({
-      OptInItem: { rental_items_by_pk: { ...item.rental_items_by_pk, inspection_opt_in: true } },
-      ItemBaseline: { rental_item_baseline_photos: ready },
+      BatchOptIn: { rental_items: [{ id: ITEM, inspection_opt_in: true }] },
+      ReadySlots: { rental_item_baseline_photos: slots },
     });
     await expect(on.svc.stampsNewBooking(ITEM)).resolves.toBe(true);
     const off = harness({
-      OptInItem: item,
-      ItemBaseline: { rental_item_baseline_photos: ready },
+      BatchOptIn: { rental_items: [{ id: ITEM, inspection_opt_in: false }] },
+      ReadySlots: { rental_item_baseline_photos: slots },
     });
     await expect(off.svc.stampsNewBooking(ITEM)).resolves.toBe(false);
+    expect(on.hasura.executeQuery).toHaveBeenCalledTimes(2);
   });
 
   function bookingRow() {
