@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
+import { DECLINE_RANKING_FLAG } from '../decline-ranking/decline-ranking.policy';
 import { PICKUP_DECLINE_FLAG } from '../pickup-decline/pickup-decline.policy';
 
 const FLAG_KEY = 'rental_inspection_enabled';
@@ -46,6 +47,11 @@ export class RentalInspectionFlags {
 
   async pickupDeclineEnabled(countryCode?: string | null): Promise<boolean> {
     return this.booleanConfig(PICKUP_DECLINE_FLAG, countryCode, false);
+  }
+
+  /** Search penalty and support exclusion. Seeded false. No NODE_ENV override. */
+  async declineRankingEnabled(countryCode?: string | null): Promise<boolean> {
+    return this.booleanConfig(DECLINE_RANKING_FLAG, countryCode, false);
   }
 
   /** Per-item opt-in. Seeded false. No NODE_ENV override. */

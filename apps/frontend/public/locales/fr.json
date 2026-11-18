@@ -9854,5 +9854,14 @@
     "pushBodyEn": "Marie declined the condition of JBL PartyBox 310 (RB-25496259). The booking is cancelled and the unit is free. No charge.",
     "pushTitleFr": "Le locataire a refusé l’état des lieux",
     "pushBodyFr": "Marie a refusé l’état des lieux de JBL PartyBox 310 (RB-25496259). La réservation est annulée et l’article est libre. Aucun frais."
+  },
+  "declineRanking": {
+    "title": "Pas la faute du commerce",
+    "lead": "Les refus exclus sortent du compte du commerce. Ils comptent toujours pour le locataire.",
+    "note": "Note",
+    "notePlaceholder": "Pourquoi ce n’est pas la faute du commerce ?",
+    "businessCount": "Refus du commerce (90 jours)",
+    "renterCount": "Refus du locataire (90 jours)",
+    "booking": "Réservation"
   }
 }
