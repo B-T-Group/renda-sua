@@ -244,6 +244,48 @@ describe('cancelClientRentalRequest', () => {
   });
 });
 
+describe('N8 failed side effects stay queued', () => {
+  it('N8 stores the request row and logs when retries are exhausted', async () => {
+    const service = Object.create(RentalsService.prototype) as RentalsService & {
+      logger: { warn: () => void; error: (message: string) => void };
+      hasuraSystemService: { executeMutation: jest.Mock };
+    };
+    const logged: string[] = [];
+    service.logger = { warn: () => undefined, error: (message: string) => logged.push(message) };
+    service.hasuraSystemService = {
+      executeMutation: jest.fn().mockResolvedValue({ enqueue_rental_side_effect: [{ attempts: 5 }] }),
+    };
+    await service.recordSideEffect('req-1', 'release', new Error('stripe down'), {
+      row: { id: 'req-1' },
+      window: 'sla',
+    });
+    const payload = service.hasuraSystemService.executeMutation.mock.calls[0][1].payload;
+    expect(payload.row.id).toBe('req-1');
+    expect(logged.join(' ')).toContain('RENTAL_SIDE_EFFECT_DEAD');
+  });
+
+  it('N8 queues a notice when notification throws', async () => {
+    const recordFailure = jest.fn(async () => undefined);
+    await expireUnansweredRentalRequests({
+      now: new Date('2026-11-18T16:00:00.000Z'),
+      isEnabled: async () => true,
+      listPending: async () => [row()],
+      casDecline: async () => true,
+      releaseHolds: async () => undefined,
+      notify: async () => {
+        throw new Error('push down');
+      },
+      recordFailure,
+    });
+    expect(recordFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'req-1' }),
+      'notify',
+      'sla',
+      expect.any(Error)
+    );
+  });
+});
+
 describe('N5 stored respond_by after an edit', () => {
   it('N5 keeps the edited deadline instead of created_at plus 24 hours', async () => {
     const edited = effectiveRespondBy({
