@@ -11,6 +11,7 @@ export interface RentalSearchHit {
   pricePerDay: number;
   totalForDates: number | null;
   dayCount: number | null;
+  inspection_enabled?: boolean;
 }
 
 export interface RentalSearchPage {
@@ -19,6 +20,7 @@ export interface RentalSearchPage {
   page: number;
   limit: number;
   availableCount: number;
+  hasMore?: boolean;
   dates: { startDate: string; endDate: string; dayCount: number } | null;
 }
 
@@ -41,7 +43,7 @@ export interface RentalSearchParams {
   country_code?: string;
   state?: string;
   category_id?: string;
-  sort?: 'relevance' | 'newest' | 'cheapest' | 'expensive';
+  sort?: 'relevance' | 'newest' | 'cheapest' | 'expensive' | 'recommended';
   operation_mode?: 'take_home' | 'business_operated';
   start_date?: string;
   end_date?: string;

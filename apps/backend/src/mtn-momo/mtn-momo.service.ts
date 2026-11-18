@@ -68,6 +68,8 @@ export interface DisbursementRequest {
   };
   payerMessage: string;
   payeeNote: string;
+  /** When set, MTN uses this X-Reference-Id instead of a new one. */
+  referenceId?: string;
 }
 
 export interface RemittanceRequest {
@@ -346,8 +348,8 @@ export class MtnMomoService {
    * Transfer (Disbursement) - Send money to a customer
    */
   async transfer(request: DisbursementRequest): Promise<MtnMomoResponse> {
+    const referenceId = request.referenceId?.trim() || this.generateReferenceId();
     try {
-      const referenceId = this.generateReferenceId();
       const currency = request.currency || this.config.currency;
       const amount = formatMtnAmount(request.amount, currency);
       const token = await this.getToken('disbursement');
@@ -379,10 +381,28 @@ export class MtnMomoService {
         payerMessage: request.payerMessage,
         payeeNote: request.payeeNote,
       };
-    } catch (error) {
-      this.logger.error(`Disbursement failed: ${(error as Error).message}`);
-      return this.failure(error);
+    } catch (error: any) {
+      this.logger.error(`Disbursement failed: ${error?.message ?? error}`);
+      const code = error?.response?.status;
+      if (code === 409) return this.duplicateTransfer(request, referenceId);
+      return {
+        status: false,
+        financialTransactionId: referenceId,
+        externalId: request.externalId,
+        statusCode: code != null ? String(code) : undefined,
+        error: error?.response?.data?.message || error?.message,
+      };
     }
+  }
+
+  /** MTN already has this reference. Poll it instead of sending a second payout. */
+  private duplicateTransfer(request: DisbursementRequest, referenceId: string): MtnMomoResponse {
+    return {
+      status: true,
+      financialTransactionId: referenceId,
+      externalId: request.externalId,
+      statusCode: '409',
+    };
   }
 
   /**
@@ -405,10 +425,13 @@ export class MtnMomoService {
         statusCode: data.status,
         statusMessage: data.reason ?? data.status,
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Disbursement status check failed: ${(error as Error).message}`
       );
+      if (Number(error?.response?.status) === 404) {
+        return { status: false, statusCode: '404' };
+      }
       return this.failure(error);
     }
   }

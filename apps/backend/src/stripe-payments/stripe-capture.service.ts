@@ -494,6 +494,26 @@ export class StripeCaptureService {
     });
     return { success: true };
   }
+
+  /** A captured PaymentIntent cannot be voided. Refund it once, keyed by the caller. */
+  async refundCapturedPayment(params: {
+    orderNumber: string;
+    idempotencyKey: string;
+  }): Promise<{ success: boolean; message?: string }> {
+    const tx = await this.databaseService.getTransactionByEntityId(params.orderNumber);
+    if (!tx?.stripe_payment_intent_id) return { success: false, message: 'No captured payment' };
+    try {
+      const refund = await this.stripeService.createRefund({
+        paymentIntentId: tx.stripe_payment_intent_id,
+        idempotencyKey: params.idempotencyKey,
+        metadata: { orderNumber: params.orderNumber, reason: 'condition_decline' },
+      });
+      const ok = refund.status === 'succeeded' || refund.status === 'pending';
+      return { success: ok, message: refund.status ?? undefined };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Refund failed' };
+    }
+  }
 }
 
 /**

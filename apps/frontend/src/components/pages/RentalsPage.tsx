@@ -28,7 +28,9 @@ import {
 import { RentalItemCard } from '../rentals/RentalItemCard';
 import { RENTAL_REQUEST_SECTION_ID } from '../rentals/RentalListingRequestSection';
 import SEOHead from '../seo/SEOHead';
+import { useClientFlags } from '../../hooks/useClientFlags';
 import { useMarket } from '../../hooks/useMarket';
+import RentalsDefaultCatalog from './RentalsDefaultCatalog';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useRentalCategories } from '../../hooks/useRentalCategories';
 import {
@@ -51,7 +53,7 @@ const rentalFilterFormControlSx = {
   maxWidth: '100%',
 } as const;
 
-const RentalsPage: React.FC = () => {
+const RentalsLegacyCatalog: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
@@ -488,5 +490,11 @@ function CatalogNotice() {
     </Paper>
   );
 }
+
+const RentalsPage: React.FC = () => {
+  const { flags } = useClientFlags();
+  if (flags.rentals_default_list_enabled) return <RentalsDefaultCatalog />;
+  return <RentalsLegacyCatalog />;
+};
 
 export default RentalsPage;

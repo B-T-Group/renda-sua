@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { marketTimeZone } from '../common/market-timezones';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
@@ -14,6 +14,16 @@ import {
   type CardPaymentPolicy,
 } from './rental-card-window';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
+import { DeclineRankingService } from './decline-ranking/decline-ranking.service';
+import {
+  listingStillPublic,
+  listingsInIdOrder,
+  marketFromQuery,
+  rentalSearchOrderKey,
+  RentalSearchIdCache,
+  type CachedSearchOrder,
+  type SearchMarket,
+} from './rental-search-id-cache';
 import { RentalsService, type PublicRentalListingRow } from './rentals.service';
 
 const DAY_MS = 86_400_000;
@@ -26,26 +36,46 @@ export interface RentalSearchHit extends Partial<CardPaymentPolicy> {
   pricePerDay: number;
   totalForDates: number | null;
   dayCount: number | null;
+  /** Item inspection opt-in. False when the item has not opted in. */
+  inspection_enabled?: boolean;
+}
+
+interface SearchFlight {
+  hits: Array<RentalSearchHit & { catalogIndex: number }>;
+  guard: boolean;
+  total: number;
+  availableCount: number;
 }
 
 @Injectable()
 export class RentalSearchService {
+  private readonly logger = new Logger(RentalSearchService.name);
+  private idCache = new RentalSearchIdCache();
+  private readonly flights = new Map<string, Promise<SearchFlight>>();
+
   constructor(
     private readonly rentals: RentalsService,
     private readonly hasura: HasuraSystemService,
     private readonly routing?: PaymentRoutingService,
-    private readonly flags?: RentalInspectionFlags
+    private readonly flags?: RentalInspectionFlags,
+    private readonly ranking?: DeclineRankingService
   ) {}
+
+  /** Tests pass a cache with a fake clock. Nest does not inject this. */
+  replaceIdCache(cache: RentalSearchIdCache): void {
+    this.idCache = cache;
+  }
 
   async search(query: RentalSearchQueryDto) {
     const range = this.dateRange(query.start_date, query.end_date);
-    const rows = await this.rentals.collectPublicRentalListings(this.catalogQuery(query));
-    const window = await this.cardWindow(query.country_code);
-    const ordered = await this.orderedHits(await this.annotate(rows, range), query.country_code, window, range);
-    const paged = this.page(ordered.hits, query, range, window);
-    if (ordered.guard) return paged;
-    const listings = await this.stampPage(paged.listings, query.country_code, window);
-    return { ...paged, listings };
+    const market = await this.marketFor(query);
+    const window = await this.cardWindow(market.country ?? query.country_code);
+    if (!this.canPageFromIds()) return this.pageUncached(query, market, range, window);
+    const ranked = await this.orderKey(query, market);
+    const queried = this.queried(query);
+    const cached = ranked.degraded ? null : this.idCache.get(ranked.key, queried);
+    if (cached) return this.pageFromIds(cached, query, market, range, window, ranked.key, queried);
+    return this.joinFlight(ranked.key, ranked.degraded, queried, query, market, range, window);
   }
 
   async cardWindow(country?: string | null, latest?: string | null, inspected?: boolean): Promise<CardPaymentPolicy> {
@@ -153,37 +183,244 @@ export class RentalSearchService {
     return res.rental_bookings ?? [];
   }
 
-  private page(
-    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+  private async pageUncached(
     query: RentalSearchQueryDto,
+    market: SearchMarket,
     range: SearchDateRange | null,
     window: CardPaymentPolicy
   ) {
+    const ordered = await this.loadOrdered(query, market, range, window);
+    return this.pageFlight(this.flightFrom(ordered.hits, ordered.guard), query, market, range, window);
+  }
+
+  private joinFlight(
+    key: string,
+    degraded: boolean,
+    queried: boolean,
+    query: RentalSearchQueryDto,
+    market: SearchMarket,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
+    const pending = this.flights.get(key);
+    if (pending) return pending.then((flight) => this.pageFlight(flight, query, market, range, window));
+    // Chain finally on the stored promise. A separate `void flight.finally` rejects again
+    // and Node treats that second rejection as an unhandledRejection.
+    const flight = this.computeFlight(key, degraded, queried, query, market, range, window).finally(() =>
+      this.clearFlight(key, flight)
+    );
+    this.flights.set(key, flight);
+    return flight.then((value) => this.pageFlight(value, query, market, range, window));
+  }
+
+  private async computeFlight(
+    key: string,
+    degraded: boolean,
+    queried: boolean,
+    query: RentalSearchQueryDto,
+    market: SearchMarket,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ): Promise<SearchFlight> {
+    const ordered = await this.loadOrdered(query, market, range, window);
+    this.remember(key, ordered.hits, degraded || ordered.degraded, queried);
+    return this.flightFrom(ordered.hits, ordered.guard);
+  }
+
+  private clearFlight(key: string, flight: Promise<SearchFlight>): void {
+    if (this.flights.get(key) === flight) this.flights.delete(key);
+  }
+
+  private async loadOrdered(
+    query: RentalSearchQueryDto,
+    market: SearchMarket,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
+    const rows = await this.rentals.collectPublicRentalListings(this.catalogQuery(query, market));
+    return this.orderedHits(await this.annotate(rows, range), market.country, window, range);
+  }
+
+  private remember(
+    key: string | null,
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    degraded: boolean,
+    queried: boolean
+  ): void {
+    if (!key || degraded || hits.length === 0) return;
+    const availableCount = hits.filter((hit) => hit.available === true).length;
+    this.idCache.set(key, { ids: hits.map((hit) => hit.listing.id), availableCount }, queried);
+  }
+
+  private async pageFromIds(
+    cached: CachedSearchOrder,
+    query: RentalSearchQueryDto,
+    market: SearchMarket,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy,
+    key: string,
+    queried: boolean
+  ) {
+    const bounds = this.pageBounds(query);
+    const ids = cached.ids.slice(bounds.start, bounds.start + bounds.limit);
+    const rows = await this.rowsForIds(ids, query, market);
+    if (rows.length < ids.length) return this.refreshShortPage(key, queried, query, market, range, window);
+    const listings = await this.finishPage(await this.annotate(rows, range), market.country, range, window);
+    return this.pageBody(listings, cached.ids.length, cached.availableCount, bounds, range, window);
+  }
+
+  private refreshShortPage(
+    key: string,
+    queried: boolean,
+    query: RentalSearchQueryDto,
+    market: SearchMarket,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
+    this.idCache.delete(key, queried);
+    return this.joinFlight(key, false, queried, query, market, range, window);
+  }
+
+  private async rowsForIds(
+    ids: string[],
+    query: RentalSearchQueryDto,
+    market: SearchMarket
+  ): Promise<PublicRentalListingRow[]> {
+    if (!ids.length) return [];
+    const load = this.rentals.loadPublicRentalListingsByIds;
+    const rows = listingsInIdOrder(ids, await load.call(this.rentals, ids));
+    return rows.filter((row) => this.rowStillPublic(row, query, market));
+  }
+
+  private rowStillPublic(row: PublicRentalListingRow, query: RentalSearchQueryDto, market: SearchMarket): boolean {
+    return listingStillPublic(row, {
+      minPrice: query.min_price,
+      maxPrice: query.max_price,
+      country: market.country,
+      state: market.state,
+    });
+  }
+
+  private async finishPage(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    country: string | undefined,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
+    const guard = range ? await this.cardGuardEnabled(country) : false;
+    const prepared = await this.prepareHits(hits, country, window, range, guard);
+    const listings = prepared.map(stripCatalogIndex);
+    if (guard) return listings;
+    return this.stampPage(listings, country, window);
+  }
+
+  private async pageFlight(
+    flight: SearchFlight,
+    query: RentalSearchQueryDto,
+    market: SearchMarket,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
+    const bounds = this.pageBounds(query);
+    const slice = flight.hits.slice(bounds.start, bounds.start + bounds.limit).map(stripCatalogIndex);
+    const listings = flight.guard ? slice : await this.stampPage(slice, market.country, window);
+    return this.pageBody(listings, flight.total, flight.availableCount, bounds, range, window);
+  }
+
+  private flightFrom(hits: Array<RentalSearchHit & { catalogIndex: number }>, guard: boolean): SearchFlight {
+    const availableCount = hits.filter((hit) => hit.available === true).length;
+    return { hits, guard, total: hits.length, availableCount };
+  }
+
+  private pageBounds(query: RentalSearchQueryDto) {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
-    const start = (page - 1) * limit;
-    const slice = hits.slice(start, start + limit).map(stripCatalogIndex);
+    return { page, limit, start: (page - 1) * limit };
+  }
+
+  private pageBody(
+    listings: RentalSearchHit[],
+    total: number,
+    availableCount: number,
+    bounds: { page: number; limit: number; start: number },
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
+    const hasMore = listings.length > 0 && bounds.start + bounds.limit < total;
     return {
-      listings: slice,
-      total: hits.length,
-      page,
-      limit,
-      availableCount: hits.filter((hit) => hit.available === true).length,
-      dates: range
-        ? { startDate: range.startDate, endDate: range.endDate, dayCount: range.dayCount }
-        : null,
+      listings,
+      total,
+      page: bounds.page,
+      limit: bounds.limit,
+      availableCount,
+      hasMore,
+      dates: range ? { startDate: range.startDate, endDate: range.endDate, dayCount: range.dayCount } : null,
       ...window,
     };
   }
 
-  private catalogQuery(query: RentalSearchQueryDto) {
+  private canPageFromIds(): boolean {
+    return typeof this.rentals.loadPublicRentalListingsByIds === 'function';
+  }
+
+  private async marketFor(query: RentalSearchQueryDto): Promise<SearchMarket> {
+    const resolve = this.rentals.resolveSearchMarket;
+    if (typeof resolve !== 'function') return marketFromQuery(query.country_code, query.state);
+    try {
+      return await resolve.call(this.rentals, query.country_code, query.state);
+    } catch (error: any) {
+      this.logger.warn(`market resolve failed: ${error?.message ?? 'unknown'}`);
+      return { ...marketFromQuery(query.country_code, query.state), degraded: true };
+    }
+  }
+
+  private queried(query: RentalSearchQueryDto): boolean {
+    return Boolean(query.q?.trim());
+  }
+
+  private async orderKey(query: RentalSearchQueryDto, market: SearchMarket) {
+    const ranking = await this.rankingFlag(market.country);
+    const guard = await this.cardGuardEnabled(market.country);
+    return { degraded: market.degraded || ranking.degraded, key: this.searchKey(query, market, ranking.enabled, guard) };
+  }
+
+  private searchKey(query: RentalSearchQueryDto, market: SearchMarket, rankingEnabled: boolean, guard: boolean): string {
+    return rentalSearchOrderKey({
+      country: market.country,
+      state: market.state,
+      filterMode: market.filterMode,
+      q: query.q,
+      categoryId: query.category_id,
+      sort: query.sort,
+      minPrice: query.min_price,
+      maxPrice: query.max_price,
+      startDate: query.start_date,
+      endDate: query.end_date,
+      operationMode: query.operation_mode,
+      rankingEnabled,
+      cardGuardEnabled: guard,
+    });
+  }
+
+  private async rankingFlag(country?: string | null): Promise<{ enabled: boolean; degraded: boolean }> {
+    const read = this.flags?.declineRankingEnabled;
+    if (typeof read !== 'function') return { enabled: false, degraded: false };
+    try {
+      return { enabled: await read.call(this.flags, country), degraded: false };
+    } catch (error: any) {
+      this.logger.warn(`ranking flag read failed: ${error?.message ?? 'unknown'}`);
+      return { enabled: false, degraded: true };
+    }
+  }
+
+  private catalogQuery(query: RentalSearchQueryDto, market: SearchMarket) {
     return {
-      country_code: query.country_code,
-      state: query.state,
+      country_code: market.country,
+      state: market.state,
       q: query.q,
       matchCategoryName: true,
       category_id: query.category_id,
-      sort: query.sort,
+      sort: query.sort === 'recommended' ? 'newest' : query.sort,
       operation_mode: query.operation_mode,
       min_price: query.min_price,
       max_price: query.max_price,
@@ -197,10 +434,22 @@ export class RentalSearchService {
     range: SearchDateRange | null
   ) {
     const guard = range ? await this.cardGuardEnabled(country) : false;
-    if (!guard || !range) return { hits: [...hits].sort(compareHits), guard: false };
-    const blocked = (await this.stampHits(hits, country, window)).map((hit) => this.blockPastCardEnd(hit, range));
-    blocked.sort(compareHits);
-    return { hits: blocked, guard: true };
+    const prepared = await this.prepareHits(hits, country, window, range, guard);
+    const ranked = await this.rankMultipliers(prepared, country);
+    prepared.sort((a, b) => compareHits(a, b, ranked.map));
+    return { hits: prepared, guard, degraded: ranked.degraded };
+  }
+
+  private async prepareHits(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    country: string | undefined,
+    window: CardPaymentPolicy,
+    range: SearchDateRange | null,
+    guard: boolean
+  ) {
+    if (!guard || !range) return [...hits];
+    const stamped = await this.stampHits(hits, country, window);
+    return stamped.map((hit) => this.blockPastCardEnd(hit, range));
   }
 
   private async stampPage(listings: RentalSearchHit[], fallback: string | undefined, known: CardPaymentPolicy) {
@@ -234,7 +483,7 @@ export class RentalSearchService {
     const key = `${code}|${latest ?? ''}|${String(inspected)}`;
     const fields = cache.get(key) ?? (await this.cardWindow(code, latest, inspected));
     cache.set(key, fields);
-    return { ...hit, ...fields };
+    return { ...hit, ...fields, inspection_enabled: inspected === true };
   }
 
   private isoCountry(listing: PublicRentalListingRow, fallback?: string | null): string {
@@ -279,6 +528,20 @@ export class RentalSearchService {
     return this.flags.numberConfig('rental_inspection_stripe_review_hours', code || null, DEFAULT_STRIPE_REVIEW_HOURS);
   }
 
+  private async rankMultipliers(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    countryCode?: string | null
+  ): Promise<{ map: Map<string, number>; degraded: boolean }> {
+    if (!this.ranking) return { map: new Map(), degraded: false };
+    try {
+      const ids = hits.map((hit) => hit.listing.rental_item.business?.id).filter((id): id is string => Boolean(id));
+      return { map: await this.ranking.multipliersFor(ids, countryCode), degraded: false };
+    } catch (error: any) {
+      this.logger.warn(`decline ranking failed, using catalog order: ${error?.message ?? 'unknown'}`);
+      return { map: new Map(), degraded: true };
+    }
+  }
+
   async cardGuardEnabled(country?: string | null): Promise<boolean> {
     if (!this.flags?.cardWindowGuardEnabled) return false;
     return this.flags.cardWindowGuardEnabled(country);
@@ -311,10 +574,15 @@ function stripCatalogIndex(hit: RentalSearchHit & { catalogIndex: number }): Ren
     momo_available: hit.momo_available,
     stripe_review_hours: hit.stripe_review_hours,
     timezone: hit.timezone,
+    inspection_enabled: hit.inspection_enabled === true,
   };
 }
 
-function compareHits(a: RentalSearchHit & { catalogIndex: number }, b: RentalSearchHit & { catalogIndex: number }): number {
+function compareHits(
+  a: RentalSearchHit & { catalogIndex: number },
+  b: RentalSearchHit & { catalogIndex: number },
+  multipliers?: Map<string, number>
+): number {
   const rank = (hit: RentalSearchHit) => (hit.available === false ? 1 : 0);
   if (rank(a) !== rank(b)) return rank(a) - rank(b);
   if (a.available === false && b.available === false) {
@@ -322,7 +590,27 @@ function compareHits(a: RentalSearchHit & { catalogIndex: number }, b: RentalSea
     const bn = b.nextAvailableDate ?? '9999-99-99';
     if (an !== bn) return an < bn ? -1 : 1;
   }
-  return a.catalogIndex - b.catalogIndex;
+  const score = (hit: RentalSearchHit & { catalogIndex: number }) => {
+    const id = hit.listing.rental_item.business?.id;
+    const penalty = rankingWeight(id ? multipliers?.get(id) : undefined);
+    return penalty === 0 ? Number.POSITIVE_INFINITY : (hit.catalogIndex + 1) / penalty;
+  };
+  if (score(a) !== score(b)) return score(a) - score(b);
+  if (a.catalogIndex !== b.catalogIndex) return a.catalogIndex - b.catalogIndex;
+  return compareListingId(a.listing.id, b.listing.id);
+}
+
+/** NaN, Infinity, and null stay neutral. Anything else is clamped to [0, 1]. */
+function rankingWeight(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 1;
+  if (raw < 0) return 0;
+  if (raw > 1) return 1;
+  return raw;
+}
+
+function compareListingId(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }
 
 function sanitizeTerm(value?: string): string {

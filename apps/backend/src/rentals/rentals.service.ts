@@ -1,9 +1,4 @@
-import {
-  HttpException,
-  HttpStatus,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { AccountsService } from '../accounts/accounts.service';
@@ -13,6 +8,8 @@ import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payment
 import { MobilePaymentsService, MobilePaymentRequest } from '../mobile-payments/mobile-payments.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { isCardDepositCurrency, shownSecurityDeposit } from './rental-deposit';
+import { geoStateKey } from '../rbac/geo-state.util';
+import { listingsInIdOrder, marketFromQuery, pickStoredMarket, type SearchMarket } from './rental-search-id-cache';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -56,6 +53,9 @@ import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, shouldNotifyPriceChan
 import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+import { refundLateCollectIfDeclined } from './pickup-decline/late-collect-refund';
+import type { CollectedPayment } from './pickup-decline/pickup-decline.money';
 import type { ListingCardWindow } from './rental-card-window';
 import { attachListingCardWindows, inspectedByItem } from './inspection/listing-card-batch';
 import { snapshotInspected } from './inspection/inspection-optin';
@@ -409,10 +409,24 @@ function rentalPricePerDay(row: PublicRentalListingRow): number {
   return typeof v === 'number' ? v : parseFloat(String(v)) || 0;
 }
 
+function compareRentalPrice(a: PublicRentalListingRow, b: PublicRentalListingRow): number {
+  const hours = rentalPricePerHour(a) - rentalPricePerHour(b);
+  return hours || rentalPricePerDay(a) - rentalPricePerDay(b);
+}
+
+function compareListingId(a: { id: string }, b: { id: string }): number {
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? -1 : 1;
+}
+
 /**
  * Singleton rental orchestration.
  * Request identity comes from nestjs-cls via HasuraUserService (optional explicit RequestContext).
  */
+const STORED_RENTAL_MARKET = `query StoredRentalMarket($where: supported_country_states_bool_exp!) {
+  supported_country_states(where: $where, limit: 50) { country_code state_name state_key }
+}`;
+
 @Injectable()
 export class RentalsService {
   private readonly logger = new Logger(RentalsService.name);
@@ -470,12 +484,30 @@ export class RentalsService {
     const where = this.applyCatalogFilters(this.whereExcludingActiveProposedContracts(baseWhere), query);
     const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings: PublicRentalListingRow[];
-    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, { where, order_by: [{ updated_at: 'desc' }] });
+    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, { where, order_by: [{ updated_at: 'desc' }, { id: 'asc' }] });
     let rows = r.rental_location_listings ?? [];
     rows = await this.filterListingsByPaymentsEnabled(rows);
     rows = await this.enrichRentalListingsWithDistance(rows, query);
     rows = this.sortRentalListingRows(rows, sort);
     return this.hideMomoDeposits(this.filterListingsByPrice(rows, query.min_price, query.max_price));
+  }
+
+  /** Page rows for a cached id list. Order follows `ids`, not the query. */
+  async loadPublicRentalListingsByIds(ids: string[]): Promise<PublicRentalListingRow[]> {
+    const unique = [...new Set(ids)].filter(Boolean);
+    if (!unique.length) return [];
+    const fetched = await this.fetchListingsByIds(unique);
+    const visible = await this.filterListingsByPaymentsEnabled(fetched);
+    const enriched = await this.enrichRentalListingsWithDistance(this.hideMomoDeposits(visible));
+    return listingsInIdOrder(ids, enriched);
+  }
+
+  private async fetchListingsByIds(ids: string[]): Promise<PublicRentalListingRow[]> {
+    const where = this.whereExcludingActiveProposedContracts({ id: { _in: ids } });
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_location_listings: PublicRentalListingRow[];
+    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, { where, order_by: [{ id: 'asc' }] });
+    return r.rental_location_listings ?? [];
   }
 
   async getTopRentalLocations(
@@ -2991,6 +3023,7 @@ export class RentalsService {
       );
       return;
     }
+    if (await refundLateCollectIfDeclined(booking)) return;
     if (booking.status === 'proposed' || booking.status === 'reserved') {
       await this.confirmBookingAfterContractPayment(booking, bookingNumber);
       return;
@@ -3020,6 +3053,52 @@ export class RentalsService {
       return;
     }
     // Idempotency: already confirmed / cancelled / completed.
+  }
+
+  /** A collect approved after the decline. Queue the refund, or alert if it is not one. */
+  async recoverDeclinedLateCollect(transaction: {
+    entity_id?: string | null;
+    reference?: string | null;
+    amount?: number | string | null;
+    currency?: string | null;
+    provider?: string | null;
+    customer_phone?: string | null;
+    transaction_id?: string | null;
+  }): Promise<boolean> {
+    const bookingNumber = transaction.entity_id || transaction.reference;
+    if (!bookingNumber) return false;
+    const booking = await this.fetchBookingByBookingNumber(bookingNumber);
+    if (!booking?.condition_declined_at || !booking.id) {
+      this.alertUnmatchedLateCollect(String(bookingNumber));
+      return false;
+    }
+    await refundLateCollectIfDeclined(booking, this.lateCollectPayment(transaction));
+    return true;
+  }
+
+  private alertUnmatchedLateCollect(bookingNumber: string): void {
+    reportMoneyAnomaly(
+      this.logger,
+      'late_rental_collect',
+      `Late Mobile Money collect for ${bookingNumber} is not a declined rental`,
+      { bookingNumber }
+    );
+  }
+
+  private lateCollectPayment(transaction: {
+    amount?: number | string | null;
+    currency?: string | null;
+    provider?: string | null;
+    customer_phone?: string | null;
+    transaction_id?: string | null;
+  }): CollectedPayment {
+    return {
+      amount: Number(transaction.amount ?? 0),
+      currency: String(transaction.currency ?? ''),
+      provider: String(transaction.provider ?? ''),
+      phone: transaction.customer_phone ?? null,
+      transactionId: transaction.transaction_id ?? null,
+    };
   }
 
   /** Wallet credit landed: confirm + PIN, then hold the contract and mark paid. */
@@ -3282,6 +3361,73 @@ export class RentalsService {
    * otherwise). Throws on a real void failure so callers do not mark the
    * booking cancelled while a card hold is still outstanding.
    */
+  /** Wallet hold release and Stripe void used by a free cancel and a condition decline. */
+  async releaseFreeCancelFunds(booking: {
+    id: string;
+    booking_number?: string | null;
+    currency: string;
+    client: { user_id: string };
+  }): Promise<void> {
+    await this.cancelStripeAuthorizationIfAny(booking);
+    await this.releaseHoldIfNeeded(booking.id, booking);
+  }
+
+  /**
+   * MoMo decline. The collect already credited the wallet and placed a hold.
+   * Release that hold and debit the payout in the same booking key so the
+   * phone transfer is the only money that leaves.
+   */
+  async consumeDeclineHold(
+    booking: { id: string; currency: string; client: { user_id: string } },
+    amount: number
+  ): Promise<void> {
+    if (!(amount > 0)) return;
+    const hold = await this.getHold(booking.id);
+    const account = await this.hasuraSystemService.getAccount(booking.client.user_id, booking.currency);
+    if (!account?.id) throw new HttpException('Account missing', HttpStatus.BAD_GATEWAY);
+    if (hold?.status === 'active') {
+      await this.releaseRentalHold(
+        booking.id,
+        Number(hold.client_hold_amount),
+        account.id,
+        this.holdAttemptId(hold, booking.id)
+      );
+      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
+        bookingId: booking.id,
+        from: 'active',
+        status: 'completed',
+      });
+    }
+    const paid = await this.accountsService.registerTransaction({
+      accountId: account.id,
+      amount,
+      transactionType: 'payment',
+      memo: `Condition decline refund ${booking.id}`,
+      referenceId: booking.id,
+      idempotencyKey: rentalLedgerKey(booking.id, 'decline:refund'),
+    });
+    assertLedgerResult(paid, 'decline refund');
+  }
+
+  /** Payout did not land. Put the debited amount back in the wallet and alert the caller. */
+  async restoreDeclinePayout(
+    booking: { id: string; currency: string; client: { user_id: string } },
+    amount: number
+  ): Promise<void> {
+    if (!(amount > 0)) return;
+    const account = await this.hasuraSystemService.getAccount(booking.client.user_id, booking.currency);
+    if (!account?.id) throw new HttpException('Account missing', HttpStatus.BAD_GATEWAY);
+    const credited = await this.accountsService.registerTransaction({
+      accountId: account.id,
+      amount,
+      transactionType: 'deposit',
+      memo: `Condition decline refund returned ${booking.id}`,
+      referenceId: booking.id,
+      idempotencyKey: rentalLedgerKey(booking.id, 'decline:refund:reversal'),
+    });
+    assertLedgerResult(credited, 'decline refund reversal');
+  }
+
   private async cancelStripeAuthorizationIfAny(booking: any): Promise<void> {
     const bookingNumber = booking.booking_number as string | undefined;
     if (!bookingNumber) return;
@@ -3290,11 +3436,28 @@ export class RentalsService {
       orderId: booking.id,
     });
     if (!result.success && !result.skipped) {
+      if ((result.message ?? '').toLowerCase().includes('use refund')) {
+        await this.refundCapturedCard(bookingNumber, booking.id);
+        return;
+      }
       this.logger.error(
         `cancelStripeAuthorizationIfAny failed for ${bookingNumber}: ${result.message}`
       );
       throw new HttpException(
         'Could not release the card authorization. Please try again.',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+  }
+
+  private async refundCapturedCard(bookingNumber: string, bookingId: string): Promise<void> {
+    const refunded = await this.stripeCaptureService.refundCapturedPayment({
+      orderNumber: bookingNumber,
+      idempotencyKey: rentalLedgerKey(bookingId, 'decline:card-refund'),
+    });
+    if (!refunded.success) {
+      throw new HttpException(
+        'Could not refund the captured card payment. Please try again.',
         HttpStatus.BAD_GATEWAY
       );
     }
@@ -5987,33 +6150,70 @@ export class RentalsService {
     }
   }
 
-  private async resolveRentalCatalogGeo(
-    queryCountry?: string,
-    queryState?: string
-  ): Promise<{
-    country?: string;
-    state?: string;
-    filterMode: 'specific' | 'supported_only';
-  }> {
+  /** Resolved market for the search cache. Listings keep the uncanonical profile fallback. */
+  async resolveSearchMarket(country?: string, state?: string): Promise<SearchMarket> {
+    const profile = await this.profileSearchGeo(country, state);
+    if (!profile.country && !profile.state) return marketFromQuery(undefined, undefined);
+    return this.canonicalSearchMarket(profile.country, profile.state);
+  }
+
+  private async canonicalSearchMarket(country?: string, state?: string): Promise<SearchMarket> {
+    const normalized = marketFromQuery(country, state);
+    try {
+      const stored = await this.storedSearchMarket(normalized.country, normalized.state);
+      return marketFromQuery(stored.country ?? normalized.country, stored.state ?? normalized.state);
+    } catch (error: any) {
+      this.logger.warn(`rental market lookup failed: ${error?.message ?? 'unknown'}`);
+      return { ...normalized, degraded: true };
+    }
+  }
+
+  private async storedSearchMarket(country?: string, state?: string) {
+    const response = await this.hasuraSystemService.executeQuery<{
+      supported_country_states: Array<{ country_code: string; state_name: string; state_key?: string }>;
+    }>(STORED_RENTAL_MARKET, { where: this.storedMarketWhere(country, state) });
+    return pickStoredMarket(response.supported_country_states ?? [], country, state);
+  }
+
+  private storedMarketWhere(country?: string, state?: string): Record<string, unknown> {
+    const stateKey = state ? geoStateKey(state) : '';
+    return {
+      ...(country ? { country_code: { _eq: country } } : {}),
+      ...(stateKey ? { state_key: { _eq: stateKey } } : {}),
+    };
+  }
+
+  private async resolveRentalCatalogGeo(queryCountry?: string, queryState?: string) {
+    const geo = await this.profileSearchGeo(queryCountry, queryState);
+    const filterMode = geo.country || geo.state ? 'specific' : 'supported_only';
+    return { ...geo, filterMode } as {
+      country?: string;
+      state?: string;
+      filterMode: 'specific' | 'supported_only';
+    };
+  }
+
+  private async profileSearchGeo(queryCountry?: string, queryState?: string) {
     let country = queryCountry?.trim() || undefined;
     let state = queryState?.trim() || undefined;
+    const primary = await this.primaryAddressCountry();
+    if (!country && primary?.country) {
+      country = primary.country;
+      state = primary.state ?? state;
+    }
+    return { country, state };
+  }
+
+  private async primaryAddressCountry(): Promise<{ country?: string; state?: string } | null> {
     try {
       const user = await this.hasuraUserService.getUser();
       const addresses = user?.addresses;
-      if (addresses?.length) {
-        const primary =
-          addresses.find((a) => a.is_primary === true) ?? addresses[0];
-        // Only fall back to account address when caller did not pass country_code.
-        if (!country && primary?.country) {
-          country = primary.country;
-          state = primary.state ?? state;
-        }
-      }
+      if (!addresses?.length) return null;
+      const primary = addresses.find((row) => row.is_primary === true) ?? addresses[0];
+      return { country: primary?.country, state: primary?.state ?? undefined };
     } catch {
-      // anonymous or invalid token
+      return null;
     }
-    const filterMode = country || state ? 'specific' : 'supported_only';
-    return { country, state, filterMode };
   }
 
   private async resolveRentalListOrigin(
@@ -6085,7 +6285,7 @@ export class RentalsService {
         { moderation_status: { _eq: 'approved' } },
         { is_active: { _eq: true } },
         { deleted_at: { _is_null: true } },
-        { rental_item: { deleted_at: { _is_null: true } } },
+        { rental_item: { deleted_at: { _is_null: true }, is_active: { _eq: true } } },
         {
           rental_item: {
             business: { is_storefront_visible: { _eq: true } },
@@ -6122,28 +6322,18 @@ export class RentalsService {
   ): PublicRentalListingRow[] {
     const copy = [...rows];
     if (sort === 'fastest') {
-      copy.sort((a, b) => this.compareRentalByDistance(a, b));
+      copy.sort((a, b) => this.compareRentalByDistance(a, b) || compareListingId(a, b));
       return copy;
     }
     if (sort === 'cheapest') {
-      copy.sort((a, b) => {
-        const ah = rentalPricePerHour(a);
-        const bh = rentalPricePerHour(b);
-        if (ah !== bh) return ah - bh;
-        return rentalPricePerDay(a) - rentalPricePerDay(b);
-      });
+      copy.sort((a, b) => compareRentalPrice(a, b) || compareListingId(a, b));
       return copy;
     }
     if (sort === 'expensive') {
-      copy.sort((a, b) => {
-        const ah = rentalPricePerHour(a);
-        const bh = rentalPricePerHour(b);
-        if (ah !== bh) return bh - ah;
-        return rentalPricePerDay(b) - rentalPricePerDay(a);
-      });
+      copy.sort((a, b) => compareRentalPrice(b, a) || compareListingId(a, b));
       return copy;
     }
-    copy.sort((a, b) => rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a));
+    copy.sort((a, b) => rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a) || compareListingId(a, b));
     return copy;
   }
 
@@ -6154,7 +6344,7 @@ export class RentalsService {
     const av = a.distance_value ?? Number.POSITIVE_INFINITY;
     const bv = b.distance_value ?? Number.POSITIVE_INFINITY;
     if (av !== bv) return av - bv;
-    return rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a);
+    return rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a) || compareListingId(a, b);
   }
 
   private formatRentalAddressForGoogle(address: {

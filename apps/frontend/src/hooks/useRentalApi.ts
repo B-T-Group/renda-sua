@@ -331,6 +331,15 @@ export interface RentalBookingDetail {
   actual_end_at?: string | null;
   units_booked?: number | null;
   inspection_policy_version?: number | null;
+  condition_declined_at?: string | null;
+  refund_status?: 'none' | 'refund_pending' | 'refunded' | 'failed' | null;
+  refund_amount?: number | string | null;
+  refund_currency?: string | null;
+  condition_decline?: {
+    reason: string;
+    reasonText?: string | null;
+    photos: Array<{ url: string; capturedAt: string; slotKey?: string }>;
+  } | null;
   not_received_report?: { id: string; reported_at: string } | null;
   renter_reported_returned_at?: string | null;
   renter_return_escalated_at?: string | null;
@@ -826,6 +835,19 @@ export function useRentalApi() {
     [api]
   );
 
+  const declineCondition = useCallback(
+    async (bookingId: string, body: { versionId: string; reason: string; text?: string; photos?: string[] }) => {
+      const { data } = await api.post(`/rentals/bookings/${bookingId}/decline-condition`, body);
+      return data;
+    },
+    [api]
+  );
+
+  const fetchConditionPhotos = useCallback(async (listingId: string) => {
+    const { data } = await api.get(`/rentals/listings/${listingId}/condition-photos`);
+    return data as { photos?: Array<{ slotKey: string; capturedAt: string | null; url: string; expiresAt: string }> };
+  }, [api]);
+
   const deleteBusinessRentalItem = useCallback(
     async (itemId: string) => {
       const { data } = await api.delete<{ success: boolean }>(
@@ -872,5 +894,7 @@ export function useRentalApi() {
     confirmReturn,
     deleteBusinessRentalListing,
     deleteBusinessRentalItem,
+    declineCondition,
+    fetchConditionPhotos,
   };
 }

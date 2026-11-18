@@ -28,6 +28,7 @@ import BusinessDashboardModuleCard, {
 } from '../business/BusinessDashboardModuleCard';
 import BusinessDashboardSection from '../business/BusinessDashboardSection';
 import BusinessStoreReachCard from '../business/BusinessStoreReachCard';
+import { DeclineInsightsStat } from '../rentals/DeclinePickupScreens';
 import BusinessCatalogHealthCard from '../business/BusinessCatalogHealthCard';
 import BusinessQuietHomeNextActionCard from '../business/BusinessQuietHomeNextActionCard';
 import AddressAlert from '../common/AddressAlert';
@@ -399,6 +400,12 @@ const BusinessDashboard: React.FC = () => {
 
       {showOperationalModules ? (
         <>
+          {aggregates?.conditionDeclines90d != null ? (
+            <DeclineInsightsStat
+              declines={aggregates.conditionDeclines90d}
+              pickups={aggregates.pickupsReached90d ?? 0}
+            />
+          ) : null}
           <BusinessStoreReachCard
             businessId={profile.business.id}
             businessName={profile.business.name}

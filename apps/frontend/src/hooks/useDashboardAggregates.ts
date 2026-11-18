@@ -38,6 +38,8 @@ export interface DashboardAggregates {
   pendingItemCount?: number;
   rejectedItemCount?: number;
   topViewedOutOfStockCount?: number;
+  conditionDeclines90d?: number | null;
+  pickupsReached90d?: number | null;
   tipsRemindersEnabled?: boolean;
 }
 

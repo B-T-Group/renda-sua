@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
+import { DECLINE_RANKING_FLAG } from '../decline-ranking/decline-ranking.policy';
+import { PICKUP_DECLINE_FLAG } from '../pickup-decline/pickup-decline.policy';
 
 const FLAG_KEY = 'rental_inspection_enabled';
 const ALLOW_SELF_BOOKING_KEY = 'rentals_inspection_allow_self_booking';
@@ -35,6 +37,26 @@ export class RentalInspectionFlags {
   /** Date-picker guard and create-time rejection. Seeded false. */
   async cardWindowGuardEnabled(countryCode?: string | null): Promise<boolean> {
     return this.booleanConfig(CARD_WINDOW_GUARD_KEY, countryCode, false);
+  }
+
+  /** Renter decline at pickup. Seeded false. No NODE_ENV override. */
+  /** True when the global row or any country row is on. Admin and dashboard checks use this. */
+  async pickupDeclineEnabledAnywhere(): Promise<boolean> {
+    return this.anyEnabled(PICKUP_DECLINE_FLAG);
+  }
+
+  async pickupDeclineEnabled(countryCode?: string | null): Promise<boolean> {
+    return this.booleanConfig(PICKUP_DECLINE_FLAG, countryCode, false);
+  }
+
+  /** True when the global row or any country row is on. The support list uses this. */
+  async declineRankingEnabledAnywhere(): Promise<boolean> {
+    return this.anyEnabled(DECLINE_RANKING_FLAG);
+  }
+
+  /** Search penalty and support exclusion. Seeded false. No NODE_ENV override. */
+  async declineRankingEnabled(countryCode?: string | null): Promise<boolean> {
+    return this.booleanConfig(DECLINE_RANKING_FLAG, countryCode, false);
   }
 
   /** Per-item opt-in. Seeded false. No NODE_ENV override. */
@@ -77,6 +99,25 @@ export class RentalInspectionFlags {
     } catch (error: any) {
       this.logger.warn(`inspection flag ${key}: ${error?.message ?? error}`);
       return fallback;
+    }
+  }
+
+  private async anyEnabled(key: string): Promise<boolean> {
+    try {
+      const result = await this.hasura.executeQuery<{
+        application_configurations: Array<{ boolean_value?: boolean | null }>;
+      }>(
+        `query FlagAnywhere($key: String!) {
+          application_configurations(
+            where: { config_key: { _eq: $key }, status: { _eq: "active" } }
+          ) { boolean_value }
+        }`,
+        { key }
+      );
+      return (result.application_configurations ?? []).some((row) => row.boolean_value === true);
+    } catch (error: any) {
+      this.logger.warn(`inspection flag ${key}: ${error?.message ?? error}`);
+      return false;
     }
   }
 

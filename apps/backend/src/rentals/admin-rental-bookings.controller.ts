@@ -7,12 +7,13 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
   UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
@@ -24,6 +25,11 @@ import { ConfirmReportedReturnDto } from './dto/confirm-reported-return.dto';
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { RentalsService } from './rentals.service';
+import { SetDeclineExclusionDto } from './decline-ranking/decline-exclusion.dto';
+import { DeclineExclusionService } from './decline-ranking/decline-exclusion.service';
+import { MarkDeclineRefundDto } from './pickup-decline/pickup-decline.dto';
+import { RentalDeclineCountsService } from './pickup-decline/rental-decline-counts.service';
+import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 
 interface RequestWithUser extends Request {
   user: { id: string };
@@ -49,7 +55,10 @@ export class AdminRentalBookingsController {
     private readonly rentalsService: RentalsService,
     private readonly inspections: RentalInspectionService,
     private readonly notReceived: RentalNotReceivedService,
-    private readonly renterReturns: RentalRenterReturnService
+    private readonly renterReturns: RentalRenterReturnService,
+    private readonly declineCounts: RentalDeclineCountsService,
+    private readonly pickupDecline: RentalPickupDeclineService,
+    private readonly exclusions: DeclineExclusionService
   ) {}
 
   @Post('bookings/:id/start-overwrite-code')
@@ -157,5 +166,61 @@ export class AdminRentalBookingsController {
       body.reason,
       body.damageAmount
     );
+  }
+
+  @Get('condition-declines')
+  @ApiOperation({ summary: 'Parties with condition declines in the last 90 days' })
+  @ApiResponse({ status: 200, description: 'Counts, pickup reach, and the 5-decline flag' })
+  @ApiResponse({ status: 404, description: 'Pickup decline is off' })
+  listConditionDeclines() {
+    return this.declineCounts.list();
+  }
+
+  @Get('bookings/:id/condition-decline')
+  @ApiOperation({ summary: 'Decline reason and private photos for support' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Signed photo URLs' })
+  @ApiResponse({ status: 404, description: 'No decline, or the flag is off' })
+  conditionDecline(@Param('id', ParseUUIDPipe) bookingId: string) {
+    return this.pickupDecline.adminDetail(bookingId);
+  }
+
+  @Post('bookings/:id/refund-status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark a pending Mobile Money refund refunded or failed' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: MarkDeclineRefundDto })
+  @ApiResponse({ status: 200, description: 'Refund status updated' })
+  @ApiResponse({ status: 400, description: 'Missing provider reference and note' })
+  @ApiResponse({ status: 403, description: 'FINANCIAL_REFUNDS is required' })
+  @ApiResponse({ status: 409, description: 'Refund is not pending' })
+  markDeclineRefund(@Param('id', ParseUUIDPipe) bookingId: string, @Body() body: MarkDeclineRefundDto) {
+    return this.pickupDecline.markRefund(bookingId, body);
+  }
+
+  @Get('condition-exclusions')
+  @ApiOperation({ summary: 'Recent declines with the support exclusion toggle' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiResponse({ status: 200, description: 'One page of decline rows and the counts support sees' })
+  @ApiResponse({ status: 404, description: 'Decline ranking is off' })
+  listDeclineExclusions(@Query('page') page?: string) {
+    return this.exclusions.list(Number(page) || 1);
+  }
+
+  @Post('bookings/:id/condition-exclusion')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark a condition decline as not the business fault, or reverse it' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: SetDeclineExclusionDto })
+  @ApiResponse({ status: 200, description: 'Exclusion stored and audited' })
+  @ApiResponse({ status: 403, description: 'Not a support or admin role' })
+  @ApiResponse({ status: 404, description: 'Ranking is off, or there is no decline' })
+  @ApiResponse({ status: 409, description: 'The booking has more than one decline and no decline id' })
+  setDeclineExclusion(
+    @Param('id', ParseUUIDPipe) bookingId: string,
+    @Body() body: SetDeclineExclusionDto,
+    @Req() req: RequestWithUser
+  ) {
+    return this.exclusions.set(bookingId, req.user.id, body.excluded, body.note, body.declineId);
   }
 }

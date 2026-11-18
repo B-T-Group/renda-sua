@@ -44,7 +44,15 @@ describe('POST admin/rentals/bookings/:id/inspection-decision', () => {
     inspections.notice = jest.fn();
     inspections.booking = jest.fn();
     inspections.rentals = { settleEnrolledRental: jest.fn() };
-    controller = new AdminRentalBookingsController({} as any, inspections);
+    controller = new AdminRentalBookingsController(
+      {} as any,
+      inspections,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
   });
 
   async function decide(body: unknown) {

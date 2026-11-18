@@ -11,12 +11,12 @@ import {
 } from '../utils/rentals/rentalSearchPreset';
 import {
   formatRangeDates,
-  formatSingleDate,
   marketTimeZone,
   publishRentalSearchStay,
   rangeFromSearchParams,
   type RentalDateRange,
 } from '../utils/rentals/rentalSearchDates';
+import { formatRentalDay } from '../utils/rentals/rentalRequestFormat';
 import type { SelectionRange } from '../utils/rentals/rentalRequestScheduleUtils';
 
 export { rangeFromSearchParams };
@@ -108,7 +108,7 @@ function unavailableFor(
     return t('rentals.searchFirst.unavailableForDates', 'Not available for these dates');
   }
   return t('rentals.searchFirst.availableFrom', 'Available from {{date}}', {
-    date: formatSingleDate(state.nextAvailableDate, language),
+    date: formatRentalDay(state.nextAvailableDate, language),
   });
 }
 

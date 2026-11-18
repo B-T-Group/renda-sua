@@ -652,6 +652,7 @@ function emptySearchPage(): RentalSearchPage {
     page: 1,
     limit: 6,
     availableCount: 0,
+    hasMore: false,
     dates: null,
     mode: 'authorize_upfront',
     latest_card_end_at: null,
