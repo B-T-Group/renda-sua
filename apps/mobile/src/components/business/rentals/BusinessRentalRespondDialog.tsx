@@ -135,7 +135,7 @@ export function BusinessRentalRespondDialog({
     const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(buildPricingSnapshot(request).total, overridden);
     if (overridden === 'invalid' || tooHigh) {
       setError(tooHigh
-        ? t('business.rentals.changeTotalTooHigh', 'Enter a total no more than 10 times the quote, and at most 1000000.')
+        ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, and at most 10 times the quote.')
         : t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.'));
       return;
     }
@@ -248,7 +248,7 @@ export function BusinessRentalRespondDialog({
                 {canChangeTotal ? (
                 <Text variant="bodySmall" style={{ color: overrideTooHigh ? colors.error.main : colors.text.secondary, marginBottom: 8 }}>
                   {overrideTooHigh
-                    ? t('business.rentals.changeTotalTooHigh', 'Enter a total no more than 10 times the quote, and at most 1000000.')
+                    ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, and at most 10 times the quote.')
                     : t(
                     'business.rentals.changeTotalHelper',
                     'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'

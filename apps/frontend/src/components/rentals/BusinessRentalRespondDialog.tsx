@@ -172,7 +172,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     if (overridden === 'invalid' || tooHigh) {
       setError(overridden === 'invalid'
         ? t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.')
-        : t('business.rentals.changeTotalTooHigh', 'Enter a total no more than 10 times the quote, and at most 1000000.'));
+        : t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, and at most 10 times the quote.'));
       return;
     }
     setSubmitting(true);
@@ -333,10 +333,10 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
               type="number"
               value={totalOverride}
               onChange={(e) => setTotalOverride(e.target.value)}
-              inputProps={{ min: 0.01, max: 1000000, step: '0.01' }}
+              inputProps={{ min: 0.01, step: '0.01' }}
               error={overrideTooHigh}
               helperText={overrideTooHigh
-                ? t('business.rentals.changeTotalTooHigh', 'Enter a total no more than 10 times the quote, and at most 1000000.')
+                ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, and at most 10 times the quote.')
                 : t('business.rentals.changeTotalHelper', 'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.')
               }
               fullWidth

@@ -15,6 +15,7 @@ import { SmsService } from '../sms/sms.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { DeepLinkService } from './deep-link.service';
 import { priceChangeCopy } from '../rentals/rental-price-change';
+import { failedDeliveries } from '../rentals/rental-request-expiry';
 import {
   MERCHANT_INCOMING_ORDER_PUSH,
   ORDER_OFFER_CANCELLED_PUSH,
@@ -3754,6 +3755,23 @@ export class NotificationsService {
     }
   }
 
+  async failedNoResponseRecipients(
+    payload: {
+      id: string;
+      window: 'sla' | 'start';
+      clientUserId: string | null;
+      businessUserId: string | null;
+      itemName: string;
+      businessName: string;
+      renterName: string;
+      listingId: string;
+    },
+    only?: Array<'renter' | 'business'>
+  ): Promise<Array<'renter' | 'business'>> {
+    const targets = only?.length ? only : (['renter', 'business'] as Array<'renter' | 'business'>);
+    return failedDeliveries(targets, (target) => this.deliverNoResponseTo(target, payload));
+  }
+
   /** In-app row, push, and email. 24h copy, not the “not available” decline. */
   async sendRentalRequestNoResponse(payload: {
     id: string;
@@ -3765,13 +3783,28 @@ export class NotificationsService {
     renterName: string;
     listingId: string;
   }): Promise<void> {
-    try {
-      await this.deliverRenterNoResponse(payload);
-      await this.deliverBusinessRequestExpired(payload);
-    } catch (error: any) {
-      this.logger.error(`sendRentalRequestNoResponse: ${error?.message ?? error}`);
-      throw error;
+    const failed = await this.failedNoResponseRecipients(payload);
+    if (!failed.length) return;
+    const error = new Error(`NO_RESPONSE_PARTIAL:${failed.join(',')}`);
+    this.logger.error(`sendRentalRequestNoResponse: ${error.message}`);
+    throw error;
+  }
+
+  private deliverNoResponseTo(
+    target: 'renter' | 'business',
+    payload: {
+      id: string;
+      window: 'sla' | 'start';
+      clientUserId: string | null;
+      businessUserId: string | null;
+      itemName: string;
+      businessName: string;
+      renterName: string;
+      listingId: string;
     }
+  ): Promise<void> {
+    if (target === 'renter') return this.deliverRenterNoResponse(payload);
+    return this.deliverBusinessRequestExpired(payload);
   }
 
   private async deliverRenterNoResponse(payload: {

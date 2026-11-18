@@ -38,6 +38,13 @@ describe('rental price change', () => {
     expect(() => quoteWithTotalOverride(priced, 15000 * 10 + 1, true)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
   });
 
+  it('N12 allows any total up to the quote and applies a per-currency ceiling only above it', () => {
+    const quote = { ...snap, total: 2_000_000, lines: [{ kind: 'hourly' as const, subtotal: 2_000_000, billableHours: 1, ratePerHour: 2_000_000, startAt: 'a', endAt: 'b' }] };
+    expect(quoteWithTotalOverride(quote, 1_800_000, true, 1_000_000).total).toBe(1_800_000);
+    expect(() => quoteWithTotalOverride(quote, 5_000_000, true, 3_000_000)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
+    expect(quoteWithTotalOverride(quote, 5_000_000, true, null).total).toBe(5_000_000);
+  });
+
   it('blocks payment until the renter has seen the new price', () => {
     expect(paymentBlockedUntilPriceSeen({ quoted: 2500, accepted: 3000, seenAt: null })).toBe(true);
     expect(paymentBlockedUntilPriceSeen({ quoted: 2500, accepted: 3000, seenAt: '2026-11-13T00:00:00.000Z' })).toBe(false);

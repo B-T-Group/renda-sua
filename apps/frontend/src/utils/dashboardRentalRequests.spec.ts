@@ -6,6 +6,7 @@ import {
   respondWithinAmber,
   respondWithinHours,
   respondWindow,
+  totalOverrideTooHigh,
 } from './dashboardRentalRequests';
 
 describe('dashboard rental request display', () => {
@@ -28,6 +29,11 @@ describe('dashboard rental request display', () => {
   it('picks the start window only when start is sooner than 24 hours', () => {
     expect(respondWindow('2026-11-14T14:21:00.000Z', '2026-11-14T16:41:00.000Z')).toBe('start');
     expect(respondWindow('2026-11-14T12:41:00.000Z', '2026-11-17T05:00:00.000Z')).toBe('sla');
+  });
+
+  it('N12 allows a discount of a quote above any old absolute cap', () => {
+    expect(totalOverrideTooHigh(2_000_000, 1_800_000)).toBe(false);
+    expect(totalOverrideTooHigh(2_000_000, 20_000_001)).toBe(true);
   });
 
   it('formats an all-day stay and a multi-day stay like the dashboard', () => {

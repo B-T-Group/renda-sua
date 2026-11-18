@@ -4,6 +4,7 @@ import {
   dashboardPeriodLabel,
   respondWithinAmber,
   respondWithinHours,
+  totalOverrideTooHigh,
 } from './dashboardRentalRequests';
 
 describe('dashboard rental requests', () => {
@@ -19,6 +20,11 @@ describe('dashboard rental requests', () => {
     expect(respondWithinHours('2026-11-14T16:41:00.000Z', now)).toBe(2);
     expect(respondWithinAmber('2026-11-14T16:41:00.000Z', now)).toBe(true);
     expect(respondWithinAmber('2026-11-15T12:41:00.000Z', now)).toBe(false);
+  });
+
+  it('N12 allows a discount of a quote above any old absolute cap', () => {
+    expect(totalOverrideTooHigh(2_000_000, 1_800_000)).toBe(false);
+    expect(totalOverrideTooHigh(2_000_000, 20_000_001)).toBe(true);
   });
 
   it('shows an exclusive end for a multi-day stay', () => {

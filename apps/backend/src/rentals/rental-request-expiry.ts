@@ -1,4 +1,5 @@
-import type { ExpiryCountryFilter } from './rental-dashboard-flag';
+import { countrySpellings } from '../orders/delivery-pricing.util';
+import type { DashboardRequestFlagRow } from './rental-dashboard-flag';
 import {
   earliestRequestStartIso,
   effectiveRespondBy,
@@ -19,11 +20,14 @@ export interface UnansweredRentalRequest {
   listingId: string;
 }
 
+export type NoResponseRecipient = 'renter' | 'business';
+
 export interface SideEffectJob {
   id: string;
   kind: 'release' | 'notify';
   row: UnansweredRentalRequest;
   window: RentalRespondWindow;
+  recipients?: NoResponseRecipient[];
 }
 
 export interface ExpireUnansweredDeps {
@@ -32,7 +36,11 @@ export interface ExpireUnansweredDeps {
   listPending: () => Promise<UnansweredRentalRequest[]>;
   casDecline: (id: string, respondedAt: string) => Promise<boolean>;
   releaseHolds: (requestId: string) => Promise<void>;
-  notify: (row: UnansweredRentalRequest, window: RentalRespondWindow) => Promise<void>;
+  notify: (
+    row: UnansweredRentalRequest,
+    window: RentalRespondWindow,
+    recipients?: NoResponseRecipient[]
+  ) => Promise<void>;
   listRetries?: () => Promise<SideEffectJob[]>;
   clearRetry?: (id: string) => Promise<void>;
   recordFailure?: (
@@ -76,27 +84,100 @@ function earliestCutoff(now: Date, rows: AutodeclineConfigRow[]): string {
   return stamps.reduce((earliest, value) => (Date.parse(value) < Date.parse(earliest) ? value : earliest));
 }
 
-export function pendingExpiryWhere(
-  now: Date,
-  since: string,
-  filter: ExpiryCountryFilter
-): Record<string, unknown> | null {
-  if (filter.kind === 'none') return null;
-  const where: Record<string, unknown> = {
-    status: { _eq: 'pending' },
-    respond_by: { _lte: now.toISOString(), _gte: since },
-  };
-  if (filter.kind === 'in') {
-    where.rental_location_listing = addressCountry({ _in: filter.countries });
+export interface ExpiryClause {
+  since: string;
+  countries: string[] | null;
+  exclude: boolean;
+}
+
+/** One cutoff per enabled country, so a not-yet-due backlog cannot fill the page. */
+export function expiryClauses(
+  flags: DashboardRequestFlagRow[],
+  rows: AutodeclineConfigRow[],
+  now: Date
+): ExpiryClause[] {
+  const specific = enabledCountries(flags).map((iso) => countryClause(rows, iso, now));
+  if (!globalFlagOn(flags)) return specific;
+  return [...specific, globalClause(flags, rows, specific, now)];
+}
+
+export function pendingExpiryWhere(now: Date, clauses: ExpiryClause[]): Record<string, unknown> | null {
+  if (!clauses.length) return null;
+  return { status: { _eq: 'pending' }, _or: clauses.map((clause) => clauseWhere(now, clause)) };
+}
+
+export function noResponseRecipients(error: unknown): NoResponseRecipient[] | undefined {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const match = /NO_RESPONSE_PARTIAL:([a-z,]+)/.exec(message);
+  if (!match) return undefined;
+  return match[1].split(',').filter(isRecipient);
+}
+
+export async function failedDeliveries<T extends string>(
+  targets: T[],
+  send: (target: T) => Promise<void>
+): Promise<T[]> {
+  const failed: T[] = [];
+  for (const target of targets) {
+    try {
+      await send(target);
+    } catch {
+      failed.push(target);
+    }
   }
-  if (filter.kind === 'out') {
-    where.rental_location_listing = addressCountry({ _nin: filter.countries });
-  }
-  return where;
+  return failed;
 }
 
 function addressCountry(country: Record<string, unknown>): Record<string, unknown> {
   return { business_location: { address: { country } } };
+}
+
+function enabledCountries(flags: DashboardRequestFlagRow[]): string[] {
+  return flags
+    .filter((row) => row.country_code && row.boolean_value === true)
+    .map((row) => (row.country_code ?? '').trim().toUpperCase())
+    .filter((code) => code.length > 0);
+}
+
+function globalFlagOn(flags: DashboardRequestFlagRow[]): boolean {
+  return flags.find((row) => row.country_code == null)?.boolean_value === true;
+}
+
+function countryClause(rows: AutodeclineConfigRow[], iso: string, now: Date): ExpiryClause {
+  return { since: cutoffForCountry(rows, iso, now), countries: countrySpellings(iso), exclude: false };
+}
+
+function globalClause(
+  flags: DashboardRequestFlagRow[],
+  rows: AutodeclineConfigRow[],
+  specific: ExpiryClause[],
+  now: Date
+): ExpiryClause {
+  const excluded = [...specific.flatMap((clause) => clause.countries ?? []), ...offSpellings(flags)];
+  return {
+    since: cutoffForCountry(rows, null, now),
+    countries: excluded.length ? [...new Set(excluded)] : null,
+    exclude: excluded.length > 0,
+  };
+}
+
+function offSpellings(flags: DashboardRequestFlagRow[]): string[] {
+  return flags
+    .filter((row) => row.country_code && row.boolean_value === false)
+    .flatMap((row) => countrySpellings(row.country_code ?? ''));
+}
+
+function clauseWhere(now: Date, clause: ExpiryClause): Record<string, unknown> {
+  const where: Record<string, unknown> = {
+    respond_by: { _lte: now.toISOString(), _gte: clause.since },
+  };
+  if (!clause.countries?.length) return where;
+  const match = clause.exclude ? { _nin: clause.countries } : { _in: clause.countries };
+  return { ...where, rental_location_listing: addressCountry(match) };
+}
+
+function isRecipient(value: string): value is NoResponseRecipient {
+  return value === 'renter' || value === 'business';
 }
 
 function autodeclineBatch(rows: AutodeclineConfigRow[]): number {
@@ -128,7 +209,7 @@ async function retrySideEffects(deps: ExpireUnansweredDeps): Promise<void> {
 async function retryOne(deps: ExpireUnansweredDeps, job: SideEffectJob): Promise<void> {
   try {
     if (job.kind === 'release') await deps.releaseHolds(job.row.id);
-    else await deps.notify(job.row, job.window);
+    else await deps.notify(job.row, job.window, job.recipients);
     await deps.clearRetry?.(job.id);
   } catch (error: any) {
     await deps.recordFailure?.(job.row, job.kind, job.window, error);

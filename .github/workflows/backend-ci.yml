@@ -5,6 +5,7 @@ on:
     branches: [main, prod]
     paths:
       - 'apps/backend/**'
+      - 'apps/hasura/migrations/**'
       - 'package.json'
       - 'yarn.lock'
       - 'nx.json'
@@ -14,6 +15,7 @@ on:
     branches: [main, prod]
     paths:
       - 'apps/backend/**'
+      - 'apps/hasura/migrations/**'
       - 'package.json'
       - 'yarn.lock'
       - 'nx.json'

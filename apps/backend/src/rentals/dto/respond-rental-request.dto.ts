@@ -35,15 +35,13 @@ export class RespondRentalRequestDto {
   @ApiProperty({
     required: false,
     description:
-      'Replaces the server quote. Accepted only while modify-request and dashboard requests are both on. Must be positive, in the item currency.',
+      'Replaces the server quote. Accepted only while modify-request and dashboard requests are both on. Any amount up to the quote is allowed. A higher amount cannot exceed 10 times the quote, or that currency’s configured ceiling.',
     minimum: 0.01,
-    maximum: 1000000,
   })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0.01)
-  @Max(1_000_000)
   totalOverride?: number;
 
   @ApiProperty({ type: RentalPricingSnapshotDto, required: false })

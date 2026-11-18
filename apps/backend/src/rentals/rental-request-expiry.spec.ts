@@ -1,10 +1,12 @@
 import { RentalsService } from './rentals.service';
-import { expiryCountryFilter } from './rental-dashboard-flag';
 import { effectiveRespondBy } from './rental-respond-by';
 import {
   autodeclineBounds,
   cutoffForCountry,
   expireUnansweredRentalRequests,
+  expiryClauses,
+  failedDeliveries,
+  noResponseRecipients,
   pendingExpiryWhere,
   type UnansweredRentalRequest,
 } from './rental-request-expiry';
@@ -261,7 +263,7 @@ describe('N8 failed side effects stay queued', () => {
     });
     const payload = service.hasuraSystemService.executeMutation.mock.calls[0][1].payload;
     expect(payload.row.id).toBe('req-1');
-    expect(logged.join(' ')).toContain('RENTAL_SIDE_EFFECT_DEAD');
+    expect(logged.join(' ')).toContain('code=RENTAL_SIDE_EFFECT_DEAD');
   });
 
   it('N8 queues a notice when notification throws', async () => {
@@ -303,17 +305,56 @@ describe('N5 stored respond_by after an edit', () => {
 
 describe('N6 expiry scan country filter', () => {
   it('N6 limits the SQL where to enabled countries before the batch', () => {
-    const filter = expiryCountryFilter([
+    const flags = [
       { boolean_value: false, country_code: null },
       { boolean_value: true, country_code: 'CM' },
-    ]);
-    expect(filter.kind).toBe('in');
-    if (filter.kind !== 'in') return;
-    expect(filter.countries).toEqual(expect.arrayContaining(['CM', 'Cameroon']));
-    expect(filter.countries.join(' ')).not.toMatch(/Gabon|GA/);
-    const where = pendingExpiryWhere(new Date('2026-11-18T00:00:00.000Z'), '2026-11-01T00:00:00.000Z', filter);
-    expect(JSON.stringify(where)).toContain('Cameroon');
-    expect(JSON.stringify(where)).not.toContain('Gabon');
+    ];
+    const config = [
+      {
+        config_key: 'rentals_dashboard_requests_autodecline_since',
+        country_code: 'CM',
+        string_value: '2026-11-01T00:00:00.000Z',
+      },
+    ];
+    const where = pendingExpiryWhere(new Date('2026-11-18T00:00:00.000Z'), expiryClauses(flags, config, new Date('2026-11-18T00:00:00.000Z')));
+    const json = JSON.stringify(where);
+    expect(json).toContain('Cameroon');
+    expect(json).not.toContain('Gabon');
+  });
+
+  it('N13 keeps each country on its own cutoff', () => {
+    const now = new Date('2026-11-20T00:00:00.000Z');
+    const flags = [
+      { boolean_value: true, country_code: 'CM' },
+      { boolean_value: true, country_code: 'GA' },
+    ];
+    const config = [
+      { config_key: 'rentals_dashboard_requests_autodecline_since', country_code: 'CM', string_value: '2026-11-01T00:00:00.000Z' },
+      { config_key: 'rentals_dashboard_requests_autodecline_since', country_code: 'GA', string_value: '2026-11-18T00:00:00.000Z' },
+    ];
+    const where = pendingExpiryWhere(now, expiryClauses(flags, config, now)) as {
+      _or: Array<{ respond_by: { _gte: string } }>;
+    };
+    const clauses = where._or.map((clause) => ({ since: clause.respond_by._gte, text: JSON.stringify(clause) }));
+    expect(clauses.find((clause) => clause.text.includes('Gabon'))?.since).toBe('2026-11-18T00:00:00.000Z');
+    expect(clauses.find((clause) => clause.text.includes('Cameroon'))?.since).toBe('2026-11-01T00:00:00.000Z');
+  });
+});
+
+describe('N16 per-recipient notice retry', () => {
+  it('N16 sends the next attempt only to the recipient that failed', async () => {
+    const sent: string[] = [];
+    const failed = await failedDeliveries(['renter', 'business'], async (target) => {
+      sent.push(target);
+      if (target === 'business') throw new Error('push down');
+    });
+    expect(failed).toEqual(['business']);
+    const again: string[] = [];
+    await failedDeliveries(noResponseRecipients(new Error(`NO_RESPONSE_PARTIAL:${failed.join(',')}`)) ?? [], async (target) => {
+      again.push(target);
+    });
+    expect(again).toEqual(['business']);
+    expect(sent).toEqual(['renter', 'business']);
   });
 });
 

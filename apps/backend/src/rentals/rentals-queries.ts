@@ -932,6 +932,21 @@ export const DELETE_RENTAL_SIDE_EFFECT = `
   }
 `;
 
+export const RENTAL_TOTAL_OVERRIDE_MAX = `
+  query RentalTotalOverrideMax($currency: String!) {
+    application_configurations(
+      where: {
+        config_key: { _eq: "rentals_total_override_max" }
+        string_value: { _eq: $currency }
+        status: { _eq: active }
+      }
+      limit: 1
+    ) {
+      number_value
+    }
+  }
+`;
+
 export const DASHBOARD_REQUESTS_EXPIRY_CONFIG = `
   query DashboardRequestsExpiryConfig {
     application_configurations(

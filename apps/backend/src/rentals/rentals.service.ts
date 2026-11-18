@@ -1499,7 +1499,9 @@ export class RentalsService {
     computed: RentalPricingSnapshotDto
   ): Promise<RentalPricingSnapshotDto> {
     try {
-      return quoteWithTotalOverride(computed, dto.totalOverride, await this.totalOverrideEnabled(req));
+      const ceiling = await this.overrideCeiling(computed.currency);
+      const enabled = await this.totalOverrideEnabled(req);
+      return quoteWithTotalOverride(computed, dto.totalOverride, enabled, ceiling);
     } catch (error: any) {
       throw new HttpException(this.overrideErrorMessage(error), HttpStatus.BAD_REQUEST);
     }
@@ -1508,7 +1510,7 @@ export class RentalsService {
   private overrideErrorMessage(error: any): string {
     if (error?.message === 'TOTAL_OVERRIDE_DISABLED') return 'Changing the total is not enabled';
     if (error?.message === 'TOTAL_OVERRIDE_TOO_HIGH') {
-      return 'Enter a total no more than 10 times the quote, and at most 1000000';
+      return 'Enter a total up to the quote, at most 10 times the quote, or within the configured currency limit';
     }
     return 'Enter a total greater than zero';
   }
@@ -1518,6 +1520,17 @@ export class RentalsService {
     const flags = await this.loadDashboardRequestFlags();
     const country = req.rental_location_listing?.business_location?.address?.country;
     return listingDashboardFlag(flags, country);
+  }
+
+  private async overrideCeiling(currency: string | undefined): Promise<number | null> {
+    const code = (currency ?? '').trim().toUpperCase();
+    if (!code) return null;
+    const res = await this.hasuraSystemService.executeQuery<{
+      application_configurations: Array<{ number_value: number | null }>;
+    }>(Q.RENTAL_TOTAL_OVERRIDE_MAX, { currency: code });
+    const value = Number(res.application_configurations?.[0]?.number_value);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return value;
   }
 
   private async notifyClientIfPriceChanged(
@@ -5677,15 +5690,24 @@ export class RentalsService {
         payload: { requestId, kind, ...payload },
         error: message,
       });
-      this.noteDeadLetter(kind, requestId, saved.enqueue_rental_side_effect?.[0]?.attempts ?? 0, message);
+      this.noteDeadLetter(kind, requestId, saved.enqueue_rental_side_effect?.[0]?.attempts ?? 0, message, payload);
     } catch (enqueueError: any) {
-      this.logger.error(`RENTAL_SIDE_EFFECT_DEAD enqueue ${kind} ${requestId}: ${enqueueError?.message ?? enqueueError}`);
+      this.logger.error(`code=RENTAL_SIDE_EFFECT_DEAD enqueue kind=${kind} request=${requestId}: ${enqueueError?.message ?? enqueueError}`);
     }
   }
 
-  private noteDeadLetter(kind: string, requestId: string, attempts: number, message: string): void {
+  private noteDeadLetter(
+    kind: string,
+    requestId: string,
+    attempts: number,
+    message: string,
+    payload: Record<string, unknown>
+  ): void {
     if (attempts < 5) return;
-    this.logger.error(`RENTAL_SIDE_EFFECT_DEAD ${kind} ${requestId} after ${attempts} attempts: ${message}`);
+    const recipients = Array.isArray(payload.recipients) ? payload.recipients.join(',') : '';
+    this.logger.error(
+      `code=RENTAL_SIDE_EFFECT_DEAD kind=${kind} request=${requestId} attempts=${attempts} recipients=${recipients}: ${message}`
+    );
   }
 
   private proposedBookingInsert(

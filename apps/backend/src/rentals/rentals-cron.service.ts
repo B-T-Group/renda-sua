@@ -7,19 +7,28 @@ import { RentalInspectionService } from './inspection/rental-inspection.service'
 import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
-import { expiryCountryFilter, listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
+import { listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
 import {
   autodeclineBounds,
   cutoffForCountry,
+  expiryClauses,
+  noResponseRecipients,
   pendingExpiryWhere,
   expireUnansweredRentalRequests,
   type AutodeclineConfigRow,
+  type NoResponseRecipient,
   type SideEffectJob,
   type UnansweredRentalRequest,
 } from './rental-request-expiry';
 import { earliestRequestStartIso, effectiveRespondBy, type RentalRespondWindow } from './rental-respond-by';
 import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
+
+function listedRecipients(value: unknown): NoResponseRecipient[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const recipients = value.filter((item): item is NoResponseRecipient => item === 'renter' || item === 'business');
+  return recipients.length ? recipients : undefined;
+}
 
 /** Grace after the scheduled start before an unpaid reservation is released. */
 const RESERVED_UNPAID_GRACE_MINUTES = 60;
@@ -372,11 +381,15 @@ export class RentalsCronService {
       listPending: () => this.listUnansweredRequests(flags, now),
       casDecline: (id, respondedAt) => this.casDeclineNoResponse(id, respondedAt),
       releaseHolds: (requestId) => this.rentalsService.releaseLinkedDeclineHold(requestId),
-      notify: (row, window) => this.notifyNoResponse(row, window),
+      notify: (row, window, recipients) => this.notifyNoResponse(row, window, recipients),
       listRetries: () => this.listSideEffects(),
       clearRetry: (id) => this.clearSideEffect(id),
       recordFailure: (row, kind, window, error) =>
-        this.rentalsService.recordSideEffect(row.id, kind, error, { row, window }),
+        this.rentalsService.recordSideEffect(row.id, kind, error, {
+          row,
+          window,
+          recipients: noResponseRecipients(error),
+        }),
     });
   }
 
@@ -393,7 +406,7 @@ export class RentalsCronService {
   ): Promise<UnansweredRentalRequest[]> {
     const config = await this.loadExpiryConfig();
     const bounds = autodeclineBounds(now, config);
-    const rows = await this.pageDueRequests(flags, config, now, bounds);
+    const rows = await this.pageDueRequests(flags, config, now, bounds.limit);
     return rows.map((row) => this.toUnanswered(row));
   }
 
@@ -401,28 +414,29 @@ export class RentalsCronService {
     flags: DashboardRequestFlagRow[],
     config: AutodeclineConfigRow[],
     now: Date,
-    bounds: { since: string; limit: number }
+    limit: number
   ): Promise<any[]> {
     const found: any[] = [];
-    for (let offset = 0; offset < bounds.limit * 20 && found.length < bounds.limit; offset += bounds.limit) {
-      const page = await this.fetchDuePage(flags, now, bounds, offset);
-      this.collectDue(found, page, flags, config, now, bounds.limit);
-      if (page.length < bounds.limit) break;
+    for (let offset = 0; offset < limit * 20 && found.length < limit; offset += limit) {
+      const page = await this.fetchDuePage(flags, config, now, limit, offset);
+      this.collectDue(found, page, flags, config, now, limit);
+      if (page.length < limit) break;
     }
     return found;
   }
 
   private async fetchDuePage(
     flags: DashboardRequestFlagRow[],
+    config: AutodeclineConfigRow[],
     now: Date,
-    bounds: { since: string; limit: number },
+    limit: number,
     offset: number
   ): Promise<any[]> {
-    const where = pendingExpiryWhere(now, bounds.since, expiryCountryFilter(flags));
+    const where = pendingExpiryWhere(now, expiryClauses(flags, config, now));
     if (!where) return [];
     const res = await this.hasuraSystemService.executeQuery<{ rental_requests: any[] }>(
       Q.LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY,
-      { where, limit: bounds.limit, offset }
+      { where, limit, offset }
     );
     return res.rental_requests ?? [];
   }
@@ -475,7 +489,13 @@ export class RentalsCronService {
   private sideEffectJob(row: { id: string; kind: 'release' | 'notify'; payload: any }): SideEffectJob[] {
     const payload = row.payload ?? {};
     if (!payload.row?.id) return [];
-    return [{ id: row.id, kind: row.kind, row: payload.row, window: payload.window === 'start' ? 'start' : 'sla' }];
+    return [{
+      id: row.id,
+      kind: row.kind,
+      row: payload.row,
+      window: payload.window === 'start' ? 'start' : 'sla',
+      recipients: listedRecipients(payload.recipients),
+    }];
   }
 
   private async clearSideEffect(id: string): Promise<void> {
@@ -507,8 +527,17 @@ export class RentalsCronService {
     return (saved.update_rental_requests?.affected_rows ?? 0) > 0;
   }
 
-  private async notifyNoResponse(row: UnansweredRentalRequest, window: RentalRespondWindow): Promise<void> {
-    await this.notificationsService.sendRentalRequestNoResponse({ ...row, window });
+  private async notifyNoResponse(
+    row: UnansweredRentalRequest,
+    window: RentalRespondWindow,
+    recipients?: NoResponseRecipient[]
+  ): Promise<void> {
+    const failed = await this.notificationsService.failedNoResponseRecipients(
+      { ...row, window },
+      recipients
+    );
+    if (!failed.length) return;
+    throw new Error(`NO_RESPONSE_PARTIAL:${failed.join(',')}`);
   }
 
   private async logHistory(

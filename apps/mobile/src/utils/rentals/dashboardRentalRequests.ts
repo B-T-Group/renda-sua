@@ -11,11 +11,10 @@ type StartRow = {
 };
 
 const CONTRACT_HOUR_CAP = 48;
-export const TOTAL_OVERRIDE_MAX = 1_000_000;
 export const TOTAL_OVERRIDE_RATIO = 10;
 
 export function totalOverrideTooHigh(quote: number, value: number): boolean {
-  if (value > TOTAL_OVERRIDE_MAX) return true;
+  if (value <= quote) return false;
   return quote > 0 && value > quote * TOTAL_OVERRIDE_RATIO;
 }
 
