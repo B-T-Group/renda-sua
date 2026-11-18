@@ -502,7 +502,11 @@ function build(
     {} as never,
     momo,
     {} as never,
-    { notifySupportConditionRefund: async () => true, sendConditionDeclinedNotice: async () => undefined } as never,
+    {
+      notifySupportConditionRefund: async () => true,
+      notifyRenterConditionRefund: async () => true,
+      sendConditionDeclinedNotice: async () => undefined,
+    } as never,
     { clearPinForOrder: async () => undefined } as never,
     {
       consumeDeclineHold: async () => undefined,

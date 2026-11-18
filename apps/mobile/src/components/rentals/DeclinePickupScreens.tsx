@@ -161,29 +161,34 @@ export function declineCardView(booking: {
   };
 }
 
-export function DeclineOutcomeCard({
-  money,
-  refundStatus,
-  onViewWallet,
-  onBrowse,
-}: {
+type OutcomeCardProps = {
   money: DeclineMoney;
   refundStatus: DeclineRefundView;
   onViewWallet?: () => void;
   onBrowse?: () => void;
-}) {
+  onContactSupport?: () => void;
+};
+
+export function DeclineOutcomeCard({ money, refundStatus, onViewWallet, onBrowse, onContactSupport }: OutcomeCardProps) {
   const { t, i18n } = useTranslation();
   const amount = declineAmount(money.amount, money.currency, i18n.language);
   const wallet = refundStatus === 'failed' || refundStatus === 'manual';
+  const checking = refundStatus === 'refund_pending' && money.refundSent === false;
   return (
     <View style={styles.pad}>
-      {wallet ? <WalletMark /> : <MaterialCommunityIcons name="cash-refund" size={36} color={colors.primary.main} />}
+      {outcomeMark(wallet, checking)}
       <Text variant="headlineSmall">{outcomeTitle(refundStatus, t)}</Text>
       <Text>{money.place} · {money.bookingNumber}</Text>
       <Text>{outcomeBody(money, amount, refundStatus, t)}</Text>
-      <OutcomeActions wallet={wallet} onViewWallet={onViewWallet} onBrowse={onBrowse} />
+      <OutcomeActions wallet={wallet} checking={checking} onViewWallet={onViewWallet} onBrowse={onBrowse} onSupport={onContactSupport} />
     </View>
   );
+}
+
+function outcomeMark(wallet: boolean, checking: boolean) {
+  if (wallet) return <WalletMark />;
+  if (checking) return <CheckingMark />;
+  return <MaterialCommunityIcons name="cash-refund" size={36} color={colors.primary.main} />;
 }
 
 export function BusinessDeclineBanner({
@@ -407,10 +412,16 @@ function paidLine(money: DeclineMoney, amount: string, t: any): string {
   return t('pickupDecline.momoPaid', "We'll refund {{amount}} to {{phone}}.", { amount, phone });
 }
 
+function checkingCopy(amount: string, t: any): string {
+  return t(
+    'pickupDecline.refundChecking',
+    "We're checking your refund of {{amount}}. We'll let you know as soon as it's in your wallet.",
+    { amount }
+  );
+}
+
 function sentLine(status: string, money: DeclineMoney, amount: string, t: any): string {
-  if (status === 'refund_pending' && money.refundSent === false) {
-    return t('pickupDecline.refundChecking', "We're checking your refund of {{amount}}.", { amount });
-  }
+  if (status === 'refund_pending' && money.refundSent === false) return checkingCopy(amount, t);
   const phone = (money.phoneMask ?? '').trim();
   if (money.rail === 'momo_paid' && phone && status === 'refund_pending') {
     return t('pickupDecline.refundProgressBody', '{{amount}} is on its way to {{phone}}.', { amount, phone });
@@ -445,11 +456,19 @@ function outcomeTitle(refundStatus: string, t: any): string {
   return t('pickupDecline.cancelledTitle', 'Booking cancelled');
 }
 
-function OutcomeActions({ wallet, onViewWallet, onBrowse }: { wallet: boolean; onViewWallet?: () => void; onBrowse?: () => void }) {
+function OutcomeActions(props: { wallet: boolean; checking: boolean; onViewWallet?: () => void; onBrowse?: () => void; onSupport?: () => void }) {
   const { t } = useTranslation();
-  if (!wallet) {
-    return <Button mode="contained" buttonColor={colors.primary.main} onPress={onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>;
-  }
+  if (props.wallet) return <WalletActions onViewWallet={props.onViewWallet} onBrowse={props.onBrowse} />;
+  return (
+    <>
+      <Button mode="contained" buttonColor={colors.primary.main} onPress={props.onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
+      {props.checking ? <SupportLink onSupport={props.onSupport} /> : null}
+    </>
+  );
+}
+
+function WalletActions({ onViewWallet, onBrowse }: { onViewWallet?: () => void; onBrowse?: () => void }) {
+  const { t } = useTranslation();
   return (
     <>
       <Button mode="contained" buttonColor={colors.primary.main} onPress={onViewWallet}>{t('pickupDecline.viewWallet', 'View wallet')}</Button>
@@ -458,11 +477,29 @@ function OutcomeActions({ wallet, onViewWallet, onBrowse }: { wallet: boolean; o
   );
 }
 
+function SupportLink({ onSupport }: { onSupport?: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Button mode="text" textColor={colors.primary.main} onPress={onSupport}>
+      {t('pickupDecline.contactSupport', 'Contact support')}
+    </Button>
+  );
+}
+
 function WalletMark() {
   return (
     <View style={styles.mark}>
       <MaterialCommunityIcons name="wallet-outline" size={36} color={colors.primary.main} />
       <MaterialCommunityIcons name="check-circle" size={16} color="#0B7A3B" style={styles.badge} />
+    </View>
+  );
+}
+
+function CheckingMark() {
+  return (
+    <View style={styles.mark}>
+      <MaterialCommunityIcons name="wallet-outline" size={36} color={colors.primary.main} />
+      <MaterialCommunityIcons name="clock-outline" size={16} color={colors.warning.main} style={styles.badge} />
     </View>
   );
 }

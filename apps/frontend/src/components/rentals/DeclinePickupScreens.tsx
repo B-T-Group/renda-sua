@@ -1,3 +1,4 @@
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
@@ -195,29 +196,34 @@ export function declineCardView(booking: {
   };
 }
 
-export function DeclineOutcomeCard({
-  money,
-  refundStatus,
-  onViewWallet,
-  onBrowse,
-}: {
+type OutcomeCardProps = {
   money: DeclineMoney;
   refundStatus: DeclineRefundView;
   onViewWallet?: () => void;
   onBrowse?: () => void;
-}) {
+  onContactSupport?: () => void;
+};
+
+export function DeclineOutcomeCard({ money, refundStatus, onViewWallet, onBrowse, onContactSupport }: OutcomeCardProps) {
   const { t, i18n } = useTranslation();
   const amount = declineAmount(money.amount, money.currency, i18n.language);
   const wallet = refundStatus === 'failed' || refundStatus === 'manual';
+  const checking = refundStatus === 'refund_pending' && money.refundSent === false;
   return (
     <Stack spacing={2} sx={{ p: 2, maxWidth: 420, width: '100%', mx: 'auto' }}>
-      {wallet ? <WalletMark /> : <DeclineArt />}
+      {outcomeMark(wallet, checking)}
       <Typography variant="h5">{outcomeTitle(refundStatus, t)}</Typography>
       <Typography color="text.secondary">{money.place} · {money.bookingNumber}</Typography>
       <Typography>{outcomeBody(money, amount, refundStatus, t)}</Typography>
-      <OutcomeActions wallet={wallet} onViewWallet={onViewWallet} onBrowse={onBrowse} />
+      <OutcomeActions wallet={wallet} checking={checking} onViewWallet={onViewWallet} onBrowse={onBrowse} onSupport={onContactSupport} />
     </Stack>
   );
+}
+
+function outcomeMark(wallet: boolean, checking: boolean) {
+  if (wallet) return <WalletMark />;
+  if (checking) return <CheckingMark />;
+  return <DeclineArt />;
 }
 
 export function BusinessDeclineBanner({
@@ -499,9 +505,19 @@ function outcomeTitle(refundStatus: DeclineRefundView, t: any): string {
   return t('pickupDecline.cancelledTitle', 'Booking cancelled');
 }
 
-function OutcomeActions({ wallet, onViewWallet, onBrowse }: { wallet: boolean; onViewWallet?: () => void; onBrowse?: () => void }) {
+function OutcomeActions(props: { wallet: boolean; checking: boolean; onViewWallet?: () => void; onBrowse?: () => void; onSupport?: () => void }) {
   const { t } = useTranslation();
-  if (!wallet) return <Button variant="contained" color="primary" onClick={onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>;
+  if (props.wallet) return <WalletActions onViewWallet={props.onViewWallet} onBrowse={props.onBrowse} />;
+  return (
+    <>
+      <Button variant="contained" color="primary" onClick={props.onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
+      {props.checking ? <SupportLink onSupport={props.onSupport} /> : null}
+    </>
+  );
+}
+
+function WalletActions({ onViewWallet, onBrowse }: { onViewWallet?: () => void; onBrowse?: () => void }) {
+  const { t } = useTranslation();
   return (
     <>
       <Button variant="contained" color="primary" onClick={onViewWallet}>{t('pickupDecline.viewWallet', 'View wallet')}</Button>
@@ -510,11 +526,25 @@ function OutcomeActions({ wallet, onViewWallet, onBrowse }: { wallet: boolean; o
   );
 }
 
+function SupportLink({ onSupport }: { onSupport?: () => void }) {
+  const { t } = useTranslation();
+  return <Button color="primary" onClick={onSupport}>{t('pickupDecline.contactSupport', 'Contact support')}</Button>;
+}
+
 function WalletMark() {
   return (
     <Box sx={{ position: 'relative', width: 40, height: 40 }} aria-hidden>
       <AccountBalanceWalletIcon sx={{ fontSize: 40, color: 'primary.main' }} />
       <CheckCircleIcon sx={{ position: 'absolute', right: -6, bottom: -2, fontSize: 18, color: '#0B7A3B', bgcolor: '#FAF9F7', borderRadius: '50%' }} />
+    </Box>
+  );
+}
+
+function CheckingMark() {
+  return (
+    <Box sx={{ position: 'relative', width: 40, height: 40 }} aria-hidden>
+      <AccountBalanceWalletIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+      <AccessTimeIcon sx={{ position: 'absolute', right: -6, bottom: -2, fontSize: 18, color: 'warning.main', bgcolor: '#FAF9F7', borderRadius: '50%' }} />
     </Box>
   );
 }
@@ -556,10 +586,16 @@ function paidLine(money: DeclineMoney, amount: string, t: any): string {
   return t('pickupDecline.momoPaid', "We'll refund {{amount}} to {{phone}}.", { amount, phone });
 }
 
+function checkingCopy(amount: string, t: any): string {
+  return t(
+    'pickupDecline.refundChecking',
+    "We're checking your refund of {{amount}}. We'll let you know as soon as it's in your wallet.",
+    { amount }
+  );
+}
+
 function sentLine(status: string, money: DeclineMoney, amount: string, t: any): string {
-  if (status === 'refund_pending' && money.refundSent === false) {
-    return t('pickupDecline.refundChecking', "We're checking your refund of {{amount}}.", { amount });
-  }
+  if (status === 'refund_pending' && money.refundSent === false) return checkingCopy(amount, t);
   const phone = (money.phoneMask ?? '').trim();
   if (money.rail === 'momo_paid' && phone && status === 'refund_pending') {
     return t('pickupDecline.refundProgressBody', '{{amount}} is on its way to {{phone}}.', { amount, phone });

@@ -1,4 +1,5 @@
 import {
+  buildConditionRefundRenterNotice,
   buildRentalBookingConfirmedPush,
   buildRentalBookingReservedPush,
   buildRentalInspectionNotice,
@@ -141,6 +142,18 @@ describe('rental push copy', () => {
     expect(buildReportSentInApp({ rentalItemName: item, renterName: 'Amina' }).body).toBe(
       `We asked Amina to review the pickup report for ${item}.`
     );
+  });
+
+  it('tells the renter the decline refund landed, in the wallet or on Mobile Money', () => {
+    const wallet = buildConditionRefundRenterNotice({ amount: 45000, currency: 'XAF', landed: 'wallet' });
+    expect(wallet.body).toBe('Your refund of 45\u00a0000\u00a0FCFA is in your Rendasua wallet.');
+    const sent = buildConditionRefundRenterNotice({
+      amount: 45000,
+      currency: 'XAF',
+      landed: 'sent',
+      preferredLanguage: 'fr',
+    });
+    expect(sent.body).toBe('Votre remboursement de 45\u00a0000\u00a0FCFA a été envoyé sur votre numéro Mobile Money.');
   });
 
   it('formats the due clock in the listing time zone', () => {

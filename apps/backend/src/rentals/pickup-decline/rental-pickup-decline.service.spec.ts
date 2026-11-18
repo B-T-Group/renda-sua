@@ -56,6 +56,7 @@ function harness(options: {
   stealClaim?: boolean;
   dropOwnedWrite?: boolean;
   noticeFails?: boolean;
+  renterFails?: boolean;
   poll?: 'refunded' | 'failed' | 'refund_pending' | 'missing';
 } = {}) {
   const state = booking(options.booking);
@@ -77,6 +78,7 @@ function harness(options: {
     refund: [] as unknown[],
     support: 0,
     supportPayload: null as { outcome?: string; externalId?: string; walletCredited?: boolean } | null,
+    renter: [] as Array<{ landed?: string; amount?: number; currency?: string }>,
     cas: 0,
     claimAtSend: null as string | null,
   };
@@ -271,6 +273,10 @@ function harness(options: {
         calls.supportPayload = payload;
         if (options.noticeFails) throw new Error('smtp down');
         return true;
+      }),
+      notifyRenterConditionRefund: jest.fn(async (payload: { landed?: string; amount?: number; currency?: string }) => {
+        calls.renter.push(payload);
+        return options.renterFails ? false : true;
       }),
     } as never,
     {
@@ -894,6 +900,23 @@ describe('RentalPickupDeclineService', () => {
     expect(paid.state.refund_status).toBe('refunded');
     expect(paid.state.refund_claim_token).toBeNull();
     expect(paid.calls.restore).toBe(0);
+    expect(paid.calls.renter).toEqual([expect.objectContaining({ landed: 'sent', amount: 100 })]);
+    expect(neverSent.calls.renter).toEqual([expect.objectContaining({ landed: 'wallet' })]);
+    const again = harness({
+      poll: 'missing',
+      booking: {
+        status: 'cancelled',
+        refund_status: 'refund_pending',
+        refund_amount: 100,
+        refund_provider: 'freemopay',
+        refund_provider_ref: stableRefundReference(BOOKING),
+        refund_sent_at: null,
+        refund_notices: ['renter_landed'],
+      },
+    });
+    await again.service.markRefund(BOOKING, { status: 'unpaid', note: 'already told' });
+    expect(again.calls.restore).toBe(1);
+    expect(again.calls.renter).toEqual([]);
     const lost = harness({ booking: { status: 'cancelled', refund_status: 'refund_pending' }, claimLoses: true });
     await expect(lost.service.markRefund(BOOKING, { status: 'refunded', providerRef: 'FP-9' })).rejects.toMatchObject({
       status: 409,
@@ -913,7 +936,8 @@ describe('RentalPickupDeclineService', () => {
     expect(calls.history).toBe(1);
     expect(calls.notice).toBe(1);
     expect(calls.support).toBe(1);
-    expect(state.refund_notices ?? []).toEqual([]);
+    expect(state.refund_notices ?? []).toEqual(['renter_landed']);
+    expect(calls.renter).toEqual([expect.objectContaining({ landed: 'wallet' })]);
   });
 
   it('stamps the wallet credit when the manual status write loses its claim', async () => {

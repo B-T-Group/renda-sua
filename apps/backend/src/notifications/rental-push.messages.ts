@@ -1,3 +1,4 @@
+import { formatRentalAmount } from '../assistant/assistant-rental-format';
 import { marketTimeZone } from '../common/market-timezones';
 
 export type RentalPushLocale = 'en' | 'fr';
@@ -507,5 +508,36 @@ export function buildConditionRefundSupportNotice(params: {
   return {
     title: 'Mobile Money refund needs review',
     body: `A Mobile Money refund for ${params.rentalItemName} (${params.bookingNumber}) is ${params.outcome}.${external}${wallet} Review it in rental declines.`,
+  };
+}
+
+/** One renter notice when a decline refund is in the wallet or confirmed sent. */
+export function buildConditionRefundRenterNotice(params: {
+  amount: number;
+  currency: string;
+  landed: 'wallet' | 'sent';
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const amount = formatRentalAmount(params.amount, params.currency, fr ? 'fr' : 'en');
+  if (params.landed === 'sent') return sentRefundNotice(fr, amount);
+  return walletRefundNotice(fr, amount);
+}
+
+function walletRefundNotice(fr: boolean, amount: string): { title: string; body: string } {
+  return {
+    title: fr ? 'Remboursement dans votre portefeuille' : 'Refund in your wallet',
+    body: fr
+      ? `Votre remboursement de ${amount} est dans votre portefeuille Rendasua.`
+      : `Your refund of ${amount} is in your Rendasua wallet.`,
+  };
+}
+
+function sentRefundNotice(fr: boolean, amount: string): { title: string; body: string } {
+  return {
+    title: fr ? 'Remboursement envoyé' : 'Refund sent',
+    body: fr
+      ? `Votre remboursement de ${amount} a été envoyé sur votre numéro Mobile Money.`
+      : `Your refund of ${amount} was sent to your Mobile Money number.`,
   };
 }

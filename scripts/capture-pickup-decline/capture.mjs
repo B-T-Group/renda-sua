@@ -337,8 +337,12 @@ async function assertScene(page, scene, lang, mobile) {
     }
   }
   if (scene === 'refund-checking') {
-    const line = lang === 'fr' ? 'Nous vérifions votre remboursement' : "We're checking your refund";
+    const line = lang === 'fr' ? 'Nous vous préviendrons dès qu' : "We'll let you know as soon as";
+    const support = lang === 'fr' ? 'Contacter le support' : 'Contact support';
+    const raw = await page.evaluate(() => document.body.textContent || '');
     if (!text.includes(line)) throw new Error(`${scene} ${lang} is not the checking copy`);
+    if (!text.includes(support)) throw new Error(`${scene} ${lang} is missing contact support`);
+    if (!raw.includes('45\u00a0000\u00a0FCFA')) throw new Error(`${scene} ${lang} lost the non-breaking space`);
     if (text.toLowerCase().includes(lang === 'fr' ? 'en route' : 'on its way')) {
       throw new Error(`${scene} ${lang} still says the money is on its way`);
     }

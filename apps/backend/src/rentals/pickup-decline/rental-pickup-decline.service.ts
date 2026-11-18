@@ -366,6 +366,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     const ref = result.providerRef ?? referenceId;
     const wrote = await this.writeOwned(booking.id, token, result.status, result.provider, ref);
     if (!wrote) await this.keepProviderRef(booking.id, referenceId, ref);
+    if (wrote && result.status === 'refunded') await this.tellRenter(booking, 'sent');
     return wrote ? result.status : 'refund_pending';
   }
 
@@ -373,6 +374,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     if (!(await this.keepClaim(booking.id, token))) return 'refund_pending';
     await this.rentals.restoreDeclinePayout(booking, ledger.amount);
     await this.markCredited(booking.id);
+    await this.tellRenter(booking, 'wallet');
     const wrote = await this.writeOwned(booking.id, token, 'manual', 'unsupported', null);
     if (wrote) await this.tellSupport(booking, 'unsupported');
     return wrote ? 'manual' : 'refund_pending';
@@ -768,13 +770,39 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   private async sendNotice(booking: DeclineBooking, outcome: string): Promise<void> {
-    const claimed = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
-      Q.CLAIM_NOTICE,
-      { id: booking.id, outcome: [outcome] }
-    );
-    if ((claimed.update_rental_bookings?.affected_rows ?? 0) !== 1) return;
+    if (!(await this.claimNotice(booking.id, outcome))) return;
     const sent = await this.notifications.notifySupportConditionRefund(this.noticeBody(booking, outcome));
     if (!sent) await this.releaseNotice(booking.id, outcome);
+  }
+
+  /** Once per booking. A failed send releases the claim so the next landing can retry. */
+  private async tellRenter(booking: DeclineBooking, landed: 'wallet' | 'sent'): Promise<void> {
+    try {
+      await this.sendRenterNotice(booking, landed);
+    } catch (error: any) {
+      this.logger.warn(`decline renter notice: ${error?.message ?? error}`);
+      await this.releaseNotice(booking.id, 'renter_landed');
+    }
+  }
+
+  private async sendRenterNotice(booking: DeclineBooking, landed: 'wallet' | 'sent'): Promise<void> {
+    const userId = booking.client?.user_id;
+    const amount = moneyAmount(booking.refund_amount) || moneyAmount(booking.total_amount);
+    if (!userId || amount <= 0 || !(await this.claimNotice(booking.id, 'renter_landed'))) return;
+    const sent = await this.notifications.notifyRenterConditionRefund(this.renterBody(booking, userId, amount, landed));
+    if (!sent) await this.releaseNotice(booking.id, 'renter_landed');
+  }
+
+  private renterBody(booking: DeclineBooking, clientUserId: string, amount: number, landed: 'wallet' | 'sent') {
+    return { clientUserId, bookingId: booking.id, amount, currency: booking.currency, landed };
+  }
+
+  private async claimNotice(id: string, outcome: string): Promise<boolean> {
+    const claimed = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
+      Q.CLAIM_NOTICE,
+      { id, outcome: [outcome] }
+    );
+    return (claimed.update_rental_bookings?.affected_rows ?? 0) === 1;
   }
 
   private noticeBody(booking: DeclineBooking, outcome: string) {
@@ -887,7 +915,9 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   private async markOwned(booking: DeclineBooking, token: string, status: RefundStatus, ref: string): Promise<boolean> {
     const provider = booking.refund_provider ?? '';
-    return this.writeOwned(booking.id, token, status, provider, ref);
+    const wrote = await this.writeOwned(booking.id, token, status, provider, ref);
+    if (wrote && status === 'refunded') await this.tellRenter(booking, 'sent');
+    return wrote;
   }
 
   /** MTN rejects a duplicate X-Reference-Id with 409, so the same id can be sent again. */
@@ -979,6 +1009,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     const owned = await this.takeClaim(booking);
     const wrote = await this.writeOwned(booking.id, owned.token, 'refunded', booking.refund_provider ?? '', body.providerRef ?? null);
     if (!wrote) throw new HttpException(this.busyRefund(), HttpStatus.CONFLICT);
+    await this.tellRenter(booking, 'sent');
   }
 
   private async takeClaim(booking: DeclineBooking): Promise<{ booking: DeclineBooking; token: string }> {
@@ -1001,6 +1032,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     const pay = amount > 0 ? amount : moneyAmount(full.refund_amount);
     if (pay > 0) await this.rentals.restoreDeclinePayout(full, pay);
     if (pay > 0) await this.markCredited(full.id);
+    if (pay > 0) await this.tellRenter(full, 'wallet');
     const wrote = token
       ? await this.writeOwned(full.id, token, 'failed', full.refund_provider ?? '', providerRef ?? null)
       : await this.writePolled(full.id, 'failed', providerRef ?? undefined);
