@@ -183,6 +183,11 @@ export interface GetInventoryItemsQuery {
   food_only?: boolean;
   /** Only export_available items for the viewer market. */
   export_only?: boolean;
+  /**
+   * How page > 1 updates the list. Default `append` (infinite scroll).
+   * Use `replace` for numbered pagination (e.g. /exports).
+   */
+  pageMode?: 'append' | 'replace';
   /** When false, skip fetching (e.g. wait for store header). */
   enabled?: boolean;
 }
@@ -272,6 +277,19 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.export_only ?? '',
     locationScoped ? '' : `${catalogGeo.country_code ?? ''}:${catalogGeo.state ?? ''}`,
   ].join('|');
+  const pageMode = query.pageMode ?? 'append';
+  const replacePageKey =
+    pageMode === 'replace'
+      ? `${listScopeKey}|${query.page || 1}`
+      : listScopeKey;
+  const [activeReplaceKey, setActiveReplaceKey] = useState(replacePageKey);
+  if (pageMode === 'replace' && replacePageKey !== activeReplaceKey) {
+    setActiveReplaceKey(replacePageKey);
+    setInventoryItems([]);
+    setLoading(true);
+    setLoadingMore(false);
+    setError(null);
+  }
 
   const fetchInventoryItems = useCallback(async () => {
     if (query.enabled === false) {
@@ -301,12 +319,16 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     const requestedPage = query.page || 1;
     // Filter/sort/location changes can race ahead of page reset; always replace then.
     const page = scopeChanged ? 1 : requestedPage;
-    const isLoadMore = page > 1 && !scopeChanged;
+    const isLoadMore =
+      pageMode === 'append' && page > 1 && !scopeChanged;
     if (isLoadMore) {
       setLoadingMore(true);
     } else {
       setLoading(true);
       setLoadingMore(false);
+      if (pageMode === 'replace') {
+        setInventoryItems([]);
+      }
     }
     setError(null);
 
@@ -425,6 +447,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     catalogGeo.country_code,
     catalogGeo.state,
     listScopeKey,
+    pageMode,
     query.page,
     query.limit,
     query.is_active,

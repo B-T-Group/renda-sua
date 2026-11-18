@@ -9,13 +9,10 @@ import {
     Alert,
     Box,
     Button,
-    Card,
-    CardContent,
     Chip,
     CircularProgress,
     Container,
     Paper,
-    Skeleton,
     Typography,
     useMediaQuery,
     useTheme,
@@ -73,6 +70,7 @@ import AddressAlert from '../common/AddressAlert';
 import AppDownloadBanner from '../common/AppDownloadBanner';
 import InGridAppPromoTile from '../common/InGridAppPromoTile';
 import DashboardItemCard from '../common/DashboardItemCard';
+import ItemCardSkeleton from '../common/ItemCardSkeleton';
 import { FeaturedCollectionsRow } from '../common/FeaturedCollectionsRow';
 import BrowseStoresStrip from '../common/BrowseStoresStrip';
 import { useCollections } from '../../hooks/useCollections';
@@ -91,32 +89,6 @@ import { catalogSearchShouldFocus } from '../../utils/catalogSearchFocus';
 import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
 import type { Order } from '../../hooks/useOrders';
 import { useMarket } from '../../hooks/useMarket';
-
-// ItemCardSkeleton component for better loading UX
-const ItemCardSkeleton: React.FC = () => (
-  <Card
-    elevation={0}
-    sx={{
-      height: '100%',
-      border: 1,
-      borderColor: 'divider',
-      borderRadius: 2,
-      overflow: 'hidden',
-    }}
-  >
-    <Skeleton variant="rectangular" height={240} animation="wave" />
-    <CardContent sx={{ p: 2 }}>
-      <Skeleton variant="text" width="80%" height={24} sx={{ mb: 1 }} animation="wave" />
-      <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} animation="wave" />
-      <Skeleton variant="text" width="40%" height={16} sx={{ mb: 2 }} animation="wave" />
-      <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-        <Skeleton variant="rounded" width={60} height={24} animation="wave" />
-        <Skeleton variant="rounded" width={80} height={24} animation="wave" />
-      </Box>
-      <Skeleton variant="rounded" width="100%" height={36} animation="wave" />
-    </CardContent>
-  </Card>
-);
 
 /** Same columns/gap as the main catalog grid below curated sections. */
 const ITEMS_CATALOG_GRID_SX = {
