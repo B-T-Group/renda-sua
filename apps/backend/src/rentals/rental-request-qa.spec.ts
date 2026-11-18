@@ -25,11 +25,17 @@ describe('rental request QA sql', () => {
   });
 
   it('L5 backfills respond_by in batches without a generated column', () => {
+    const backfill = readFileSync(
+      join(__dirname, '../../../hasura/migrations/Rendasua/20261118180000_rental_request_qa_round2/up.sql'),
+      'utf8'
+    );
     expect(qaSql).toContain('ADD COLUMN IF NOT EXISTS respond_by timestamptz');
-    expect(qaSql).toContain('LIMIT 500');
+    expect(backfill).toContain('LIMIT 500');
     expect(qaSql).toContain("timezone('UTC', p_now)");
     expect(qaSql).not.toContain('IMMUTABLE');
     expect(qaSql).not.toContain('GENERATED ALWAYS');
+    expect(backfill).toContain('RETURNS SETOF public.rental_requests');
+    expect(backfill).toContain('rental_status_history');
   });
 
   it('L6 locks the item before inserting the proposed booking', () => {
@@ -89,6 +95,17 @@ describe('list gates', () => {
     expect(service.businessRequestLimit({ status: 'pending', limit: 1000 }, true)).toBe(100);
     expect(service.businessRequestLimit({ status: 'pending' }, true)).toBe(100);
     expect(service.businessRequestLimit({ status: 'pending', limit: 1000 }, false)).toBe(100);
+  });
+
+  it('N5 keeps the respond_by stored after the renter edit', () => {
+    const row = {
+      created_at: '2026-11-01T00:00:00.000Z',
+      respond_by: '2026-11-02T20:00:00.000Z',
+      requested_start_at: '2026-11-10T00:00:00.000Z',
+      rental_location_listing: { business_location: { address: { country: 'Cameroon' } } },
+    };
+    const flags = [{ boolean_value: true, country_code: null }];
+    expect(service.withRespondBy([row], flags)[0].respond_by).toBe('2026-11-02T20:00:00.000Z');
   });
 
   it('M4 omits respond_by when that country is off', () => {

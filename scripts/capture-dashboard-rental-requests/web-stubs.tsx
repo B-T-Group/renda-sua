@@ -1,7 +1,7 @@
 /** Capture stubs for web data hooks. Not imported by the app. */
 import { dashboardPayload, listPayload } from './fixtures';
 
-const flags = { rentals_dashboard_requests_enabled: true };
+const flags = { rentals_dashboard_requests_enabled: true, rentals_modify_request_enabled: true };
 const profile = { business: { id: 'biz-atelier' }, accounts: [] as unknown[] };
 
 const fetchDashboardRentalRequests = async () => dashboardPayload();

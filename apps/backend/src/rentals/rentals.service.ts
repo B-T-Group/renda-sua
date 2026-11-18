@@ -50,7 +50,7 @@ import { buildRentalRequestQuote } from './rental-request-quote';
 import { paymentBlockedUntilPriceSeen, quoteWithTotalOverride, shouldNotifyPriceChange } from './rental-price-change';
 import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
-import { cappedContractExpiry, computeRespondBy, earliestRequestStartIso } from './rental-respond-by';
+import { cappedContractExpiry, computeRespondBy, earliestRequestStartIso, effectiveRespondBy } from './rental-respond-by';
 import { listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
@@ -1014,6 +1014,10 @@ export class RentalsService {
         inspection_policy_version: inspectionPolicyVersion,
         quoted_total: quote?.quotedTotal ?? null,
         rental_pricing_snapshot: quote?.snapshot ?? null,
+        respond_by: computeRespondBy({
+          createdAt: new Date().toISOString(),
+          startAt: plan.envelopeStartIso,
+        }).respondBy,
       },
     });
     const requestId = row.insert_rental_requests_one.id;
@@ -1477,7 +1481,11 @@ export class RentalsService {
     const flags = await this.loadDashboardRequestFlags();
     const country = req.rental_location_listing?.business_location?.address?.country;
     if (!listingDashboardFlag(flags, country)) return;
-    const decision = computeRespondBy({ createdAt: req.created_at, startAt: earliestRequestStartIso(req) });
+    const decision = effectiveRespondBy({
+      createdAt: req.created_at,
+      respondBy: req.respond_by,
+      startAt: earliestRequestStartIso(req),
+    });
     if (now.getTime() <= Date.parse(decision.respondBy)) return;
     throw new HttpException(
       { message: 'This request has expired', code: 'RENTAL_REQUEST_EXPIRED' },
@@ -1493,12 +1501,16 @@ export class RentalsService {
     try {
       return quoteWithTotalOverride(computed, dto.totalOverride, await this.totalOverrideEnabled(req));
     } catch (error: any) {
-      const disabled = error?.message === 'TOTAL_OVERRIDE_DISABLED';
-      throw new HttpException(
-        disabled ? 'Changing the total is not enabled' : 'Enter a total greater than zero',
-        HttpStatus.BAD_REQUEST
-      );
+      throw new HttpException(this.overrideErrorMessage(error), HttpStatus.BAD_REQUEST);
     }
+  }
+
+  private overrideErrorMessage(error: any): string {
+    if (error?.message === 'TOTAL_OVERRIDE_DISABLED') return 'Changing the total is not enabled';
+    if (error?.message === 'TOTAL_OVERRIDE_TOO_HIGH') {
+      return 'Enter a total no more than 10 times the quote, and at most 1000000';
+    }
+    return 'Enter a total greater than zero';
   }
 
   private async totalOverrideEnabled(req: any): Promise<boolean> {
@@ -1650,7 +1662,7 @@ export class RentalsService {
     const shown = rows.filter((row) => this.rowDashboardOn(flags, row));
     const rails = await this.railsByCountry(shown);
     const held = await this.heldWindowsByListing(shown);
-    return rows.map((row) => this.withCardFacts(row, flags, rails, held));
+    return Promise.all(rows.map((row) => this.withCardFacts(row, flags, rails, held)));
   }
 
   private rowDashboardOn(flags: DashboardRequestFlagRow[], row: any): boolean {
@@ -1704,36 +1716,71 @@ export class RentalsService {
     return r.rental_booking_windows ?? [];
   }
 
-  private withCardFacts(
+  private async withCardFacts(
     row: any,
     flags: DashboardRequestFlagRow[],
     rails: Map<string, string | null>,
     held: Map<string, Array<{ startMs: number; endMs: number; units: number }>>
-  ): any {
+  ): Promise<any> {
     if (!this.rowDashboardOn(flags, row)) return row;
     const code = resolveItemCountry(row.rental_location_listing?.business_location?.address?.country);
     return {
       ...row,
       payment_rail: code ? rails.get(code) ?? null : null,
-      dates_available: this.datesFromHeld(row, held),
+      dates_available: await this.datesFromHeld(row, held),
     };
   }
 
-  private datesFromHeld(
+  private async datesFromHeld(
     row: any,
     held: Map<string, Array<{ startMs: number; endMs: number; units: number }>>
-  ): boolean | null {
+  ): Promise<boolean | null> {
     if (row.status !== 'pending') return null;
-    const listingId = row.rental_location_listing?.id;
-    if (!listingId) return null;
+    if (!row.rental_location_listing?.id) return null;
+    try {
+      return await this.datesFromSpans(row, held);
+    } catch (error: any) {
+      return this.datesFromThrown(error);
+    }
+  }
+
+  private async datesFromSpans(
+    row: any,
+    held: Map<string, Array<{ startMs: number; endMs: number; units: number }>>
+  ): Promise<boolean> {
+    const spans = this.requestSpans(row);
+    if (!spans) return this.probeCapacity(row);
     const cap = Math.max(1, Number(row.rental_location_listing?.units_available) || 1);
     const want = this.normalizeUnitsRequested(row.units_requested);
-    const windows = held.get(listingId) ?? [];
-    for (const span of this.capacitySpans(row)) {
+    const windows = held.get(row.rental_location_listing.id) ?? [];
+    for (const span of spans) {
       const used = this.peakConcurrentUnits(windows, span.start.getTime(), span.end.getTime());
       if (used + want > cap) return false;
     }
     return true;
+  }
+
+  private requestSpans(row: any): Array<{ start: Date; end: Date }> | null {
+    const raw = row?.rental_selection_windows;
+    if (Array.isArray(raw) && raw.length > 0) return this.capacitySpans(row);
+    const start = Date.parse(row?.requested_start_at);
+    const end = Date.parse(row?.requested_end_at);
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      return [{ start: new Date(start), end: new Date(end) }];
+    }
+    return null;
+  }
+
+  private async probeCapacity(row: any): Promise<boolean> {
+    const listing = row.rental_location_listing;
+    const units = Math.max(1, Number(listing?.units_available) || 1);
+    await this.assertCapacityForRequestWindows(listing?.id, units, row, this.normalizeUnitsRequested(row.units_requested));
+    return true;
+  }
+
+  private datesFromThrown(error: any): boolean | null {
+    if (error instanceof HttpException && error.getStatus() === HttpStatus.CONFLICT) return false;
+    return null;
   }
 
   private capacitySpans(row: any): Array<{ start: Date; end: Date }> {
@@ -1761,8 +1808,11 @@ export class RentalsService {
   }
 
   private attachRespondBy(row: any): any {
-    const startAt = earliestRequestStartIso(row);
-    const decision = computeRespondBy({ createdAt: row.created_at, startAt });
+    const decision = effectiveRespondBy({
+      createdAt: row.created_at,
+      respondBy: row.respond_by,
+      startAt: earliestRequestStartIso(row),
+    });
     const country = row.rental_location_listing?.business_location?.address?.country;
     return {
       ...row,
@@ -2043,7 +2093,7 @@ export class RentalsService {
     const req = await this.fetchRequest(requestId);
     this.assertCancelOwner(req, user.clientId);
     const row = await this.cancelRequestRow(requestId, user.clientId);
-    if (row.released_booking_id) await this.releaseCancelledBooking(requestId);
+    if (row.released_booking_id) await this.releaseCancelledBooking(requestId, req);
     return { success: true };
   }
 
@@ -2053,22 +2103,29 @@ export class RentalsService {
   ): Promise<{ released_booking_id?: string | null }> {
     try {
       const saved = await this.hasuraSystemService.executeMutation<{
-        cancel_client_rental_request: Array<{ id: string; released_booking_id?: string | null }>;
+        cancel_client_rental_request: Array<{ id: string }>;
       }>(Q.CANCEL_CLIENT_RENTAL_REQUEST, { requestId, clientId });
       const row = saved.cancel_client_rental_request?.[0];
       if (!row) throw new HttpException('This request cannot be cancelled', HttpStatus.CONFLICT);
-      return row;
+      return { released_booking_id: await this.cancelledBookingId(requestId) };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw this.mapEditSqlError(error);
     }
   }
 
-  private async releaseCancelledBooking(requestId: string): Promise<void> {
+  private async cancelledBookingId(requestId: string): Promise<string | null> {
+    const found = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: Array<{ id: string }>;
+    }>(Q.CANCELLED_BOOKING_FOR_REQUEST, { requestId });
+    return found.rental_bookings?.[0]?.id ?? null;
+  }
+
+  private async releaseCancelledBooking(requestId: string, request: { id: string }): Promise<void> {
     try {
       await this.releaseLinkedDeclineHold(requestId);
     } catch (error: any) {
-      await this.recordSideEffect(requestId, 'release', error);
+      await this.recordSideEffect(requestId, 'release', error, { row: { id: request.id }, window: 'sla' });
     }
   }
 
@@ -5612,15 +5669,23 @@ export class RentalsService {
     const message = error instanceof Error ? error.message : String(error);
     this.logger.warn(`rental side effect ${kind} ${requestId}: ${message}`);
     try {
-      await this.hasuraSystemService.executeMutation(Q.ENQUEUE_RENTAL_SIDE_EFFECT, {
+      const saved = await this.hasuraSystemService.executeMutation<{
+        enqueue_rental_side_effect: Array<{ attempts: number }>;
+      }>(Q.ENQUEUE_RENTAL_SIDE_EFFECT, {
         requestId,
         kind,
         payload: { requestId, kind, ...payload },
         error: message,
       });
+      this.noteDeadLetter(kind, requestId, saved.enqueue_rental_side_effect?.[0]?.attempts ?? 0, message);
     } catch (enqueueError: any) {
-      this.logger.warn(`enqueue ${kind} ${requestId}: ${enqueueError?.message ?? enqueueError}`);
+      this.logger.error(`RENTAL_SIDE_EFFECT_DEAD enqueue ${kind} ${requestId}: ${enqueueError?.message ?? enqueueError}`);
     }
+  }
+
+  private noteDeadLetter(kind: string, requestId: string, attempts: number, message: string): void {
+    if (attempts < 5) return;
+    this.logger.error(`RENTAL_SIDE_EFFECT_DEAD ${kind} ${requestId} after ${attempts} attempts: ${message}`);
   }
 
   private proposedBookingInsert(

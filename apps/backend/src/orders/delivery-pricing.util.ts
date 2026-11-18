@@ -142,6 +142,20 @@ export function comparableCountry(value?: string | null): string | null {
   return COUNTRY_NAMES[raw] ?? raw;
 }
 
+/** Spellings an address may store for an ISO code, for a SQL `_in` filter. */
+export function countrySpellings(iso: string): string[] {
+  const code = iso.trim().toUpperCase();
+  if (!code) return [];
+  const variants = new Set<string>([code]);
+  for (const name of Object.keys(COUNTRY_NAMES)) {
+    if (COUNTRY_NAMES[name] !== code) continue;
+    variants.add(name);
+    variants.add(name.toLowerCase());
+    variants.add(name.toLowerCase().replace(/(^|[^a-z0-9])([a-z])/g, (_, sep, letter) => sep + letter.toUpperCase()));
+  }
+  return [...variants];
+}
+
 /** ISO alpha-2 when the value is a code or a known market name; otherwise null. */
 export function isoCountryCode(value?: string | null): string | null {
   const mapped = comparableCountry(value);

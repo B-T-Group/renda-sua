@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { dashboardPayload, listPayload } from './fixtures';
 
-const flags = { rentals_dashboard_requests_enabled: true };
+const flags = { rentals_dashboard_requests_enabled: true, rentals_modify_request_enabled: true };
 
 export function useClientFlags() {
   return { flags, loaded: true, loading: false, error: null };

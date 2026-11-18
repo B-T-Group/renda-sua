@@ -37,11 +37,13 @@ export class RespondRentalRequestDto {
     description:
       'Replaces the server quote. Accepted only while modify-request and dashboard requests are both on. Must be positive, in the item currency.',
     minimum: 0.01,
+    maximum: 1000000,
   })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0.01)
+  @Max(1_000_000)
   totalOverride?: number;
 
   @ApiProperty({ type: RentalPricingSnapshotDto, required: false })

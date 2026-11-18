@@ -23,6 +23,14 @@ export function businessChangedThePrice(status: string, quoted: unknown, accepte
   return status === 'available' && shouldNotifyPriceChange(quoted, accepted);
 }
 
+export const TOTAL_OVERRIDE_MAX = 1_000_000;
+export const TOTAL_OVERRIDE_RATIO = 10;
+
+export function totalOverrideTooHigh(quote: number, totalOverride: number): boolean {
+  if (totalOverride > TOTAL_OVERRIDE_MAX) return true;
+  return quote > 0 && totalOverride > quote * TOTAL_OVERRIDE_RATIO;
+}
+
 export function quoteWithTotalOverride(
   computed: RentalPricingSnapshotDto,
   totalOverride: number | null | undefined,
@@ -31,6 +39,7 @@ export function quoteWithTotalOverride(
   if (totalOverride == null) return computed;
   if (!enabled) throw new Error('TOTAL_OVERRIDE_DISABLED');
   if (!Number.isFinite(totalOverride) || totalOverride <= 0) throw new Error('TOTAL_OVERRIDE_INVALID');
+  if (totalOverrideTooHigh(Number(computed.total), totalOverride)) throw new Error('TOTAL_OVERRIDE_TOO_HIGH');
   return scaleSnapshotTotal(computed, Number(totalOverride.toFixed(2)));
 }
 

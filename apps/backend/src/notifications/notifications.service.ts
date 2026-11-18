@@ -3754,7 +3754,7 @@ export class NotificationsService {
     }
   }
 
-  /** In-app row, push, and email. 24h copy, not the “not available” decline. Never throws. */
+  /** In-app row, push, and email. 24h copy, not the “not available” decline. */
   async sendRentalRequestNoResponse(payload: {
     id: string;
     window: 'sla' | 'start';
@@ -3770,6 +3770,7 @@ export class NotificationsService {
       await this.deliverBusinessRequestExpired(payload);
     } catch (error: any) {
       this.logger.error(`sendRentalRequestNoResponse: ${error?.message ?? error}`);
+      throw error;
     }
   }
 

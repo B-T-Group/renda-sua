@@ -16,6 +16,19 @@ export function computeRespondBy(input: {
   return { respondBy: new Date(sla).toISOString(), window: 'sla' };
 }
 
+/** Stored respond_by wins. An edit resets it; created_at is only the fallback. */
+export function effectiveRespondBy(input: {
+  createdAt: string;
+  respondBy?: string | null;
+  startAt: string | null;
+}): { respondBy: string; window: RentalRespondWindow } {
+  const computed = computeRespondBy({ createdAt: input.createdAt, startAt: input.startAt });
+  const stored = input.respondBy && Number.isFinite(Date.parse(input.respondBy)) ? input.respondBy : null;
+  if (!stored) return computed;
+  const atStart = input.startAt != null && Date.parse(stored) === Date.parse(input.startAt);
+  return { respondBy: stored, window: atStart ? 'start' : 'sla' };
+}
+
 const CONTRACT_HOUR_CAP = 48;
 
 /** Default and maximum contract length: min(48, whole hours until start). Hidden under 1 hour. */

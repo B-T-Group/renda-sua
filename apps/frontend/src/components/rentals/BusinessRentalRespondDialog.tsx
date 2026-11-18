@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { contractHoursOffer, requestStartIso } from '../../utils/dashboardRentalRequests';
+import { contractHoursOffer, requestStartIso, totalOverrideTooHigh } from '../../utils/dashboardRentalRequests';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 import { buildRequestCardModel } from '../../utils/rentalRequestCardModel';
 import type {
@@ -134,7 +134,8 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
 }) => {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
-  const canChangeTotal = flags.rentals_dashboard_requests_enabled;
+  const canChangeTotal =
+    flags.rentals_dashboard_requests_enabled && flags.rentals_modify_request_enabled;
   const [contractHours, setContractHours] = useState('48');
   const [availableNote, setAvailableNote] = useState('');
   const [reasonCode, setReasonCode] = useState<UnavailableRentalReasonCode | ''>('');
@@ -166,8 +167,12 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
       return;
     }
     const overridden = parseTotalOverride(totalOverride);
-    if (overridden === 'invalid') {
-      setError(t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.'));
+    const quote = buildPricingSnapshot(request).total;
+    const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(quote, overridden);
+    if (overridden === 'invalid' || tooHigh) {
+      setError(overridden === 'invalid'
+        ? t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.')
+        : t('business.rentals.changeTotalTooHigh', 'Enter a total no more than 10 times the quote, and at most 1000000.'));
       return;
     }
     setSubmitting(true);
@@ -260,6 +265,10 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     }
   }, [mode, request]);
 
+  const typedOverride = typeof parseTotalOverride(totalOverride) === 'number' ? parseTotalOverride(totalOverride) as number : null;
+  const quoteTotal = offerPreview?.ok ? offerPreview.total : 0;
+  const overrideTooHigh = typedOverride != null && totalOverrideTooHigh(quoteTotal, typedOverride);
+
   if (!open || !mode || !request) return null;
 
   const title =
@@ -324,11 +333,12 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
               type="number"
               value={totalOverride}
               onChange={(e) => setTotalOverride(e.target.value)}
-              inputProps={{ min: 0.01, step: '0.01' }}
-              helperText={t(
-                'business.rentals.changeTotalHelper',
-                'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'
-              )}
+              inputProps={{ min: 0.01, max: 1000000, step: '0.01' }}
+              error={overrideTooHigh}
+              helperText={overrideTooHigh
+                ? t('business.rentals.changeTotalTooHigh', 'Enter a total no more than 10 times the quote, and at most 1000000.')
+                : t('business.rentals.changeTotalHelper', 'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.')
+              }
               fullWidth
             />
             ) : null}
@@ -402,7 +412,8 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
           disabled={
             submitting ||
             declineBlocked(mode, reasonCode, unavailableNote) ||
-            (mode === 'available' && offerPreview != null && !offerPreview.ok)
+            (mode === 'available' && offerPreview != null && !offerPreview.ok) ||
+            (mode === 'available' && overrideTooHigh)
           }
           onClick={() => void (mode === 'available' ? submitAvailable() : submitUnavailable())}
           sx={mode === 'unavailable' ? declineButtonSx : undefined}

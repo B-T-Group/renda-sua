@@ -1,12 +1,14 @@
+import type { ExpiryCountryFilter } from './rental-dashboard-flag';
 import {
-  computeRespondBy,
   earliestRequestStartIso,
+  effectiveRespondBy,
   type RentalRespondWindow,
 } from './rental-respond-by';
 
 export interface UnansweredRentalRequest {
   id: string;
   created_at: string;
+  respond_by?: string | null;
   requested_start_at?: string | null;
   rental_selection_windows?: unknown;
   clientUserId: string | null;
@@ -74,6 +76,29 @@ function earliestCutoff(now: Date, rows: AutodeclineConfigRow[]): string {
   return stamps.reduce((earliest, value) => (Date.parse(value) < Date.parse(earliest) ? value : earliest));
 }
 
+export function pendingExpiryWhere(
+  now: Date,
+  since: string,
+  filter: ExpiryCountryFilter
+): Record<string, unknown> | null {
+  if (filter.kind === 'none') return null;
+  const where: Record<string, unknown> = {
+    status: { _eq: 'pending' },
+    respond_by: { _lte: now.toISOString(), _gte: since },
+  };
+  if (filter.kind === 'in') {
+    where.rental_location_listing = addressCountry({ _in: filter.countries });
+  }
+  if (filter.kind === 'out') {
+    where.rental_location_listing = addressCountry({ _nin: filter.countries });
+  }
+  return where;
+}
+
+function addressCountry(country: Record<string, unknown>): Record<string, unknown> {
+  return { business_location: { address: { country } } };
+}
+
 function autodeclineBatch(rows: AutodeclineConfigRow[]): number {
   const row = rows.find((item) => item.config_key === 'rentals_dashboard_requests_autodecline_batch');
   const batch = Number(row?.number_value);
@@ -114,8 +139,9 @@ async function expireOneUnanswered(
   deps: ExpireUnansweredDeps,
   row: UnansweredRentalRequest
 ): Promise<boolean> {
-  const decision = computeRespondBy({
+  const decision = effectiveRespondBy({
     createdAt: row.created_at,
+    respondBy: row.respond_by,
     startAt: earliestRequestStartIso(row),
   });
   if (Date.parse(decision.respondBy) > deps.now.getTime()) return false;

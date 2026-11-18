@@ -22,24 +22,7 @@ END $$;
 ALTER TABLE public.rental_requests
   ADD COLUMN IF NOT EXISTS respond_by timestamptz;
 
-DO $$
-DECLARE
-  n integer;
-BEGIN
-  LOOP
-    UPDATE public.rental_requests
-       SET respond_by = public.rental_request_respond_by(
-         created_at, requested_start_at, rental_selection_windows
-       )
-     WHERE id IN (
-       SELECT id FROM public.rental_requests
-        WHERE respond_by IS NULL
-        LIMIT 500
-     );
-    GET DIAGNOSTICS n = ROW_COUNT;
-    EXIT WHEN n = 0;
-  END LOOP;
-END $$;
+-- Pending-row backfill is 20261118180000, after this column lock commits.
 
 CREATE INDEX IF NOT EXISTS idx_rental_requests_status_respond_by
   ON public.rental_requests (status, respond_by);
@@ -216,15 +199,19 @@ $$;
 CREATE OR REPLACE FUNCTION public.cancel_client_rental_request(
   p_request_id uuid,
   p_client_id uuid
-) RETURNS TABLE (id uuid, released_booking_id uuid)
+) RETURNS SETOF public.rental_requests
 LANGUAGE plpgsql
 VOLATILE
 AS $$
 DECLARE
   v_req public.rental_requests%ROWTYPE;
+  v_saved public.rental_requests%ROWTYPE;
   v_booking uuid;
 BEGIN
-  SELECT * INTO v_req FROM public.rental_requests WHERE id = p_request_id FOR UPDATE;
+  SELECT * INTO v_req
+    FROM public.rental_requests
+   WHERE rental_requests.id = p_request_id
+   FOR UPDATE;
   IF NOT FOUND OR v_req.client_id IS DISTINCT FROM p_client_id THEN
     RAISE EXCEPTION 'rental_request_forbidden' USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -236,21 +223,30 @@ BEGIN
      SET status = 'cancelled',
          payment_status = 'cancelled',
          contract_expires_at = NULL
-   WHERE rental_request_id = p_request_id
-     AND status::text = 'proposed'
+   WHERE rental_bookings.rental_request_id = p_request_id
+     AND rental_bookings.status::text = 'proposed'
    RETURNING rental_bookings.id INTO v_booking;
+
+  IF v_booking IS NOT NULL THEN
+    INSERT INTO public.rental_status_history (
+      rental_booking_id, status, previous_status, changed_by_type, notes
+    ) VALUES (
+      v_booking, 'cancelled', 'proposed', 'client', 'Client withdrew before confirming'
+    );
+  END IF;
 
   UPDATE public.rental_requests
      SET status = 'cancelled'
    WHERE rental_requests.id = p_request_id
-     AND status::text IN ('pending', 'available');
+     AND rental_requests.status::text IN ('pending', 'available');
   IF NOT FOUND THEN
     RAISE EXCEPTION 'rental_request_not_pending' USING ERRCODE = 'check_violation';
   END IF;
 
-  id := p_request_id;
-  released_booking_id := v_booking;
-  RETURN NEXT;
+  SELECT * INTO v_saved
+    FROM public.rental_requests
+   WHERE rental_requests.id = p_request_id;
+  RETURN NEXT v_saved;
 END;
 $$;
 

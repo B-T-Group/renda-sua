@@ -1,8 +1,11 @@
 import { RentalsService } from './rentals.service';
+import { expiryCountryFilter } from './rental-dashboard-flag';
+import { effectiveRespondBy } from './rental-respond-by';
 import {
   autodeclineBounds,
   cutoffForCountry,
   expireUnansweredRentalRequests,
+  pendingExpiryWhere,
   type UnansweredRentalRequest,
 } from './rental-request-expiry';
 import {
@@ -201,13 +204,16 @@ describe('cancelClientRentalRequest', () => {
       }),
     };
     service.hasuraSystemService = {
-      executeQuery: jest.fn().mockResolvedValue({
-        rental_requests_by_pk: { id: 'req-1', client_id: 'client-1', status: 'pending' },
+      executeQuery: jest.fn().mockImplementation((query: string) => {
+        if (String(query).includes('rental_bookings')) {
+          return Promise.resolve({ rental_bookings: affected === 2 ? [{ id: 'booking-1' }] : [] });
+        }
+        return Promise.resolve({
+          rental_requests_by_pk: { id: 'req-1', client_id: 'client-1', status: 'pending' },
+        });
       }),
       executeMutation: jest.fn().mockResolvedValue({
-        cancel_client_rental_request: affected
-          ? [{ id: 'req-1', released_booking_id: affected === 2 ? 'booking-1' : null }]
-          : [],
+        cancel_client_rental_request: affected ? [{ id: 'req-1', status: 'cancelled' }] : [],
       }),
     };
     service.releaseLinkedDeclineHold = jest.fn();
@@ -235,6 +241,37 @@ describe('cancelClientRentalRequest', () => {
     const service = cancelService(2);
     await expect(service.cancelClientRentalRequest('req-1')).resolves.toEqual({ success: true });
     expect(service.releaseLinkedDeclineHold).toHaveBeenCalledWith('req-1');
+  });
+});
+
+describe('N5 stored respond_by after an edit', () => {
+  it('N5 keeps the edited deadline instead of created_at plus 24 hours', async () => {
+    const edited = effectiveRespondBy({
+      createdAt: '2026-11-01T00:00:00.000Z',
+      respondBy: '2026-11-02T20:00:00.000Z',
+      startAt: '2026-11-10T00:00:00.000Z',
+    });
+    expect(edited.respondBy).toBe('2026-11-02T20:00:00.000Z');
+    const now = new Date('2026-11-02T01:00:00.000Z');
+    const tools = harness([row({ respond_by: edited.respondBy, created_at: '2026-11-01T00:00:00.000Z' })]);
+    await expect(tools.run(now)).resolves.toBe(0);
+    expect(tools.casDecline).not.toHaveBeenCalled();
+  });
+});
+
+describe('N6 expiry scan country filter', () => {
+  it('N6 limits the SQL where to enabled countries before the batch', () => {
+    const filter = expiryCountryFilter([
+      { boolean_value: false, country_code: null },
+      { boolean_value: true, country_code: 'CM' },
+    ]);
+    expect(filter.kind).toBe('in');
+    if (filter.kind !== 'in') return;
+    expect(filter.countries).toEqual(expect.arrayContaining(['CM', 'Cameroon']));
+    expect(filter.countries.join(' ')).not.toMatch(/Gabon|GA/);
+    const where = pendingExpiryWhere(new Date('2026-11-18T00:00:00.000Z'), '2026-11-01T00:00:00.000Z', filter);
+    expect(JSON.stringify(where)).toContain('Cameroon');
+    expect(JSON.stringify(where)).not.toContain('Gabon');
   });
 });
 

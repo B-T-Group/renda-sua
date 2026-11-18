@@ -7,16 +7,17 @@ import { RentalInspectionService } from './inspection/rental-inspection.service'
 import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
-import { listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
+import { expiryCountryFilter, listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
 import {
   autodeclineBounds,
   cutoffForCountry,
+  pendingExpiryWhere,
   expireUnansweredRentalRequests,
   type AutodeclineConfigRow,
   type SideEffectJob,
   type UnansweredRentalRequest,
 } from './rental-request-expiry';
-import type { RentalRespondWindow } from './rental-respond-by';
+import { earliestRequestStartIso, effectiveRespondBy, type RentalRespondWindow } from './rental-respond-by';
 import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
 
@@ -404,7 +405,7 @@ export class RentalsCronService {
   ): Promise<any[]> {
     const found: any[] = [];
     for (let offset = 0; offset < bounds.limit * 20 && found.length < bounds.limit; offset += bounds.limit) {
-      const page = await this.fetchDuePage(now, bounds, offset);
+      const page = await this.fetchDuePage(flags, now, bounds, offset);
       this.collectDue(found, page, flags, config, now, bounds.limit);
       if (page.length < bounds.limit) break;
     }
@@ -412,13 +413,16 @@ export class RentalsCronService {
   }
 
   private async fetchDuePage(
+    flags: DashboardRequestFlagRow[],
     now: Date,
     bounds: { since: string; limit: number },
     offset: number
   ): Promise<any[]> {
+    const where = pendingExpiryWhere(now, bounds.since, expiryCountryFilter(flags));
+    if (!where) return [];
     const res = await this.hasuraSystemService.executeQuery<{ rental_requests: any[] }>(
       Q.LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY,
-      { now: now.toISOString(), since: bounds.since, limit: bounds.limit, offset }
+      { where, limit: bounds.limit, offset }
     );
     return res.rental_requests ?? [];
   }
@@ -446,7 +450,12 @@ export class RentalsCronService {
     const raw = row.rental_location_listing?.business_location?.address?.country ?? null;
     if (!listingDashboardFlag(flags, raw)) return false;
     const cutoff = cutoffForCountry(config, resolveItemCountry(raw), now);
-    return Date.parse(row.respond_by) >= Date.parse(cutoff);
+    const decision = effectiveRespondBy({
+      createdAt: row.created_at,
+      respondBy: row.respond_by,
+      startAt: earliestRequestStartIso(row),
+    });
+    return Date.parse(decision.respondBy) >= Date.parse(cutoff);
   }
 
   private async loadExpiryConfig(): Promise<AutodeclineConfigRow[]> {
@@ -479,6 +488,7 @@ export class RentalsCronService {
     return {
       id: row.id,
       created_at: row.created_at,
+      respond_by: row.respond_by,
       requested_start_at: row.requested_start_at,
       rental_selection_windows: row.rental_selection_windows,
       clientUserId: row.client?.user_id ?? null,

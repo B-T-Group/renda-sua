@@ -3292,6 +3292,7 @@
       "changeTotalLabel": "Modifier le total (facultatif)",
       "changeTotalHelper": "Le devis du locataire est une estimation. Si vous modifiez le total, il devra vérifier le nouveau prix avant de payer.",
       "changeTotalInvalid": "Saisissez un total de zéro ou plus.",
+      "changeTotalTooHigh": "Saisissez un total d’au plus 10 fois le devis, et au maximum 1000000.",
       "contractExpiryHoursLabel": "Contrat valable (heures)",
       "contractExpiryHelper": "Jusqu’à {{count}} heures, sans dépasser le début.",
       "optionalMessage": "Message optionnel au client",

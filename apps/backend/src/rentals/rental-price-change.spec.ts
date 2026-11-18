@@ -34,6 +34,8 @@ describe('rental price change', () => {
     expect(quoteWithTotalOverride(priced, 12000, true).lines[0].subtotal).toBe(12000);
     expect(() => quoteWithTotalOverride(priced, 12000, false)).toThrow('TOTAL_OVERRIDE_DISABLED');
     expect(() => quoteWithTotalOverride(priced, 0, true)).toThrow('TOTAL_OVERRIDE_INVALID');
+    expect(() => quoteWithTotalOverride(priced, 1e15, true)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
+    expect(() => quoteWithTotalOverride(priced, 15000 * 10 + 1, true)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
   });
 
   it('blocks payment until the renter has seen the new price', () => {

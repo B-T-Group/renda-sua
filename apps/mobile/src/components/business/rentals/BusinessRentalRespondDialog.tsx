@@ -19,7 +19,7 @@ import {
   parseRentalSelectionWindowsFromJson,
 } from '../../../utils/rentals';
 import { formatRequestAmount } from '../../../utils/rentals/rentalRequestFormat';
-import { contractHoursOffer, requestStartIso } from '../../../utils/rentals/dashboardRentalRequests';
+import { contractHoursOffer, requestStartIso, totalOverrideTooHigh } from '../../../utils/rentals/dashboardRentalRequests';
 import { buildRequestCardModel } from '../../../utils/rentals/rentalRequestCardModel';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useClientFlags } from '../../../contexts/ClientFlagsContext';
@@ -79,7 +79,8 @@ export function BusinessRentalRespondDialog({
 }: BusinessRentalRespondDialogProps) {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
-  const canChangeTotal = flags.rentals_dashboard_requests_enabled;
+  const canChangeTotal =
+    flags.rentals_dashboard_requests_enabled && flags.rentals_modify_request_enabled;
   const { colors } = useTheme();
   const [contractHours, setContractHours] = useState('48');
   const [totalOverride, setTotalOverride] = useState('');
@@ -109,6 +110,9 @@ export function BusinessRentalRespondDialog({
     }
   }, [mode, request]);
 
+  const typedOverride = typeof parseTotalOverride(totalOverride) === 'number' ? Number(parseTotalOverride(totalOverride)) : null;
+  const overrideTooHigh = typedOverride != null && totalOverrideTooHigh(offerPreview?.total ?? 0, typedOverride);
+
   const resetAndClose = useCallback(() => {
     setContractHours(String(contractHoursOffer(request ? requestStartIso(request) : null).hours || 1));
     setTotalOverride('');
@@ -128,8 +132,11 @@ export function BusinessRentalRespondDialog({
       return;
     }
     const overridden = parseTotalOverride(totalOverride);
-    if (overridden === 'invalid') {
-      setError(t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.'));
+    const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(buildPricingSnapshot(request).total, overridden);
+    if (overridden === 'invalid' || tooHigh) {
+      setError(tooHigh
+        ? t('business.rentals.changeTotalTooHigh', 'Enter a total no more than 10 times the quote, and at most 1000000.')
+        : t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.'));
       return;
     }
     setSubmitting(true);
@@ -239,8 +246,10 @@ export function BusinessRentalRespondDialog({
                 />
                 ) : null}
                 {canChangeTotal ? (
-                <Text variant="bodySmall" style={{ color: colors.text.secondary, marginBottom: 8 }}>
-                  {t(
+                <Text variant="bodySmall" style={{ color: overrideTooHigh ? colors.error.main : colors.text.secondary, marginBottom: 8 }}>
+                  {overrideTooHigh
+                    ? t('business.rentals.changeTotalTooHigh', 'Enter a total no more than 10 times the quote, and at most 1000000.')
+                    : t(
                     'business.rentals.changeTotalHelper',
                     'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'
                   )}
@@ -319,14 +328,13 @@ export function BusinessRentalRespondDialog({
             loading={submitting}
             buttonColor={mode === 'unavailable' ? colors.error.main : colors.primary.main}
             textColor="#ffffff"
-            disabled={submitting}
-            accessibilityState={{ disabled: submitting || blocked }}
+            disabled={submitting || (mode === 'unavailable' && blocked) || (mode === 'available' && overrideTooHigh)}
+            accessibilityState={{ disabled: submitting || blocked || overrideTooHigh }}
             onPress={() => {
-              if (blocked) return;
+              if (mode === 'unavailable' && blocked) return;
               if (mode === 'available') void submitAvailable();
               else void submitUnavailable();
             }}
-            style={mode === 'unavailable' && blocked ? styles.declineDisabled : undefined}
           >
             {mode === 'available'
               ? t('business.rentals.accept', 'Accept')
@@ -374,5 +382,4 @@ export function confirmSoftDelete(
 
 const styles = StyleSheet.create({
   field: { marginTop: 12 },
-  declineDisabled: { opacity: 0.72 },
 });

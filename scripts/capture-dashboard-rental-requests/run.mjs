@@ -13,6 +13,7 @@ import { buildMobile, buildWeb } from './build.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const outDir = process.argv[2] || '/opt/cursor/artifacts/dashboard-rental-requests/v2';
+const only = (process.argv[3] || '').split(',').map((stem) => stem.trim()).filter(Boolean);
 const tmp = '/tmp/capture-drr';
 mkdirSync(tmp, { recursive: true });
 mkdirSync(outDir, { recursive: true });
@@ -129,7 +130,8 @@ async function shoot(page, kind, scene, stem, lang, width, height, action) {
   console.log(`${file} ${size} ${errors[0] ? 'ERR ' + errors[0].split('\n')[0] : 'ok'}`);
 }
 
-for (const [kind, scene, stem, width, height, action] of shots) {
+const selected = only.length ? shots.filter((shot) => only.includes(shot[2])) : shots;
+for (const [kind, scene, stem, width, height, action] of selected) {
   for (const lang of ['en', 'fr']) {
     const page = await browser.newPage();
     try {

@@ -252,6 +252,10 @@ export const GET_RENTAL_REQUEST_FULL = `
       change_summary
       client_request_note
       expires_at
+      created_at
+      requested_start_at
+      requested_end_at
+      respond_by
       rental_location_listing {
         id
         units_available
@@ -834,7 +838,22 @@ export const CANCEL_CLIENT_RENTAL_REQUEST = `
   mutation CancelClientRentalRequest($requestId: uuid!, $clientId: uuid!) {
     cancel_client_rental_request(args: { p_request_id: $requestId, p_client_id: $clientId }) {
       id
-      released_booking_id
+      status
+    }
+  }
+`;
+
+export const CANCELLED_BOOKING_FOR_REQUEST = `
+  query CancelledBookingForRequest($requestId: uuid!) {
+    rental_bookings(
+      where: {
+        rental_request_id: { _eq: $requestId }
+        status: { _eq: cancelled }
+        payment_status: { _eq: cancelled }
+      }
+      limit: 1
+    ) {
+      id
     }
   }
 `;
@@ -1322,9 +1341,9 @@ export const EXPIRE_RENTAL_REQUEST_NO_RESPONSE = `
 `;
 
 export const LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY = `
-  query ListPendingRentalRequestsForExpiry($now: timestamptz!, $since: timestamptz!, $limit: Int!, $offset: Int!) {
+  query ListPendingRentalRequestsForExpiry($where: rental_requests_bool_exp!, $limit: Int!, $offset: Int!) {
     rental_requests(
-      where: { status: { _eq: pending }, respond_by: { _lte: $now, _gte: $since } }
+      where: $where
       order_by: { respond_by: asc }
       limit: $limit
       offset: $offset
@@ -1368,6 +1387,8 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       id
       created_at
       requested_start_at
+      requested_end_at
+      respond_by
       status
       rental_selection_windows
       rental_pricing_snapshot

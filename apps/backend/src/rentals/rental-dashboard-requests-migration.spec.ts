@@ -45,6 +45,14 @@ describe('rentals dashboard requests flag', () => {
     expect(index).not.toMatch(/LANGUAGE plpgsql\s+IMMUTABLE/);
     expect(index).not.toContain('GENERATED ALWAYS');
     expect(index).toContain('ADD COLUMN IF NOT EXISTS respond_by timestamptz');
-    expect(index).toContain('LIMIT 500');
+    expect(index).toContain('EXCEPTION WHEN OTHERS');
+    expect(index).not.toContain('UPDATE public.rental_requests');
+    const backfill = readFileSync(
+      join(root, 'hasura/migrations/Rendasua/20261118180000_rental_request_qa_round2/up.sql'),
+      'utf8'
+    );
+    expect(backfill).toContain('LIMIT 500');
+    expect(backfill).toContain('BEFORE INSERT');
+    expect(backfill).not.toContain('ALTER TABLE');
   });
 });

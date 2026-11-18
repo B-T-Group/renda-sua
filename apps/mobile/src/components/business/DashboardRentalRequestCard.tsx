@@ -80,7 +80,7 @@ function CardCopy({
     <View style={styles.body}>
       <Text variant="labelSmall">{t('business.dashboard.rentalRequests.requested', 'Requested')}</Text>
       <StartChip model={model} />
-      {model.updated ? <Text variant="labelSmall">{t('business.dashboard.rentalRequests.updated', 'Updated')}</Text> : null}
+      {model.updated ? <UpdatedChip /> : null}
       {model.acceptDisabled ? <Text variant="labelSmall" style={{ color: colors.warning.dark }}>{t('rentals.requestCard.alreadyBooked', 'These dates are already booked')}</Text> : null}
       <Text variant="titleSmall">{title}</Text>
       {model.renterName ? <Text variant="bodySmall">{model.renterName}</Text> : null}
@@ -92,6 +92,18 @@ function CardCopy({
       {model.changeDetail ? <Text variant="labelSmall">{t('rentals.modify.changed', 'Changed: {{detail}}', { detail: model.changeDetail })}</Text> : null}
       {hours > 0 ? <Text variant="bodySmall" style={{ color: amber ? colors.warning.dark : colors.text.secondary, fontWeight: amber ? '700' : '500' }}>{t('business.dashboard.rentalRequests.respondWithin', 'Respond within {{hours}}h', { hours })}</Text> : null}
       {model.sentClock ? <Text variant="labelSmall">{t('rentals.requestCard.sent', 'Sent {{time}}', { time: model.sentClock })}</Text> : null}
+    </View>
+  );
+}
+
+function UpdatedChip() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.updated, { backgroundColor: colors.infoTint }]}>
+      <Text style={{ color: colors.info.dark, fontSize: 11, fontWeight: '700' }}>
+        {t('business.dashboard.rentalRequests.updated', 'Updated')}
+      </Text>
     </View>
   );
 }
@@ -155,6 +167,7 @@ const styles = StyleSheet.create({
   photo: { width: 64, height: 64, borderRadius: 12 },
   thumb: { alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, gap: 2 },
+  updated: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
   iconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   decline: { borderWidth: 1, backgroundColor: '#fff' },

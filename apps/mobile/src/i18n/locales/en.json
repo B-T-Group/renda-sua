@@ -2603,6 +2603,7 @@
       "changeTotalLabel": "Change total (optional)",
       "changeTotalHelper": "The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.",
       "changeTotalInvalid": "Enter a total of zero or more.",
+      "changeTotalTooHigh": "Enter a total no more than 10 times the quote, and at most 1000000.",
       "submitResponse": "Send response",
       "contractHours": "Contract valid for (hours)",
       "contractExpiryHelper": "Up to {{count}} hours, and not past the start.",
