@@ -7153,7 +7153,13 @@
       "allDayRateLine": "All day — daily rate",
       "allDayNeedsDate": "All-day selection is missing a date.",
       "invalidAllDay": "All-day selection must cover the full open hours for that date.",
-      "yourRanges": "Your selected times"
+      "yourRanges": "Your selected times",
+      "dayCount": "{{count}} day",
+      "dayCount_one": "{{count}} day",
+      "dayCount_other": "{{count}} days",
+      "dayCount_plural": "{{count}} days",
+      "dailyBreakdown": "{{days}} × {{rate}} / day",
+      "hourlyBreakdown": "{{h}} h × {{rate}} / hour"
     },
     "fillDates": "Choose start and end",
     "requestSent": "Request sent. The business will respond.",
@@ -7508,7 +7514,33 @@
     "cancelError": "Could not cancel booking",
     "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid.",
     "returnAt": "Return date and time",
-    "returnAtHint": "Select when the item was returned. Early returns still pay the full rental total; time after the booked end is billed as overtime."
+    "returnAtHint": "Select when the item was returned. Early returns still pay the full rental total; time after the booked end is billed as overtime.",
+    "modify": {
+      "changed": "Changed: {{detail}}",
+      "staleBanner": "This request was updated. Review the latest version."
+    },
+    "requestCard": {
+      "title": "Rental request",
+      "startsToday": "Starts today",
+      "startsIn_one": "Starts in {{count}} day",
+      "startsIn_other": "Starts in {{count}} days",
+      "startsIn_plural": "Starts in {{count}} days",
+      "alreadyBooked": "These dates are already booked",
+      "seeTimes_one": "{{count}} day · see times",
+      "seeTimes_other": "{{count}} days · see times",
+      "seeTimes_plural": "{{count}} days · see times",
+      "seeTimesA11y": "Show each time",
+      "hideTimes": "Hide times",
+      "allDay": "All day",
+      "youReceive": "You receive {{amount}}",
+      "deposit": "Deposit {{amount}}",
+      "sent": "Sent {{time}}",
+      "quoteUnavailable": "Quote unavailable",
+      "openRequest": "Open request",
+      "acceptUnavailable": "Accept unavailable — dates are taken",
+      "chargedAfterAccept": "The renter is charged after you accept",
+      "notFound": "This request is no longer here."
+    }
   },
   "profile": {
     "accountOverview": "Account Overview",

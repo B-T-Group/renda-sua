@@ -6076,6 +6076,8 @@
       "addOrChangeTimes": "Ajouter ou modifier des horaires",
       "add": "Ajouter",
       "dayCount": "{{count}} jour",
+      "dayCount_one": "{{count}} jour",
+      "dayCount_other": "{{count}} jours",
       "dayCount_plural": "{{count}} jours",
       "availableForDates": "{{remaining}} sur {{total}} disponible pour vos dates",
       "availableForDates_plural": "{{remaining}} sur {{total}} disponibles pour vos dates",
@@ -6539,7 +6541,29 @@
     "returnDate": "Date de retour",
     "returnTime": "Heure de retour",
     "returnAtInvalid": "Saisissez une date et une heure de retour valides",
-    "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué."
+    "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué.",
+    "requestCard": {
+      "title": "Demande de location",
+      "startsToday": "Commence aujourd’hui",
+      "startsIn_one": "Commence dans {{count}} jour",
+      "startsIn_other": "Commence dans {{count}} jours",
+      "startsIn_plural": "Commence dans {{count}} jours",
+      "alreadyBooked": "Ces dates sont déjà réservées",
+      "seeTimes_one": "{{count}} jour · voir les horaires",
+      "seeTimes_other": "{{count}} jours · voir les horaires",
+      "seeTimes_plural": "{{count}} jours · voir les horaires",
+      "seeTimesA11y": "Afficher chaque horaire",
+      "hideTimes": "Masquer les horaires",
+      "allDay": "Toute la journée",
+      "youReceive": "Vous recevez {{amount}}",
+      "deposit": "Caution {{amount}}",
+      "sent": "Envoyée {{time}}",
+      "quoteUnavailable": "Devis indisponible",
+      "openRequest": "Ouvrir la demande",
+      "acceptUnavailable": "Accepter indisponible — dates prises",
+      "chargedAfterAccept": "Le locataire est débité après votre acceptation",
+      "notFound": "Cette demande n’est plus là."
+    }
   },
   "admin": {
     "reels": {

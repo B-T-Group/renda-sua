@@ -6130,6 +6130,8 @@
       "addOrChangeTimes": "Add or change times",
       "add": "Add",
       "dayCount": "{{count}} day",
+      "dayCount_one": "{{count}} day",
+      "dayCount_other": "{{count}} days",
       "dayCount_plural": "{{count}} days",
       "availableForDates": "{{remaining}} of {{total}} available for your dates",
       "availableForDates_plural": "{{remaining}} of {{total}} available for your dates",
@@ -6616,7 +6618,29 @@
     "returnDate": "Return date",
     "returnTime": "Return time",
     "returnAtInvalid": "Enter a valid return date and time",
-    "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid."
+    "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid.",
+    "requestCard": {
+      "title": "Rental request",
+      "startsToday": "Starts today",
+      "startsIn_one": "Starts in {{count}} day",
+      "startsIn_other": "Starts in {{count}} days",
+      "startsIn_plural": "Starts in {{count}} days",
+      "alreadyBooked": "These dates are already booked",
+      "seeTimes_one": "{{count}} day · see times",
+      "seeTimes_other": "{{count}} days · see times",
+      "seeTimes_plural": "{{count}} days · see times",
+      "seeTimesA11y": "Show each time",
+      "hideTimes": "Hide times",
+      "allDay": "All day",
+      "youReceive": "You receive {{amount}}",
+      "deposit": "Deposit {{amount}}",
+      "sent": "Sent {{time}}",
+      "quoteUnavailable": "Quote unavailable",
+      "openRequest": "Open request",
+      "acceptUnavailable": "Accept unavailable — dates are taken",
+      "chargedAfterAccept": "The renter is charged after you accept",
+      "notFound": "This request is no longer here."
+    }
   },
   "admin": {
     "reels": {

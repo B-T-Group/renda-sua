@@ -19,6 +19,7 @@ import {
   useRentalApi,
   type BusinessRentalRequestRow,
 } from '../../hooks/useRentalApi';
+import { BusinessDashboardRentalRequestCard } from '../business/BusinessDashboardRentalRequestCard';
 import { BusinessRentalRespondDialog } from '../rentals/BusinessRentalRespondDialog';
 import { BusinessRentalRequestCard } from '../rentals/BusinessRentalRequestCard';
 import BusinessRentalsStudioShell from '../rentals/BusinessRentalsStudioShell';
@@ -187,14 +188,23 @@ const BusinessRentalsRequestsPage: React.FC = () => {
         ) : null}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {queuedRequests.map((req) => (
-            <BusinessRentalRequestCard
-              key={req.id}
-              request={req}
-              onAccept={(selected) => setRespondTarget({ req: selected, mode: 'available' })}
-              onReject={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
-            />
-          ))}
+          {queuedRequests.map((req) =>
+            flags.rentals_dashboard_requests_enabled && req.status === 'pending' ? (
+              <BusinessDashboardRentalRequestCard
+                key={req.id}
+                request={req}
+                onAccept={(selected) => setRespondTarget({ req: selected, mode: 'available' })}
+                onDecline={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
+              />
+            ) : (
+              <BusinessRentalRequestCard
+                key={req.id}
+                request={req}
+                onAccept={(selected) => setRespondTarget({ req: selected, mode: 'available' })}
+                onReject={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
+              />
+            )
+          )}
         </Box>
 
         {unavailableRequests.length > 0 &&

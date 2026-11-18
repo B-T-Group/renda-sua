@@ -473,6 +473,8 @@ export interface BusinessRentalRequestRow {
   respond_by?: string | null;
   respond_window?: 'sla' | 'start' | null;
   listing_timezone?: string | null;
+  dates_available?: boolean | null;
+  payment_rail?: string | null;
   change_summary?: {
     fields?: string[];
     dates?: { from: RentalSelectionWindow[]; to: RentalSelectionWindow[] };
@@ -485,6 +487,7 @@ export interface BusinessRentalRequestRow {
     id: string;
     base_price_per_hour: number;
     base_price_per_day: number;
+    security_deposit_amount?: number | string | null;
     weekly_availability?: RentalWeeklyAvailabilityRow[];
     business_location?: { name?: string | null; address?: { city?: string | null } | null } | null;
     rental_item: {

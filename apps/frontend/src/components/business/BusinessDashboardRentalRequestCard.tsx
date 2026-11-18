@@ -2,19 +2,11 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import { Avatar, Box, Chip, IconButton, Stack, Typography } from '@mui/material';
-import React from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BusinessRentalRequestRow } from '../../hooks/useRentalApi';
-import {
-  dashboardPeriodLabel,
-  formatYouReceive,
-  requestPhotoUrl,
-  respondWithinAmber,
-  respondWithinHours,
-  startInDays,
-  youReceiveAmount,
-} from '../../utils/dashboardRentalRequests';
-import { parseRentalSelectionWindows } from '../../utils/rentalRequestDisplay';
+import { requestPhotoUrl, respondWithinAmber, respondWithinHours } from '../../utils/dashboardRentalRequests';
+import { buildRequestCardModel, type RequestCardModel } from '../../utils/rentalRequestCardModel';
 
 export function BusinessDashboardRentalRequestCard({
   request,
@@ -26,71 +18,117 @@ export function BusinessDashboardRentalRequestCard({
   onDecline: (request: BusinessRentalRequestRow) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const windows = parseRentalSelectionWindows(request.rental_selection_windows);
-  const period = dashboardPeriodLabel(
-    windows,
-    i18n.language,
-    t('business.dashboard.rentalRequests.allDay', 'All day'),
-    (count) => t('business.dashboard.rentalRequests.dayCount', '{{count}} days', { count })
-  );
-  const amount = youReceiveAmount(request);
-  const currency = request.rental_location_listing.rental_item.currency || 'CAD';
+  const [open, setOpen] = useState(false);
+  const model = buildRequestCardModel(request, i18n.language, new Date(), t);
   const hours = request.respond_by ? respondWithinHours(request.respond_by) : 0;
   const amber = request.respond_by ? respondWithinAmber(request.respond_by) : false;
-  const daysOut = startInDays(windows[0]?.calendar_date, request.listing_timezone || 'America/Toronto');
-  const renter = [request.client?.user?.first_name, request.client?.user?.last_name].filter(Boolean).join(' ');
-  const photo = requestPhotoUrl(request);
-  const updated = (request.change_summary?.fields?.length ?? 0) > 0;
-  const daily = windows.length > 1 ? Number(request.rental_location_listing.base_price_per_day) : 0;
-
   return (
-    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', p: 1.5, border: 1, borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
-      <Avatar src={photo ?? undefined} variant="rounded" sx={{ width: 56, height: 56 }} alt="" />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography fontWeight={800} noWrap sx={{ flex: 1 }}>{request.rental_location_listing.rental_item.name}</Typography>
-          <Chip size="small" label={t('business.dashboard.rentalRequests.requested', 'Requested')} />
-          {daysOut === 0 ? <Chip size="small" color="info" label={t('business.dashboard.rentalRequests.startsToday', 'Starts today')} /> : null}
-          {daysOut != null && daysOut > 0 ? (
-            <Chip size="small" label={t('business.dashboard.rentalRequests.startsIn', 'Starts in {{count}} days', { count: daysOut })} />
-          ) : null}
-          {updated ? <Chip size="small" color="info" label={t('business.dashboard.rentalRequests.updated', 'Updated')} /> : null}
-        </Stack>
-        <Typography variant="body2" color="text.secondary" noWrap>
-          {renter}{period ? ` · ${period}` : ''}
-        </Typography>
-        <Stack direction="row" spacing={2} alignItems="center">
-          {amount != null ? (
-            <Typography fontWeight={800}>
-              {t('business.dashboard.rentalRequests.youReceive', 'You receive')} {formatYouReceive(amount, currency, i18n.language)}
-            </Typography>
-          ) : null}
-          {hours > 0 ? (
-            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: amber ? 'warning.dark' : 'text.secondary' }}>
-              <AccessTimeIcon sx={{ fontSize: 16 }} />
-              <Typography variant="body2" fontWeight={800}>
-                {t('business.dashboard.rentalRequests.respondWithin', 'Respond within {{hours}}h', { hours })}
-              </Typography>
-            </Stack>
-          ) : null}
-        </Stack>
-        {daily > 0 ? (
-          <Typography variant="caption" color="text.secondary">
-            {t('business.dashboard.rentalRequests.dailyRate', '{{count}} days × {{rate}} / day', {
-              count: windows.length,
-              rate: formatYouReceive(daily, currency, i18n.language),
-            })}
-          </Typography>
-        ) : null}
-      </Box>
-      <Stack direction="row" spacing={1}>
-        <IconButton aria-label={t('business.dashboard.rentalRequests.accept', 'Accept')} color="success" onClick={() => onAccept(request)} sx={{ bgcolor: 'success.main', color: 'common.white', '&:hover': { bgcolor: 'success.dark' } }}>
-          <CheckIcon />
-        </IconButton>
-        <IconButton aria-label={t('business.dashboard.rentalRequests.decline', 'Decline')} color="error" onClick={() => onDecline(request)} sx={{ border: 1, borderColor: 'divider' }}>
-          <CloseIcon />
-        </IconButton>
-      </Stack>
+    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', p: 1.5, border: 1, borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
+      <Avatar src={requestPhotoUrl(request) ?? undefined} variant="rounded" sx={{ width: 56, height: 56 }} alt="" />
+      <CardCopy model={model} hours={hours} amber={amber} open={open} onToggle={() => setOpen((value) => !value)} />
+      <DecisionButtons request={request} disabled={model.acceptDisabled} onAccept={onAccept} onDecline={onDecline} />
     </Box>
+  );
+}
+
+function CardCopy({
+  model,
+  hours,
+  amber,
+  open,
+  onToggle,
+}: {
+  model: RequestCardModel;
+  hours: number;
+  amber: boolean;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Box sx={{ flex: 1, minWidth: 0 }}>
+      <CardChips model={model} />
+      <Typography fontWeight={800} noWrap>{model.itemName}{model.quantity ? ` × ${model.quantity}` : ''}</Typography>
+      {model.place ? <Typography variant="body2" color="text.secondary" noWrap>{model.place}</Typography> : null}
+      <ScheduleLine model={model} open={open} onToggle={onToggle} />
+      {model.receiveLine ? <Typography fontWeight={800}>{model.receiveLine}</Typography> : null}
+      {model.breakdown ? <Typography variant="caption" color="text.secondary">{model.breakdown}</Typography> : null}
+      {model.depositAmount ? <Typography variant="caption" display="block">{t('rentals.requestCard.deposit', 'Deposit {{amount}}', { amount: model.depositAmount })}</Typography> : null}
+      {model.changeDetail ? <Typography variant="caption" color="info.main" display="block">{t('rentals.modify.changed', 'Changed: {{detail}}', { detail: model.changeDetail })}</Typography> : null}
+      <Countdown hours={hours} amber={amber} />
+      {model.sentClock ? <Typography variant="caption" color="text.secondary" display="block">{t('rentals.requestCard.sent', 'Sent {{time}}', { time: model.sentClock })}</Typography> : null}
+    </Box>
+  );
+}
+
+function CardChips({ model }: { model: RequestCardModel }) {
+  const { t } = useTranslation();
+  return (
+    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+      <Chip size="small" label={t('business.dashboard.rentalRequests.requested', 'Requested')} />
+      {model.startsIn?.kind === 'today' ? <Chip size="small" color="info" label={t('rentals.requestCard.startsToday', 'Starts today')} /> : null}
+      {model.startsIn?.kind === 'days' ? <Chip size="small" label={t('rentals.requestCard.startsIn', 'Starts in {{count}} days', { count: model.startsIn.count })} /> : null}
+      {model.updated ? <Chip size="small" color="info" label={t('business.dashboard.rentalRequests.updated', 'Updated')} /> : null}
+      {model.acceptDisabled ? <Chip size="small" color="warning" label={t('rentals.requestCard.alreadyBooked', 'These dates are already booked')} /> : null}
+    </Stack>
+  );
+}
+
+function ScheduleLine({ model, open, onToggle }: { model: RequestCardModel; open: boolean; onToggle: () => void }) {
+  const { t } = useTranslation();
+  if (!model.schedule.summary) return null;
+  return (
+    <Box>
+      <Typography
+        variant="body2"
+        component={model.schedule.expandable ? 'button' : 'p'}
+        onClick={model.schedule.expandable ? onToggle : undefined}
+        aria-label={model.schedule.expandable ? t('rentals.requestCard.seeTimesA11y', 'Show each time') : undefined}
+        sx={{ m: 0, p: 0, border: 0, bgcolor: 'transparent', textAlign: 'left', cursor: model.schedule.expandable ? 'pointer' : 'default' }}
+      >
+        {open ? t('rentals.requestCard.hideTimes', 'Hide times') : model.schedule.summary}
+      </Typography>
+      {open ? model.schedule.lines.map((line) => <Typography key={line} variant="caption" display="block">{line}</Typography>) : null}
+    </Box>
+  );
+}
+
+function Countdown({ hours, amber }: { hours: number; amber: boolean }) {
+  const { t } = useTranslation();
+  if (hours <= 0) return null;
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: amber ? 'warning.dark' : 'text.secondary' }}>
+      <AccessTimeIcon sx={{ fontSize: 16 }} />
+      <Typography variant="body2" fontWeight={800}>
+        {t('business.dashboard.rentalRequests.respondWithin', 'Respond within {{hours}}h', { hours })}
+      </Typography>
+    </Stack>
+  );
+}
+
+function DecisionButtons({
+  request,
+  disabled,
+  onAccept,
+  onDecline,
+}: {
+  request: BusinessRentalRequestRow;
+  disabled: boolean;
+  onAccept: (request: BusinessRentalRequestRow) => void;
+  onDecline: (request: BusinessRentalRequestRow) => void;
+}) {
+  const { t } = useTranslation();
+  const acceptLabel = disabled
+    ? t('rentals.requestCard.acceptUnavailable', 'Accept unavailable — dates are taken')
+    : t('business.dashboard.rentalRequests.accept', 'Accept');
+  return (
+    <Stack direction="row" spacing={1}>
+      <IconButton aria-label={acceptLabel} disabled={disabled} color="success" onClick={() => onAccept(request)} sx={{ bgcolor: 'success.main', color: 'common.white', '&:hover': { bgcolor: 'success.dark' } }}>
+        <CheckIcon />
+      </IconButton>
+      <IconButton aria-label={t('business.dashboard.rentalRequests.decline', 'Decline')} color="error" onClick={() => onDecline(request)} sx={{ border: 1, borderColor: 'divider' }}>
+        <CloseIcon />
+      </IconButton>
+    </Stack>
   );
 }

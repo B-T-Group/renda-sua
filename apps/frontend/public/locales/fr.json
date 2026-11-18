@@ -6873,7 +6873,13 @@
       "allDayRateLine": "Journée complète — tarif journalier",
       "allDayNeedsDate": "La sélection journée complète n’a pas de date.",
       "invalidAllDay": "La journée complète doit couvrir toutes les heures d’ouverture ce jour-là.",
-      "yourRanges": "Vos créneaux sélectionnés"
+      "yourRanges": "Vos créneaux sélectionnés",
+      "dayCount": "{{count}} jour",
+      "dayCount_one": "{{count}} jour",
+      "dayCount_other": "{{count}} jours",
+      "dayCount_plural": "{{count}} jours",
+      "dailyBreakdown": "{{days}} × {{rate}} / jour",
+      "hourlyBreakdown": "{{h}} h × {{rate}} / heure"
     },
     "fillDates": "Choisissez le début et la fin",
     "requestSent": "Demande envoyée. L'entreprise répondra.",
@@ -7228,7 +7234,33 @@
     "cancelError": "Impossible d’annuler la réservation",
     "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué.",
     "returnAt": "Date et heure de retour",
-    "returnAtHint": "Indiquez quand l’article a été rendu. Un retour anticipé paie toujours le total de la location ; le temps après la fin prévue est facturé en heures supplémentaires."
+    "returnAtHint": "Indiquez quand l’article a été rendu. Un retour anticipé paie toujours le total de la location ; le temps après la fin prévue est facturé en heures supplémentaires.",
+    "modify": {
+      "changed": "Modifié : {{detail}}",
+      "staleBanner": "Cette demande a été mise à jour. Relisez la dernière version."
+    },
+    "requestCard": {
+      "title": "Demande de location",
+      "startsToday": "Commence aujourd’hui",
+      "startsIn_one": "Commence dans {{count}} jour",
+      "startsIn_other": "Commence dans {{count}} jours",
+      "startsIn_plural": "Commence dans {{count}} jours",
+      "alreadyBooked": "Ces dates sont déjà réservées",
+      "seeTimes_one": "{{count}} jour · voir les horaires",
+      "seeTimes_other": "{{count}} jours · voir les horaires",
+      "seeTimes_plural": "{{count}} jours · voir les horaires",
+      "seeTimesA11y": "Afficher chaque horaire",
+      "hideTimes": "Masquer les horaires",
+      "allDay": "Toute la journée",
+      "youReceive": "Vous recevez {{amount}}",
+      "deposit": "Caution {{amount}}",
+      "sent": "Envoyée {{time}}",
+      "quoteUnavailable": "Devis indisponible",
+      "openRequest": "Ouvrir la demande",
+      "acceptUnavailable": "Accepter indisponible — dates prises",
+      "chargedAfterAccept": "Le locataire est débité après votre acceptation",
+      "notFound": "Cette demande n’est plus là."
+    }
   },
   "profile": {
     "accountOverview": "Aperçu du Compte",

@@ -20,6 +20,7 @@ import {
 } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DashboardRentalRequestCard } from '../../components/business/DashboardRentalRequestCard';
 import { BusinessRentalCatalogCard } from '../../components/business/rentals/BusinessRentalCatalogCard';
 import { BusinessRentalRespondDialog } from '../../components/business/rentals/BusinessRentalRespondDialog';
 import { ModerationFilterBanner } from '../../components/common/ModerationFilterBanner';
@@ -456,6 +457,24 @@ export default function BusinessRentalsStudioScreen() {
             </View>
           }
           renderItem={({ item }) => {
+            if (flags.rentals_dashboard_requests_enabled && item.status === 'pending') {
+              return (
+                <DashboardRentalRequestCard
+                  request={item}
+                  onOpen={(selected) =>
+                    navigation.navigate('BusinessRentalRequestDetail', { requestId: selected.id })
+                  }
+                  onAccept={(selected) => {
+                    setRespondReq(selected);
+                    setRespondMode('available');
+                  }}
+                  onDecline={(selected) => {
+                    setRespondReq(selected);
+                    setRespondMode('unavailable');
+                  }}
+                />
+              );
+            }
             const phase = resolveRentalPhase(
               {
                 requestStatus: item.status,
