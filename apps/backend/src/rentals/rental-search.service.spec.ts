@@ -520,7 +520,8 @@ describe('RentalSearchService', () => {
     try {
       let now = 5_000;
       const cache = new RentalSearchIdCache(4, 1_000, () => now);
-      const cached = new RentalSearchService(catalog as never, hasura as never, undefined, undefined, undefined, cache);
+      const cached = new RentalSearchService(catalog as never, hasura as never);
+      cached.replaceIdCache(cache);
       const query = {
         country_code: 'CM',
         sort: 'newest' as const,

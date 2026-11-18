@@ -40,15 +40,20 @@ export interface RentalSearchHit extends Partial<CardPaymentPolicy> {
 @Injectable()
 export class RentalSearchService {
   private readonly logger = new Logger(RentalSearchService.name);
+  private idCache = new RentalSearchIdCache();
 
   constructor(
     private readonly rentals: RentalsService,
     private readonly hasura: HasuraSystemService,
     private readonly routing?: PaymentRoutingService,
     private readonly flags?: RentalInspectionFlags,
-    private readonly ranking?: DeclineRankingService,
-    private readonly idCache = new RentalSearchIdCache()
+    private readonly ranking?: DeclineRankingService
   ) {}
+
+  /** Tests pass a cache with a fake clock. Nest does not inject this. */
+  replaceIdCache(cache: RentalSearchIdCache): void {
+    this.idCache = cache;
+  }
 
   async search(query: RentalSearchQueryDto) {
     const range = this.dateRange(query.start_date, query.end_date);
