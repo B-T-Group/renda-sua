@@ -8,6 +8,8 @@ import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payment
 import { MobilePaymentsService, MobilePaymentRequest } from '../mobile-payments/mobile-payments.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { isCardDepositCurrency, shownSecurityDeposit } from './rental-deposit';
+import { geoStateKey } from '../rbac/geo-state.util';
+import { listingsInIdOrder, marketFromQuery, pickStoredMarket, type SearchMarket } from './rental-search-id-cache';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -421,6 +423,10 @@ function compareListingId(a: { id: string }, b: { id: string }): number {
  * Singleton rental orchestration.
  * Request identity comes from nestjs-cls via HasuraUserService (optional explicit RequestContext).
  */
+const STORED_RENTAL_MARKET = `query StoredRentalMarket($where: supported_country_states_bool_exp!) {
+  supported_country_states(where: $where, limit: 50) { country_code state_name state_key }
+}`;
+
 @Injectable()
 export class RentalsService {
   private readonly logger = new Logger(RentalsService.name);
@@ -484,6 +490,24 @@ export class RentalsService {
     rows = await this.enrichRentalListingsWithDistance(rows, query);
     rows = this.sortRentalListingRows(rows, sort);
     return this.hideMomoDeposits(this.filterListingsByPrice(rows, query.min_price, query.max_price));
+  }
+
+  /** Page rows for a cached id list. Order follows `ids`, not the query. */
+  async loadPublicRentalListingsByIds(ids: string[]): Promise<PublicRentalListingRow[]> {
+    const unique = [...new Set(ids)].filter(Boolean);
+    if (!unique.length) return [];
+    const fetched = await this.fetchListingsByIds(unique);
+    const visible = await this.filterListingsByPaymentsEnabled(fetched);
+    const enriched = await this.enrichRentalListingsWithDistance(this.hideMomoDeposits(visible));
+    return listingsInIdOrder(ids, enriched);
+  }
+
+  private async fetchListingsByIds(ids: string[]): Promise<PublicRentalListingRow[]> {
+    const where = this.whereExcludingActiveProposedContracts({ id: { _in: ids } });
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_location_listings: PublicRentalListingRow[];
+    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, { where, order_by: [{ id: 'asc' }] });
+    return r.rental_location_listings ?? [];
   }
 
   async getTopRentalLocations(
@@ -6126,33 +6150,70 @@ export class RentalsService {
     }
   }
 
-  private async resolveRentalCatalogGeo(
-    queryCountry?: string,
-    queryState?: string
-  ): Promise<{
-    country?: string;
-    state?: string;
-    filterMode: 'specific' | 'supported_only';
-  }> {
+  /** Resolved market for the search cache. Listings keep the uncanonical profile fallback. */
+  async resolveSearchMarket(country?: string, state?: string): Promise<SearchMarket> {
+    const profile = await this.profileSearchGeo(country, state);
+    if (!profile.country && !profile.state) return marketFromQuery(undefined, undefined);
+    return this.canonicalSearchMarket(profile.country, profile.state);
+  }
+
+  private async canonicalSearchMarket(country?: string, state?: string): Promise<SearchMarket> {
+    const normalized = marketFromQuery(country, state);
+    try {
+      const stored = await this.storedSearchMarket(normalized.country, normalized.state);
+      return marketFromQuery(stored.country ?? normalized.country, stored.state ?? normalized.state);
+    } catch (error: any) {
+      this.logger.warn(`rental market lookup failed: ${error?.message ?? 'unknown'}`);
+      return { ...normalized, degraded: true };
+    }
+  }
+
+  private async storedSearchMarket(country?: string, state?: string) {
+    const response = await this.hasuraSystemService.executeQuery<{
+      supported_country_states: Array<{ country_code: string; state_name: string; state_key?: string }>;
+    }>(STORED_RENTAL_MARKET, { where: this.storedMarketWhere(country, state) });
+    return pickStoredMarket(response.supported_country_states ?? [], country, state);
+  }
+
+  private storedMarketWhere(country?: string, state?: string): Record<string, unknown> {
+    const stateKey = state ? geoStateKey(state) : '';
+    return {
+      ...(country ? { country_code: { _eq: country } } : {}),
+      ...(stateKey ? { state_key: { _eq: stateKey } } : {}),
+    };
+  }
+
+  private async resolveRentalCatalogGeo(queryCountry?: string, queryState?: string) {
+    const geo = await this.profileSearchGeo(queryCountry, queryState);
+    const filterMode = geo.country || geo.state ? 'specific' : 'supported_only';
+    return { ...geo, filterMode } as {
+      country?: string;
+      state?: string;
+      filterMode: 'specific' | 'supported_only';
+    };
+  }
+
+  private async profileSearchGeo(queryCountry?: string, queryState?: string) {
     let country = queryCountry?.trim() || undefined;
     let state = queryState?.trim() || undefined;
+    const primary = await this.primaryAddressCountry();
+    if (!country && primary?.country) {
+      country = primary.country;
+      state = primary.state ?? state;
+    }
+    return { country, state };
+  }
+
+  private async primaryAddressCountry(): Promise<{ country?: string; state?: string } | null> {
     try {
       const user = await this.hasuraUserService.getUser();
       const addresses = user?.addresses;
-      if (addresses?.length) {
-        const primary =
-          addresses.find((a) => a.is_primary === true) ?? addresses[0];
-        // Only fall back to account address when caller did not pass country_code.
-        if (!country && primary?.country) {
-          country = primary.country;
-          state = primary.state ?? state;
-        }
-      }
+      if (!addresses?.length) return null;
+      const primary = addresses.find((row) => row.is_primary === true) ?? addresses[0];
+      return { country: primary?.country, state: primary?.state ?? undefined };
     } catch {
-      // anonymous or invalid token
+      return null;
     }
-    const filterMode = country || state ? 'specific' : 'supported_only';
-    return { country, state, filterMode };
   }
 
   private async resolveRentalListOrigin(

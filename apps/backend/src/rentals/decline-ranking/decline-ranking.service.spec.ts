@@ -59,6 +59,19 @@ describe('DeclineRankingService', () => {
     expect(flags.declineRankingEnabled).not.toHaveBeenCalledWith(' cm ');
   });
 
+  it('does not keep a failed snapshot', async () => {
+    flags.declineRankingEnabled.mockResolvedValue(true);
+    hasura.executeQuery.mockRejectedValueOnce(new Error('snapshot')).mockResolvedValueOnce({
+      application_configurations: [],
+      rental_condition_decline_counts_90d: [{ party_id: 'busy', decline_count: 7 }],
+      rental_business_pickup_reach_90d: [{ business_id: 'busy', pickups_reached: 10 }],
+    });
+    await expect(service.multipliersFor(['busy'], 'CM')).rejects.toThrow('snapshot');
+    const second = await service.multipliersFor(['busy'], 'CM');
+    expect(second.get('busy')).toBeLessThan(1);
+    expect(hasura.executeQuery).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps one cache per country', async () => {
     flags.declineRankingEnabled.mockImplementation(async (country?: string) => country === 'CM');
     hasura.executeQuery.mockResolvedValue({

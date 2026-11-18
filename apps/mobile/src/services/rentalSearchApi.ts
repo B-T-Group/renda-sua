@@ -20,6 +20,7 @@ export interface RentalSearchPage {
   page: number;
   limit: number;
   availableCount: number;
+  hasMore?: boolean;
   dates: { startDate: string; endDate: string; dayCount: number } | null;
 }
 

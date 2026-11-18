@@ -1,5 +1,5 @@
 import { formatCatalogMoney } from './rentalRequestFormat';
-import { defaultCatalogParams, mergeSearchHits } from './defaultRentalCatalog';
+import { catalogHasMore, defaultCatalogParams, mergeSearchHits } from './defaultRentalCatalog';
 
 describe('default rental catalog', () => {
   it('asks for the market with no query and pages of 20', () => {
@@ -24,6 +24,14 @@ describe('default rental catalog', () => {
       page: 1,
       limit: 20,
     });
+  });
+
+  it('stops when the page is empty or hasMore is false', () => {
+    const row = [{}];
+    expect(catalogHasMore({ listings: [], hasMore: true, total: 50 }, 0)).toBe(false);
+    expect(catalogHasMore({ listings: row, hasMore: false, total: 50 }, 1)).toBe(false);
+    expect(catalogHasMore({ listings: row, hasMore: true, total: 1 }, 1)).toBe(true);
+    expect(catalogHasMore({ listings: row, total: 20 }, 20)).toBe(false);
   });
 
   it('replaces the first page and appends the next without repeating a listing', () => {

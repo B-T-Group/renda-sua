@@ -26,6 +26,17 @@ export function defaultCatalogParams(input: {
   };
 }
 
+/** Stop when the page is empty, the API says so, or a stale total would otherwise keep paging. */
+export function catalogHasMore(
+  page: { listings?: readonly unknown[]; hasMore?: boolean; total?: number },
+  loaded: number
+): boolean {
+  if (!page.listings?.length) return false;
+  if (page.hasMore === false) return false;
+  if (page.hasMore === true) return true;
+  return loaded < (page.total ?? 0);
+}
+
 export function mergeSearchHits<T extends { listing: { id: string } }>(
   previous: T[],
   next: T[],
