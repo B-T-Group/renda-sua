@@ -34,6 +34,11 @@ import RentalListingModerationStatusChip from '../rentals/RentalListingModeratio
 import { RichTextEditor } from '../common/RichTextEditor';
 import SEOHead from '../seo/SEOHead';
 
+function showsCardDeposit(currency: string | null | undefined): boolean {
+  const code = (currency ?? '').trim().toUpperCase();
+  return code !== 'XAF' && code !== 'XOF';
+}
+
 function rentalDeleteErrorMessage(error: unknown, fallback: string): string {
   const err = error as { response?: { data?: { message?: string | string[] } } };
   const m = err?.response?.data?.message;
@@ -662,21 +667,23 @@ const BusinessRentalItemEditPage: React.FC = () => {
                   type="number"
                   fullWidth
                 />
-                <TextField
-                  label={t('business.rentals.securityDeposit', 'Security deposit')}
-                  value={f.security_deposit_amount}
-                  onChange={(e) =>
-                    patchListingForm(l.id, {
-                      security_deposit_amount: e.target.value,
-                    })
-                  }
-                  type="number"
-                  fullWidth
-                  helperText={t(
-                    'business.rentals.securityDepositHelper',
-                    'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-                  )}
-                />
+                {showsCardDeposit(item?.currency || lockedCurrency) ? (
+                  <TextField
+                    label={t('business.rentals.securityDeposit', 'Security deposit')}
+                    value={f.security_deposit_amount}
+                    onChange={(e) =>
+                      patchListingForm(l.id, {
+                        security_deposit_amount: e.target.value,
+                      })
+                    }
+                    type="number"
+                    fullWidth
+                    helperText={t(
+                      'business.rentals.securityDepositHelper',
+                      'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                    )}
+                  />
+                ) : null}
                 <TextField
                   label={t('rentals.minHours', 'Min hours')}
                   value={f.min_rental_hours}

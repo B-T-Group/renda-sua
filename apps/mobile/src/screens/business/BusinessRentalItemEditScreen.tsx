@@ -41,6 +41,11 @@ type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
 /** Mirrors the backend listing default of 8x the hourly rate. */
 const DEFAULT_DEPOSIT_HOURLY_MULTIPLIER = 8;
 
+function showsCardDeposit(currency: string | null | undefined): boolean {
+  const code = (currency ?? '').trim().toUpperCase();
+  return code !== 'XAF' && code !== 'XOF';
+}
+
 export default function BusinessRentalItemEditScreen() {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
@@ -344,31 +349,35 @@ export default function BusinessRentalItemEditScreen() {
               mode="outlined"
               style={styles.field}
             />
-            <TextInput
-              label={t(
-                'business.rentals.wizard.location.deposit',
-                'Security deposit (optional)'
-              )}
-              value={edit.deposit}
-              onChangeText={(v) =>
-                setListingEdits((prev) => ({
-                  ...prev,
-                  [listingId]: { ...prev[listingId], deposit: v },
-                }))
-              }
-              keyboardType="decimal-pad"
-              mode="outlined"
-              style={styles.field}
-            />
-            <Text
-              variant="bodySmall"
-              style={{ color: colors.text.secondary, marginTop: -6, marginBottom: 10 }}
-            >
-              {t(
-                'business.rentals.wizard.location.depositHelp',
-                'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-              )}
-            </Text>
+            {showsCardDeposit(item.currency) ? (
+              <>
+                <TextInput
+                  label={t(
+                    'business.rentals.wizard.location.deposit',
+                    'Security deposit (optional)'
+                  )}
+                  value={edit.deposit}
+                  onChangeText={(v) =>
+                    setListingEdits((prev) => ({
+                      ...prev,
+                      [listingId]: { ...prev[listingId], deposit: v },
+                    }))
+                  }
+                  keyboardType="decimal-pad"
+                  mode="outlined"
+                  style={styles.field}
+                />
+                <Text
+                  variant="bodySmall"
+                  style={{ color: colors.text.secondary, marginTop: -6, marginBottom: 10 }}
+                >
+                  {t(
+                    'business.rentals.wizard.location.depositHelp',
+                    'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                  )}
+                </Text>
+              </>
+            ) : null}
             <TextInput
               label={t('business.rentals.units', 'Units available')}
               value={edit.units}
