@@ -25,7 +25,7 @@ import {
   computeRentalPricingLines,
   parseRentalSelectionWindowsFromJson,
 } from '../../utils/rentalPricingLines';
-import { parseRentalSelectionWindows } from '../../utils/rentalRequestDisplay';
+import { formatRequestAmount, parseRentalSelectionWindows } from '../../utils/rentalRequestDisplay';
 
 function isStaleVersion(error: unknown): boolean {
   const data = (error as { response?: { data?: { code?: string } } })?.response?.data;
@@ -88,16 +88,8 @@ function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnaps
   };
 }
 
-function formatMoney(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency.length === 3 ? currency : 'XAF',
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `${amount} ${currency}`;
-  }
+function formatMoney(amount: number, currency: string, language: string): string {
+  return formatRequestAmount(amount, currency, language);
 }
 
 function formatDateTimeWithoutTimezone(value: string): string {
@@ -297,9 +289,9 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                         })
                       : t('rentals.requestForm.lineHourly', '{{h}} h × {{rate}}', {
                           h: line.billableHours,
-                          rate: formatMoney(line.ratePerHour, offerPreview.cur),
+                          rate: formatMoney(line.ratePerHour, offerPreview.cur, i18n.language),
                         })}{' '}
-                    — {formatMoney(line.subtotal, offerPreview.cur)}
+                    — {formatMoney(line.subtotal, offerPreview.cur, i18n.language)}
                   </Typography>
                 ))}
                 <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -309,7 +301,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 </Typography>
                 <Typography variant="h6" fontWeight={700}>
                   {t('business.rentals.contractTotal', 'Total')}:{' '}
-                  {formatMoney(offerPreview.total, offerPreview.cur)}
+                  {formatMoney(offerPreview.total, offerPreview.cur, i18n.language)}
                 </Typography>
               </>
             ) : null}

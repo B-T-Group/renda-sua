@@ -1,5 +1,5 @@
 import type { RentalSelectionWindow } from '../../types/rentals';
-import { formatRentalDay } from './rentalRequestFormat';
+import { formatRequestAmount, formatRentalDay } from './rentalRequestFormat';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -47,21 +47,7 @@ function startMs(row: StartRow): number {
 }
 
 export function formatYouReceive(amount: number, currency: string, language: string): string {
-  const code = currency.toUpperCase();
-  if (code === 'XAF' || code === 'XOF' || code === 'FCFA') {
-    return `${Math.round(amount).toLocaleString(language.startsWith('fr') ? 'fr' : 'en')}\u00A0FCFA`;
-  }
-  const locale = language.toLowerCase().startsWith('fr') ? 'fr-CA' : 'en-CA';
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: code.length === 3 ? code : 'CAD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${amount} ${currency}`;
-  }
+  return formatRequestAmount(amount, currency, language);
 }
 
 export function dashboardPeriodLabel(

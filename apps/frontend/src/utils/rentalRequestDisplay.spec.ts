@@ -33,6 +33,13 @@ describe('formatRequestAmount', () => {
     expect(formatRequestAmount(260, 'USD', 'fr')).not.toMatch(/FCFA/);
   });
 
+  it('formats CAD like the shared confirmation amounts', () => {
+    expect(formatRequestAmount(65, 'CAD', 'en')).toBe('$65.00');
+    expect(formatRequestAmount(65, 'CAD', 'fr')).toBe('65,00\u00a0$');
+    expect(formatRequestAmount(45, 'CAD', 'en')).not.toContain('CA$');
+    expect(formatRequestAmount(45, 'CAD', 'fr')).not.toMatch(/\bCAD\b/);
+  });
+
   it('rounds to the nearest franc, keeps the sign, and groups millions', () => {
     expect(formatRequestAmount(45000.4, 'XAF', 'en')).toBe(joined('45 000 FCFA'));
     expect(formatRequestAmount(45000.5, 'xaf', 'fr')).toBe(joined('45 001 FCFA'));

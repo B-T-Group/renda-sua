@@ -205,8 +205,8 @@ describe('conflict and windows', () => {
     expect(many.schedule.expandable).toBe(true);
     expect(many.schedule.summary).toBe('2 days · see times');
     expect(many.schedule.lines).toEqual([
-      'Wed 11 Nov · 09:00\u201313:00 · 4 h',
-      'Fri 13 Nov · 14:00\u201318:00 · 4 h',
+      '11\u00A0Nov · 09:00\u201313:00 · 4 h',
+      '13\u00A0Nov · 14:00\u201318:00 · 4 h',
     ]);
 
     const one = buildRequestCardModel(
@@ -220,12 +220,12 @@ describe('conflict and windows', () => {
       copy
     );
     expect(one.schedule.expandable).toBe(false);
-    expect(one.schedule.summary).toBe('Wed 11 Nov · All day');
+    expect(one.schedule.summary).toBe('11\u00A0Nov · All day');
   });
 
   it('writes a contiguous daily range through the last booked day, in French', () => {
     const model = buildRequestCardModel(request(), 'fr', now, fr);
-    expect(model.schedule.summary).toBe('Sam. 14 nov. – dim. 15 nov. · 2 jours');
+    expect(model.schedule.summary).toBe('14\u00A0nov. – 15\u00A0nov. · 2 jours');
     expect(model.receiveLine).toBe('Vous recevez 760\u00A0FCFA');
     expect(model.schedule.summary).not.toMatch(/2026|PM|AM/);
   });

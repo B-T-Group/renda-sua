@@ -16,9 +16,9 @@ import type {
 import { cardWindowErrorMessage } from '../../../utils/rentals/cardWindow';
 import {
   computeRentalPricingLines,
-  formatRentalMoney,
   parseRentalSelectionWindowsFromJson,
 } from '../../../utils/rentals';
+import { formatRequestAmount } from '../../../utils/rentals/rentalRequestFormat';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { rentalsApi } from '../../../services/rentalsApi';
 
@@ -207,9 +207,10 @@ export function BusinessRentalRespondDialog({
                 {offerPreview ? (
                   <Text style={{ marginBottom: 8, color: colors.text.primary }}>
                     {t('business.rentals.offerTotal', 'Quoted total')}:{' '}
-                    {formatRentalMoney(
+                    {formatRequestAmount(
                       offerPreview.total,
-                      offerPreview.currency
+                      offerPreview.currency,
+                      i18n.language
                     )}
                   </Text>
                 ) : null}

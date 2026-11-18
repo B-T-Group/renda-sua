@@ -1,5 +1,5 @@
 import { formatSelectionLabel, localDateKey, type SelectionRange } from './rentalRequestScheduleUtils';
-import { formatRentalMoney } from './rentalRequestDisplay';
+import { formatConfirmationMoney } from './confirmationFormat';
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -22,15 +22,15 @@ function utcDate(iso: string): Date | null {
 }
 
 /**
- * Number, then `FCFA` (`45 000 FCFA`) in EN and FR for XAF, XOF, and FCFA.
- * Other currencies stay on `formatRentalMoney`.
+ * XAF, XOF, and FCFA use `45 000 FCFA` (non-breaking spaces).
+ * CAD uses the shared confirmation formatter: `$65.00` / `65,00 $`.
  */
-export function formatRequestAmount(amount: number, currency: string, _language: string): string {
+export function formatRequestAmount(amount: number, currency: string, language: string): string {
   const code = currency.toUpperCase();
   if (code === 'XAF' || code === 'XOF' || code === 'FCFA') {
     return `${groupedDigits(amount, '\u00A0')}\u00A0FCFA`;
   }
-  return formatRentalMoney(amount, currency);
+  return formatConfirmationMoney(amount, code, language).replace(/CA\$/g, '$');
 }
 
 /** `Wed 11 Nov` / `Mer. 11 nov.` Never an ISO date. */

@@ -280,7 +280,7 @@ function dailySchedule(
   t: Copy
 ): RequestCardSchedule {
   const days = calendarDays(windows);
-  const lines = days.map((day) => `${formatRequestDay(day, locale)} · ${allDay}`);
+  const lines = days.map((day) => `${shortDay(day, locale)} · ${allDay}`);
   if (days.length === 1) return { summary: lines[0], expandable: false, lines };
   if (!isContiguous(days) || days.length !== windows.length) {
     return {
@@ -292,7 +292,7 @@ function dailySchedule(
   const end = displayedEndDate(windows) ?? addUtcDays(days[days.length - 1], 1);
   const count = t('rentals.requestForm.dayCount', '{{count}} days', { count: windows.length });
   return {
-    summary: `${formatRequestDay(days[0], locale)} – ${endDayLabel(end, locale)} · ${count}`,
+    summary: `${shortDay(days[0], locale)} – ${shortDay(end, locale)} · ${count}`,
     expandable: false,
     lines,
   };
@@ -300,11 +300,18 @@ function dailySchedule(
 
 function windowLine(row: RentalSelectionWindow, locale: string, allDay: string): string {
   if (row.billing === 'all_day' && row.calendar_date) {
-    return `${formatRequestDay(row.calendar_date, locale)} · ${allDay}`;
+    return `${shortDay(row.calendar_date, locale)} · ${allDay}`;
   }
   const day = row.start_at.slice(0, 10);
   const hours = rentalBillableHours(Date.parse(row.start_at), Date.parse(row.end_at));
-  return `${formatRequestDay(day, locale)} · ${clock(row.start_at)}${EN_DASH}${clock(row.end_at)} · ${hours} h`;
+  return `${shortDay(day, locale)} · ${clock(row.start_at)}${EN_DASH}${clock(row.end_at)} · ${hours} h`;
+}
+
+function shortDay(iso: string, locale: string): string {
+  const label = formatRequestDay(iso, locale);
+  const space = label.lastIndexOf(' ');
+  if (space <= 0) return label;
+  return `${label.slice(0, space)}\u00A0${label.slice(space + 1)}`;
 }
 
 /** End day follows formatRentalDateRange (exclusive end today; last booked day if that helper changes). */
@@ -319,12 +326,6 @@ function displayedEndDate(windows: RentalSelectionWindow[]): string | null {
   if (Number(exclusive.slice(8, 10)) === endNum) return exclusive;
   if (Number(last.slice(8, 10)) === endNum) return last;
   return exclusive;
-}
-
-function endDayLabel(iso: string, locale: string): string {
-  const label = formatRequestDay(iso, locale);
-  if (!locale.toLowerCase().startsWith('fr') || !label) return label;
-  return label.charAt(0).toLocaleLowerCase() + label.slice(1);
 }
 
 function listingStartKey(windows: RentalSelectionWindow[]): string | null {

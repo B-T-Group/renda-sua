@@ -97,7 +97,7 @@ function ScheduleLine({ model, open, onToggle }: { model: RequestCardModel; open
   if (!model.schedule.summary) return null;
   return (
     <View>
-      <Text variant="bodySmall" onPress={model.schedule.expandable ? onToggle : undefined}>
+      <Text variant="bodySmall" numberOfLines={1} onPress={model.schedule.expandable ? onToggle : undefined}>
         {open ? t('rentals.requestCard.hideTimes', 'Hide times') : model.schedule.summary}
       </Text>
       {open ? model.schedule.lines.map((line) => <Text key={line} variant="labelSmall">{line}</Text>) : null}

@@ -84,7 +84,7 @@ function ScheduleLine({ model, open, onToggle }: { model: RequestCardModel; open
         component={model.schedule.expandable ? 'button' : 'p'}
         onClick={model.schedule.expandable ? onToggle : undefined}
         aria-label={model.schedule.expandable ? t('rentals.requestCard.seeTimesA11y', 'Show each time') : undefined}
-        sx={{ m: 0, p: 0, border: 0, bgcolor: 'transparent', textAlign: 'left', cursor: model.schedule.expandable ? 'pointer' : 'default' }}
+        sx={{ m: 0, p: 0, border: 0, bgcolor: 'transparent', textAlign: 'left', whiteSpace: 'nowrap', cursor: model.schedule.expandable ? 'pointer' : 'default' }}
       >
         {open ? t('rentals.requestCard.hideTimes', 'Hide times') : model.schedule.summary}
       </Typography>
