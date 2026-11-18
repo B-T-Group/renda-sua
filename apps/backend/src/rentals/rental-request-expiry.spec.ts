@@ -14,7 +14,16 @@ import {
   buildBusinessRentalRequestExpiredPush,
   buildRentalRequestNoResponsePush,
 } from '../notifications/rental-push.messages';
-import { countryKeys, countrySpellings, normalizeCountryKey } from '../orders/delivery-pricing.util';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import {
+  COUNTRY_KEY_EDGE,
+  COUNTRY_KEY_LOWER,
+  COUNTRY_KEY_UPPER,
+  countryKeys,
+  countrySpellings,
+  normalizeCountryKey,
+} from '../orders/delivery-pricing.util';
 import { RENTAL_TOTAL_OVERRIDE_MAX } from './rentals-queries';
 
 function row(overrides: Partial<UnansweredRentalRequest> = {}): UnansweredRentalRequest {
@@ -314,6 +323,25 @@ describe('N20 country name keys', () => {
     expect(normalizeCountryKey('  Cameroun ')).toBe('CAMEROUN');
     expect(normalizeCountryKey(' cm ')).toBe('CM');
     expect(countryKeys('CM')).toEqual(expect.arrayContaining(['CM', 'CAMEROON', 'CAMEROUN']));
+  });
+
+  it('N22 trims tab, newline and NBSP with the regexp stored in SQL', () => {
+    const sql = readFileSync(
+      join(__dirname, '../../../hasura/migrations/Rendasua/20261119150000_rental_country_key_fold/up.sql'),
+      'utf8'
+    );
+    expect(sql).toContain(COUNTRY_KEY_EDGE);
+    expect(sql).toContain(COUNTRY_KEY_LOWER);
+    expect(sql).toContain(COUNTRY_KEY_UPPER);
+    expect(sql).toContain('COLLATE "C"');
+    expect(normalizeCountryKey('Cameroun\t')).toBe('CAMEROUN');
+    expect(normalizeCountryKey('Cameroun\n')).toBe('CAMEROUN');
+    expect(normalizeCountryKey('Cameroun\u00a0')).toBe('CAMEROUN');
+    expect(normalizeCountryKey('Bénin')).toBe('BÉNIN');
+    expect(normalizeCountryKey('\tBénin\n')).toBe(normalizeCountryKey('Bénin'));
+    for (const sample of [' Cam ', 'Bénin\u00a0', "Côte d'Ivoire\t", '\u2003GA']) {
+      expect(sample.replace(new RegExp(COUNTRY_KEY_EDGE, 'g'), '')).toBe(sample.trim());
+    }
   });
 });
 

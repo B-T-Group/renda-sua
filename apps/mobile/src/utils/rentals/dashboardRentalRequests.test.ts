@@ -26,8 +26,9 @@ describe('dashboard rental requests', () => {
     expect(totalOverrideTooHigh(2_000_000, 1_800_000, 1_000_000)).toBe(false);
     expect(totalOverrideTooHigh(2_000_000, 2_500_000, 1_000_000)).toBe(true);
     expect(totalOverrideTooHigh(2_000_000, 20_000_001)).toBe(true);
-    expect(totalOverrideTooHigh(0, 1_000_000)).toBe(true);
+    expect(totalOverrideTooHigh(0, 1_000_000)).toBe(false);
     expect(totalOverrideTooHigh(0, 40_000, 50_000)).toBe(false);
+    expect(totalOverrideTooHigh(0, 60_000, 50_000)).toBe(true);
   });
 
   it('shows an exclusive end for a multi-day stay', () => {

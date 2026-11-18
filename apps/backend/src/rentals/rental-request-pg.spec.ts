@@ -1,18 +1,33 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Client } from 'pg';
+import { parse as parsePgConnection } from 'pg-connection-string';
 
 const url = process.env.RENTAL_QA_DATABASE_URL || 'postgres://rental_qa:rental_qa@127.0.0.1:5432/rental_qa';
 const root = join(__dirname, '../../../hasura/migrations/Rendasua');
 
 export function assertDisposableQaDatabase(connectionString: string): void {
-  const parsed = new URL(connectionString);
-  const host = parsed.hostname.replace(/^\[|\]$/g, '');
-  const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
-  const local = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  const endpoint = pgEndpoint(connectionString);
+  const local = isLocalPgHost(endpoint.host, endpoint.port);
   const optedIn = process.env.RENTAL_QA_ALLOW_DROP === '1';
-  if (local && isQaDatabaseName(name) && optedIn) return;
+  if (local && isQaDatabaseName(endpoint.database) && optedIn) return;
   throw new Error('Refusing to drop schema: RENTAL_QA_DATABASE_URL is not a disposable database');
+}
+
+function pgEndpoint(connectionString: string): { host: string; port: string; database: string } {
+  const parsed = parsePgConnection(connectionString);
+  return {
+    host: String(parsed.host ?? ''),
+    port: String(parsed.port ?? ''),
+    database: String(parsed.database ?? ''),
+  };
+}
+
+function isLocalPgHost(host: string, port: string): boolean {
+  if (port !== '' && !/^\d+$/.test(port)) return false;
+  const parts = host.split(',').map((part) => part.trim().replace(/^\[|\]$/g, '')).filter(Boolean);
+  if (parts.length === 0) return false;
+  return parts.every((part) => part === 'localhost' || part === '127.0.0.1' || part === '::1');
 }
 
 function isQaDatabaseName(name: string): boolean {
@@ -37,6 +52,10 @@ describe('N14 disposable database guard', () => {
     expect(() => assertDisposableQaDatabase('postgres://user:secret@127.0.0.1:5432/rendasua')).toThrow(/disposable/);
     expect(() => assertDisposableQaDatabase('postgres://user:secret@db.internal:5432/rental_qa')).toThrow(/disposable/);
     expect(() => assertDisposableQaDatabase('postgres://user:secret@127.0.0.1:5432/latest_aqua')).toThrow(/disposable/);
+    const socket = 'postgres://user:secret@localhost:9/rental_qa?host=/workspace/qa/pg838&port=58338';
+    expect(() => assertDisposableQaDatabase(socket)).toThrow(/disposable/);
+    const localQuery = 'postgres://user:secret@db.internal:5432/rental_qa?host=127.0.0.1&port=5432';
+    expect(() => assertDisposableQaDatabase(localQuery)).not.toThrow();
     delete process.env[allow];
     expect(() => assertDisposableQaDatabase('postgres://user:secret@127.0.0.1:5432/rental_qa')).toThrow(/disposable/);
   });
@@ -110,6 +129,7 @@ describe('rental request SQL on Postgres', () => {
     await client.query(readFileSync(join(root, '20261118210000_rental_request_qa_round2/up.sql'), 'utf8'));
     await client.query(readFileSync(join(root, '20261118220000_rental_request_fair_window/up.sql'), 'utf8'));
     await client.query(readFileSync(join(root, '20261118230000_rental_request_response_clock/up.sql'), 'utf8'));
+    await client.query(readFileSync(join(root, '20261119150000_rental_country_key_fold/up.sql'), 'utf8'));
     await client.query(`
       DROP TRIGGER IF EXISTS stamp_rental_autodecline_since ON public.application_configurations;
       CREATE TRIGGER stamp_rental_autodecline_since
@@ -287,6 +307,30 @@ describe('rental request SQL on Postgres', () => {
     const spaced = await insertListing(client, ' Cameroun ');
     const id = await insertPending(client, spaced, '2026-11-10T00:00:00Z', start);
     await client.query('SELECT public.extend_overdue_rental_respond_by($1::timestamptz, $2)', [cutoff, 'cm']);
+    expect(await respondBy(client, id)).toBe(new Date(Date.parse(cutoff) + 24 * 60 * 60 * 1000).toISOString());
+  });
+
+  it('N22 trims tab, newline and NBSP, and folds Bénin under C', async () => {
+    const samples: Array<[string, string]> = [
+      ['Cameroun\t', 'CAMEROUN'],
+      ['Cameroun\n', 'CAMEROUN'],
+      ['Cameroun\u00a0', 'CAMEROUN'],
+      ['Bénin', 'BÉNIN'],
+      ['bénin', 'BÉNIN'],
+      ['BÉNIN', 'BÉNIN'],
+      ["Côte d'Ivoire", "CÔTE D'IVOIRE"],
+    ];
+    for (const [raw, key] of samples) {
+      const folded = await client.query('SELECT public.normalized_country_key($1) AS key', [raw]);
+      expect(folded.rows[0].key).toBe(key);
+    }
+    const cUpper = await client.query(`SELECT upper('Bénin' COLLATE "C") AS key`);
+    expect(cUpper.rows[0].key).toBe('BéNIN');
+    const benin = await insertListing(client, 'Bénin\t');
+    const cutoff = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const start = new Date(Date.parse(cutoff) + 4 * 24 * 60 * 60 * 1000).toISOString();
+    const id = await insertPending(client, benin, '2026-11-10T00:00:00Z', start);
+    await client.query('SELECT public.extend_overdue_rental_respond_by($1::timestamptz, $2)', [cutoff, 'bj']);
     expect(await respondBy(client, id)).toBe(new Date(Date.parse(cutoff) + 24 * 60 * 60 * 1000).toISOString());
   });
 });

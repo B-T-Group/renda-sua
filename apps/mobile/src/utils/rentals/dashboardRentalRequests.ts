@@ -16,7 +16,7 @@ export const TOTAL_OVERRIDE_RATIO = 10;
 export function totalOverrideTooHigh(quote: number, value: number, ceiling: number | null = null): boolean {
   if (!(value > quote)) return false;
   if (ceiling != null && value > ceiling) return true;
-  if (!(quote > 0)) return ceiling == null;
+  if (!(quote > 0)) return false;
   return value > quote * TOTAL_OVERRIDE_RATIO;
 }
 

@@ -32,7 +32,7 @@ export function totalOverrideTooHigh(
 ): boolean {
   if (!(totalOverride > quote)) return false;
   if (ceiling != null && totalOverride > ceiling) return true;
-  if (!(quote > 0)) return ceiling == null;
+  if (!(quote > 0)) return false;
   return totalOverride > quote * TOTAL_OVERRIDE_RATIO;
 }
 

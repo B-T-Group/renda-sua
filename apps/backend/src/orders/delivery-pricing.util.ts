@@ -136,15 +136,30 @@ export function collectedDeliveryFee(order: {
 
 /** ISO code, or a known country name. Unknown text stays as entered. */
 export function comparableCountry(value?: string | null): string | null {
-  const raw = String(value ?? '').trim().toUpperCase();
+  const raw = normalizeCountryKey(value);
   if (!raw) return null;
   if (/^[A-Z]{2}$/.test(raw)) return raw;
   return COUNTRY_NAMES[raw] ?? raw;
 }
 
-/** Same key as SQL `normalized_country_key`: trim, then uppercase. */
+/**
+ * Edge whitespace removed from a country name. The same text is the
+ * `regexp_replace` pattern in `normalized_country_key`.
+ */
+export const COUNTRY_KEY_EDGE =
+  '^[\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]+|[\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]+$';
+
+/** Latin letters `upper()` leaves unchanged under the C collation. */
+export const COUNTRY_KEY_LOWER = 'àáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿœ';
+export const COUNTRY_KEY_UPPER = 'ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝŸŒ';
+
+/** Same key as SQL `normalized_country_key`: shared trim, then Unicode uppercase. */
 export function normalizeCountryKey(value?: string | null): string {
-  return String(value ?? '').trim().toUpperCase();
+  return String(value ?? '').replace(countryKeyEdges(), '').toUpperCase();
+}
+
+function countryKeyEdges(): RegExp {
+  return new RegExp(COUNTRY_KEY_EDGE, 'g');
 }
 
 /** Uppercase spellings SQL compares with `upper(btrim(address.country))`. */

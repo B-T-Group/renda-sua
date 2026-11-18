@@ -392,6 +392,20 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     return { service, executeMutation };
   }
 
+  function acceptWatchingCeiling() {
+    const { service } = responder(pendingRequest(), true, {}, true);
+    const seen = { ceilingCalls: 0 };
+    const inner = service.hasuraSystemService.executeQuery.getMockImplementation();
+    service.hasuraSystemService.executeQuery.mockImplementation(async (query: string, vars?: unknown) => {
+      if (String(query).includes('rentals_total_override_max')) {
+        seen.ceilingCalls += 1;
+        throw new Error('ceiling down');
+      }
+      return inner(query, vars);
+    });
+    return { service, seen };
+  }
+
   const accept = {
     status: RespondRentalRequestStatusDto.available,
     contractExpiryHours: 24,
@@ -561,6 +575,27 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     await expect(
       zero.service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1, totalOverride: 0 })
     ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('N23 loads the ceiling only for an override above the quote', async () => {
+    const plain = acceptWatchingCeiling();
+    await plain.service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1 });
+    expect(plain.seen.ceilingCalls).toBe(0);
+    const discount = acceptWatchingCeiling();
+    await discount.service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1, totalOverride: 500 });
+    expect(discount.seen.ceilingCalls).toBe(0);
+    const raised = acceptWatchingCeiling();
+    const failed = raised.service.respondToRentalRequest('request-1', {
+      ...accept,
+      expectedVersion: 1,
+      totalOverride: 5000,
+    });
+    await expect(failed).rejects.toBeInstanceOf(HttpException);
+    await expect(failed).rejects.toMatchObject({
+      status: 400,
+      response: 'The currency limit could not be loaded. Try again.',
+    });
+    expect(raised.seen.ceilingCalls).toBe(1);
   });
 
   it('L3 returns 409 expired when accept is after respond_by and the flag is on', async () => {

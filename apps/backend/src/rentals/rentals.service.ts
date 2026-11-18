@@ -1504,13 +1504,27 @@ export class RentalsService {
     computed: RentalPricingSnapshotDto
   ): Promise<RentalPricingSnapshotDto> {
     try {
-      const country = resolveItemCountry(req.rental_location_listing?.business_location?.address?.country);
-      const ceiling = await this.overrideCeiling(computed.currency, country);
       const enabled = await this.totalOverrideEnabled(req);
+      const ceiling = await this.ceilingForOverride(req, dto, computed, enabled);
       return quoteWithTotalOverride(computed, dto.totalOverride, enabled, ceiling);
     } catch (error: any) {
       throw new HttpException(this.overrideErrorMessage(error), HttpStatus.BAD_REQUEST);
     }
+  }
+
+  private async ceilingForOverride(
+    req: any,
+    dto: RespondRentalRequestDto,
+    computed: RentalPricingSnapshotDto,
+    enabled: boolean
+  ): Promise<number | null> {
+    if (!enabled || !this.overrideNeedsCeiling(dto.totalOverride, computed.total)) return null;
+    const country = resolveItemCountry(req.rental_location_listing?.business_location?.address?.country);
+    return this.overrideCeiling(computed.currency, country);
+  }
+
+  private overrideNeedsCeiling(totalOverride: number | null | undefined, quote: number): boolean {
+    return totalOverride != null && totalOverride > Number(quote);
   }
 
   private overrideErrorMessage(error: any): string {
