@@ -344,8 +344,8 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
         onToggleCheapest={() => setSort((value) => (value === 'cheapest' ? 'relevance' : 'cheapest'))}
         onCycleSort={() =>
           setSort((value) => {
-            const order = defaultList ? LIST_SORTS : LEGACY_SORTS;
-            const index = order.indexOf(value as (typeof order)[number]);
+            const order = (defaultList ? LIST_SORTS : LEGACY_SORTS) as readonly SortName[];
+            const index = order.indexOf(value);
             return order[(index + 1) % order.length];
           })
         }

@@ -65,7 +65,7 @@ export function useRentalSearchCatalog(options: {
         const rows = data.data.listings ?? [];
         setTotal(data.data.total ?? rows.length);
         setPage(nextPage);
-        setHits((prev) => (append ? [...prev, ...rows] : rows));
+        setHits((prev) => (append ? appendCatalogHits(prev, rows) : rows));
         setLoading(false);
         setLoadingMore(false);
       } catch {
@@ -90,6 +90,20 @@ export function useRentalSearchCatalog(options: {
   }, [hits.length, loading, loadingMore, page, runFetch, total]);
 
   return { hits, total, loading: !geo.ready || loading, loadingMore, loadMore, ready: geo.ready };
+}
+
+export function appendCatalogHits(
+  previous: RentalSearchCatalogHit[],
+  next: RentalSearchCatalogHit[]
+): RentalSearchCatalogHit[] {
+  const seen = new Set(previous.map((hit) => hit.listing.id));
+  const added: RentalSearchCatalogHit[] = [];
+  for (const hit of next) {
+    if (seen.has(hit.listing.id)) continue;
+    seen.add(hit.listing.id);
+    added.push(hit);
+  }
+  return [...previous, ...added];
 }
 
 function catalogParams(

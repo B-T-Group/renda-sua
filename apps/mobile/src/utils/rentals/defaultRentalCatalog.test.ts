@@ -26,9 +26,11 @@ describe('default rental catalog', () => {
     });
   });
 
-  it('replaces the first page and appends the next', () => {
-    expect(mergeSearchHits(['a'], ['b'], 1)).toEqual(['b']);
-    expect(mergeSearchHits(['a'], ['b'], 2)).toEqual(['a', 'b']);
+  it('replaces the first page and appends the next without repeating a listing', () => {
+    const hit = (id: string) => ({ listing: { id } });
+    expect(mergeSearchHits([hit('a')], [hit('b')], 1)).toEqual([hit('b')]);
+    expect(mergeSearchHits([hit('a')], [hit('b')], 2)).toEqual([hit('a'), hit('b')]);
+    expect(mergeSearchHits([hit('a')], [hit('a'), hit('c')], 2)).toEqual([hit('a'), hit('c')]);
   });
 
   it('formats XAF with a non-breaking space and CAD for EN and FR', () => {

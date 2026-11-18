@@ -26,6 +26,18 @@ export function defaultCatalogParams(input: {
   };
 }
 
-export function mergeSearchHits<T>(previous: T[], next: T[], page: number): T[] {
-  return page <= 1 ? next : [...previous, ...next];
+export function mergeSearchHits<T extends { listing: { id: string } }>(
+  previous: T[],
+  next: T[],
+  page: number
+): T[] {
+  if (page <= 1) return next;
+  const seen = new Set(previous.map((hit) => hit.listing.id));
+  const added: T[] = [];
+  for (const hit of next) {
+    if (seen.has(hit.listing.id)) continue;
+    seen.add(hit.listing.id);
+    added.push(hit);
+  }
+  return [...previous, ...added];
 }

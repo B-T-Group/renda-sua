@@ -448,6 +448,42 @@ describe('RentalSearchService', () => {
     jest.restoreAllMocks();
   });
 
+  it('treats a bad ranking multiplier as neutral and survives a ranking throw', async () => {
+    const first = listing('a', 'First');
+    first.rental_item.business = { id: 'boosted', name: 'A' };
+    const second = listing('b', 'Second');
+    second.rental_item.business = { id: 'plain', name: 'B' };
+    rentals.collectPublicRentalListings.mockResolvedValue([first, second]);
+    const ranking = { multipliersFor: jest.fn().mockResolvedValue(new Map([['boosted', Number.POSITIVE_INFINITY]])) };
+    const ranked = new RentalSearchService(
+      rentals as never,
+      hasura as never,
+      undefined,
+      undefined,
+      ranking as unknown as DeclineRankingService
+    );
+    const infinite = await ranked.search({ country_code: 'CM' });
+    expect(infinite.listings.map((row) => row.listing.id)).toEqual(['a', 'b']);
+    ranking.multipliersFor.mockResolvedValue(
+      new Map<string, number>([
+        ['boosted', Number.NaN],
+        ['plain', null as unknown as number],
+      ])
+    );
+    const blank = await ranked.search({ country_code: 'CM' });
+    expect(blank.listings.map((row) => row.listing.id)).toEqual(['a', 'b']);
+    ranking.multipliersFor.mockResolvedValue(new Map([['boosted', 2]]));
+    const capped = await ranked.search({ country_code: 'CM' });
+    expect(capped.listings.map((row) => row.listing.id)).toEqual(['a', 'b']);
+    ranking.multipliersFor.mockResolvedValue(new Map([['boosted', 0]]));
+    const grounded = await ranked.search({ country_code: 'CM' });
+    expect(grounded.listings.map((row) => row.listing.id)).toEqual(['b', 'a']);
+    ranking.multipliersFor.mockRejectedValue(new Error('ranking down'));
+    const fallen = await ranked.search({ country_code: 'CM' });
+    expect(fallen.listings.map((row) => row.listing.id)).toEqual(['a', 'b']);
+    expect(fallen.total).toBe(2);
+  });
+
   it('keeps inspection_enabled from the item opt-in on search hits', async () => {
     const rows = [listing('a', 'A'), listing('b', 'B')];
     const withWindows = {

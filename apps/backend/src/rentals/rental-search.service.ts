@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { marketTimeZone } from '../common/market-timezones';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
@@ -33,6 +33,8 @@ export interface RentalSearchHit extends Partial<CardPaymentPolicy> {
 
 @Injectable()
 export class RentalSearchService {
+  private readonly logger = new Logger(RentalSearchService.name);
+
   constructor(
     private readonly rentals: RentalsService,
     private readonly hasura: HasuraSystemService,
@@ -300,8 +302,13 @@ export class RentalSearchService {
     countryCode?: string | null
   ): Promise<Map<string, number>> {
     if (!this.ranking) return new Map();
-    const ids = hits.map((hit) => hit.listing.rental_item.business?.id).filter((id): id is string => Boolean(id));
-    return this.ranking.multipliersFor(ids, countryCode);
+    try {
+      const ids = hits.map((hit) => hit.listing.rental_item.business?.id).filter((id): id is string => Boolean(id));
+      return await this.ranking.multipliersFor(ids, countryCode);
+    } catch (error: any) {
+      this.logger.warn(`decline ranking failed, using catalog order: ${error?.message ?? 'unknown'}`);
+      return new Map();
+    }
   }
 
   async cardGuardEnabled(country?: string | null): Promise<boolean> {
@@ -354,11 +361,25 @@ function compareHits(
   }
   const score = (hit: RentalSearchHit & { catalogIndex: number }) => {
     const id = hit.listing.rental_item.business?.id;
-    const penalty = id ? multipliers?.get(id) ?? 1 : 1;
-    return (hit.catalogIndex + 1) / (penalty > 0 ? penalty : 1);
+    const penalty = rankingWeight(id ? multipliers?.get(id) : undefined);
+    return penalty === 0 ? Number.POSITIVE_INFINITY : (hit.catalogIndex + 1) / penalty;
   };
   if (score(a) !== score(b)) return score(a) - score(b);
-  return a.catalogIndex - b.catalogIndex;
+  if (a.catalogIndex !== b.catalogIndex) return a.catalogIndex - b.catalogIndex;
+  return compareListingId(a.listing.id, b.listing.id);
+}
+
+/** NaN, Infinity, and null stay neutral. Anything else is clamped to [0, 1]. */
+function rankingWeight(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 1;
+  if (raw < 0) return 0;
+  if (raw > 1) return 1;
+  return raw;
+}
+
+function compareListingId(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }
 
 function sanitizeTerm(value?: string): string {
