@@ -235,6 +235,9 @@ export interface RentalBookingDetail {
   units_booked?: number | null;
   inspection_policy_version?: number | null;
   condition_declined_at?: string | null;
+  refund_status?: 'none' | 'refund_pending' | 'refunded' | 'failed' | 'manual' | null;
+  refund_amount?: number | string | null;
+  refund_currency?: string | null;
   condition_decline?: {
     reason: string;
     reasonText?: string | null;

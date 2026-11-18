@@ -8840,6 +8840,7 @@
     "refunded": "Refunded",
     "refundProgressBody": "{{amount}} is on its way to {{phone}}.",
     "refundedBody": "{{amount}} was sent to {{phone}}.",
+    "walletReturned": "{{amount}} is back in your wallet.",
     "browse": "Browse rentals",
     "businessTitle": "Renter declined the condition",
     "businessBody": "The booking is cancelled and the unit is free. No charge.",

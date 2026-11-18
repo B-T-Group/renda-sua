@@ -102,16 +102,13 @@ describe('RentalMomoRefundService', () => {
     expect(pending.providerRef).toBe('mtn-ref');
   });
 
-  it('keeps a FreemoPay timeout pending and reuses the same external id', async () => {
+  it('sends FreemoPay once when the status lookup fails, and does not send from a later probe', async () => {
     const referenceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-    let checks = 0;
     const { api, freemopay } = service({
       freemopay: {
         withdraw: jest.fn(async () => ({ success: false, ambiguous: true, status: 'UNKNOWN' })),
         checkTransactionStatus: jest.fn(async () => {
-          checks += 1;
-          const error: any = new Error(checks === 1 ? 'not found' : 'timeout');
-          error.status = checks === 1 ? 404 : 504;
+          const error: any = new Error('socket hang up');
           throw error;
         }),
       },
@@ -121,8 +118,27 @@ describe('RentalMomoRefundService', () => {
     expect(result.providerRef).toBe(referenceId);
     expect(freemopay.withdraw).toHaveBeenCalledTimes(1);
     expect(freemopay.withdraw).toHaveBeenCalledWith(expect.objectContaining({ externalId: referenceId }));
-    const again = await api.refund({ ...request, provider: 'freemopay', referenceId });
-    expect(again.status).toBe('refund_pending');
+    expect(await api.probe('freemopay', referenceId)).toBe('refund_pending');
+    expect(freemopay.withdraw).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends one FreemoPay payout when status returns 503 before the withdrawal is accepted', async () => {
+    const referenceId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const { api, freemopay } = service({
+      freemopay: {
+        withdraw: jest.fn(async () => ({ success: true, reference: 'FP-1', status: 'CREATED' })),
+        checkTransactionStatus: jest.fn(async () => {
+          const error: any = new Error('unavailable');
+          error.status = 503;
+          throw error;
+        }),
+      },
+    });
+    const result = await api.refund({ ...request, provider: 'freemopay', referenceId });
+    expect(result.status).toBe('refund_pending');
+    expect(result.providerRef).toBe('FP-1');
+    expect(freemopay.withdraw).toHaveBeenCalledTimes(1);
+    expect(await api.probe('freemopay', 'FP-1')).toBe('refund_pending');
     expect(freemopay.withdraw).toHaveBeenCalledTimes(1);
   });
 
@@ -142,32 +158,37 @@ describe('RentalMomoRefundService', () => {
     expect(freemopay.withdraw).toHaveBeenCalledTimes(1);
   });
 
-  it('does not withdraw again when FreemoPay already has the external id', async () => {
+  it('reads a known FreemoPay success without sending another withdrawal', async () => {
     const { api, freemopay } = service({
       freemopay: {
         withdraw: jest.fn(async () => ({ success: true, reference: 'free-ref' })),
         checkTransactionStatus: jest.fn(async () => ({ status: 'SUCCESS' })),
       },
     });
-    const result = await api.refund({ ...request, provider: 'freemopay', referenceId: 'stable-fp' });
-    expect(result.status).toBe('refunded');
-    expect(result.providerRef).toBe('stable-fp');
+    expect(await api.probe('freemopay', 'stable-fp')).toBe('refunded');
     expect(freemopay.withdraw).not.toHaveBeenCalled();
   });
 
-  it('treats a FreemoPay status outage as unknown and a 404 as missing', async () => {
+  it('treats a FreemoPay status outage, a 404, and a blank status as unknown', async () => {
     const down = service({
       freemopay: {
         withdraw: jest.fn(),
         checkTransactionStatus: jest.fn(async () => {
-          const error: any = new Error('socket hang up');
-          throw error;
+          throw new Error('socket hang up');
         }),
       },
     });
     expect(await down.api.probe('freemopay', 'fp-1')).toBe('refund_pending');
     const missing = service();
-    expect(await missing.api.probe('freemopay', 'fp-1')).toBe('missing');
+    expect(await missing.api.probe('freemopay', 'fp-1')).toBe('refund_pending');
+    const blank = service({
+      freemopay: {
+        withdraw: jest.fn(),
+        checkTransactionStatus: jest.fn(async () => ({ status: '' })),
+      },
+    });
+    expect(await blank.api.probe('freemopay', 'fp-1')).toBe('refund_pending');
+    expect(blank.freemopay.withdraw).not.toHaveBeenCalled();
   });
 
   it('stays pending when a poll cannot be reached', async () => {

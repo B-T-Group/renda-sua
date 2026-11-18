@@ -497,9 +497,15 @@ export function buildConditionRefundSupportNotice(params: {
   rentalItemName: string;
   bookingNumber: string;
   outcome: string;
+  externalId?: string;
+  walletCredited?: boolean;
 }): { title: string; body: string } {
+  const external = params.externalId ? ` External id ${params.externalId}.` : '';
+  const wallet = params.walletCredited
+    ? ' The wallet was credited. Do not pay the phone.'
+    : ' The wallet was not credited.';
   return {
     title: 'Mobile Money refund needs review',
-    body: `A Mobile Money refund for ${params.rentalItemName} (${params.bookingNumber}) is ${params.outcome}. Review it in rental declines.`,
+    body: `A Mobile Money refund for ${params.rentalItemName} (${params.bookingNumber}) is ${params.outcome}.${external}${wallet} Review it in rental declines.`,
   };
 }

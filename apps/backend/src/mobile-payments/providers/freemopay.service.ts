@@ -486,7 +486,7 @@ export class FreemopayService implements OnModuleInit {
 
       return {
         transactionId: data.reference || reference,
-        status: data.status || 'PENDING',
+        status: typeof data.status === 'string' && data.status.trim() ? data.status : 'UNKNOWN',
         amount: data.amount,
         reference: data.reference,
         merchantRef,

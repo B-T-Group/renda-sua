@@ -83,6 +83,8 @@ const WEB = [
   ['lightbox', '05b-web-lightbox'],
   ['refund-progress', '06-web-refund-progress'],
   ['refunded', '06-web-refunded'],
+  ['refund-failed', '06b-web-refund-failed'],
+  ['refund-manual', '06c-web-refund-manual'],
   ['insights', '07-web-insights'],
   ['admin', '07-web-admin'],
 ];
@@ -103,6 +105,8 @@ const MOBILE = [
   ['lightbox', '05b-lightbox'],
   ['refund-progress', '06-refund-progress'],
   ['refunded', '06-refunded'],
+  ['refund-failed', '06b-refund-failed'],
+  ['refund-manual', '06c-refund-manual'],
   ['insights', '07-insights'],
 ];
 
@@ -285,6 +289,13 @@ async function assertScene(page, scene, lang, mobile) {
     if (!loaded) throw new Error(`${scene} icon font did not load`);
   }
   if (scene === 'admin' && !text.includes('5')) throw new Error('admin threshold copy missing 5');
+  if (scene === 'refund-failed' || scene === 'refund-manual') {
+    const wallet = lang === 'fr' ? 'portefeuille' : 'wallet';
+    if (!text.toLowerCase().includes(wallet)) throw new Error(`${scene} ${lang} does not say the wallet`);
+    if (text.includes('670') || text.toLowerCase().includes('phone')) {
+      throw new Error(`${scene} ${lang} still names the phone`);
+    }
+  }
 }
 
 async function writeCompressed(file, png) {

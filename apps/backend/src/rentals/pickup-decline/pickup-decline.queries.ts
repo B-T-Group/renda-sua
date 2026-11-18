@@ -17,6 +17,7 @@ export const DECLINE_BOOKING = `
       refund_amount
       refund_provider
       refund_provider_ref
+      refund_sent_at
       authorized_amount
       total_amount
       currency
@@ -218,6 +219,44 @@ export const DECLINE_HISTORY = `
   }
 `;
 
+export const STAMP_SENT = `
+  mutation StampDeclineRefundSent($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_claim_token: { _eq: $token }
+        refund_sent_at: { _is_null: true }
+      }
+      _set: { refund_sent_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+export const KEEP_PROVIDER_REF = `
+  mutation KeepDeclineProviderRef($id: uuid!, $stableRef: String!, $ref: String!) {
+    update_rental_bookings(
+      where: { id: { _eq: $id }, refund_provider_ref: { _eq: $stableRef } }
+      _set: { refund_provider_ref: $ref }
+    ) { affected_rows }
+  }
+`;
+
+export const CLAIM_NOTICE = `
+  mutation NoteDeclineRefundOnce($id: uuid!, $outcome: String!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        _or: [
+          { refund_notices: { _is_null: true } }
+          { _not: { refund_notices: { _contains: [$outcome] } } }
+        ]
+      }
+      _append: { refund_notices: [$outcome] }
+    ) { affected_rows }
+  }
+`;
+
 export const KEEP_REFUND_CLAIM = `
   mutation KeepDeclineRefundClaim($id: uuid!, $token: uuid!, $at: timestamptz!) {
     update_rental_bookings(
@@ -323,6 +362,7 @@ export const PENDING_REFUNDS = `
       refund_amount
       refund_provider
       refund_provider_ref
+      refund_sent_at
       refund_claim_at
       client { user_id }
       business { user_id }

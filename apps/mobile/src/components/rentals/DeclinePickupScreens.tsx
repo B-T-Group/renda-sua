@@ -126,7 +126,14 @@ export function DeclineConditionSheet({
   );
 }
 
-export function DeclineOutcomeCard({ money, refundStatus }: { money: DeclineMoney; refundStatus: 'none' | 'refund_pending' | 'refunded' }) {
+export type DeclineRefundView = 'none' | 'refund_pending' | 'refunded' | 'failed' | 'manual';
+
+export function declineRefundView(status?: string | null): DeclineRefundView {
+  if (status === 'refund_pending' || status === 'refunded' || status === 'failed' || status === 'manual') return status;
+  return 'none';
+}
+
+export function DeclineOutcomeCard({ money, refundStatus }: { money: DeclineMoney; refundStatus: DeclineRefundView }) {
   const { t, i18n } = useTranslation();
   const amount = declineAmount(money.amount, money.currency, i18n.language);
   const title = refundStatus === 'refund_pending'
@@ -369,6 +376,9 @@ function outcomeBody(money: DeclineMoney, amount: string, refundStatus: string, 
   }
   if (refundStatus === 'refunded') {
     return t('pickupDecline.refundedBody', '{{amount}} was sent to {{phone}}.', { amount, phone: money.phoneMask ?? '' });
+  }
+  if (refundStatus === 'failed' || refundStatus === 'manual') {
+    return t('pickupDecline.walletReturned', '{{amount}} is back in your wallet.', { amount });
   }
   return moneyLine(money, amount, t);
 }

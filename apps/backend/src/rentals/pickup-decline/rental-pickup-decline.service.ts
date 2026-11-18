@@ -78,6 +78,7 @@ interface DeclineBooking {
   refund_amount?: number | string | null;
   refund_provider: string | null;
   refund_provider_ref: string | null;
+  refund_sent_at?: string | null;
   refund_claim_token?: string | null;
   authorized_amount: number | string | null;
   total_amount: number | string | null;
@@ -192,7 +193,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     if (!refundMarkEvidence(body.providerRef, body.note)) {
       throw new HttpException('Add the provider reference or a note', HttpStatus.BAD_REQUEST);
     }
-    if (body.status === 'failed') await this.failRefund(booking, this.refundPay(booking), body.providerRef);
+    if (body.status === 'failed') await this.failMarked(booking, body);
     else await this.writePolled(bookingId, body.status, body.providerRef);
     await this.auditRefund(booking, body);
     return { refundStatus: body.status };
@@ -341,6 +342,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     token: string
   ): Promise<RefundStatus> {
     try {
+      if (!(await this.markSent(booking, source.provider, token))) return 'refund_pending';
       const result = await this.momo.refund(this.refundRequest(booking, ledger, source, referenceId));
       return this.settleResult(booking, ledger, result, referenceId, token);
     } catch (error: any) {
@@ -360,6 +362,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     if (result.status === 'failed') return this.failOwned(booking, ledger.amount, result.providerRef ?? referenceId, token);
     const ref = result.providerRef ?? referenceId;
     const wrote = await this.writeOwned(booking.id, token, result.status, result.provider, ref);
+    if (!wrote) await this.keepProviderRef(booking.id, referenceId, ref);
     return wrote ? result.status : 'refund_pending';
   }
 
@@ -549,6 +552,24 @@ export class RentalPickupDeclineService implements OnModuleInit {
     await this.hasura.executeMutation(Q.REMEMBER_REFUND_REF, { id: bookingId, provider, ref });
   }
 
+  /** FreemoPay is stamped immediately before the withdrawal. A lost claim does not send. */
+  private async markSent(booking: DeclineBooking, provider: string, token: string): Promise<boolean> {
+    if (providerRefundPlan(provider) !== 'freemopay') return true;
+    const at = new Date().toISOString();
+    const result = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
+      Q.STAMP_SENT,
+      { id: booking.id, token, at }
+    );
+    if ((result.update_rental_bookings?.affected_rows ?? 0) !== 1) return false;
+    booking.refund_sent_at = at;
+    return true;
+  }
+
+  private async keepProviderRef(bookingId: string, stableRef: string, providerRef: string): Promise<void> {
+    if (!providerRef || providerRef === stableRef) return;
+    await this.hasura.executeMutation(Q.KEEP_PROVIDER_REF, { id: bookingId, stableRef, ref: providerRef });
+  }
+
   private async removeDecline(declineId: string): Promise<void> {
     await this.hasura.executeMutation(Q.DELETE_DECLINE, { id: declineId });
   }
@@ -694,11 +715,18 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   private async tellSupport(booking: DeclineBooking, outcome: string): Promise<void> {
+    const claimed = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
+      Q.CLAIM_NOTICE,
+      { id: booking.id, outcome }
+    );
+    if ((claimed.update_rental_bookings?.affected_rows ?? 0) !== 1) return;
     await this.notifications.notifySupportConditionRefund({
       bookingId: booking.id,
       bookingNumber: booking.booking_number,
       rentalItemName: booking.rental_location_listing?.rental_item?.name || 'the item',
       outcome,
+      externalId: booking.refund_provider_ref || stableRefundReference(booking.id),
+      walletCredited: outcome === 'failed' || outcome === 'unsupported',
     });
   }
 
@@ -728,8 +756,16 @@ export class RentalPickupDeclineService implements OnModuleInit {
     const token = randomUUID();
     if (!(await this.claimWork(booking, attempts, token))) return false;
     const claimed = { ...booking, refund_attempts: attempts + 1, refund_claim_token: token };
-    if (!claimed.refund_provider_ref) return this.sendClaimed(claimed, token);
+    if (this.needsSend(claimed)) return this.sendClaimed(claimed, token);
     return this.pollClaimed(claimed, token);
+  }
+
+  /** FreemoPay sends while refund_sent_at is null and the stored ref is empty or the stable id. */
+  private needsSend(booking: DeclineBooking): boolean {
+    if (providerRefundPlan(booking.refund_provider ?? '') !== 'freemopay') return !booking.refund_provider_ref;
+    if (booking.refund_sent_at) return false;
+    const ref = booking.refund_provider_ref;
+    return !ref || ref === stableRefundReference(booking.id);
   }
 
   private async claimWork(booking: DeclineBooking, attempts: number, token: string): Promise<boolean> {
@@ -787,6 +823,22 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   /** Credit the wallet before the row becomes failed, so a crash can retry the credit. */
+  private async failMarked(
+    booking: DeclineBooking,
+    body: { providerRef?: string; note?: string }
+  ): Promise<void> {
+    if (booking.refund_sent_at && !body.providerRef?.trim()) {
+      throw new HttpException('A payout may have landed', HttpStatus.CONFLICT);
+    }
+    const token = randomUUID();
+    const attempts = booking.refund_attempts ?? 0;
+    if (!(await this.claimWork(booking, attempts, token))) {
+      throw new HttpException('A payout may be in progress', HttpStatus.CONFLICT);
+    }
+    const wrote = await this.failRefund({ ...booking, refund_claim_token: token }, this.refundPay(booking), body.providerRef, token);
+    if (!wrote) throw new HttpException('A payout may be in progress', HttpStatus.CONFLICT);
+  }
+
   private async failRefund(
     booking: DeclineBooking,
     amount: number,

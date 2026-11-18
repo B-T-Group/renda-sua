@@ -21,6 +21,7 @@ import {
   DidntReceiveReportButton,
   useDidntReceiveWindow,
 } from '../../components/rentals/DidntReceiveReportButton';
+import { DeclineOutcomeCard, declineRefundView } from '../../components/rentals/DeclinePickupScreens';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { RenterReturnCard } from '../../components/rentals/RenterReturnCard';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
@@ -448,6 +449,21 @@ export default function RentalBookingDetailScreen() {
             borderColor={pillColors.borderColor}
           />
         </View>
+
+        {booking.condition_declined_at ? (
+          <DeclineOutcomeCard
+            money={{
+              rail: booking.currency === 'XAF' || booking.currency === 'XOF' ? 'momo_paid' : 'card',
+              amount: Number(booking.refund_amount) || Number(booking.authorized_amount) || 0,
+              currency: booking.refund_currency || booking.currency,
+              timeZone: booking.currency === 'XAF' || booking.currency === 'XOF' ? 'Africa/Douala' : 'America/Toronto',
+              place: booking.rental_location_listing?.business_location?.name ?? '',
+              item: booking.rental_location_listing?.rental_item?.name ?? '',
+              bookingNumber: booking.booking_number ?? '',
+            }}
+            refundStatus={declineRefundView(booking.refund_status)}
+          />
+        ) : null}
 
         {showReturnReport ? null : (
         <View style={{ marginTop: spacing.md }}>

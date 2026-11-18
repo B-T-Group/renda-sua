@@ -20,7 +20,10 @@ import * as Q from './pickup-decline.queries';
 const TEMPLATE = process.env.DEDICATED_PG_TEMPLATE?.trim();
 const OPTED = process.env.DECLINE_REFUND_PG === '1';
 const HOST = (process.env.PGHOST ?? '').trim();
-const MIGRATION = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql');
+const MIGRATIONS = [
+  join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql'),
+  join(__dirname, '../../../../hasura/migrations/Rendasua/20261119160000_rentals_decline_refund_hardening/up.sql'),
+];
 
 describe('decline refund postgres job', () => {
   it('is configured when CI runs this workflow', () => {
@@ -57,7 +60,7 @@ suite('decline refund claim on real Postgres', () => {
     pool = new Pool({ database: dbName, max: 8 });
     pool.on('error', () => undefined);
     await pool.query(SCHEMA);
-    await pool.query(readFileSync(MIGRATION, 'utf8'));
+    for (const file of MIGRATIONS) await pool.query(readFileSync(file, 'utf8'));
   });
 
   afterAll(async () => {
@@ -152,6 +155,49 @@ suite('decline refund claim on real Postgres', () => {
     expect(wallet.credits).toBe(0);
     expect(await statusOf(pool, id)).toBe('refund_pending');
     expect(provider.withdraws).toHaveLength(0);
+  });
+
+  it('sends one payout when the status lookup fails during the decline', async () => {
+    const id = await seed(pool, { refund_status: 'none', status: 'cancelled', refund_provider_ref: null, refund_provider: null });
+    const provider = fakeProvider();
+    provider.check = async () => {
+      throw new Error('socket hang up');
+    };
+    provider.withdraw = async (body: { externalId: string }) => {
+      provider.withdraws.push(body);
+      return { success: true, reference: 'FP-1', ambiguous: false };
+    };
+    const service = build(pool, provider, { credits: 0 });
+    await service.refundLateCollect(id, collect(id));
+    expect(provider.withdraws).toHaveLength(1);
+    provider.check = async () => ({ status: 'SUCCESS' });
+    await ageClaim(pool, id);
+    expect(await service.reconcilePending()).toBe(1);
+    expect(provider.withdraws).toHaveLength(1);
+    expect(await statusOf(pool, id)).toBe('refunded');
+    expect(await sentAt(pool, id)).toBeTruthy();
+  });
+
+  it('sends one payout when FreemoPay status returns 503 before acceptance', async () => {
+    const id = await seed(pool, { refund_status: 'none', status: 'cancelled', refund_provider_ref: null, refund_provider: null });
+    const provider = fakeProvider();
+    provider.check = async () => {
+      const error: any = new Error('unavailable');
+      error.status = 503;
+      throw error;
+    };
+    provider.withdraw = async (body: { externalId: string }) => {
+      provider.withdraws.push(body);
+      return { success: true, reference: 'FP-503', ambiguous: false };
+    };
+    const service = build(pool, provider, { credits: 0 });
+    await service.refundLateCollect(id, collect(id));
+    expect(provider.withdraws).toHaveLength(1);
+    provider.check = async () => ({ status: 'SUCCESS' });
+    await ageClaim(pool, id);
+    expect(await service.reconcilePending()).toBe(1);
+    expect(provider.withdraws).toHaveLength(1);
+    expect(await statusOf(pool, id)).toBe('refunded');
   });
 
   it('does not resend FreemoPay when a stored reference is missing', async () => {
@@ -277,7 +323,8 @@ CREATE TABLE rental_condition_declines (
 CREATE TABLE rental_status_history (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   rental_booking_id uuid,
-  notes text
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 `;
 
@@ -316,6 +363,11 @@ async function claim(pool: Pool, id: string, attempts: number): Promise<number> 
     [id, attempts + 1, token, attempts]
   );
   return result.rowCount ?? 0;
+}
+
+async function sentAt(pool: Pool, id: string): Promise<string | null> {
+  const result = await pool.query(`SELECT refund_sent_at FROM rental_bookings WHERE id = $1`, [id]);
+  return result.rows[0].refund_sent_at;
 }
 
 async function statusOf(pool: Pool, id: string): Promise<string> {
@@ -408,11 +460,14 @@ function shape(row: Record<string, unknown> | undefined) {
 }
 
 async function applyMutation(pool: Pool, query: string, vars: Record<string, unknown>) {
+  if (query.includes('StampDeclineRefundSent')) return { update_rental_bookings: { affected_rows: await stampSent(pool, vars) } };
   if (query.includes('StampDeclineRefund')) return { update_rental_bookings: { affected_rows: await stamp(pool, vars) } };
   if (query.includes('ClaimDeclineRefund')) return { update_rental_bookings: { affected_rows: await claimWork(pool, vars) } };
   if (query.includes('RememberDeclineRefundRef')) return { update_rental_bookings: { affected_rows: await remember(pool, vars) } };
   if (query.includes('KeepDeclineRefundClaim')) return { update_rental_bookings: { affected_rows: await keep(pool, vars) } };
   if (query.includes('ApplyOwnedDeclineRefund')) return { update_rental_bookings: { affected_rows: await owned(pool, vars) } };
+  if (query.includes('KeepDeclineProviderRef')) return { update_rental_bookings: { affected_rows: await keepRef(pool, vars) } };
+  if (query.includes('NoteDeclineRefundOnce')) return { update_rental_bookings: { affected_rows: await claimNotice(pool, vars) } };
   return { update_rental_bookings: { affected_rows: 0 } };
 }
 
@@ -454,6 +509,34 @@ async function owned(pool: Pool, vars: Record<string, unknown>): Promise<number>
     `id = $1 AND refund_status = 'refund_pending' AND refund_claim_token = $2`,
     [vars.id, vars.token]
   );
+}
+
+async function stampSent(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_sent_at = $3
+     WHERE id = $1 AND refund_status = 'refund_pending' AND refund_claim_token = $2 AND refund_sent_at IS NULL`,
+    [vars.id, vars.token, vars.at]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function keepRef(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_provider_ref = $3
+     WHERE id = $1 AND refund_provider_ref = $2`,
+    [vars.id, vars.stableRef, vars.ref]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function claimNotice(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings
+     SET refund_notices = array_append(COALESCE(refund_notices, '{}'), $2)
+     WHERE id = $1 AND NOT ($2 = ANY(COALESCE(refund_notices, '{}')))`,
+    [vars.id, vars.outcome]
+  );
+  return result.rowCount ?? 0;
 }
 
 async function writeSet(pool: Pool, set: Record<string, unknown>, where: string, params: unknown[]): Promise<number> {

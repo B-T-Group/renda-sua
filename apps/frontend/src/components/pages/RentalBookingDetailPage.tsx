@@ -37,7 +37,7 @@ import {
 import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
 import { RenterReturnPanel } from '../rentals/RenterReturnPanel';
 import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
-import { BusinessDeclineBanner, DeclineOutcomeCard } from '../rentals/DeclinePickupScreens';
+import { BusinessDeclineBanner, DeclineOutcomeCard, declineRefundView } from '../rentals/DeclinePickupScreens';
 import { ReportSentConfirmation } from '../rentals/ReportSentConfirmation';
 import { RentalStartedConfirmation } from '../rentals/RentalStartedConfirmation';
 import SEOHead from '../seo/SEOHead';
@@ -796,11 +796,7 @@ const RentalBookingDetailPage: React.FC = () => {
                 item: booking.rental_location_listing?.rental_item?.name ?? '',
                 bookingNumber: booking.booking_number ?? '',
               }}
-              refundStatus={
-                booking.refund_status === 'refund_pending' || booking.refund_status === 'refunded'
-                  ? booking.refund_status
-                  : 'none'
-              }
+              refundStatus={declineRefundView(booking.refund_status)}
             />
           ) : null}
           {bookingId && inspection.enrolled ? (

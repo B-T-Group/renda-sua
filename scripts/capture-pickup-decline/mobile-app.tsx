@@ -91,6 +91,8 @@ function CaptureApp() {
       {scene === 'lightbox' ? <ConditionPhotoLightbox photos={photos} timeZone="America/Toronto" /> : null}
       {scene === 'refund-progress' ? <DeclineOutcomeCard money={MOMO_PAID} refundStatus="refund_pending" /> : null}
       {scene === 'refunded' ? <DeclineOutcomeCard money={MOMO_PAID} refundStatus="refunded" /> : null}
+      {scene === 'refund-failed' ? <DeclineOutcomeCard money={MOMO_PAID} refundStatus="failed" /> : null}
+      {scene === 'refund-manual' ? <DeclineOutcomeCard money={MOMO_PAID} refundStatus="manual" /> : null}
       {scene === 'admin' ? <DeclineAdminTable rows={ADMIN_ROWS} timeZone="Africa/Douala" /> : null}
     </div>
   );

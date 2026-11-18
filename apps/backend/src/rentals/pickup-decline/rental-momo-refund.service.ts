@@ -92,12 +92,9 @@ export class RentalMomoRefundService {
     return this.pending('mtn', sent.financialTransactionId ?? null, false);
   }
 
+  /** The first attempt does not look up. Nothing has been sent before this call. */
   private async initiateFreemopay(request: MomoRefundRequest): Promise<MomoRefundResult> {
-    const externalId = this.stableId(request);
-    const looked = await this.lookup('freemopay', externalId);
-    if (looked.kind === 'unknown') return this.pending('freemopay', externalId, false);
-    if (looked.kind === 'code') return this.fromCode('freemopay', externalId, looked.code);
-    return this.sendFreemopay(request, externalId);
+    return this.sendFreemopay(request, this.stableId(request));
   }
 
   private async initiateFedapay(request: MomoRefundRequest): Promise<MomoRefundResult> {
@@ -152,12 +149,19 @@ export class RentalMomoRefundService {
     }
   }
 
+  /**
+   * GET /api/v2/payment/:reference is documented for FreemoPay's own reference.
+   * A 404, a transport error, or a 200 with no status is unknown, not "not sent".
+   */
   private async lookupFreemopay(ref: string): Promise<PollLook> {
     try {
       const status = await this.freemopay.checkTransactionStatus(ref);
-      return { kind: 'code', code: status.status || 'PENDING' };
+      const code = (status.status ?? '').trim();
+      if (!code || code.toUpperCase() === 'UNKNOWN') return { kind: 'unknown' };
+      return { kind: 'code', code };
     } catch (error: any) {
-      return Number(error?.status) === 404 ? { kind: 'missing' } : { kind: 'unknown' };
+      void error;
+      return { kind: 'unknown' };
     }
   }
 

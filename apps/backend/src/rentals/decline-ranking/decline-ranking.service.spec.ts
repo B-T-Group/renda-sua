@@ -59,6 +59,24 @@ describe('DeclineRankingService', () => {
     expect(flags.declineRankingEnabled).not.toHaveBeenCalledWith(' cm ');
   });
 
+  it('uses a country weight and falls back to the global row', async () => {
+    flags.declineRankingEnabled.mockResolvedValue(true);
+    hasura.executeQuery.mockResolvedValue({
+      application_configurations: [
+        { config_key: 'rentals_decline_rank_weight', number_value: 0, country_code: null },
+        { config_key: 'rentals_decline_rank_weight', number_value: 0.3, country_code: 'CM' },
+      ],
+      rental_condition_decline_counts_90d: [{ party_id: 'busy', decline_count: 7 }],
+      rental_business_pickup_reach_90d: [{ business_id: 'busy', pickups_reached: 10 }],
+    });
+    const cameroon = await service.multipliersFor(['busy'], 'CM');
+    const gabon = await service.multipliersFor(['busy'], 'GA');
+    expect(cameroon.get('busy')).toBeLessThan(1);
+    expect(gabon.size).toBe(0);
+    expect(hasura.executeQuery).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ country: 'CM' }));
+    expect(hasura.executeQuery).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ country: 'GA' }));
+  });
+
   it('keeps one cache per country', async () => {
     flags.declineRankingEnabled.mockImplementation(async (country?: string) => country === 'CM');
     hasura.executeQuery.mockResolvedValue({

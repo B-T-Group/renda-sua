@@ -9819,6 +9819,7 @@
     "refunded": "Remboursé",
     "refundProgressBody": "{{amount}} est en route vers {{phone}}.",
     "refundedBody": "{{amount}} a été envoyé au {{phone}}.",
+    "walletReturned": "{{amount}} est de retour dans votre portefeuille.",
     "browse": "Parcourir les locations",
     "businessTitle": "Le locataire a refusé l’état des lieux",
     "businessBody": "La réservation est annulée et l’article est libre. Aucun frais.",

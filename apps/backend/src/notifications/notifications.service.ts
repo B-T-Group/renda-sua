@@ -4454,6 +4454,8 @@ export class NotificationsService {
     bookingNumber: string;
     rentalItemName: string;
     outcome: string;
+    externalId?: string;
+    walletCredited?: boolean;
   }): Promise<void> {
     try {
       await this.emailSupportRefund(payload);
@@ -4501,6 +4503,8 @@ export class NotificationsService {
     bookingNumber: string;
     rentalItemName: string;
     outcome: string;
+    externalId?: string;
+    walletCredited?: boolean;
   }): Promise<void> {
     const msg = buildConditionRefundSupportNotice(payload);
     await this.sendSimpleLifecycleEmail({
@@ -4515,6 +4519,8 @@ export class NotificationsService {
     bookingNumber: string;
     rentalItemName: string;
     outcome: string;
+    externalId?: string;
+    walletCredited?: boolean;
   }): Promise<void> {
     if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
     const recipients = buildOrderRiskRecipients({
