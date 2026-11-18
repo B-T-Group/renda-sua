@@ -41,10 +41,11 @@ describe('CategoryCarouselProvider', () => {
       const context = {
         country: 'TG',
         state: null,
-        language: 'en',
+        language: 'en' as const,
         layout: 'discovery' as const,
         isReturning: false,
         userId: null,
+        surface: 'all' as const,
       };
 
       await provider.build(context);

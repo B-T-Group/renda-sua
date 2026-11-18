@@ -29,6 +29,7 @@ import {
 import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemCardSkeleton from '../common/ItemCardSkeleton';
+import { RecentlyViewedRail } from '../catalog-experience/RecentlyViewedRail';
 import ExportCatalogIllustration from '../illustrations/ExportCatalogIllustration';
 import SEOHead from '../seo/SEOHead';
 import { MarketSelector } from '../market/MarketSelector';
@@ -181,6 +182,22 @@ const ExportsPage: React.FC = () => {
         </Box>
         <MarketSelector />
       </Box>
+
+      <RecentlyViewedRail
+        surface="export"
+        actions={{
+          formatCurrency,
+          onOrderClick: handleOrderClick,
+          onAddToCart: handleAddToCart,
+          isPublicView: !isAuthenticated,
+          canOrder: !isAuthenticated || isClientUser,
+          showCartButtons: isAuthenticated && isClientUser,
+          loginButtonText: t('public.items.login', 'Sign In to Order'),
+          orderButtonText: t('common.orderNow', 'Order Now'),
+          addToCartButtonText: t('cart.addToCart', 'Add to Cart'),
+          buyNowButtonText: t('cart.buyNow', 'Buy Now'),
+        }}
+      />
 
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>

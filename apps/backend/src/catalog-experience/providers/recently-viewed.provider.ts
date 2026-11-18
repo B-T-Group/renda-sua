@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { FOOD_CATEGORY_NAME } from '../../food/food.constants';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
-import { InventoryItemsService } from '../../inventory-items/inventory-items.service';
+import {
+  InventoryItemsService,
+  type InventoryItem,
+} from '../../inventory-items/inventory-items.service';
 import { localizedCopy } from '../catalog-experience.geo';
 import { rankListings } from '../catalog-listing-rank';
 import {
   CATALOG_CAROUSEL_LIMIT,
   type CatalogExperienceContext,
+  type CatalogExperienceSurface,
   type CatalogModule,
   type CatalogModuleProvider,
 } from '../catalog-experience.types';
@@ -24,10 +29,14 @@ export class RecentlyViewedProvider implements CatalogModuleProvider {
   }
 
   async build(context: CatalogExperienceContext): Promise<CatalogModule | null> {
-    if (!context.userId) return null;
+    if (!context.userId || context.surface === 'rentals') return null;
     const itemIds = await this.recentItemIds(context.userId);
     if (itemIds.length === 0) return null;
-    const products = await this.listingsFor(itemIds);
+    const products = this.filterBySurface(
+      await this.listingsFor(itemIds),
+      context.surface,
+      context.country
+    );
     if (products.length === 0) return null;
     return {
       id: 'recently-viewed',
@@ -39,6 +48,18 @@ export class RecentlyViewedProvider implements CatalogModuleProvider {
       ),
       products,
     };
+  }
+
+  private filterBySurface(
+    listings: InventoryItem[],
+    surface: CatalogExperienceSurface,
+    country?: string
+  ): InventoryItem[] {
+    if (surface === 'food') return listings.filter(isFoodListing);
+    if (surface === 'export') {
+      return listings.filter((row) => isExportListing(row, country));
+    }
+    return listings;
   }
 
   private async recentItemIds(userId: string): Promise<string[]> {
@@ -62,6 +83,21 @@ export class RecentlyViewedProvider implements CatalogModuleProvider {
     );
     return rankListings(listings, CATALOG_CAROUSEL_LIMIT, personalization);
   }
+}
+
+function isFoodListing(row: InventoryItem): boolean {
+  const name = row.item?.item_sub_category?.item_category?.name;
+  return (name ?? '').trim() === FOOD_CATEGORY_NAME;
+}
+
+function isExportListing(row: InventoryItem, country?: string): boolean {
+  if (!row.item?.export_available) return false;
+  const code = country?.trim().toUpperCase();
+  if (!code) return true;
+  const markets = row.item.export_markets ?? [];
+  return markets.some(
+    (market) => market.country_code?.trim().toUpperCase() === code
+  );
 }
 
 function uniqueItemIds(

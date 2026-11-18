@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import type { CatalogExperienceContext } from './catalog-experience.types';
+import type {
+  CatalogExperienceContext,
+  CatalogExperienceSurface,
+} from './catalog-experience.types';
 
 export interface CatalogExperienceQuery {
   country_code?: string;
@@ -9,6 +12,7 @@ export interface CatalogExperienceQuery {
   language?: string;
   layout?: string;
   device?: string;
+  surface?: string;
 }
 
 interface ViewerGeo {
@@ -38,7 +42,13 @@ export class CatalogExperienceContextBuilder {
       layout,
       device: query.device?.trim() || undefined,
       isReturning: await this.resolveReturning(layout, viewer),
+      surface: this.resolveSurface(query.surface),
     };
+  }
+
+  private resolveSurface(raw?: string): CatalogExperienceSurface {
+    if (raw === 'food' || raw === 'export' || raw === 'rentals') return raw;
+    return 'all';
   }
 
   private resolveState(

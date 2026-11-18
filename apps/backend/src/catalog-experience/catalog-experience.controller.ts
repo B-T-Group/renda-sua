@@ -36,6 +36,11 @@ export class CatalogExperienceController {
   @ApiQuery({ name: 'language', required: false, type: String })
   @ApiQuery({ name: 'layout', required: false, enum: ['discovery', 'results'] })
   @ApiQuery({ name: 'device', required: false, type: String })
+  @ApiQuery({
+    name: 'surface',
+    required: false,
+    enum: ['all', 'food', 'export', 'rentals'],
+  })
   @ApiResponse({ status: 200, description: 'Ordered catalog modules' })
   async getExperience(@Query() query: CatalogExperienceQueryDto) {
     const context = await this.contextBuilder.build(query);

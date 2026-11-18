@@ -295,19 +295,25 @@ function ClientBrowseHomeScreenBase() {
             />
           )
         }
-        discoveryExtra={
+        discoveryExtra={({ foodOnly: foodSurface, exportOnly }) => (
           <>
             {buyAgain ? (
               <BuyAgainCard
                 orderId={buyAgain.order.id}
                 orderStatus={buyAgain.order.current_status}
                 items={buyAgainLines(buyAgain.lines)}
-                foodOnly={foodOnly}
+                foodOnly={foodSurface}
               />
             ) : null}
-            <DiscoveryRails authenticated={isClientAuthenticated} onItemPress={onItemPress} />
+            <DiscoveryRails
+              authenticated={isClientAuthenticated}
+              surface={
+                exportOnly ? 'export' : foodSurface ? 'food' : 'all'
+              }
+              onItemPress={onItemPress}
+            />
           </>
-        }
+        )}
       />
       <CatalogVariantPickerDialog
         open={variantFlow.pickerOpen}

@@ -8,23 +8,28 @@ import {
 } from '../../hooks/useTrackSiteEvent';
 import { CatalogModuleRenderer } from './CatalogModuleRenderer';
 import type { CatalogCardActions } from './ProductCarouselRenderer';
-import { useCatalogExperience } from '../../hooks/useCatalogExperience';
+import {
+  useCatalogExperience,
+  type CatalogExperienceSurface,
+} from '../../hooks/useCatalogExperience';
 import { isVisualCatalogModule } from './catalogExperience.types';
 
 export function CatalogExperience({
   enabled,
+  surface = 'all',
   actions,
   onCategorySelect,
   onSeeAllDeals,
   onUnavailable,
 }: {
   enabled: boolean;
+  surface?: CatalogExperienceSurface;
   actions: CatalogCardActions;
   onCategorySelect: (name: string) => void;
   onSeeAllDeals?: () => void;
   onUnavailable?: () => void;
 }) {
-  const { modules, loading, failed } = useCatalogExperience(enabled);
+  const { modules, loading, failed } = useCatalogExperience(enabled, surface);
   const { trackSiteEvent } = useTrackSiteEvent();
   const visible = modules.filter(isVisualCatalogModule);
 

@@ -222,7 +222,9 @@ export interface BrowseCatalogScreenProps {
   requestedCategory?: string;
   categoryRequestId?: number;
   /** Extra discovery content above the product grid (rails, buy again). */
-  discoveryExtra?: React.ReactNode;
+  discoveryExtra?:
+    | React.ReactNode
+    | ((ctx: { foodOnly: boolean; exportOnly: boolean }) => React.ReactNode);
   /** Shop and Food open the full search screen. Omitted on the in-place catalog search. */
   onSearchBarPress?: () => void;
 }
@@ -1097,7 +1099,9 @@ function BrowseCatalogScreenInner({
           onToggleExportOnly={onToggleExportOnly}
           onClearExportOnly={onClearExportOnly}
         />
-        {discoveryExtra}
+        {typeof discoveryExtra === 'function'
+          ? discoveryExtra({ foodOnly, exportOnly })
+          : discoveryExtra}
       </>
     ),
     [
@@ -1117,6 +1121,8 @@ function BrowseCatalogScreenInner({
       onSeeAllHomeOrders,
       nearbyAgentsCount,
       onHeroSlidePress,
+      foodOnly,
+      exportOnly,
       categoryRail.items,
       categoryRail.title,
       onBrowseCategories,

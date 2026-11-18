@@ -6,6 +6,9 @@ export const MIN_CATEGORY_LISTINGS = 1;
 
 export type CatalogLayout = 'discovery' | 'results';
 
+/** Active catalog surface for scoping recently viewed (and similar rails). */
+export type CatalogExperienceSurface = 'all' | 'food' | 'export' | 'rentals';
+
 export interface CatalogExperienceContext {
   userId?: string;
   clientId?: string;
@@ -15,6 +18,7 @@ export interface CatalogExperienceContext {
   layout: CatalogLayout;
   device?: string;
   isReturning: boolean;
+  surface: CatalogExperienceSurface;
 }
 
 export interface CatalogCategoryTile {
