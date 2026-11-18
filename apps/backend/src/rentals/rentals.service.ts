@@ -805,13 +805,19 @@ export class RentalsService {
   }
 
   private async rejectUnfitCardRequest(
-    listing: { business_location?: { address?: { country?: string | null } | null } | null },
+    listing: {
+      rental_item?: { id?: string | null } | null;
+      business_location?: { address?: { country?: string | null } | null } | null;
+    },
     endIso: string
   ): Promise<void> {
     const country = resolveItemCountry(listing?.business_location?.address?.country);
     if (!this.inspectionFlags?.cardWindowGuardEnabled) return;
     if (!(await this.inspectionFlags.cardWindowGuardEnabled(country))) return;
-    this.throwIfCardEndMisses(endIso, await this.stripeWindowFields(country));
+    const inspected = (await this.optInFlag(country))
+      ? await this.inspectionOptIn.stampsNewBooking(listing?.rental_item?.id)
+      : undefined;
+    this.throwIfCardEndMisses(endIso, await this.stripeWindowFields(country, inspected));
   }
 
   private throwIfCardEndMisses(endIso: string, fields: ListingCardWindow): void {
@@ -820,9 +826,22 @@ export class RentalsService {
     throw cardWindowRejected(INSPECTION_CODES.STRIPE_WINDOW, STRIPE_WINDOW_MESSAGE, fields);
   }
 
-  private async stripeWindowFields(country: string | null): Promise<ListingCardWindow> {
-    if (this.cardWindow) return this.cardWindow.forCountry(country);
-    return emptyStripeFields();
+  private async stripeWindowFields(country: string | null, inspected?: boolean): Promise<ListingCardWindow> {
+    if (!this.cardWindow) return emptyStripeFields();
+    if (inspected === undefined) return this.cardWindow.forCountry(country);
+    return this.cardWindow.forCountry(country, new Date(), inspected);
+  }
+
+  private async knownInspected(country: string | null, row: { inspection_policy_version?: number | null }): Promise<boolean | undefined> {
+    if (!(await this.optInFlag(country))) return undefined;
+    if (!row || !('inspection_policy_version' in row)) return undefined;
+    return row.inspection_policy_version != null;
+  }
+
+  private async optInFlag(country?: string | null): Promise<boolean> {
+    const flags = this.inspectionFlags as { optInEnabled?: (code?: string | null) => Promise<boolean> } | undefined;
+    if (typeof flags?.optInEnabled !== 'function') return false;
+    return flags.optInEnabled(country);
   }
 
   async getPublicRentalListingById(
@@ -927,6 +946,7 @@ export class RentalsService {
     await this.validateRentalRequestWindowsPlan(plan, listing, unitsRequested);
     await this.rejectUnfitCardRequest(listing, plan.envelopeEndIso);
     const note = dto.clientRequestNote?.trim();
+    const inspectionPolicyVersion = await this.requestPolicyVersion(listing);
     const row = await this.hasuraSystemService.executeMutation<{
       insert_rental_requests_one: { id: string };
     }>(Q.INSERT_RENTAL_REQUEST, {
@@ -940,6 +960,7 @@ export class RentalsService {
         status: 'pending',
         units_requested: unitsRequested,
         client_request_note: note || null,
+        inspection_policy_version: inspectionPolicyVersion,
         quoted_total: quotePlanTotal(
           plan.windows,
           Number(listing.base_price_per_day),
@@ -956,11 +977,7 @@ export class RentalsService {
       plan.envelopeEndIso,
       user
     );
-    return {
-      success: true,
-      requestId,
-      inspection_policy_version: await this.requestPolicyVersion(listing),
-    };
+    return { success: true, requestId, inspection_policy_version: inspectionPolicyVersion };
   }
 
   private async requestPolicyVersion(listing: any): Promise<number | null> {
@@ -1519,6 +1536,8 @@ export class RentalsService {
     const user = await this.hasuraUserService.getUser();
     const req = await this.loadRequestQuietly(requestId);
     if (!this.mayReadRequestPolicy(user, req)) throw requestPolicyNotFound();
+    const country = req.rental_location_listing?.business_location?.address?.country ?? null;
+    if (await this.optInFlag(country)) return req.inspection_policy_version ?? null;
     return this.requestPolicyVersion(req.rental_location_listing);
   }
 
@@ -1654,7 +1673,7 @@ export class RentalsService {
       ? await this.paymentRoutingService.resolveRailForCountry(listingCountry)
       : await this.paymentRoutingService.resolveRailForUser(user.id);
     if (rail === 'stripe') {
-      const fields = await this.stripeWindowFields(listingCountry);
+      const fields = await this.stripeWindowFields(listingCountry, await this.knownInspected(listingCountry, booking));
       this.assertStripeRentalEndWithinAuthWindow(booking.end_at as string, fields);
       await this.assertEnrolledStripeReviewWindow(
         bookingId,
@@ -1868,7 +1887,7 @@ export class RentalsService {
       throw new HttpException('Rental item not found', HttpStatus.NOT_FOUND);
     }
     const item = await this.attachListingRejectionReasons(r.rental_items_by_pk);
-    item.inspection = await this.inspectionOptIn.summary(itemId);
+    item.inspection = await this.inspectionOptIn.summaryIfEnabled(itemId);
     return item;
   }
 
@@ -2459,7 +2478,7 @@ export class RentalsService {
       );
     }
     const enrolledEnd = this.requestWindowEnvelope(params.req).endAt;
-    const fields = await this.stripeWindowFields(listingCountry);
+    const fields = await this.stripeWindowFields(listingCountry, await this.knownInspected(listingCountry, params.req));
     this.assertStripeRentalEndWithinAuthWindow(enrolledEnd, fields);
     await this.assertEnrolledStripeReviewWindow(params.bookingId, enrolledEnd, listingCountry);
     const total = Number(snap.total);
@@ -5161,9 +5180,8 @@ export class RentalsService {
     const country = resolveItemCountry(
       req.rental_location_listing?.business_location?.address?.country
     );
-    if (await this.inspectionFlags.optInEnabled(country)) {
-      const itemId = req.rental_location_listing?.rental_item?.id;
-      if (!(await this.inspectionOptIn.stampsNewBooking(itemId))) return null;
+    if (await this.optInFlag(country)) {
+      if (req.inspection_policy_version == null) return null;
       return this.enrolOrReject(req, country);
     }
     const enabled = await this.inspectionFlags.isEnabled(country);
@@ -5177,14 +5195,15 @@ export class RentalsService {
       return decision.outcome === 'enrol' ? decision.policyVersion : null;
     }
     if (decision.code === INSPECTION_CODES.STRIPE_WINDOW) {
-      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country));
+      const inspected = (await this.optInFlag(country)) ? true : undefined;
+      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country, inspected));
     }
     throw inspectionRejected(decision.code, decision.message);
   }
 
   /** 1 when a new booking in this country would be inspected. Does not reject the listing. */
   async listingInspectionPolicy(country?: string | null, itemId?: string | null): Promise<number | null> {
-    if (await this.inspectionFlags.optInEnabled(country)) {
+    if (await this.optInFlag(country)) {
       return (await this.inspectionOptIn.stampsNewBooking(itemId)) ? 1 : null;
     }
     const enabled = await this.inspectionFlags.isEnabled(country);
@@ -5275,7 +5294,8 @@ export class RentalsService {
     };
     const decision = decideInspectionEnrolment(input);
     if (decision.outcome === 'reject') {
-      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country));
+      const inspected = (await this.optInFlag(country)) ? true : undefined;
+      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country, inspected));
     }
   }
 

@@ -129,8 +129,6 @@ update_permissions:
         - currency
         - operation_mode
         - is_active
-        - inspection_opt_in
-        - inspection_opted_in_at
         - deleted_at
       filter:
         business:

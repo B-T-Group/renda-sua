@@ -9,6 +9,7 @@ import {
   HttpStatus,
   NotFoundException,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -433,7 +434,7 @@ export class RentalsController {
   @ApiBody({ type: SetInspectionOptInDto })
   @ApiResponse({ status: 200, description: 'Opt-in saved' })
   @ApiResponse({ status: 400, description: 'Baseline photos are incomplete' })
-  setInspectionOptIn(@Param('itemId') itemId: string, @Body() dto: SetInspectionOptInDto) {
+  setInspectionOptIn(@Param('itemId', ParseUUIDPipe) itemId: string, @Body() dto: SetInspectionOptInDto) {
     return this.inspectionOptIn.setOptIn(itemId, dto.enabled);
   }
 
@@ -443,7 +444,7 @@ export class RentalsController {
   @ApiBody({ type: PresignBaselinePhotoDto })
   @ApiResponse({ status: 201, description: 'Upload URL returned' })
   presignBaseline(
-    @Param('itemId') itemId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: PresignBaselinePhotoDto,
     @Headers('x-rendasua-platform') platform?: string,
     @Headers('x-client-platform') clientPlatform?: string
@@ -458,7 +459,10 @@ export class RentalsController {
   @ApiParam({ name: 'photoId', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Baseline photo ready' })
   @ApiResponse({ status: 404, description: 'Photo not found' })
-  finalizeBaseline(@Param('itemId') itemId: string, @Param('photoId') photoId: string) {
+  finalizeBaseline(
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Param('photoId', ParseUUIDPipe) photoId: string
+  ) {
     return this.inspectionOptIn.finalizeBaseline(itemId, photoId);
   }
 

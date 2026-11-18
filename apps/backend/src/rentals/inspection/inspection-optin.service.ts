@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { photoSha256, stripPhoto } from './inspection-photo-bytes';
 import { AwsService } from '../../aws/aws.service';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { HasuraUserService } from '../../hasura/hasura-user.service';
@@ -10,22 +11,25 @@ import {
   BASELINE_SLOTS,
   INSPECTION_BASELINE_REQUIRED,
   PICKUP_PHOTO_AFTER_START,
+  PICKUP_REUSE_BLOCKED_DAMAGE,
+  PICKUP_REUSE_UNAVAILABLE,
   baselineReady,
   isBeforeRentalStart,
   itemOptInStamps,
+  latestReturnsBySlot,
+  matchTargetUnit,
   optInCaptureColumns,
+  returnIsClean,
   reuseChoice,
-  reuseDamage,
   reusedColumns,
+  rolesComplete,
   zoneForCountry,
   type CaptureColumns,
-  type ReuseBlock,
 } from './inspection-optin';
 import { RentalInspectionFlags } from './rental-inspection-flags.service';
 import { inspectionRejected } from './rental-inspection.errors';
 import {
   INSPECTION_UPLOAD_TTL_SECONDS,
-  inspectionDerivativeKey,
   inspectionEvidenceBucket,
   inspectionObjectKey,
   resolveInspectionChecksum,
@@ -72,6 +76,7 @@ export class InspectionOptInService {
 
   async setOptIn(itemId: string, enabled: boolean) {
     await this.ownedItem(itemId);
+    await this.assertFlag(await this.itemCountry(itemId));
     if (!enabled) return this.writeOptIn(itemId, false, null);
     if (!baselineReady(await this.readySlots(itemId))) this.rejectBaseline();
     return this.writeOptIn(itemId, true, new Date().toISOString());
@@ -79,6 +84,7 @@ export class InspectionOptInService {
 
   async presignBaseline(itemId: string, input: BaselinePresign) {
     await this.ownedItem(itemId);
+    await this.assertFlag(await this.itemCountry(itemId));
     this.assertSlot(input.slotKey);
     const upload = validateInspectionUpload(input.contentType, input.fileSize);
     const photoId = randomUUID();
@@ -104,30 +110,40 @@ export class InspectionOptInService {
   }
 
   async finalizeBaseline(itemId: string, photoId: string) {
+    await this.ownedItem(itemId);
+    await this.assertFlag(await this.itemCountry(itemId));
     const row = await this.baselineById(itemId, photoId);
     if (!row) throw new HttpException('Photo not found', HttpStatus.NOT_FOUND);
     if (row.status === 'ready') return { photoId, status: 'ready' };
     const head = await this.aws.headObjectMeta(inspectionEvidenceBucket(), row.object_key);
-    if (!head) throw new HttpException('Upload was not received', HttpStatus.CONFLICT);
-    await this.markBaselineReady(photoId, head.contentLength ?? null);
+    this.assertBaselineHead(head, row);
+    const raw = await this.aws.readObjectBytes(inspectionEvidenceBucket(), row.object_key);
+    const stripped = await stripPhoto(raw, row.content_type || head!.contentType);
+    await this.aws.putPrivateObject(inspectionEvidenceBucket(), row.object_key, stripped.bytes, stripped.contentType);
+    await this.markBaselineReady(photoId, stripped.bytes.length, stripped.contentType);
     return { photoId, status: 'ready' };
+  }
+
+  async summaryIfEnabled(itemId: string) {
+    try {
+      if (!(await this.flags.optInEnabled(await this.itemCountry(itemId)))) return null;
+      return await this.summary(itemId);
+    } catch (error: any) {
+      return null;
+    }
   }
 
   async reuseStatus(bookingId: string) {
     const booking = await this.bookingRow(bookingId);
     if (!booking) return { available: false, blocked: false, source: null, submittedAt: null, photoCount: 0 };
-    const found = await this.returnSummary(booking);
-    const choice = reuseChoice({
-      hasReturn: !!found,
-      damage: found?.damage ?? null,
-      hasBaseline: baselineReady(await this.readySlots(booking.itemId ?? '')),
-    });
+    const plan = await this.reusePlan(booking);
+    const latest = plan.returns[0]?.submittedAt ?? null;
     return {
-      available: choice.ok,
-      blocked: !choice.ok && choice.code === 'PICKUP_REUSE_BLOCKED_DAMAGE',
-      source: choice.ok ? choice.source : null,
-      submittedAt: found?.submittedAt ?? null,
-      photoCount: found?.photoCount ?? 0,
+      available: plan.choice.ok,
+      blocked: !plan.choice.ok && plan.choice.code === PICKUP_REUSE_BLOCKED_DAMAGE,
+      source: plan.choice.ok ? plan.choice.source : null,
+      submittedAt: latest,
+      photoCount: plan.photoCount,
     };
   }
 
@@ -135,12 +151,12 @@ export class InspectionOptInService {
     const booking = await this.ownedBooking(bookingId);
     await this.assertFlag(booking.country);
     this.assertBefore(booking, new Date());
-    const choice = reuseChoice(await this.reuseInput(booking));
-    if (!choice.ok) this.rejectReuse(choice.code);
+    const plan = await this.reusePlan(booking);
+    if (!plan.choice.ok) this.rejectReuse(plan.choice.code);
     await openDraft();
-    const draft = await this.draft(bookingId);
-    const copied = await this.copySources(booking, draft, choice.source);
-    return { reused: true, source: choice.source, count: copied };
+    const copies = await this.buildCopies(booking, plan);
+    const count = await this.applyReuse(booking.id, copies);
+    return { reused: true, source: plan.choice.source, count };
   }
 
   captureFor(input: CaptureRequest, country: string | null, clock: Date): CaptureColumns {
@@ -160,73 +176,99 @@ export class InspectionOptInService {
     return { enabled };
   }
 
-  private async reuseInput(booking: OptBooking) {
-    const found = await this.latestReturn(booking);
-    const slots = await this.readySlots(booking.itemId ?? '');
-    return {
-      hasReturn: !!found,
-      damage: found ? found.damage : null,
-      hasBaseline: baselineReady(slots),
-    };
+  private async reusePlan(booking: OptBooking): Promise<ReusePlan> {
+    const returns = latestReturnsBySlot(await this.latestReturns(booking)).map((row) => ({
+      ...row,
+      clean: returnIsClean(row),
+    }));
+    const choice = reuseChoice({
+      returns,
+      hasBaseline: baselineReady(await this.readySlots(booking.itemId ?? '')),
+    });
+    return { choice, returns, photoCount: returns.filter((row) => row.clean).length };
   }
 
-  private async copySources(booking: OptBooking, draft: DraftRef, source: 'return' | 'baseline') {
-    const rows = source === 'return' ? await this.returnPhotos(booking) : await this.baselineReadyRows(booking.itemId ?? '');
-    let count = 0;
-    for (const row of rows) {
-      await this.copyOne(booking.id, draft, row);
-      count += 1;
+  private async buildCopies(booking: OptBooking, plan: ReusePlan): Promise<ReuseCopy[]> {
+    const targets = await this.targetUnits(booking.id);
+    const copies = plan.choice.ok && plan.choice.source === 'return'
+      ? await this.returnCopies(booking.id, plan.returns, targets)
+      : await this.baselineCopies(booking.id, booking.itemId ?? '', targets);
+    if (!copies.length || !copiesGroupedComplete(copies)) this.rejectReuse(PICKUP_REUSE_UNAVAILABLE);
+    return copies;
+  }
+
+  private async returnCopies(bookingId: string, returns: CleanReturn[], targets: TargetUnit[]): Promise<ReuseCopy[]> {
+    const media = await this.returnMedia(returns.filter((row) => row.clean).map((row) => row.versionId));
+    const copies: ReuseCopy[] = [];
+    for (const row of media) {
+      const unitId = matchTargetUnit(row, targets, returns.length);
+      if (!unitId) continue;
+      copies.push(await this.strippedCopy(bookingId, row, unitId, row.versionId));
     }
-    return count;
+    return copies;
   }
 
-  private async copyOne(bookingId: string, draft: DraftRef, row: SourcePhoto) {
+  private async baselineCopies(bookingId: string, itemId: string, targets: TargetUnit[]): Promise<ReuseCopy[]> {
+    const rows = await this.baselineReadyRows(itemId);
+    const copies: ReuseCopy[] = [];
+    for (const target of targets) {
+      for (const row of rows) copies.push(await this.strippedCopy(bookingId, row, target.id, null));
+    }
+    return copies;
+  }
+
+  private async strippedCopy(bookingId: string, row: SourcePhoto, unitId: string, versionId: string | null): Promise<ReuseCopy> {
+    const raw = await this.aws.readObjectBytes(inspectionEvidenceBucket(), row.objectKey);
+    const stripped = await stripPhoto(raw, row.contentType || 'image/jpeg');
     const mediaId = randomUUID();
-    const key = inspectionObjectKey(bookingId, mediaId, 'jpg');
-    await this.copyBytes(row.objectKey, key);
-    const view = inspectionDerivativeKey(key);
-    await this.copyBytes(row.objectKey, view);
+    const key = inspectionObjectKey(bookingId, mediaId, stripped.ext);
+    const view = key.replace(/\.(jpg|png|webp)$/, `.view.${stripped.ext}`);
+    await this.aws.putPrivateObject(inspectionEvidenceBucket(), key, stripped.bytes, stripped.contentType, { ifNoneMatch: true });
+    await this.aws.putPrivateObject(inspectionEvidenceBucket(), view, stripped.bytes, stripped.contentType, { ifNoneMatch: true });
     const columns = reusedColumns({
       slotKey: row.slotKey,
       capturedAt: row.capturedAt,
       source: row.captureSource,
       atSource: row.capturedAtSource,
     });
-    await this.insertCopied(draft, mediaId, key, view, row, columns);
+    return {
+      unitId,
+      sourceVersionId: versionId || null,
+      sourceMediaId: row.mediaId,
+      role: row.role,
+      slotIndex: row.slotIndex,
+      objectKey: key,
+      derivativeKey: view,
+      contentType: stripped.contentType,
+      byteSize: stripped.bytes.length,
+      sha256: photoSha256(stripped.bytes),
+      ...columns,
+    };
   }
 
-  private async copyBytes(from: string, to: string) {
-    const bytes = await this.aws.readObjectBytes(inspectionEvidenceBucket(), from);
-    await this.aws.putPrivateObject(inspectionEvidenceBucket(), to, bytes, 'image/jpeg', { ifNoneMatch: true });
+  private async applyReuse(bookingId: string, copies: ReuseCopy[]): Promise<number> {
+    try {
+      const result = await this.hasura.executeMutation<{ rental_apply_pickup_reuse: number[] }>(
+        `mutation ApplyPickupReuse($bookingId: uuid!, $copies: jsonb!) {
+          rental_apply_pickup_reuse(args: { p_booking_id: $bookingId, p_copies: $copies })
+        }`,
+        { bookingId, copies }
+      );
+      const count = Number(result?.rental_apply_pickup_reuse?.[0] ?? 0);
+      if (count < 1) this.rejectReuse(PICKUP_REUSE_UNAVAILABLE);
+      return count;
+    } catch (error: any) {
+      this.rethrowReuse(error);
+    }
   }
 
-  private async insertCopied(
-    draft: DraftRef,
-    mediaId: string,
-    key: string,
-    view: string,
-    row: SourcePhoto,
-    columns: CaptureColumns
-  ) {
-    await this.hasura.executeMutation(
-      `mutation InsertReusedPhoto($object: rental_inspection_media_insert_input!) {
-        insert_rental_inspection_media_one(object: $object) { id }
-      }`,
-      {
-        object: {
-          id: mediaId,
-          inspection_id: draft.inspectionId,
-          unit_id: draft.unitId,
-          role: row.role,
-          object_key: key,
-          derivative_key: view,
-          content_type: 'image/jpeg',
-          status: 'ready',
-          reused_from_media_id: row.mediaId,
-          ...columns,
-        },
-      }
-    );
+  private rethrowReuse(error: any): never {
+    const text = JSON.stringify(error?.response ?? error?.message ?? error);
+    if (text.includes(PICKUP_REUSE_BLOCKED_DAMAGE)) this.rejectReuse(PICKUP_REUSE_BLOCKED_DAMAGE);
+    if (text.includes(PICKUP_REUSE_UNAVAILABLE) || text.includes('PICKUP_REUSE_CHANGED')) {
+      this.rejectReuse(PICKUP_REUSE_UNAVAILABLE);
+    }
+    throw error;
   }
 
   private rejectBaseline(): never {
@@ -304,7 +346,7 @@ export class InspectionOptInService {
     }>(
       `query ItemBaseline($id: uuid!) {
         rental_item_baseline_photos(where: { rental_item_id: { _eq: $id } }) {
-          id slot_key status object_key captured_at capture_source captured_at_source
+          id slot_key status object_key content_type byte_size captured_at capture_source captured_at_source
         }
       }`,
       { id: itemId }
@@ -323,6 +365,10 @@ export class InspectionOptInService {
         capturedAt: row.captured_at ?? new Date().toISOString(),
         captureSource: row.capture_source,
         capturedAtSource: row.captured_at_source,
+        contentType: row.content_type,
+        slotIndex: 0,
+        label: null,
+        versionId: '',
       }));
   }
 
@@ -356,7 +402,7 @@ export class InspectionOptInService {
           object: $object
           on_conflict: {
             constraint: rental_item_baseline_photos_slot_uidx
-            update_columns: [object_key, content_type, byte_size, status, captured_at, captured_at_source, capture_source]
+            update_columns: [object_key, content_type, byte_size, status, captured_at, captured_at_source, capture_source, exif_captured_at]
           }
         ) { id }
       }`,
@@ -372,6 +418,7 @@ export class InspectionOptInService {
           captured_at: columns.captured_at,
           captured_at_source: columns.captured_at_source,
           capture_source: columns.capture_source,
+          exif_captured_at: columns.exif_captured_at,
         },
       }
     );
@@ -383,16 +430,27 @@ export class InspectionOptInService {
     return rows.find((row) => row.id === photoId) ?? null;
   }
 
-  private async markBaselineReady(photoId: string, bytes: number | null) {
+  private async markBaselineReady(photoId: string, bytes: number, contentType: string) {
     await this.hasura.executeMutation(
-      `mutation ReadyBaseline($id: uuid!, $bytes: Int) {
+      `mutation ReadyBaseline($id: uuid!, $bytes: Int!, $type: String!) {
         update_rental_item_baseline_photos_by_pk(
           pk_columns: { id: $id }
-          _set: { status: "ready", byte_size: $bytes }
+          _set: { status: "ready", byte_size: $bytes, content_type: $type }
         ) { id }
       }`,
-      { id: photoId, bytes }
+      { id: photoId, bytes, type: contentType }
     );
+  }
+
+  private assertBaselineHead(
+    head: { contentLength: number; contentType: string } | null,
+    row: BaselineRow
+  ): void {
+    if (!head) throw new HttpException('Upload was not received', HttpStatus.CONFLICT);
+    const type = head.contentType.split(';')[0].trim().toLowerCase();
+    if (type !== (row.content_type || '').toLowerCase() || head.contentLength !== row.byte_size) {
+      throw new HttpException('Uploaded file does not match the signed type and size', HttpStatus.BAD_REQUEST);
+    }
   }
 
   private async bookingRow(bookingId: string): Promise<OptBooking | null> {
@@ -422,124 +480,50 @@ export class InspectionOptInService {
     };
   }
 
-  private async returnSummary(booking: OptBooking) {
-    const found = await this.latestReturn(booking);
-    if (!found) return null;
-    return found;
+  private async latestReturns(booking: OptBooking): Promise<RawReturn[]> {
+    if (!booking.listingId) return [];
+    const result = await this.hasura.executeQuery<{ rental_inspection_versions: ReturnHit[] }>(LATEST_RETURNS, {
+      listingId: booking.listingId,
+      bookingId: booking.id,
+    });
+    return (result.rental_inspection_versions ?? []).flatMap((hit) => hitRows(hit));
   }
 
-  private async latestReturn(booking: OptBooking): Promise<{ damage: ReuseBlock | null; submittedAt: string | null; photoCount: number } | null> {
-    if (!booking.listingId) return null;
-    const result = await this.hasura.executeQuery<{ rental_inspection_versions: ReturnHit[] }>(
-      `query LatestAcceptedReturn($listingId: uuid!, $bookingId: uuid!) {
-        rental_inspection_versions(
-          where: {
-            status: { _eq: "submitted" }
-            inspection: {
-              stage: { _eq: "return" }
-              rental_booking: {
-                rental_location_listing_id: { _eq: $listingId }
-                id: { _neq: $bookingId }
-                return_resolution: { _eq: "accepted" }
-              }
-            }
-          }
-          order_by: { submitted_at: desc }
-          limit: 1
-        ) {
-          id
-          submitted_at
-          items { condition }
-          inspection {
-            rental_booking {
-              claimed_damage_amount
-              rental_inspection_disputes(order_by: { created_at: desc }, limit: 1) { decision }
-            }
-          }
-        }
-      }`,
-      { listingId: booking.listingId, bookingId: booking.id }
-    );
-    const hit = result.rental_inspection_versions?.[0];
-    if (!hit) return null;
-    const claim = Number(hit.inspection?.rental_booking?.claimed_damage_amount ?? 0);
-    const decision = hit.inspection?.rental_booking?.rental_inspection_disputes?.[0]?.decision;
-    return {
-      submittedAt: hit.submitted_at ?? null,
-      photoCount: (hit.items ?? []).length,
-      damage: reuseDamage({
-        claimed: Number.isFinite(claim) ? claim : null,
-        upheld: decision === 'damage_upheld',
-        reported: (hit.items ?? []).some((item) => item.condition === 'damaged'),
-      }),
-    };
-  }
-
-  private async returnPhotos(booking: OptBooking): Promise<SourcePhoto[]> {
-    const result = await this.hasura.executeQuery<{ rental_inspection_versions: VersionMedia[] }>(
-      `query ReturnPhotos($listingId: uuid!, $bookingId: uuid!) {
-        rental_inspection_versions(
-          where: {
-            status: { _eq: "submitted" }
-            inspection: {
-              stage: { _eq: "return" }
-              rental_booking: {
-                rental_location_listing_id: { _eq: $listingId }
-                id: { _neq: $bookingId }
-                return_resolution: { _eq: "accepted" }
-              }
-            }
-          }
-          order_by: { submitted_at: desc }
-          limit: 1
-        ) {
-          id
-        }
-      }`,
-      { listingId: booking.listingId, bookingId: booking.id }
-    );
-    const versionId = result.rental_inspection_versions?.[0]?.id;
-    if (!versionId) return [];
-    const media = await this.hasura.executeQuery<{ rental_inspection_media: MediaRow[] }>(
-      `query ReturnMedia($id: uuid!) {
-        rental_inspection_media(where: { version_id: { _eq: $id }, status: { _eq: "ready" } }) {
-          id role slot_key object_key derivative_key captured_at capture_source captured_at_source
-        }
-      }`,
-      { id: versionId }
-    );
+  private async returnMedia(versionIds: string[]): Promise<SourcePhoto[]> {
+    if (!versionIds.length) return [];
+    const media = await this.hasura.executeQuery<{ rental_inspection_media: MediaRow[] }>(RETURN_MEDIA, {
+      ids: versionIds,
+    });
     return (media.rental_inspection_media ?? [])
+      .filter((row) => row.status === 'ready' || row.status === 'locked')
       .filter((row) => (BASELINE_SLOTS as readonly string[]).includes(row.slot_key ?? row.role))
       .map((row) => ({
         mediaId: row.id,
         role: row.slot_key ?? row.role,
         slotKey: row.slot_key ?? row.role,
-        objectKey: row.derivative_key || row.object_key,
+        objectKey: row.object_key,
         capturedAt: row.captured_at ?? new Date(0).toISOString(),
         captureSource: row.capture_source,
         capturedAtSource: row.captured_at_source,
+        contentType: row.content_type,
+        slotIndex: row.unit?.slot_index ?? 0,
+        label: row.unit?.physical_label ?? null,
+        versionId: row.version_id,
       }));
   }
 
-  private async draft(bookingId: string): Promise<DraftRef> {
-    const inspection = await this.hasura.executeQuery<{
-      rental_inspections: Array<{ id: string }>;
-    }>(
-      `query PickupDraft($id: uuid!) {
-        rental_inspections(where: { rental_booking_id: { _eq: $id }, stage: { _eq: "pickup" } }, limit: 1) { id }
+  private async targetUnits(bookingId: string): Promise<TargetUnit[]> {
+    const units = await this.hasura.executeQuery<{ rental_booking_units: TargetRow[] }>(
+      `query TargetUnits($id: uuid!) {
+        rental_booking_units(where: { rental_booking_id: { _eq: $id } }, order_by: { slot_index: asc }) {
+          id slot_index physical_label
+        }
       }`,
       { id: bookingId }
     );
-    const inspectionId = inspection.rental_inspections?.[0]?.id;
-    const units = await this.hasura.executeQuery<{ rental_booking_units: Array<{ id: string }> }>(
-      `query FirstUnit($id: uuid!) {
-        rental_booking_units(where: { rental_booking_id: { _eq: $id } }, order_by: { slot_index: asc }, limit: 1) { id }
-      }`,
-      { id: bookingId }
-    );
-    const unitId = units.rental_booking_units?.[0]?.id;
-    if (!inspectionId || !unitId) throw new HttpException('Open the draft first', HttpStatus.CONFLICT);
-    return { inspectionId, unitId };
+    const rows = units.rental_booking_units ?? [];
+    if (!rows.length) throw new HttpException('Open the draft first', HttpStatus.CONFLICT);
+    return rows.map((row) => ({ id: row.id, slotIndex: row.slot_index, label: row.physical_label }));
   }
 }
 
@@ -570,6 +554,8 @@ interface BaselineRow {
   slot_key: string;
   status: string;
   object_key: string;
+  content_type: string | null;
+  byte_size: number | null;
   captured_at: string | null;
   capture_source: string | null;
   captured_at_source: string | null;
@@ -600,17 +586,14 @@ interface RawBooking {
 interface ReturnHit {
   id: string;
   submitted_at?: string | null;
-  items?: Array<{ condition: string }>;
+  items?: Array<{ condition: string; unit?: { slot_index?: number | null; physical_label?: string | null } | null }>;
   inspection?: {
     rental_booking?: {
+      return_resolution?: string | null;
       claimed_damage_amount?: number | null;
       rental_inspection_disputes?: Array<{ decision: string }>;
     } | null;
   } | null;
-}
-
-interface VersionMedia {
-  id: string;
 }
 
 interface MediaRow {
@@ -618,10 +601,13 @@ interface MediaRow {
   role: string;
   slot_key: string | null;
   object_key: string;
-  derivative_key: string | null;
+  content_type: string | null;
+  status: string;
+  version_id: string;
   captured_at: string | null;
   capture_source: string | null;
   captured_at_source: string | null;
+  unit?: { slot_index?: number | null; physical_label?: string | null } | null;
 }
 
 interface SourcePhoto {
@@ -632,9 +618,111 @@ interface SourcePhoto {
   capturedAt: string;
   captureSource: string | null;
   capturedAtSource: string | null;
+  contentType: string | null;
+  slotIndex: number;
+  label: string | null;
+  versionId: string;
 }
 
-interface DraftRef {
-  inspectionId: string;
+interface RawReturn {
+  slotIndex: number;
+  versionId: string;
+  submittedAt: string | null;
+  resolution: string | null;
+  claimed: number | null;
+  upheld: boolean;
+  reported: boolean;
+}
+
+interface CleanReturn extends RawReturn {
+  clean: boolean;
+}
+
+interface TargetUnit {
+  id: string;
+  slotIndex: number;
+  label: string | null;
+}
+
+interface TargetRow {
+  id: string;
+  slot_index: number;
+  physical_label: string | null;
+}
+
+interface ReusePlan {
+  choice: ReturnType<typeof reuseChoice>;
+  returns: CleanReturn[];
+  photoCount: number;
+}
+
+interface ReuseCopy extends CaptureColumns {
   unitId: string;
+  sourceVersionId: string | null;
+  sourceMediaId: string | null;
+  role: string;
+  slotIndex: number;
+  objectKey: string;
+  derivativeKey: string;
+  contentType: string;
+  byteSize: number;
+  sha256: string;
+}
+
+const LATEST_RETURNS = `query LatestUnitReturns($listingId: uuid!, $bookingId: uuid!) {
+  rental_inspection_versions(
+    where: {
+      status: { _eq: "submitted" }
+      inspection: {
+        stage: { _eq: "return" }
+        rental_booking: { rental_location_listing_id: { _eq: $listingId }, id: { _neq: $bookingId } }
+      }
+    }
+    order_by: { submitted_at: desc }
+  ) {
+    id
+    submitted_at
+    items { condition unit { slot_index physical_label } }
+    inspection {
+      rental_booking {
+        return_resolution
+        claimed_damage_amount
+        rental_inspection_disputes(order_by: { created_at: desc }, limit: 1) { decision }
+      }
+    }
+  }
+}`;
+
+const RETURN_MEDIA = `query ReturnUnitMedia($ids: [uuid!]!) {
+  rental_inspection_media(where: { version_id: { _in: $ids }, status: { _in: ["ready", "locked"] } }) {
+    id role slot_key object_key content_type status version_id captured_at capture_source captured_at_source
+    unit { slot_index physical_label }
+  }
+}`;
+
+function hitRows(hit: ReturnHit): RawReturn[] {
+  const booking = hit.inspection?.rental_booking;
+  const claim = Number(booking?.claimed_damage_amount ?? 0);
+  const facts = {
+    versionId: hit.id,
+    submittedAt: hit.submitted_at ?? null,
+    resolution: booking?.return_resolution ?? null,
+    claimed: Number.isFinite(claim) ? claim : null,
+    upheld: booking?.rental_inspection_disputes?.[0]?.decision === 'damage_upheld',
+  };
+  return (hit.items ?? []).map((item) => ({
+    ...facts,
+    slotIndex: item.unit?.slot_index ?? 0,
+    reported: item.condition === 'damaged',
+  }));
+}
+
+function copiesGroupedComplete(copies: ReuseCopy[]): boolean {
+  const byUnit = new Map<string, string[]>();
+  for (const copy of copies) {
+    const slots = byUnit.get(copy.unitId) ?? [];
+    slots.push(copy.slot_key ?? '');
+    byUnit.set(copy.unitId, slots);
+  }
+  return byUnit.size > 0 && [...byUnit.values()].every((slots) => rolesComplete(slots));
 }

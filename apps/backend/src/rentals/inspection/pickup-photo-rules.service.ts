@@ -39,6 +39,7 @@ import {
 interface BookingContext {
   id: string;
   start_at: string | null;
+  actual_start_at: string | null;
   status: string;
   business_id: string;
   rental_location_listing_id: string | null;
@@ -84,7 +85,7 @@ export class PickupPhotoRulesService {
   async assertUpload(input: UploadGate, now = new Date()): Promise<void> {
     if (input.role === 'counter') return;
     const booking = await this.loadBooking(input.bookingId);
-    if (await this.optInOn(booking)) return this.rejectOptInUpload(booking, input, now);
+    if (await this.optInOn(booking)) return this.rejectOptInUpload(booking, input);
     if (!this.pickupOpen(booking.status)) return;
     if (!(await this.enabled(booking))) return;
     this.rejectClosedUpload(booking, input, now);
@@ -93,7 +94,7 @@ export class PickupPhotoRulesService {
   async assertSubmit(bookingId: string, stage: string, now = new Date()): Promise<void> {
     if (stage !== 'pickup') return;
     const booking = await this.loadBooking(bookingId);
-    if (await this.optInOn(booking)) return this.rejectOptInClosed(booking, now);
+    if (await this.optInOn(booking)) return this.rejectOptInClosed(booking);
     if (!(await this.enabled(booking))) return;
     const start = this.startAt(booking);
     const zone = listingTimeZone(booking.country);
@@ -287,15 +288,13 @@ export class PickupPhotoRulesService {
     return this.flags.optInEnabled(isoCountryCode(booking.country));
   }
 
-  private rejectOptInUpload(booking: BookingContext, input: UploadGate, now: Date): void {
-    if (!this.pickupOpen(booking.status)) return;
-    this.rejectOptInClosed(booking, now);
+  private rejectOptInUpload(booking: BookingContext, input: UploadGate): void {
+    this.rejectOptInClosed(booking);
     if (input.slotKey && !slotMatchesRole(input.slotKey, input.role)) this.rejectSlotPhoto();
   }
 
-  private rejectOptInClosed(booking: BookingContext, now: Date): void {
-    const start = this.startAt(booking);
-    if (!start || !isBeforeRentalStart(start, now)) this.rejectAfterStart();
+  private rejectOptInClosed(booking: BookingContext): void {
+    if (booking.actual_start_at || !this.pickupOpen(booking.status)) this.rejectAfterStart();
   }
 
   private rejectAfterStart(): never {
@@ -446,7 +445,7 @@ export class PickupPhotoRulesService {
     const result = await this.hasura.executeQuery<{ rental_bookings_by_pk: RawBooking | null }>(
       `query PickupRulesBooking($id: uuid!) {
         rental_bookings_by_pk(id: $id) {
-          id start_at status business_id rental_location_listing_id inspection_policy_version
+          id start_at actual_start_at status business_id rental_location_listing_id inspection_policy_version
           rental_location_listing { business_location { address { country } } }
         }
       }`,
@@ -457,6 +456,7 @@ export class PickupPhotoRulesService {
     return {
       id: row.id,
       start_at: row.start_at,
+      actual_start_at: row.actual_start_at ?? null,
       status: row.status,
       business_id: row.business_id,
       rental_location_listing_id: row.rental_location_listing_id,
@@ -629,6 +629,7 @@ export class PickupPhotoRulesService {
 interface RawBooking {
   id: string;
   start_at: string | null;
+  actual_start_at?: string | null;
   status: string;
   business_id: string;
   rental_location_listing_id: string | null;

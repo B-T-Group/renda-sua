@@ -39,6 +39,7 @@ select_permissions:
         - business_response_note
         - client_request_note
         - units_requested
+        - inspection_policy_version
         - unavailable_reason_code
         - edit_version
         - quoted_total
@@ -69,6 +70,7 @@ select_permissions:
         - business_response_note
         - client_request_note
         - units_requested
+        - inspection_policy_version
         - unavailable_reason_code
         - edit_version
         - quoted_total

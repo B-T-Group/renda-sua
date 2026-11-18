@@ -17,6 +17,16 @@ export interface CaptureColumns {
   capture_source: CaptureSource | null;
   captured_at_source: CapturedAtSource | null;
   reused: boolean;
+  exif_captured_at: string | null;
+}
+
+export interface UnitReturnFacts {
+  slotIndex: number;
+  resolution: string | null;
+  claimed: number | null;
+  upheld: boolean;
+  reported: boolean;
+  submittedAt: string | null;
 }
 
 /** A new booking is inspected only when the item opted in and the baseline is complete. */
@@ -49,15 +59,53 @@ export function reuseDamage(input: {
   return null;
 }
 
+/** Latest return per unit. An older clean return is ignored once a newer one exists. */
+export function latestReturnsBySlot<T extends { slotIndex: number; submittedAt: string | null }>(rows: T[]): T[] {
+  const sorted = [...rows].sort((a, b) => (b.submittedAt ?? '').localeCompare(a.submittedAt ?? ''));
+  const seen = new Set<number>();
+  const latest: T[] = [];
+  for (const row of sorted) {
+    if (seen.has(row.slotIndex)) continue;
+    seen.add(row.slotIndex);
+    latest.push(row);
+  }
+  return latest;
+}
+
+export function returnIsClean(row: UnitReturnFacts): boolean {
+  if (row.resolution !== 'accepted') return false;
+  if (row.upheld || row.reported) return false;
+  return !(row.claimed != null && row.claimed > 0);
+}
+
 export function reuseChoice(input: {
-  hasReturn: boolean;
-  damage: ReuseBlock | null;
+  returns: Array<{ clean: boolean }>;
   hasBaseline: boolean;
 }): { ok: true; source: 'return' | 'baseline' } | { ok: false; code: string } {
-  if (input.hasReturn && input.damage) return { ok: false, code: PICKUP_REUSE_BLOCKED_DAMAGE };
-  if (input.hasReturn) return { ok: true, source: 'return' };
+  if (input.returns.some((row) => !row.clean)) return { ok: false, code: PICKUP_REUSE_BLOCKED_DAMAGE };
+  if (input.returns.length > 0) return { ok: true, source: 'return' };
   if (input.hasBaseline) return { ok: true, source: 'baseline' };
   return { ok: false, code: PICKUP_REUSE_UNAVAILABLE };
+}
+
+export function rolesComplete(slots: string[]): boolean {
+  const have = new Set(slots);
+  return BASELINE_SLOTS.every((slot) => have.has(slot));
+}
+
+export function matchTargetUnit(
+  source: { slotIndex: number; label: string | null },
+  targets: Array<{ id: string; slotIndex: number; label: string | null }>,
+  sourceCount: number
+): string | null {
+  const bySlot = targets.find((row) => row.slotIndex === source.slotIndex);
+  if (bySlot) return bySlot.id;
+  const byLabel = source.label
+    ? targets.find((row) => row.label != null && row.label === source.label)
+    : undefined;
+  if (byLabel) return byLabel.id;
+  if (sourceCount === 1 && targets.length === 1) return targets[0].id;
+  return null;
 }
 
 export function optInCaptureColumns(input: {
@@ -68,14 +116,27 @@ export function optInCaptureColumns(input: {
   source?: string | null;
   platform?: string | string[];
 }): CaptureColumns {
-  const exifAt = parseExifCapture(input.exif, input.timeZone);
+  const exifAt = clampExif(input.exif, input.timeZone, input.clock);
   return {
-    captured_at: (exifAt ?? input.clock).toISOString(),
+    captured_at: input.clock.toISOString(),
     slot_key: parseSlotKey(input.slotKey),
     capture_source: normalizeSource(input.source, input.platform),
-    captured_at_source: exifAt ? 'exif' : 'upload',
+    captured_at_source: 'upload',
     reused: false,
+    exif_captured_at: exifAt ? exifAt.toISOString() : null,
   };
+}
+
+const EXIF_SKEW_MS = 2 * 60 * 1000;
+const EXIF_FLOOR_MS = 2 * 365 * 24 * 60 * 60 * 1000;
+
+/** EXIF is extra info. It never becomes the date the renter is shown. */
+export function clampExif(raw: string | null | undefined, timeZone: string, now: Date): Date | null {
+  const parsed = parseExifCapture(raw, timeZone);
+  if (!parsed || Number.isNaN(now.getTime())) return null;
+  if (parsed.getTime() > now.getTime() + EXIF_SKEW_MS) return null;
+  if (parsed.getTime() < now.getTime() - EXIF_FLOOR_MS) return null;
+  return parsed;
 }
 
 export function reusedColumns(input: {
@@ -88,8 +149,9 @@ export function reusedColumns(input: {
     captured_at: input.capturedAt,
     slot_key: parseSlotKey(input.slotKey),
     capture_source: knownSource(input.source),
-    captured_at_source: knownAtSource(input.atSource),
+    captured_at_source: knownAtSource(input.atSource) ?? 'upload',
     reused: true,
+    exif_captured_at: null,
   };
 }
 

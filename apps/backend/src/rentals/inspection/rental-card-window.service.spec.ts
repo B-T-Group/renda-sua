@@ -105,6 +105,13 @@ describe('RentalCardWindowService', () => {
     expect(kept.latest_card_end_at).not.toBeNull();
   });
 
+  it('uses the item opt-in instead of the country flag when that bit is passed', async () => {
+    const { svc, flags } = service({ rail: 'stripe', timezone: 'America/Toronto', inspection: true });
+    const fields = await svc.forCountry('CA', NOW, false);
+    expect(fields.inspection_enabled).toBe(false);
+    expect(flags.isEnabled).not.toHaveBeenCalled();
+  });
+
   it('reads each country once and treats a blank country as mobile money', async () => {
     const { svc, routing } = service({ rail: 'stripe', timezone: 'Africa/Douala' });
     const map = await svc.forCountries(['cm', ' CM ', null], NOW);
