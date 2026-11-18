@@ -2,6 +2,10 @@
 -- currency is public.currency_enum. Compare it directly: btrim has no enum overload.
 -- Idempotent: a second run matches no rows once the amounts are already 0.
 -- The updated_at trigger stays off for this statement so catalog order (updated_at desc) does not change.
+-- Must run inside a transaction. With --no-transaction, a failure between DISABLE and ENABLE
+-- leaves set_public_rental_location_listings_updated_at disabled.
+
+SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE public.rental_location_listings
   DISABLE TRIGGER set_public_rental_location_listings_updated_at;
