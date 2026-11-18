@@ -3298,6 +3298,8 @@
       "unavailableReasonLabel": "Motif",
       "otherReasonNote": "Veuillez préciser",
       "accept": "Accepter",
+      "decline": "Refuser",
+      "offerLineAllDay": "Journée complète · {{date}}",
       "submitResponse": "Envoyer",
       "respondFailed": "Impossible d’envoyer la réponse",
       "respondValidationHours": "Indiquez un nombre entier d’heures entre 1 et 168.",

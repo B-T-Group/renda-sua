@@ -92,6 +92,7 @@ export function BusinessRentalRespondDialog({
 
   const startIso = request ? requestStartIso(request) : null;
   const hourOffer = contractHoursOffer(startIso);
+  const blocked = declineBlocked(mode, reasonCode, unavailableNote);
 
   useEffect(() => {
     if (!visible) return;
@@ -316,15 +317,20 @@ export function BusinessRentalRespondDialog({
           <Button
             mode="contained"
             loading={submitting}
-            disabled={submitting || declineBlocked(mode, reasonCode, unavailableNote)}
+            buttonColor={mode === 'unavailable' ? colors.error.main : colors.primary.main}
+            textColor="#ffffff"
+            disabled={submitting}
+            accessibilityState={{ disabled: submitting || blocked }}
             onPress={() => {
+              if (blocked) return;
               if (mode === 'available') void submitAvailable();
               else void submitUnavailable();
             }}
+            style={mode === 'unavailable' && blocked ? styles.declineDisabled : undefined}
           >
             {mode === 'available'
               ? t('business.rentals.accept', 'Accept')
-              : t('business.rentals.submitResponse', 'Send response')}
+              : t('business.rentals.decline', 'Decline')}
           </Button>
         </Dialog.Actions>
       </Dialog>
@@ -368,4 +374,5 @@ export function confirmSoftDelete(
 
 const styles = StyleSheet.create({
   field: { marginTop: 12 },
+  declineDisabled: { opacity: 0.72 },
 });

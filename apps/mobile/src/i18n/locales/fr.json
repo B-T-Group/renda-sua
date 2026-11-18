@@ -2525,6 +2525,7 @@
       "deleteListingBody": "Cette annonce sera retirée s’il n’y a pas de réservations ouvertes.",
       "deleteFailed": "Suppression impossible",
       "accept": "Accepter",
+      "decline": "Refuser",
       "reject": "Refuser",
       "viewBooking": "Voir la réservation",
       "booking": "Réservation",

@@ -45,9 +45,12 @@ export function DashboardRentalRequestCard({
 
 function ItemThumb({ request }: { request: BusinessRentalRequestRow }) {
   const { colors } = useTheme();
+  const [failed, setFailed] = useState(false);
   const photo = request.rental_location_listing.rental_item.rental_item_images?.[0];
   const uri = photo?.display_url || photo?.thumbnail || photo?.image_url;
-  if (uri) return <Image source={{ uri }} style={styles.photo} />;
+  if (uri && !failed) {
+    return <Image source={{ uri }} style={styles.photo} onError={() => setFailed(true)} />;
+  }
   const name = request.rental_location_listing.rental_item.rental_category?.name
     || request.rental_location_listing.rental_item.name;
   return (

@@ -2592,6 +2592,7 @@
       "deleteListingBody": "This location listing will be removed if there are no open bookings.",
       "deleteFailed": "Could not delete",
       "accept": "Accept",
+      "decline": "Decline",
       "reject": "Reject",
       "viewBooking": "View booking",
       "booking": "Booking",

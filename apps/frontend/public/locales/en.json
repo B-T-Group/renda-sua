@@ -3604,6 +3604,8 @@
       "unavailableReasonLabel": "Reason",
       "otherReasonNote": "Please explain",
       "accept": "Accept",
+      "decline": "Decline",
+      "offerLineAllDay": "Full day · {{date}}",
       "submitResponse": "Send response",
       "respondFailed": "Could not send response",
       "respondValidationHours": "Enter a whole number of hours between 1 and 168.",

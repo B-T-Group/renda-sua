@@ -16,9 +16,7 @@ const outDir = process.argv[2] || '/opt/cursor/artifacts/dashboard-rental-reques
 const tmp = '/tmp/capture-drr';
 mkdirSync(tmp, { recursive: true });
 mkdirSync(outDir, { recursive: true });
-await sharp({
-  create: { width: 128, height: 128, channels: 3, background: { r: 32, g: 74, b: 128 } },
-}).png().toFile(path.join(tmp, 'item-photo.png'));
+const itemPhoto = path.join(import.meta.dirname, 'item-photo.png');
 
 await buildWeb(path.join(tmp, 'web.js'));
 await buildMobile(path.join(tmp, 'mobile.js'));
@@ -41,7 +39,7 @@ function listen(port) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     if (url.pathname === '/item-photo.png') {
       res.setHeader('content-type', 'image/png');
-      res.end(readFileSync(path.join(tmp, 'item-photo.png')));
+      res.end(readFileSync(itemPhoto));
       return;
     }
     if (url.pathname === '/fonts/MaterialCommunityIcons.ttf') {
@@ -72,8 +70,8 @@ const shots = [
   ['mobile', 'dashboard', '01-dashboard-mobile', 390, 844],
   ['web', 'dashboard', '02-accept-web', 1040, 900, 'accept'],
   ['mobile', 'dashboard', '02-accept-mobile', 390, 844, 'accept'],
-  ['web', 'hours', '02-accept-hours-web', 1040, 720, 'accept'],
-  ['mobile', 'hours', '02-accept-hours-mobile', 390, 720, 'accept'],
+  ['web', 'hours', '02-accept-hours-web', 1040, 980, 'accept'],
+  ['mobile', 'hours', '02-accept-hours-mobile', 390, 980, 'accept'],
   ['web', 'dashboard', '03-decline-web', 1040, 900, 'decline'],
   ['mobile', 'dashboard', '03-decline-mobile', 390, 844, 'decline'],
   ['web', 'after', '05-after-accept-web', 1040, 900],

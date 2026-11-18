@@ -27,6 +27,7 @@ import {
   parseRentalSelectionWindowsFromJson,
 } from '../../utils/rentalPricingLines';
 import { formatRequestAmount } from '../../utils/rentalRequestDisplay';
+import { formatRentalDay } from '../../utils/rentalRequestFormat';
 import { useClientFlags } from '../../hooks/useClientFlags';
 
 function isStaleVersion(error: unknown): boolean {
@@ -94,6 +95,13 @@ function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnaps
 function formatMoney(amount: number, currency: string, language: string): string {
   return formatRequestAmount(amount, currency, language);
 }
+
+const declineButtonSx = {
+  bgcolor: 'error.main',
+  color: 'common.white',
+  '&:hover': { bgcolor: 'error.dark' },
+  '&.Mui-disabled': { bgcolor: 'error.main', color: 'common.white', opacity: 0.72 },
+};
 
 function declineBlocked(
   mode: 'available' | 'unavailable' | null,
@@ -289,8 +297,8 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 {offerPreview.lines.map((line, idx) => (
                   <Typography key={idx} variant="body2">
                     {line.kind === 'all_day'
-                      ? t('rentals.requestForm.lineAllDay', 'Full day {{date}}', {
-                          date: line.calendarDate,
+                      ? t('business.rentals.offerLineAllDay', 'Full day · {{date}}', {
+                          date: formatRentalDay(line.calendarDate, i18n.language),
                         })
                       : t('rentals.requestForm.lineHourly', '{{h}} h × {{rate}}', {
                           h: line.billableHours,
@@ -390,16 +398,18 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
         </Button>
         <Button
           variant="contained"
+          color={mode === 'unavailable' ? 'error' : 'primary'}
           disabled={
             submitting ||
             declineBlocked(mode, reasonCode, unavailableNote) ||
             (mode === 'available' && offerPreview != null && !offerPreview.ok)
           }
           onClick={() => void (mode === 'available' ? submitAvailable() : submitUnavailable())}
+          sx={mode === 'unavailable' ? declineButtonSx : undefined}
         >
           {mode === 'available'
             ? t('business.rentals.accept', 'Accept')
-            : t('business.rentals.submitResponse', 'Send response')}
+            : t('business.rentals.decline', 'Decline')}
         </Button>
       </DialogActions>
     </Dialog>

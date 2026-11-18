@@ -68,8 +68,17 @@ function CardCopy({
 
 function ItemThumb({ request }: { request: Parameters<typeof requestPhotoUrl>[0] }) {
   const url = requestPhotoUrl(request);
-  if (url) {
-    return <Box component="img" src={url} alt="" sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: 'cover', flexShrink: 0 }} />;
+  const [failed, setFailed] = useState(false);
+  if (url && !failed) {
+    return (
+      <Box
+        component="img"
+        src={url}
+        alt=""
+        onError={() => setFailed(true)}
+        sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: 'cover', flexShrink: 0, bgcolor: 'action.hover' }}
+      />
+    );
   }
   const Icon = categoryIcon(request.rental_location_listing.rental_item.rental_category?.name || request.rental_location_listing.rental_item.name);
   return (
