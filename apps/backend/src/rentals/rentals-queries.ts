@@ -1186,8 +1186,8 @@ export const EXPIRE_RENTAL_REQUEST_NO_RESPONSE = `
 `;
 
 export const LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY = `
-  query ListPendingRentalRequestsForExpiry {
-    rental_requests(where: { status: { _eq: pending } }) {
+  query ListPendingRentalRequestsForExpiry($now: timestamptz!) {
+    rental_requests(where: { status: { _eq: pending }, respond_by: { _lte: $now } }) {
       id
       created_at
       requested_start_at

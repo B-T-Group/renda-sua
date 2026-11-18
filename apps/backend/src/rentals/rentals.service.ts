@@ -1647,7 +1647,11 @@ export class RentalsService {
     };
   }
 
-  /** Same hold and card release a decline uses when a booking was already opened. */
+  /**
+   * Releases a booking opened for this request: releaseHoldIfNeeded and
+   * cancelStripeAuthorizationIfAny, the same pair cancel-before-start uses.
+   * Declining a still-pending request does not open a booking and does not call this.
+   */
   async releaseLinkedDeclineHold(requestId: string): Promise<void> {
     const booking = await this.bookingForRequest(requestId);
     if (!booking) return;

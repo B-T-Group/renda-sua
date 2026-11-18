@@ -79,7 +79,7 @@ export class RentalsCronService {
   }
 
   /** Pending requests past respond_by. Off while rentals_dashboard_requests_enabled is false. */
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async handleUnansweredRentalRequests(): Promise<void> {
     try {
       const n = await this.expireUnansweredRentalRequests();
@@ -360,7 +360,7 @@ export class RentalsCronService {
     return expireUnansweredRentalRequests({
       now,
       isEnabled: async () => flags.some((row) => row.boolean_value === true),
-      listPending: () => this.listUnansweredRequests(flags),
+      listPending: () => this.listUnansweredRequests(flags, now),
       casDecline: (id, respondedAt) => this.casDeclineNoResponse(id, respondedAt),
       releaseHolds: (requestId) => this.rentalsService.releaseLinkedDeclineHold(requestId),
       notify: (row, window) => this.notifyNoResponse(row, window),
@@ -374,10 +374,13 @@ export class RentalsCronService {
     return res.application_configurations ?? [];
   }
 
-  private async listUnansweredRequests(flags: DashboardRequestFlagRow[]): Promise<UnansweredRentalRequest[]> {
+  private async listUnansweredRequests(
+    flags: DashboardRequestFlagRow[],
+    now: Date
+  ): Promise<UnansweredRentalRequest[]> {
     const res = await this.hasuraSystemService.executeQuery<{ rental_requests: any[] }>(
       Q.LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY,
-      {}
+      { now: now.toISOString() }
     );
     return (res.rental_requests ?? []).filter((row) => this.rowFlagOn(flags, row)).map((row) => this.toUnanswered(row));
   }

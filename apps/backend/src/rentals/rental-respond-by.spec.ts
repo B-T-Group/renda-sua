@@ -1,5 +1,5 @@
 import { compareSoonestRentalStart, computeRespondBy } from './rental-respond-by';
-import { EXPIRE_RENTAL_REQUEST_NO_RESPONSE } from './rentals-queries';
+import { EXPIRE_RENTAL_REQUEST_NO_RESPONSE, LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY } from './rentals-queries';
 
 const created = '2026-11-14T14:21:00.000Z';
 
@@ -43,5 +43,10 @@ describe('no_response compare-and-set', () => {
     expect(EXPIRE_RENTAL_REQUEST_NO_RESPONSE).toContain('status: { _eq: pending }');
     expect(EXPIRE_RENTAL_REQUEST_NO_RESPONSE).toContain('unavailable_reason_code: "no_response"');
     expect(EXPIRE_RENTAL_REQUEST_NO_RESPONSE).not.toContain('item_unavailable');
+  });
+
+  it('scans pending rows whose stored respond_by has passed', () => {
+    expect(LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY).toContain('status: { _eq: pending }');
+    expect(LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY).toContain('respond_by: { _lte: $now }');
   });
 });
