@@ -37,7 +37,7 @@ import {
 } from '@mui/material';
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../../hooks/useAgentOnboarding';
 import AgentOnboardingModal from '../dialogs/AgentOnboardingModal';
@@ -47,6 +47,8 @@ const SupportPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const bookingNumber = (searchParams.get('booking') ?? '').trim();
   const { isAuthenticated } = useSessionAuth();
   const { userType, refetch } = useUserProfileContext();
   const { completeOnboarding, loading: onboardingLoading } = useAgentOnboarding();
@@ -305,6 +307,9 @@ const SupportPage: React.FC = () => {
             "We're here to help you every step of the way"
           )}
         </Typography>
+        {bookingNumber ? (
+          <Alert severity="info">{t('support.bookingContext', 'This is about booking {{booking}}.', { booking: bookingNumber })}</Alert>
+        ) : null}
       </Box>
 
       {/* AI Assistant CTA */}

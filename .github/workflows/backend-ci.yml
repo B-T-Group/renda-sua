@@ -101,4 +101,4 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Decline refund and ranking unit specs
-        run: npx nx test backend --testPathPattern='rentals/(pickup-decline|decline-ranking)' --testPathIgnorePatterns=money.qa.pg --skip-nx-cache
+        run: npx nx test backend --testPathPattern='rentals/(pickup-decline|decline-ranking)|notifications/rental-push.messages.spec' --testPathIgnorePatterns=money.qa.pg --skip-nx-cache

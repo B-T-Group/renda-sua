@@ -57,7 +57,8 @@ function harness(options: {
   dropOwnedWrite?: boolean;
   noticeFails?: boolean;
   renterFails?: boolean;
-  poll?: 'refunded' | 'failed' | 'refund_pending' | 'missing';
+  poll?: 'refunded' | 'failed' | 'refund_pending' | 'missing' | 'unknown';
+  noticeRetries?: Array<Record<string, unknown>>;
 } = {}) {
   const state = booking(options.booking);
   const declines = [...(options.declines ?? [])];
@@ -90,6 +91,7 @@ function harness(options: {
       }
       if (query.includes('DeclineCollects')) return { mobile_payment_transactions: options.collects ?? [] };
       if (query.includes('PendingDeclineRefunds')) return { rental_bookings: options.pending ?? [] };
+      if (query.includes('DeclineRenterNoticeRetries')) return { rental_bookings: openNoticeRetries() };
       if (query.includes('DeclineHold')) {
         return { rental_holds: options.hold ? [{ client_hold_amount: options.hold, status: 'active' }] : [] };
       }
@@ -168,8 +170,12 @@ function harness(options: {
         if (options.stampFails) return { update_rental_bookings: { affected_rows: 0 } };
         const row = refundRow((vars as { id?: string }).id);
         const token = (vars as { token?: string }).token;
+        const ref = (vars as { ref?: string }).ref;
+        const existing = row.refund_provider_ref as string | null | undefined;
         if (row.refund_claim_token !== token || row.refund_sent_at) return { update_rental_bookings: { affected_rows: 0 } };
+        if (existing && ref && existing !== ref) return { update_rental_bookings: { affected_rows: 0 } };
         row.refund_sent_at = (vars as { at?: string }).at;
+        if (ref) row.refund_provider_ref = ref;
         return { update_rental_bookings: { affected_rows: 1 } };
       }
       if (query.includes('KeepDeclineProviderRef')) {
@@ -244,6 +250,11 @@ function harness(options: {
       return { update_rental_bookings: { affected_rows: 1 }, insert_rental_status_history_one: { id: 'h' } };
     }),
   };
+  const openNoticeRetries = () => (options.noticeRetries ?? []).filter((row) => {
+    const notices = (row.refund_notices as string[] | undefined) ?? [];
+    const open = notices.includes('renter_try:1') || notices.includes('renter_try:2');
+    return open && !notices.includes('renter_landed');
+  });
   const refundRow = (id?: string) => {
     const pending = (options.pending ?? []).find((row) => row.id === id);
     return (pending as typeof state) ?? state;
@@ -691,7 +702,7 @@ describe('RentalPickupDeclineService', () => {
       },
     });
     await expect(sent.service.markRefund(BOOKING, { status: 'failed', note: 'guess', providerRef: 'none' })).rejects.toMatchObject({
-      status: 409,
+      status: 400,
     });
     expect(sent.calls.restore).toBe(0);
     const paid = harness({
@@ -717,7 +728,7 @@ describe('RentalPickupDeclineService', () => {
         refund_sent_at: '2026-11-18T00:00:00.000Z',
       },
     });
-    await expect(service.markRefund(BOOKING, { status: 'failed', providerRef: 'none', note: 'portal' })).resolves.toEqual({
+    await expect(service.markRefund(BOOKING, { status: 'failed', providerRef: 'FP-1', note: 'portal' })).resolves.toEqual({
       refundStatus: 'failed',
     });
     expect(calls.restore).toBe(1);
@@ -866,15 +877,17 @@ describe('RentalPickupDeclineService', () => {
       booking: {
         status: 'cancelled',
         refund_status: 'refund_pending',
+        refund_amount: 100,
         refund_provider: 'freemopay',
         refund_provider_ref: stableRefundReference(BOOKING),
         refund_sent_at: '2026-11-18T00:00:00.000Z',
       },
     });
-    await expect(unknown.service.markRefund(BOOKING, { status: 'unpaid', note: 'checked' })).rejects.toMatchObject({
-      status: 409,
+    await expect(unknown.service.markRefund(BOOKING, { status: 'unpaid', note: 'checked' })).resolves.toEqual({
+      refundStatus: 'failed',
     });
-    expect(unknown.calls.restore).toBe(0);
+    expect(unknown.calls.restore).toBe(1);
+    expect(unknown.historyNotes.join(' ')).toContain('verified unsent');
     const neverSent = harness({
       poll: 'missing',
       booking: {
@@ -900,7 +913,15 @@ describe('RentalPickupDeclineService', () => {
     expect(paid.state.refund_status).toBe('refunded');
     expect(paid.state.refund_claim_token).toBeNull();
     expect(paid.calls.restore).toBe(0);
-    expect(paid.calls.renter).toEqual([expect.objectContaining({ landed: 'sent', amount: 100 })]);
+    expect(paid.calls.renter).toEqual([]);
+    const confirmed = harness({
+      poll: 'refunded',
+      booking: { status: 'cancelled', refund_status: 'refund_pending', refund_amount: 100, refund_provider_ref: 'FP-9' },
+    });
+    await expect(confirmed.service.markRefund(BOOKING, { status: 'refunded', providerRef: 'FP-9' })).resolves.toEqual({
+      refundStatus: 'refunded',
+    });
+    expect(confirmed.calls.renter).toEqual([expect.objectContaining({ landed: 'sent', amount: 100 })]);
     expect(neverSent.calls.renter).toEqual([expect.objectContaining({ landed: 'wallet' })]);
     const again = harness({
       poll: 'missing',
@@ -936,7 +957,7 @@ describe('RentalPickupDeclineService', () => {
     expect(calls.history).toBe(1);
     expect(calls.notice).toBe(1);
     expect(calls.support).toBe(1);
-    expect(state.refund_notices ?? []).toEqual(['renter_landed']);
+    expect(state.refund_notices ?? []).toEqual(['renter_try:1', 'renter_landed']);
     expect(calls.renter).toEqual([expect.objectContaining({ landed: 'wallet' })]);
   });
 
@@ -952,6 +973,82 @@ describe('RentalPickupDeclineService', () => {
     expect(wallet.available).toBe(100);
     expect(state.refund_status).not.toBe('manual');
     expect(state.refund_credited_at).toBeTruthy();
+  });
+
+  it('checks a stored FreemoPay reference before sending, in both lookup modes', async () => {
+    const ref = stableRefundReference(BOOKING);
+    const collects = [{ amount: 100, currency: 'XAF', provider: 'freemopay', customer_phone: '2376700006712', transaction_id: 'tx' }];
+    const base = { refund_provider: 'freemopay', refund_provider_ref: ref, refund_sent_at: null, refund_attempts: 0 };
+    const missing = pendingRefund(base);
+    const fpRef = harness({
+      pending: [missing],
+      poll: 'missing',
+      collects,
+      refund: { status: 'refund_pending', provider: 'freemopay', providerRef: 'FP-2', unsupported: false },
+    });
+    expect(await fpRef.service.reconcilePending()).toBe(0);
+    expect(fpRef.calls.refund).toHaveLength(0);
+    expect(fpRef.momo.probe).toHaveBeenCalledWith('freemopay', ref);
+    expect(missing.refund_status).toBe('refund_pending');
+    const found = pendingRefund(base);
+    const ext = harness({ pending: [found], poll: 'refunded' });
+    expect(await ext.service.reconcilePending()).toBe(1);
+    expect(ext.calls.refund).toHaveLength(0);
+    expect(ext.momo.probe).toHaveBeenCalledWith('freemopay', ref);
+    expect(found.refund_status).toBe('refunded');
+  });
+
+  it('rejects a reference pasted from another booking, and a pending payout', async () => {
+    const row = {
+      status: 'cancelled',
+      refund_status: 'refund_pending',
+      refund_amount: 100,
+      refund_provider: 'freemopay',
+      refund_provider_ref: 'FP-1',
+      refund_sent_at: '2026-11-18T00:00:00.000Z',
+    };
+    const pasted = harness({ poll: 'failed', booking: row });
+    await expect(pasted.service.markRefund(BOOKING, { status: 'failed', providerRef: 'FP-2' })).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(pasted.calls.restore).toBe(0);
+    const pending = harness({ poll: 'refund_pending', booking: row });
+    await expect(pending.service.markRefund(BOOKING, { status: 'failed', providerRef: 'FP-1' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(pending.calls.restore).toBe(0);
+    const unknown = harness({ poll: 'unknown', booking: row });
+    await expect(unknown.service.markRefund(BOOKING, { status: 'unpaid', providerRef: 'FP-1' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(unknown.calls.restore).toBe(0);
+  });
+
+  it('retries a failed renter notice three times and then stops', async () => {
+    const row = pendingRefund({
+      refund_status: 'failed',
+      refund_amount: 100,
+      refund_credited_at: '2026-11-18T00:00:00.000Z',
+      refund_notices: ['renter_try:1'],
+    });
+    const failed = harness({ pending: [row], noticeRetries: [row], renterFails: true });
+    await failed.service.reconcilePending();
+    await failed.service.reconcilePending();
+    expect(failed.calls.renter).toHaveLength(2);
+    expect(row.refund_notices).toEqual(['renter_try:1', 'renter_try:2', 'renter_try:3']);
+    await failed.service.reconcilePending();
+    expect(failed.calls.renter).toHaveLength(2);
+    const done = pendingRefund({
+      refund_status: 'failed',
+      refund_amount: 100,
+      refund_credited_at: '2026-11-18T00:00:00.000Z',
+      refund_notices: ['renter_try:1'],
+    });
+    const ok = harness({ pending: [done], noticeRetries: [done] });
+    await ok.service.reconcilePending();
+    expect(done.refund_notices).toContain('renter_landed');
+    await ok.service.reconcilePending();
+    expect(ok.calls.renter).toHaveLength(1);
   });
 
   it('hides the decline on a booking read when the flag is off', async () => {

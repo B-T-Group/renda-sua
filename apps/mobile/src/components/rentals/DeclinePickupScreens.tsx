@@ -180,7 +180,7 @@ export function DeclineOutcomeCard({ money, refundStatus, onViewWallet, onBrowse
       <Text variant="headlineSmall">{outcomeTitle(refundStatus, t)}</Text>
       <Text>{money.place} · {money.bookingNumber}</Text>
       <Text>{outcomeBody(money, amount, refundStatus, t)}</Text>
-      <OutcomeActions wallet={wallet} checking={checking} onViewWallet={onViewWallet} onBrowse={onBrowse} onSupport={onContactSupport} />
+      <OutcomeActions wallet={wallet} support={refundStatus === 'refund_pending'} onViewWallet={onViewWallet} onBrowse={onBrowse} onSupport={onContactSupport} />
     </View>
   );
 }
@@ -415,7 +415,7 @@ function paidLine(money: DeclineMoney, amount: string, t: any): string {
 function checkingCopy(amount: string, t: any): string {
   return t(
     'pickupDecline.refundChecking',
-    "We're checking your refund of {{amount}}. We'll let you know as soon as it's in your wallet.",
+    "We're checking your refund of {{amount}}. We'll let you know as soon as it's in your wallet or on your Mobile Money number.",
     { amount }
   );
 }
@@ -456,13 +456,13 @@ function outcomeTitle(refundStatus: string, t: any): string {
   return t('pickupDecline.cancelledTitle', 'Booking cancelled');
 }
 
-function OutcomeActions(props: { wallet: boolean; checking: boolean; onViewWallet?: () => void; onBrowse?: () => void; onSupport?: () => void }) {
+function OutcomeActions(props: { wallet: boolean; support: boolean; onViewWallet?: () => void; onBrowse?: () => void; onSupport?: () => void }) {
   const { t } = useTranslation();
   if (props.wallet) return <WalletActions onViewWallet={props.onViewWallet} onBrowse={props.onBrowse} />;
   return (
     <>
       <Button mode="contained" buttonColor={colors.primary.main} onPress={props.onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
-      {props.checking ? <SupportLink onSupport={props.onSupport} /> : null}
+      {props.support ? <SupportLink onSupport={props.onSupport} /> : null}
     </>
   );
 }

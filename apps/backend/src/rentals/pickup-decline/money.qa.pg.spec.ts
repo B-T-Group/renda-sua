@@ -24,7 +24,9 @@ const HOST = (process.env.PGHOST ?? '').trim();
 const HARDENING = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119160000_rentals_decline_refund_hardening/up.sql');
 const PREDEDUPE = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119135000_rentals_decline_history_prededupe/up.sql');
 const CLAIM_MIGRATION = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql');
-const MIGRATIONS = [PREDEDUPE, CLAIM_MIGRATION, HARDENING];
+const NOTICE_TYPES = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119180000_condition_refund_message_types/up.sql');
+const NOTICE_TYPES_DOWN = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119180000_condition_refund_message_types/down.sql');
+const MIGRATIONS = [PREDEDUPE, CLAIM_MIGRATION, HARDENING, NOTICE_TYPES];
 
 describe('decline refund postgres job', () => {
   it('is configured when CI runs this workflow', () => {
@@ -273,6 +275,56 @@ suite('decline refund claim on real Postgres', () => {
     expect(await statusOf(pool, id)).toBe('refund_pending');
   });
 
+  it('does not resend an unstamped stable FreemoPay reference in either lookup mode', async () => {
+    const providerOnly = await seed(pool, { refund_sent_at: null });
+    const indexed = await seed(pool, { refund_sent_at: null });
+    await pool.query(
+      `UPDATE rental_bookings SET refund_next_at = now() + interval '1 day' WHERE id <> ALL($1::uuid[])`,
+      [[providerOnly, indexed]]
+    );
+    const provider = fakeProvider();
+    provider.check = async () => {
+      const error: any = new Error('not found');
+      error.status = 404;
+      throw error;
+    };
+    const hidden = build(pool, provider, { credits: 0 });
+    expect(await hidden.reconcilePending()).toBe(0);
+    expect(provider.withdraws).toHaveLength(0);
+    expect(await statusOf(pool, providerOnly)).toBe('refund_pending');
+    provider.check = async () => ({ status: 'SUCCESS' });
+    await pool.query(
+      `UPDATE rental_bookings SET refund_next_at = now() + interval '1 day' WHERE id = $1`,
+      [providerOnly]
+    );
+    await ageClaim(pool, indexed);
+    expect(await hidden.reconcilePending()).toBe(1);
+    expect(provider.withdraws).toHaveLength(0);
+    expect(await statusOf(pool, indexed)).toBe('refunded');
+  });
+
+  it('inserts the decline refund notice after the message type exists', async () => {
+    await pool.query(readFileSync(NOTICE_TYPES, 'utf8'));
+    const types = await pool.query(
+      `SELECT id FROM message_types WHERE id IN ('CONDITION_DECLINED', 'CONDITION_REFUND') ORDER BY id`
+    );
+    expect(types.rows.map((row) => row.id)).toEqual(['CONDITION_DECLINED', 'CONDITION_REFUND']);
+    const inserted = await pool.query(
+      `INSERT INTO user_messages (user_id, message_type, message, notice_idempotency_key)
+       VALUES (gen_random_uuid(), 'CONDITION_REFUND', 'refund', 'booking:condition_refund')
+       RETURNING id`
+    );
+    expect(inserted.rowCount).toBe(1);
+    await pool.query(readFileSync(NOTICE_TYPES_DOWN, 'utf8'));
+    const kept = await pool.query(`SELECT id FROM message_types WHERE id = 'CONDITION_REFUND'`);
+    expect(kept.rows).toHaveLength(1);
+    await pool.query(`DELETE FROM user_messages WHERE message_type = 'CONDITION_REFUND'`);
+    await pool.query(readFileSync(NOTICE_TYPES_DOWN, 'utf8'));
+    const dropped = await pool.query(`SELECT id FROM message_types WHERE id = 'CONDITION_REFUND'`);
+    expect(dropped.rows).toHaveLength(0);
+    await pool.query(readFileSync(NOTICE_TYPES, 'utf8'));
+  });
+
   it('dedupes decline history without dropping the live unique index', async () => {
     const sql = readFileSync(HARDENING, 'utf8');
     expect(readFileSync(PREDEDUPE, 'utf8')).toContain('row_number()');
@@ -420,6 +472,17 @@ CREATE TABLE rental_status_history (
   rental_booking_id uuid,
   notes text,
   created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE message_types (
+  id text PRIMARY KEY,
+  comment text
+);
+CREATE TABLE user_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid,
+  message_type text REFERENCES message_types(id),
+  message text,
+  notice_idempotency_key text
 );
 `;
 
@@ -621,9 +684,12 @@ async function owned(pool: Pool, vars: Record<string, unknown>): Promise<number>
 
 async function stampSent(pool: Pool, vars: Record<string, unknown>): Promise<number> {
   const result = await pool.query(
-    `UPDATE rental_bookings SET refund_sent_at = $3
-     WHERE id = $1 AND refund_status = 'refund_pending' AND refund_claim_token = $2 AND refund_sent_at IS NULL`,
-    [vars.id, vars.token, vars.at]
+    `UPDATE rental_bookings
+     SET refund_sent_at = $3, refund_provider = $4, refund_provider_ref = $5
+     WHERE id = $1 AND refund_status = 'refund_pending' AND refund_claim_token = $2
+       AND refund_sent_at IS NULL
+       AND (refund_provider_ref IS NULL OR refund_provider_ref = $5)`,
+    [vars.id, vars.token, vars.at, vars.provider, vars.ref]
   );
   return result.rowCount ?? 0;
 }

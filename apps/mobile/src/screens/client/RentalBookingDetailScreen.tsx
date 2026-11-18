@@ -462,7 +462,7 @@ export default function RentalBookingDetailScreen() {
             refundStatus={declineCardView(booking).refundStatus}
             onViewWallet={() => navigation.navigate('ClientAccounts')}
             onBrowse={() => navigation.navigate('ClientMainTabs', { screen: 'ClientBrowse', params: { segment: 'rentals' } })}
-            onContactSupport={() => navigation.navigate('SupportTickets')}
+            onContactSupport={() => navigation.navigate('SupportTickets', { bookingNumber: booking.booking_number ?? '' })}
           />
         ) : null}
 

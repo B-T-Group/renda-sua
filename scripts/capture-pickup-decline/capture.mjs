@@ -340,7 +340,8 @@ async function assertScene(page, scene, lang, mobile) {
     const line = lang === 'fr' ? 'Nous vous préviendrons dès qu' : "We'll let you know as soon as";
     const support = lang === 'fr' ? 'Contacter le support' : 'Contact support';
     const raw = await page.evaluate(() => document.body.textContent || '');
-    if (!text.includes(line)) throw new Error(`${scene} ${lang} is not the checking copy`);
+    const where = lang === 'fr' ? 'numéro Mobile Money' : 'Mobile Money number';
+    if (!text.includes(line) || !text.includes(where)) throw new Error(`${scene} ${lang} is not the checking copy`);
     if (!text.includes(support)) throw new Error(`${scene} ${lang} is missing contact support`);
     if (!raw.includes('45\u00a0000\u00a0FCFA')) throw new Error(`${scene} ${lang} lost the non-breaking space`);
     if (text.toLowerCase().includes(lang === 'fr' ? 'en route' : 'on its way')) {

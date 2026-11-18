@@ -38,6 +38,8 @@ import {
   type DeclineReason,
 } from './pickup-decline.policy';
 import * as Q from './pickup-decline.queries';
+
+const RENTER_NOTICE_TRIES = 3;
 import { RentalConditionPhotosService } from './rental-condition-photos.service';
 import { RentalMomoRefundService } from './rental-momo-refund.service';
 
@@ -81,6 +83,7 @@ interface DeclineBooking {
   refund_sent_at?: string | null;
   refund_credited_at?: string | null;
   refund_claim_token?: string | null;
+  refund_notices?: string[] | null;
   authorized_amount: number | string | null;
   total_amount: number | string | null;
   currency: string;
@@ -160,15 +163,19 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   async reconcilePending(): Promise<number> {
+    const updated = await this.reconcileDue();
+    await this.retryRenterNotices();
+    return updated;
+  }
+
+  private async reconcileDue(): Promise<number> {
     const now = new Date();
     const result = await this.hasura.executeQuery<{ rental_bookings: DeclineBooking[] }>(Q.PENDING_REFUNDS, {
       now: now.toISOString(),
       stale: claimStaleAt(now.getTime()),
     });
     let updated = 0;
-    for (const booking of result.rental_bookings ?? []) {
-      updated += await this.reconcileRow(booking);
-    }
+    for (const booking of result.rental_bookings ?? []) updated += await this.reconcileRow(booking);
     return updated;
   }
 
@@ -314,7 +321,6 @@ export class RentalPickupDeclineService implements OnModuleInit {
     token: string
   ): Promise<RefundStatus> {
     const referenceId = booking.refund_provider_ref ?? stableRefundReference(booking.id);
-    await this.rememberRef(booking.id, source.provider, referenceId);
     if (!(await this.keepClaim(booking.id, token))) return 'refund_pending';
     return this.sendOwned(booking, ledger, source, referenceId, token);
   }
@@ -554,42 +560,40 @@ export class RentalPickupDeclineService implements OnModuleInit {
     };
   }
 
-  private async rememberRef(bookingId: string, provider: string, ref: string): Promise<void> {
-    await this.hasura.executeMutation(Q.REMEMBER_REFUND_REF, { id: bookingId, provider, ref });
-  }
-
-  /** FreemoPay is stamped immediately before the withdrawal. A lost stamp clears the stable id. */
+  /** FreemoPay writes the stable id and the sent stamp together, immediately before the withdrawal. */
   private async markSent(booking: DeclineBooking, provider: string, token: string): Promise<boolean> {
     if (providerRefundPlan(provider) !== 'freemopay') return true;
+    const ref = stableRefundReference(booking.id);
     try {
-      const wrote = await this.writeSent(booking, token);
-      if (!wrote) await this.clearUnsent(booking.id, token, stableRefundReference(booking.id));
+      const wrote = await this.writeSent(booking, token, provider, ref);
+      if (!wrote) await this.clearUnsent(booking.id, token, ref);
       return wrote;
     } catch (error: any) {
       void error;
-      await this.clearUnsent(booking.id, token, stableRefundReference(booking.id));
+      await this.clearUnsent(booking.id, token, ref);
       return false;
     }
   }
 
-  /** MTN stamps only after the transfer is accepted, so a pre-create failure stays unsent. */
+  /** MTN stamps the same stable id only after the transfer is accepted. */
   private async stampMtn(booking: DeclineBooking, provider: string, token: string, status: RefundStatus): Promise<void> {
     if (providerRefundPlan(provider) !== 'mtn' || status !== 'refund_pending') return;
     try {
-      await this.writeSent(booking, token);
+      await this.writeSent(booking, token, provider, stableRefundReference(booking.id));
     } catch (error: any) {
       void error;
     }
   }
 
-  private async writeSent(booking: DeclineBooking, token: string): Promise<boolean> {
+  private async writeSent(booking: DeclineBooking, token: string, provider: string, ref: string): Promise<boolean> {
     const at = new Date().toISOString();
     const result = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
       Q.STAMP_SENT,
-      { id: booking.id, token, at }
+      { id: booking.id, token, provider, ref, at }
     );
     if ((result.update_rental_bookings?.affected_rows ?? 0) !== 1) return false;
     booking.refund_sent_at = at;
+    booking.refund_provider_ref = ref;
     return true;
   }
 
@@ -788,9 +792,53 @@ export class RentalPickupDeclineService implements OnModuleInit {
   private async sendRenterNotice(booking: DeclineBooking, landed: 'wallet' | 'sent'): Promise<void> {
     const userId = booking.client?.user_id;
     const amount = moneyAmount(booking.refund_amount) || moneyAmount(booking.total_amount);
-    if (!userId || amount <= 0 || !(await this.claimNotice(booking.id, 'renter_landed'))) return;
+    if (!userId || amount <= 0 || this.alreadyTold(booking)) return;
+    if (!(await this.claimTry(booking)) || !(await this.claimNotice(booking.id, 'renter_landed'))) return;
     const sent = await this.notifications.notifyRenterConditionRefund(this.renterBody(booking, userId, amount, landed));
     if (!sent) await this.releaseNotice(booking.id, 'renter_landed');
+    if (sent) this.rememberNotice(booking, 'renter_landed');
+  }
+
+  /** Three tries. A failed send keeps the try and releases the landed claim so the cron can retry. */
+  private async claimTry(booking: DeclineBooking): Promise<boolean> {
+    const next = this.tryCount(booking) + 1;
+    if (next > RENTER_NOTICE_TRIES) return false;
+    const claimed = await this.claimNotice(booking.id, `renter_try:${next}`);
+    if (claimed) this.rememberNotice(booking, `renter_try:${next}`);
+    return claimed;
+  }
+
+  private alreadyTold(booking: DeclineBooking): boolean {
+    return (booking.refund_notices ?? []).includes('renter_landed');
+  }
+
+  private tryCount(booking: DeclineBooking): number {
+    const notices = booking.refund_notices ?? [];
+    return [1, 2, 3].filter((n) => notices.includes(`renter_try:${n}`)).length;
+  }
+
+  private rememberNotice(booking: DeclineBooking, outcome: string): void {
+    const notices = booking.refund_notices ?? [];
+    if (!notices.includes(outcome)) booking.refund_notices = [...notices, outcome];
+  }
+
+  private async retryRenterNotices(): Promise<void> {
+    try {
+      const result = await this.hasura.executeQuery<{ rental_bookings: DeclineBooking[] }>(Q.RENTER_NOTICE_RETRIES, {
+        landed: ['renter_landed'],
+        try1: ['renter_try:1'],
+        try2: ['renter_try:2'],
+      });
+      for (const booking of result.rental_bookings ?? []) await this.retryOneNotice(booking);
+    } catch (error: any) {
+      this.logger.warn(`decline renter retry: ${error?.message ?? error}`);
+    }
+  }
+
+  private async retryOneNotice(booking: DeclineBooking): Promise<void> {
+    if (this.tryCount(booking) >= RENTER_NOTICE_TRIES) return;
+    const wallet = Boolean(booking.refund_credited_at) || booking.refund_status !== 'refunded';
+    await this.tellRenter(booking, wallet ? 'wallet' : 'sent');
   }
 
   private renterBody(booking: DeclineBooking, clientUserId: string, amount: number, landed: 'wallet' | 'sent') {
@@ -850,27 +898,19 @@ export class RentalPickupDeclineService implements OnModuleInit {
     const token = randomUUID();
     if (!(await this.claimWork(booking, attempts, token))) return false;
     const claimed = { ...booking, refund_attempts: attempts + 1, refund_claim_token: token };
-    if (attempts < REFUND_ATTEMPT_LIMIT && !this.attemptMayExist(booking) && this.needsSend(claimed)) {
-      return this.sendClaimed(claimed, token);
-    }
+    if (this.hasProviderRef(claimed)) return this.pollClaimed(claimed, token);
+    if (attempts < REFUND_ATTEMPT_LIMIT && this.needsSend(claimed)) return this.sendClaimed(claimed, token);
     return this.pollClaimed(claimed, token);
   }
 
-  /** A sent stamp, or a reference that is not an unstamped FreemoPay id, may already be a payout. */
-  private attemptMayExist(booking: DeclineBooking): boolean {
-    if (booking.refund_sent_at) return true;
-    const ref = booking.refund_provider_ref ?? '';
-    if (!ref) return false;
-    const freemopay = providerRefundPlan(booking.refund_provider ?? '') === 'freemopay';
-    return !(freemopay && ref === stableRefundReference(booking.id));
+  /** A stored reference may already be a payout. Probe it before any resend. */
+  private hasProviderRef(booking: DeclineBooking): boolean {
+    return Boolean((booking.refund_provider_ref ?? '').trim());
   }
 
-  /** FreemoPay sends only when nothing has been attempted yet. */
+  /** Send only when this booking has no provider reference and no sent stamp. */
   private needsSend(booking: DeclineBooking): boolean {
-    if (providerRefundPlan(booking.refund_provider ?? '') !== 'freemopay') return !booking.refund_provider_ref;
-    if (booking.refund_sent_at) return false;
-    const ref = booking.refund_provider_ref;
-    return !ref || ref === stableRefundReference(booking.id);
+    return !this.hasProviderRef(booking) && !booking.refund_sent_at;
   }
 
   private async claimWork(booking: DeclineBooking, attempts: number, token: string): Promise<boolean> {
@@ -970,22 +1010,30 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   private async failGate(booking: DeclineBooking, typedRef?: string): Promise<FailGate> {
-    const refs = this.failRefs(booking, typedRef);
-    if (refs.length === 0 && !booking.refund_sent_at) return { credit: true, ref: null };
-    if (refs.length === 0) return { credit: false, look: 'unknown' };
+    this.rejectForeignRef(booking, typedRef);
+    const refs = this.failRefs(booking);
+    if (refs.length === 0) return { credit: true, ref: null };
     const probed = await this.probeFailRefs(booking, refs);
-    return this.failVerdict(booking, probed, refs);
+    return this.failVerdict(probed, refs);
   }
 
-  private failRefs(booking: DeclineBooking, typedRef?: string): string[] {
+  private rejectForeignRef(booking: DeclineBooking, typedRef?: string): void {
+    const typed = (typedRef ?? '').trim();
+    if (!typed || this.ownsRef(booking, typed)) return;
+    throw new HttpException("That reference is not this booking's payout", HttpStatus.BAD_REQUEST);
+  }
+
+  private ownsRef(booking: DeclineBooking, ref: string): boolean {
+    const stored = (booking.refund_provider_ref ?? '').trim();
+    return ref === stored || ref === stableRefundReference(booking.id);
+  }
+
+  private failRefs(booking: DeclineBooking): string[] {
     const stored = (booking.refund_provider_ref ?? '').trim();
     const refs = stored ? [stored] : [];
-    if (providerRefundPlan(booking.refund_provider ?? '') === 'freemopay') {
-      const stable = stableRefundReference(booking.id);
-      if (!refs.includes(stable)) refs.push(stable);
-    }
-    const typed = (typedRef ?? '').trim();
-    if (typed && !refs.includes(typed)) refs.push(typed);
+    if (providerRefundPlan(booking.refund_provider ?? '') !== 'freemopay') return refs;
+    const stable = stableRefundReference(booking.id);
+    if (!refs.includes(stable)) refs.push(stable);
     return refs;
   }
 
@@ -996,12 +1044,14 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return probed;
   }
 
-  private failVerdict(booking: DeclineBooking, probed: FailProbe[], refs: string[]): FailGate {
+  private failVerdict(probed: FailProbe[], refs: string[]): FailGate {
     if (probed.includes('refunded')) return { credit: false, look: 'refunded' };
+    if (probed.some((item) => item === 'refund_pending' || item === 'unknown')) {
+      return { credit: false, look: 'unknown' };
+    }
     const failedAt = probed.findIndex((item) => item === 'failed');
     if (failedAt >= 0) return { credit: true, ref: refs[failedAt] ?? null };
-    if (probed.some((item) => item !== 'missing')) return { credit: false, look: 'unknown' };
-    if (!booking.refund_sent_at) return { credit: true, ref: null };
+    if (probed.every((item) => item === 'missing')) return { credit: true, ref: null };
     return { credit: false, look: 'unknown' };
   }
 
@@ -1009,7 +1059,14 @@ export class RentalPickupDeclineService implements OnModuleInit {
     const owned = await this.takeClaim(booking);
     const wrote = await this.writeOwned(booking.id, owned.token, 'refunded', booking.refund_provider ?? '', body.providerRef ?? null);
     if (!wrote) throw new HttpException(this.busyRefund(), HttpStatus.CONFLICT);
-    await this.tellRenter(booking, 'sent');
+    if (await this.payoutConfirmed(owned.booking, body.providerRef)) await this.tellRenter(owned.booking, 'sent');
+  }
+
+  private async payoutConfirmed(booking: DeclineBooking, typedRef?: string): Promise<boolean> {
+    const typed = (typedRef ?? '').trim();
+    const ref = typed && this.ownsRef(booking, typed) ? typed : (booking.refund_provider_ref ?? '').trim();
+    if (!ref) return false;
+    return (await this.momo.probe(booking.refund_provider ?? '', ref)) === 'refunded';
   }
 
   private async takeClaim(booking: DeclineBooking): Promise<{ booking: DeclineBooking; token: string }> {

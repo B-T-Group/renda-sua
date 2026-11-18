@@ -34,8 +34,9 @@ function statusLabel(status: string, t: (k: string) => string): string {
   return map[status] ?? status;
 }
 
-export default function SupportTicketsScreen() {
+export default function SupportTicketsScreen({ route }: { route?: { params?: { bookingNumber?: string } } }) {
   const { t } = useTranslation();
+  const bookingNumber = (route?.params?.bookingNumber ?? '').trim();
   const { colors, typography, borderRadius } = useTheme();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +81,11 @@ export default function SupportTicketsScreen() {
           <RefreshControl refreshing={loading} onRefresh={fetchTickets} colors={[colors.primary.main]} />
         }
       >
+        {bookingNumber ? (
+          <Text style={[typography.body2, { color: colors.text.secondary, marginBottom: 12 }]}>
+            {t('support.bookingContext', 'This is about booking {{booking}}.', { booking: bookingNumber })}
+          </Text>
+        ) : null}
         {error ? (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
             <MaterialCommunityIcons name="alert-circle-outline" size={40} color={colors.error.main} />

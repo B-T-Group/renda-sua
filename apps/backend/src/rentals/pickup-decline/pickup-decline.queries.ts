@@ -221,15 +221,19 @@ export const DECLINE_HISTORY = `
 `;
 
 export const STAMP_SENT = `
-  mutation StampDeclineRefundSent($id: uuid!, $token: uuid!, $at: timestamptz!) {
+  mutation StampDeclineRefundSent($id: uuid!, $token: uuid!, $provider: String!, $ref: String!, $at: timestamptz!) {
     update_rental_bookings(
       where: {
         id: { _eq: $id }
         refund_status: { _eq: "refund_pending" }
         refund_claim_token: { _eq: $token }
         refund_sent_at: { _is_null: true }
+        _or: [
+          { refund_provider_ref: { _is_null: true } }
+          { refund_provider_ref: { _eq: $ref } }
+        ]
       }
-      _set: { refund_sent_at: $at }
+      _set: { refund_sent_at: $at, refund_provider: $provider, refund_provider_ref: $ref }
     ) { affected_rows }
   }
 `;
@@ -381,6 +385,36 @@ export const DECLINE_PHOTO_ROWS = `
       id
       object_key
       created_at
+    }
+  }
+`;
+
+export const RENTER_NOTICE_RETRIES = `
+  query DeclineRenterNoticeRetries($landed: jsonb!, $try1: jsonb!, $try2: jsonb!) {
+    rental_bookings(
+      where: {
+        refund_status: { _in: ["failed", "manual", "refunded"] }
+        _not: { refund_notices: { _contains: $landed } }
+        _or: [
+          { refund_notices: { _contains: $try1 } }
+          { refund_notices: { _contains: $try2 } }
+        ]
+      }
+      limit: 20
+    ) {
+      id
+      booking_number
+      status
+      currency
+      refund_status
+      refund_amount
+      refund_provider
+      refund_provider_ref
+      refund_credited_at
+      refund_notices
+      client { user_id }
+      business { user_id }
+      rental_location_listing { rental_item { name } }
     }
   }
 `;

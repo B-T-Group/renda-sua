@@ -8041,7 +8041,8 @@
       "keywords": "support, help, customer service, contact, FAQ, delivery help",
       "title": "Support & Help Center - Rendasua"
     },
-    "title": "Support & Help Center"
+    "title": "Support & Help Center",
+    "bookingContext": "This is about booking {{booking}}."
   },
   "termsOfService": {
     "acceptance": "Acceptance of Terms",
@@ -9848,7 +9849,7 @@
     "refundProgress": "Refund in progress",
     "refunded": "Refunded",
     "refundProgressBody": "{{amount}} is on its way to {{phone}}.",
-    "refundChecking": "We're checking your refund of {{amount}}. We'll let you know as soon as it's in your wallet.",
+    "refundChecking": "We're checking your refund of {{amount}}. We'll let you know as soon as it's in your wallet or on your Mobile Money number.",
     "contactSupport": "Contact support",
     "refundedBody": "{{amount}} was sent to {{phone}}.",
     "walletReturned": "We couldn't send {{amount}} back to your Mobile Money number, so it's in your Rendasua wallet. You can withdraw it or use it on your next booking.",

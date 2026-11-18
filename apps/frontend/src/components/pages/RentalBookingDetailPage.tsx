@@ -797,7 +797,7 @@ const RentalBookingDetailPage: React.FC = () => {
               refundStatus={declineCardView(booking).refundStatus}
               onViewWallet={() => navigate('/accounts')}
               onBrowse={() => navigate('/rentals')}
-              onContactSupport={() => navigate('/support')}
+              onContactSupport={() => navigate(`/support?booking=${encodeURIComponent(booking.booking_number ?? '')}`)}
             />
           ) : null}
           {bookingId && inspection.enrolled ? (

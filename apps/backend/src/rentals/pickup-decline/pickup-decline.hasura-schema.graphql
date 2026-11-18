@@ -148,6 +148,7 @@ type rental_bookings {
   refund_sent_at: timestamptz
   refund_credited_at: timestamptz
   refund_claim_at: timestamptz
+  refund_notices: jsonb
   authorized_amount: numeric
   total_amount: numeric
   currency: String
