@@ -51,7 +51,9 @@ import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, shouldNotifyPriceChan
 import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { refundLateCollectIfDeclined } from './pickup-decline/late-collect-refund';
+import type { CollectedPayment } from './pickup-decline/pickup-decline.money';
 import type { ListingCardWindow } from './rental-card-window';
 import { attachListingCardWindows, inspectedByItem } from './inspection/listing-card-batch';
 import { snapshotInspected } from './inspection/inspection-optin';
@@ -3017,6 +3019,52 @@ export class RentalsService {
       return;
     }
     // Idempotency: already confirmed / cancelled / completed.
+  }
+
+  /** A collect approved after the decline. Queue the refund, or alert if it is not one. */
+  async recoverDeclinedLateCollect(transaction: {
+    entity_id?: string | null;
+    reference?: string | null;
+    amount?: number | string | null;
+    currency?: string | null;
+    provider?: string | null;
+    customer_phone?: string | null;
+    transaction_id?: string | null;
+  }): Promise<boolean> {
+    const bookingNumber = transaction.entity_id || transaction.reference;
+    if (!bookingNumber) return false;
+    const booking = await this.fetchBookingByBookingNumber(bookingNumber);
+    if (!booking?.condition_declined_at || !booking.id) {
+      this.alertUnmatchedLateCollect(String(bookingNumber));
+      return false;
+    }
+    await refundLateCollectIfDeclined(booking, this.lateCollectPayment(transaction));
+    return true;
+  }
+
+  private alertUnmatchedLateCollect(bookingNumber: string): void {
+    reportMoneyAnomaly(
+      this.logger,
+      'late_rental_collect',
+      `Late Mobile Money collect for ${bookingNumber} is not a declined rental`,
+      { bookingNumber }
+    );
+  }
+
+  private lateCollectPayment(transaction: {
+    amount?: number | string | null;
+    currency?: string | null;
+    provider?: string | null;
+    customer_phone?: string | null;
+    transaction_id?: string | null;
+  }): CollectedPayment {
+    return {
+      amount: Number(transaction.amount ?? 0),
+      currency: String(transaction.currency ?? ''),
+      provider: String(transaction.provider ?? ''),
+      phone: transaction.customer_phone ?? null,
+      transactionId: transaction.transaction_id ?? null,
+    };
   }
 
   /** Wallet credit landed: confirm + PIN, then hold the contract and mark paid. */

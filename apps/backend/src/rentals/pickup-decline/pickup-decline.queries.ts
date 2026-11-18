@@ -47,6 +47,7 @@ export const FIND_DECLINE = `
       money_amount
       money_currency
       phone_mask
+      effects_recorded_at
       created_at
     }
   }
@@ -67,6 +68,7 @@ export const FIND_DECLINE_FOR_BOOKING = `
       money_amount
       money_currency
       phone_mask
+      effects_recorded_at
       created_at
     }
   }
@@ -148,6 +150,56 @@ export const STAMP_REFUND = `
   }
 `;
 
+export const CLAIM_REFUND = `
+  mutation ClaimDeclineRefund(
+    $id: uuid!
+    $attempts: Int!
+    $stale: timestamptz!
+    $set: rental_bookings_set_input!
+  ) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_attempts: { _eq: $attempts }
+        _or: [
+          { refund_claim_at: { _is_null: true } }
+          { refund_claim_at: { _lt: $stale } }
+        ]
+      }
+      _set: $set
+    ) { affected_rows }
+  }
+`;
+
+export const REMEMBER_REFUND_REF = `
+  mutation RememberDeclineRefundRef($id: uuid!, $provider: String!, $ref: String!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_provider_ref: { _is_null: true }
+      }
+      _set: { refund_provider: $provider, refund_provider_ref: $ref }
+    ) { affected_rows }
+  }
+`;
+
+export const DELETE_DECLINE = `
+  mutation DeleteConditionDecline($id: uuid!) {
+    delete_rental_condition_declines_by_pk(id: $id) { id }
+  }
+`;
+
+export const STAMP_EFFECTS = `
+  mutation StampDeclineEffects($id: uuid!, $at: timestamptz!) {
+    update_rental_condition_declines_by_pk(
+      pk_columns: { id: $id }
+      _set: { effects_recorded_at: $at }
+    ) { id }
+  }
+`;
+
 export const APPLY_REFUND_POLL = `
   mutation ApplyDeclineRefundPoll($id: uuid!, $set: rental_bookings_set_input!) {
     update_rental_bookings(
@@ -198,27 +250,38 @@ export const DECLINE_PHOTO_ROWS = `
 `;
 
 export const PENDING_REFUNDS = `
-  query PendingDeclineRefunds($now: timestamptz!) {
+  query PendingDeclineRefunds($now: timestamptz!, $stale: timestamptz!) {
     rental_bookings(
       where: {
         refund_status: { _eq: "refund_pending" }
         condition_declined_at: { _is_null: false }
         refund_attempts: { _lt: 5 }
-        _or: [
-          { refund_next_at: { _is_null: true } }
-          { refund_next_at: { _lte: $now } }
+        _and: [
+          { _or: [
+            { refund_next_at: { _is_null: true } }
+            { refund_next_at: { _lte: $now } }
+          ] }
+          { _or: [
+            { refund_claim_at: { _is_null: true } }
+            { refund_claim_at: { _lt: $stale } }
+          ] }
         ]
       }
       limit: 40
     ) {
       id
       booking_number
+      status
       currency
+      business_id
       refund_status
       refund_attempts
       refund_amount
       refund_provider
       refund_provider_ref
+      refund_claim_at
+      client { user_id }
+      business { user_id }
       rental_location_listing { rental_item { name } }
     }
   }

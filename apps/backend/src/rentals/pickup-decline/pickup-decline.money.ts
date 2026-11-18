@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 export type DeclineRail = 'card' | 'wallet' | 'momo_unpaid' | 'momo_paid';
 export type RefundStatus = 'none' | 'refund_pending' | 'refunded' | 'failed';
 
@@ -135,4 +137,17 @@ export function nextRefundAt(attempts: number, now = Date.now()): string | null 
 
 export function cardReleaseNeedsRefund(message?: string | null): boolean {
   return (message ?? '').toLowerCase().includes('use refund');
+}
+
+/** A claim older than this may be taken by another worker. */
+export const REFUND_CLAIM_STALE_MS = 2 * 60 * 1000;
+
+export function claimStaleAt(now = Date.now()): string {
+  return new Date(now - REFUND_CLAIM_STALE_MS).toISOString();
+}
+
+/** One provider reference per booking refund. Retries send this same id. */
+export function stableRefundReference(bookingId: string): string {
+  const hex = createHash('sha256').update(`rental-decline:${bookingId}`).digest('hex');
+  return [hex.slice(0, 8), hex.slice(8, 12), `4${hex.slice(13, 16)}`, `a${hex.slice(17, 20)}`, hex.slice(20, 32)].join('-');
 }

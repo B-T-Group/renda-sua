@@ -4470,7 +4470,15 @@ export class NotificationsService {
     const lang = await this.languageFor(userId);
     const msg = buildConditionDeclinedNotice({ ...params, preferredLanguage: lang });
     const path = `/rentals/bookings/${params.bookingId}?persona=business`;
-    await this.insertRentalUserMessage(userId, params.bookingId, 'CONDITION_DECLINED', msg.body, path, 'condition_declined');
+    const inserted = await this.insertRentalUserMessage(
+      userId,
+      params.bookingId,
+      'CONDITION_DECLINED',
+      msg.body,
+      path,
+      'condition_declined'
+    );
+    if (!inserted) return;
     await this.pushConditionDeclined(userId, params.bookingId, msg, path);
   }
 

@@ -68,6 +68,8 @@ export interface DisbursementRequest {
   };
   payerMessage: string;
   payeeNote: string;
+  /** When set, MTN uses this X-Reference-Id instead of a new one. */
+  referenceId?: string;
 }
 
 export interface RemittanceRequest {
@@ -346,7 +348,7 @@ export class MtnMomoService {
    * Transfer (Disbursement) - Send money to a customer
    */
   async transfer(request: DisbursementRequest): Promise<MtnMomoResponse> {
-    const referenceId = this.generateReferenceId();
+    const referenceId = request.referenceId?.trim() || this.generateReferenceId();
     try {
       const currency = request.currency || this.config.currency;
       const amount = formatMtnAmount(request.amount, currency);
@@ -382,6 +384,7 @@ export class MtnMomoService {
     } catch (error: any) {
       this.logger.error(`Disbursement failed: ${error?.message ?? error}`);
       const code = error?.response?.status;
+      if (code === 409) return this.duplicateTransfer(request, referenceId);
       return {
         status: false,
         financialTransactionId: referenceId,
@@ -390,6 +393,16 @@ export class MtnMomoService {
         error: error?.response?.data?.message || error?.message,
       };
     }
+  }
+
+  /** MTN already has this reference. Poll it instead of sending a second payout. */
+  private duplicateTransfer(request: DisbursementRequest, referenceId: string): MtnMomoResponse {
+    return {
+      status: true,
+      financialTransactionId: referenceId,
+      externalId: request.externalId,
+      statusCode: '409',
+    };
   }
 
   /**

@@ -13,6 +13,8 @@ export interface MomoRefundRequest {
   phone: string | null;
   transactionId: string | null;
   channel?: 'moov_tg' | 'togocel' | null;
+  /** Stable provider reference. A retry sends this same id. */
+  referenceId?: string | null;
 }
 
 export interface MomoRefundResult {
@@ -40,9 +42,17 @@ export class RentalMomoRefundService {
   }
 
   async poll(provider: string, providerRef: string): Promise<RefundStatus> {
+    const probed = await this.probe(provider, providerRef);
+    return probed === 'missing' ? 'refund_pending' : probed;
+  }
+
+  /** `missing` means the provider has no transfer for this reference yet. */
+  async probe(provider: string, providerRef: string): Promise<RefundStatus | 'missing'> {
     const plan = providerRefundPlan(provider);
     if (plan === 'unsupported') return 'refund_pending';
-    return mapRefundPoll(await this.pollCode(plan, providerRef));
+    const code = await this.pollCode(plan, providerRef);
+    if (code == null) return 'missing';
+    return mapRefundPoll(code);
   }
 
   private async unsupported(provider: string): Promise<MomoRefundResult> {
@@ -69,6 +79,7 @@ export class RentalMomoRefundService {
       amount: String(request.amount),
       currency: request.currency,
       externalId: this.externalId(request.bookingId),
+      referenceId: request.referenceId ?? undefined,
       payee: { partyIdType: 'MSISDN', partyId: this.msisdn(request.phone) },
       payerMessage: 'Rental condition decline refund',
       payeeNote: request.bookingId,
