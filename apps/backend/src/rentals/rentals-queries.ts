@@ -1368,6 +1368,7 @@ export const GET_RENTAL_ITEM_BUSINESS_CHECK = `
     rental_items_by_pk(id: $id) {
       id
       business_id
+      currency
       deleted_at
     }
   }

@@ -56,6 +56,7 @@ import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
 import type { ListingCardWindow } from './rental-card-window';
+import { listingWindowInspected, snapshotInspected } from './inspection/inspection-optin';
 import { InspectionOptInService } from './inspection/inspection-optin.service';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
@@ -124,6 +125,11 @@ export const RENTAL_OVERWRITE_BUSINESS_FORBIDDEN =
 
 /** Default security deposit = 8x the listing hourly rate (business can overwrite). */
 const RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER = 8;
+
+function cardDepositCurrency(currency: string | null | undefined): boolean {
+  const code = (currency ?? '').trim().toUpperCase();
+  return code !== 'XAF' && code !== 'XOF';
+}
 
 const ACCEPT_PICKUP_VERSION = `mutation AcceptPickup($id: uuid!, $version: uuid!, $actor: uuid!) {
   rental_accept_pickup_version(args: { p_booking_id: $id, p_version_id: $version, p_actor: $actor }) { id }
@@ -789,19 +795,30 @@ export class RentalsService {
 
   private async attachCardWindows(rows: PublicRentalListingRow[]): Promise<PublicRentalListingRow[]> {
     if (!rows.length || !this.cardWindow) return rows;
-    const map = await this.cardWindow.forCountries(
-      rows.map((row) => row.business_location?.address?.country)
-    );
-    return rows.map((row) => this.withCardFields(row, map));
+    const inspected = await this.listingOptIn(rows);
+    return Promise.all(rows.map((row) => this.rowCard(row, inspected)));
   }
 
-  private withCardFields(
-    row: PublicRentalListingRow,
-    map: Map<string, ListingCardWindow>
-  ): PublicRentalListingRow {
-    const code = resolveItemCountry(row.business_location?.address?.country)?.toUpperCase() || '';
-    const fields = map.get(code);
-    return fields ? { ...row, ...fields } : row;
+  private async listingOptIn(rows: PublicRentalListingRow[]): Promise<Map<string, boolean | undefined>> {
+    const map = new Map<string, boolean | undefined>();
+    for (const row of rows) {
+      const itemId = row.rental_item?.id;
+      if (!itemId || map.has(itemId)) continue;
+      map.set(itemId, await this.optInForListing(row.business_location?.address?.country, itemId));
+    }
+    return map;
+  }
+
+  private async optInForListing(country: string | null | undefined, itemId: string): Promise<boolean | undefined> {
+    const on = await this.optInFlag(country);
+    const stamps = on ? await this.inspectionOptIn.stampsNewBooking(itemId) : false;
+    return listingWindowInspected(on, stamps);
+  }
+
+  private async rowCard(row: PublicRentalListingRow, inspected: Map<string, boolean | undefined>) {
+    const country = row.business_location?.address?.country;
+    const fields = await this.cardWindow.forCountry(country, new Date(), inspected.get(row.rental_item?.id));
+    return { ...row, ...fields };
   }
 
   private async rejectUnfitCardRequest(
@@ -835,7 +852,7 @@ export class RentalsService {
   private async knownInspected(country: string | null, row: { inspection_policy_version?: number | null }): Promise<boolean | undefined> {
     if (!(await this.optInFlag(country))) return undefined;
     if (!row || !('inspection_policy_version' in row)) return undefined;
-    return row.inspection_policy_version != null;
+    return snapshotInspected(row.inspection_policy_version);
   }
 
   private async optInFlag(country?: string | null): Promise<boolean> {
@@ -1792,7 +1809,7 @@ export class RentalsService {
     dto: CreateBusinessRentalListingDto
   ): Promise<string> {
     const businessId = await this.requireBusinessId();
-    await this.assertRentalItemForBusiness(dto.rental_item_id, businessId);
+    const currency = await this.assertRentalItemForBusiness(dto.rental_item_id, businessId);
     await this.assertLocationForBusiness(dto.business_location_id, businessId);
     const minHours = dto.min_rental_hours ?? 1;
     const maxHours =
@@ -1813,7 +1830,8 @@ export class RentalsService {
     }
     const securityDeposit = this.resolveListingSecurityDeposit(
       dto.security_deposit_amount,
-      price
+      price,
+      currency
     );
     const availability = this.normalizeWeeklyAvailability(dto.weekly_availability);
     const row = await this.hasuraUserService.executeMutation<{
@@ -2061,24 +2079,23 @@ export class RentalsService {
     return out;
   }
 
-  /** Explicit deposit when provided, otherwise 8x the hourly rate. */
+  /** Explicit deposit when provided. Card listings default to 8x hourly. XAF and XOF stay 0. */
   private resolveListingSecurityDeposit(
     raw: number | undefined,
-    hourlyRate: number
+    hourlyRate: number,
+    currency?: string | null
   ): number {
-    if (raw !== undefined) {
-      const v = Number(raw);
-      if (Number.isNaN(v) || v < 0) {
-        throw new HttpException(
-          'Invalid security_deposit_amount',
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      return Number(v.toFixed(2));
+    if (raw !== undefined) return this.explicitDeposit(raw);
+    if (!cardDepositCurrency(currency)) return 0;
+    return Number((hourlyRate * RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER).toFixed(2));
+  }
+
+  private explicitDeposit(raw: number): number {
+    const value = Number(raw);
+    if (Number.isNaN(value) || value < 0) {
+      throw new HttpException('Invalid security_deposit_amount', HttpStatus.BAD_REQUEST);
     }
-    return Number(
-      (hourlyRate * RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER).toFixed(2)
-    );
+    return Number(value.toFixed(2));
   }
 
   private async assertListingMinMaxAfterPatch(
@@ -2219,10 +2236,11 @@ export class RentalsService {
     itemId: string,
     businessId: string,
     options: { allowDeleted?: boolean } = {}
-  ): Promise<void> {
+  ): Promise<string> {
     const r = await this.hasuraSystemService.executeQuery<{
       rental_items_by_pk: {
         business_id: string;
+        currency?: string | null;
         deleted_at: string | null;
       } | null;
     }>(Q.GET_RENTAL_ITEM_BUSINESS_CHECK, { id: itemId });
@@ -2231,11 +2249,9 @@ export class RentalsService {
       throw new HttpException('Rental item not found', HttpStatus.NOT_FOUND);
     }
     if (!options.allowDeleted && row.deleted_at) {
-      throw new HttpException(
-        'This rental item was removed',
-        HttpStatus.BAD_REQUEST
-      );
+      throw new HttpException('This rental item was removed', HttpStatus.BAD_REQUEST);
     }
+    return row.currency ?? '';
   }
 
   private async assertLocationForBusiness(

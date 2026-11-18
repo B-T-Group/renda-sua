@@ -100,6 +100,12 @@ describe('resolveListingSecurityDeposit', () => {
     expect(svc.resolveListingSecurityDeposit(undefined, 40)).toBe(320);
   });
 
+  it('stores zero instead of 8x when an XAF or XOF deposit is omitted', () => {
+    expect(svc.resolveListingSecurityDeposit(undefined, 40, 'XAF')).toBe(0);
+    expect(svc.resolveListingSecurityDeposit(undefined, 40, 'xof')).toBe(0);
+    expect(svc.resolveListingSecurityDeposit(undefined, 40, 'CAD')).toBe(320);
+  });
+
   it('keeps an explicit override, including zero', () => {
     expect(svc.resolveListingSecurityDeposit(100, 40)).toBe(100);
     expect(svc.resolveListingSecurityDeposit(0, 40)).toBe(0);
