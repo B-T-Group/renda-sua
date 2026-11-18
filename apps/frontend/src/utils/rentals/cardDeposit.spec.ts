@@ -1,4 +1,4 @@
-import { depositOnSave, showsCardDeposit } from './cardDeposit';
+import { depositInputError, depositOnSave, showsCardDeposit, showsListingDeposit } from './cardDeposit';
 
 describe('card deposit field', () => {
   it('hides the field for XAF and XOF and keeps it for card currencies', () => {
@@ -13,5 +13,9 @@ describe('card deposit field', () => {
     expect(depositOnSave('XOF', '  ', 40)).toBeUndefined();
     expect(depositOnSave('XAF', '0', 40)).toBe(0);
     expect(depositOnSave('CAD', '', 40)).toBe(320);
+    expect(depositInputError('CAD', '1.2.3')).toBe(true);
+    expect(depositInputError('CAD', '')).toBe(false);
+    expect(showsListingDeposit('')).toBe(false);
+    expect(showsListingDeposit('CAD')).toBe(true);
   });
 });

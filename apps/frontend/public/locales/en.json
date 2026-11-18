@@ -3672,6 +3672,7 @@
         "catalogBadge": "Removed from catalog"
       },
       "securityDeposit": "Security deposit",
+      "depositInvalid": "Enter a valid security deposit.",
       "securityDepositHelper": "Held on card rentals to cover extra hours. Default is 8× the hourly rate.",
       "securityDepositCreateHint": "Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours."
     },
@@ -7408,6 +7409,9 @@
       "primary": "I’ve returned it",
       "sheetTitle": "Did you hand the item to the business?",
       "sheetBody": "The business will check the item and confirm. Your {{amount}} deposit is released only after they confirm. This does not end the rental by itself.",
+      "sheetBodyNoDeposit": "The business will check the item and confirm. This does not end the rental by itself.",
+      "waitingBodyNoDeposit": "You reported the return on {{time}}. The business will check the item.",
+      "escalatedBodyNoDeposit": "You reported the return on {{time}}. The business has not confirmed within 24 hours. Support is following up.",
       "waitingTitle": "Waiting for the business to confirm",
       "waitingBody": "You reported the return on {{time}}. The business will check the item. Your {{amount}} deposit is released only after they confirm.",
       "waitingStepper": "Waiting for confirmation",

@@ -128,13 +128,7 @@ export function RenterReturnPanel({
       <Dialog open={open} onClose={() => !busy && setOpen(false)} fullWidth>
         <DialogTitle>{t('rentals.returnReport.sheetTitle', 'Did you hand the item to the business?')}</DialogTitle>
         <DialogContent>
-          <Typography>
-            {t(
-              'rentals.returnReport.sheetBody',
-              'The business will check the item and confirm. Your {{amount}} deposit is released only after they confirm. This does not end the rental by itself.',
-              { amount: depositLabel }
-            )}
-          </Typography>
+          <Typography>{sheetCopy(t, depositLabel)}</Typography>
           {retry ? (
             <Typography color="error" sx={{ mt: 1 }}>
               {t('rentals.returnReport.networkBody', 'Check your connection and try again.')}
@@ -182,24 +176,64 @@ function copy(
   when: string,
   amount: string
 ): string {
-  if (phase === 'waiting') {
-    return t(
-      'rentals.returnReport.waitingBody',
-      'You reported the return on {{time}}. The business will check the item. Your {{amount}} deposit is released only after they confirm.',
-      { time: when, amount }
-    );
-  }
-  if (phase === 'escalated') {
-    return t(
-      'rentals.returnReport.escalatedBody',
-      'You reported the return on {{time}}. The business has not confirmed within 24 hours. Support is following up. Your {{amount}} deposit is still held.',
-      { time: when, amount }
-    );
-  }
+  if (phase === 'waiting') return waitingCopy(t, when, amount);
+  if (phase === 'escalated') return escalatedCopy(t, when, amount);
   if (phase === 'overdue') {
     return t('rentals.returnReport.overdueBody', 'Bring the item to {{location}} as soon as you can.', { location });
   }
   return '';
+}
+
+function waitingCopy(
+  t: (key: string, def: string, opts?: Record<string, string>) => string,
+  when: string,
+  amount: string
+): string {
+  if (!amount) {
+    return t(
+      'rentals.returnReport.waitingBodyNoDeposit',
+      'You reported the return on {{time}}. The business will check the item.',
+      { time: when }
+    );
+  }
+  return t(
+    'rentals.returnReport.waitingBody',
+    'You reported the return on {{time}}. The business will check the item. Your {{amount}} deposit is released only after they confirm.',
+    { time: when, amount }
+  );
+}
+
+function escalatedCopy(
+  t: (key: string, def: string, opts?: Record<string, string>) => string,
+  when: string,
+  amount: string
+): string {
+  if (!amount) {
+    return t(
+      'rentals.returnReport.escalatedBodyNoDeposit',
+      'You reported the return on {{time}}. The business has not confirmed within 24 hours. Support is following up.',
+      { time: when }
+    );
+  }
+  return t(
+    'rentals.returnReport.escalatedBody',
+    'You reported the return on {{time}}. The business has not confirmed within 24 hours. Support is following up. Your {{amount}} deposit is still held.',
+    { time: when, amount }
+  );
+}
+
+function sheetCopy(t: (key: string, def: string, opts?: Record<string, string>) => string, amount: string): string {
+  if (!amount) {
+    return t(
+      'rentals.returnReport.sheetBodyNoDeposit',
+      'The business will check the item and confirm. This does not end the rental by itself.'
+    );
+  }
+  return t(
+    'rentals.returnReport.sheetBody',
+    'The business will check the item and confirm. Your {{amount}} deposit is released only after they confirm. This does not end the rental by itself.',
+    { amount }
+  );
 }
 
 function openMaps(destination: string) {

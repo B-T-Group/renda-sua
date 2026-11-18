@@ -2639,6 +2639,7 @@
           "saveDraft": "Enregistrer comme brouillon",
           "deposit": "Caution (optionnelle)",
           "depositHelp": "Retenue sur les locations par carte pour couvrir les heures supplémentaires. Par défaut : 8× le tarif horaire.",
+          "depositInvalid": "Saisissez une caution valide.",
           "weeklyHours": "Horaires hebdomadaires",
           "weeklyHoursDefaultHint": "Horaires par défaut — les clients peuvent réserver dans ces créneaux. Vous pourrez les personnaliser plus tard dans l’éditeur d’annonce."
         },
@@ -6435,6 +6436,9 @@
       "primary": "J’ai rendu l’article",
       "sheetTitle": "Avez-vous remis l’article à l’entreprise ?",
       "sheetBody": "L’entreprise vérifiera l’article et confirmera. Votre caution de {{amount}} ne sera libérée qu’après sa confirmation. Cela ne met pas fin à la location.",
+      "sheetBodyNoDeposit": "L’entreprise vérifiera l’article et confirmera. Cela ne met pas fin à la location.",
+      "waitingBodyNoDeposit": "Vous avez signalé le retour le {{time}}. L’entreprise vérifiera l’article.",
+      "escalatedBodyNoDeposit": "Vous avez signalé le retour le {{time}}. L’entreprise n’a pas confirmé dans les 24 heures. Le support assure le suivi.",
       "waitingTitle": "En attente de la confirmation de l’entreprise",
       "waitingBody": "Vous avez signalé le retour le {{time}}. L’entreprise vérifiera l’article. Votre caution de {{amount}} ne sera libérée qu’après sa confirmation.",
       "waitingStepper": "En attente de confirmation",

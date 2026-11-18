@@ -33,7 +33,7 @@ import {
 } from '../rentals/businessRentalsShared';
 import RentalListingModerationStatusChip from '../rentals/RentalListingModerationStatusChip';
 import LoadingPage from '../common/LoadingPage';
-import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { depositInputError, showsListingDeposit } from '../../utils/rentals/cardDeposit';
 
 const BusinessRentalsCatalogPage: React.FC = () => {
   const { t } = useTranslation();
@@ -105,6 +105,8 @@ const BusinessRentalsCatalogPage: React.FC = () => {
       console.error('units_available must be >= 1');
       return;
     }
+    const listingCurrency = items.find((it) => it.id === selItem)?.currency;
+    if (depositInputError(listingCurrency, deposit)) return;
     setSavingListing(true);
     try {
       let listingId: string | undefined;
@@ -116,8 +118,7 @@ const BusinessRentalsCatalogPage: React.FC = () => {
           dropoff_instructions: dropoff,
           base_price_per_hour: hourly,
           base_price_per_day: daily,
-          ...(showsCardDeposit(items.find((it) => it.id === selItem)?.currency) &&
-          deposit.trim() !== ''
+          ...(showsListingDeposit(listingCurrency) && deposit.trim() !== ''
             ? { security_deposit_amount: Number(deposit) }
             : {}),
           min_rental_hours: Number(minD) || 1,
@@ -408,16 +409,21 @@ const BusinessRentalsCatalogPage: React.FC = () => {
               'Leave empty to use 12 × hourly rate'
             )}
           />
-          {showsCardDeposit(items.find((it) => it.id === selItem)?.currency) ? (
+          {showsListingDeposit(items.find((it) => it.id === selItem)?.currency) ? (
             <TextField
               label={t('business.rentals.securityDeposit', 'Security deposit')}
               value={deposit}
               onChange={(e) => setDeposit(e.target.value)}
               type="number"
-              helperText={t(
-                'business.rentals.securityDepositCreateHint',
-                'Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours.'
-              )}
+              error={depositInputError(items.find((it) => it.id === selItem)?.currency, deposit)}
+              helperText={
+                depositInputError(items.find((it) => it.id === selItem)?.currency, deposit)
+                  ? t('business.rentals.depositInvalid', 'Enter a valid security deposit.')
+                  : t(
+                      'business.rentals.securityDepositCreateHint',
+                      'Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours.'
+                    )
+              }
             />
           ) : null}
           <TextField label={t('rentals.minHours', 'Min hours')} value={minD} onChange={(e) => setMinD(e.target.value)} />

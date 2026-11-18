@@ -34,7 +34,7 @@ import { RentalWeeklyHoursEditor } from '../../components/business/rentals/Renta
 import { InspectionOptInCard } from '../../components/business/rentals/InspectionOptInCard';
 import type { RentalWeeklyAvailabilityRow } from '../../types/rentals';
 import { defaultWeeklyAvailability } from '../../utils/rentals';
-import { depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { depositInputError, depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalItemEdit'>;
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
@@ -125,6 +125,13 @@ export default function BusinessRentalItemEditScreen() {
 
   const save = useCallback(async () => {
     if (!name.trim() || !categoryId) return;
+    const invalidDeposit = Object.values(listingEdits).some((edit) =>
+      depositInputError(item?.currency, edit.deposit)
+    );
+    if (invalidDeposit) {
+      setSnack(t('business.rentals.wizard.location.depositInvalid', 'Enter a valid security deposit.'));
+      return;
+    }
     setBusy(true);
     try {
       await rentalsApi.updateBusinessItem(itemId, {
@@ -353,8 +360,14 @@ export default function BusinessRentalItemEditScreen() {
                   }
                   keyboardType="decimal-pad"
                   mode="outlined"
+                  error={depositInputError(item.currency, edit.deposit)}
                   style={styles.field}
                 />
+                {depositInputError(item.currency, edit.deposit) ? (
+                  <Text variant="bodySmall" style={{ color: colors.error.main, marginTop: -6, marginBottom: 10 }}>
+                    {t('business.rentals.wizard.location.depositInvalid', 'Enter a valid security deposit.')}
+                  </Text>
+                ) : null}
                 <Text
                   variant="bodySmall"
                   style={{ color: colors.text.secondary, marginTop: -6, marginBottom: 10 }}

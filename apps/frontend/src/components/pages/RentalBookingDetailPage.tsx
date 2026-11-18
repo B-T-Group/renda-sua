@@ -45,6 +45,7 @@ import {
   formatRequestAmount,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
+import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import { bookingRequestedPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
 import { formatDoualaStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
 import {
@@ -517,7 +518,9 @@ const RentalBookingDetailPage: React.FC = () => {
                 ? ('error' as const)
                 : ('default' as const);
 
-  const depositAmount = Number(booking.security_deposit_amount) || 0;
+  const depositAmount = showsCardDeposit(booking.currency)
+    ? Number(booking.security_deposit_amount) || 0
+    : 0;
   const authorizedAmount = Number(booking.authorized_amount) || 0;
   const overtimeAmount = Number(booking.overtime_amount) || 0;
   const cancellableBeforeStart =
@@ -796,7 +799,7 @@ const RentalBookingDetailPage: React.FC = () => {
               phone={booking.return_place?.phone ?? null}
               endAt={booking.end_at}
               reportedAt={booking.renter_reported_returned_at}
-              depositLabel={formatDetailMoney(depositAmount)}
+              depositLabel={depositAmount > 0 ? formatDetailMoney(depositAmount) : ''}
               onChanged={() => void load()}
             />
           ) : null}
@@ -1439,6 +1442,7 @@ function BookingConfirmation({
 }
 
 function depositLabel(booking: RentalBookingDetail, language: string): string {
+  if (!showsCardDeposit(booking.currency)) return '';
   const amount = Number(booking.security_deposit_amount) || 0;
   if (amount <= 0) return '';
   return formatConfirmationMoney(amount, booking.currency, language);
