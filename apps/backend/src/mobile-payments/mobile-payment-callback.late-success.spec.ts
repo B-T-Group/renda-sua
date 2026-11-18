@@ -42,7 +42,7 @@ describe('MobilePaymentCallbackProcessor late success on superseded order tx', (
         .mockResolvedValue({ success: true, alreadyExists: false }),
     };
     const handler = {
-      supportsPaymentEntity: (e: string) => e === 'order',
+      supportsPaymentEntity: (e: string) => e === 'order' || e === 'rental_booking',
       onPaymentSuccess: jest.fn(),
       onPaymentFailure: jest.fn(),
       finalizeCashReconciliationAfterPayment: jest.fn(),
@@ -278,6 +278,24 @@ describe('MobilePaymentCallbackProcessor late success on superseded order tx', (
       tx.id,
       'cancelled',
       expect.objectContaining({ transaction_id: 'pv-1' })
+    );
+  });
+
+  it('recovers a rental collect the renter approved after declining', async () => {
+    const tx = {
+      ...supersededTx,
+      payment_entity: 'rental_booking',
+      error_code: 'SUPERSEDED_BY_DECLINE',
+      entity_id: 'RB-25496310',
+    };
+    const { processor, handler, accountsService, databaseService } = build(tx, 'applied');
+    await processor.processFreemopayCallback(callback('SUCCESS') as any);
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
+    expect(handler.onLateSuccessAfterSupersede).toHaveBeenCalledWith(tx);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      tx.id,
+      'cancelled',
+      expect.objectContaining({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' })
     );
   });
 });

@@ -6,6 +6,7 @@ import { ImageValidationModule } from '../image-validation/image-validation.modu
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
+import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { AdminRentalBookingsController } from './admin-rental-bookings.controller';
 import { RentalPaymentCallbackHandler } from './rental-payment-callback.handler';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
@@ -24,6 +25,10 @@ import { RentalRenterReturnService } from './renter-return/rental-renter-return.
 import { RentalsService } from './rentals.service';
 import { RentalSearchService } from './rental-search.service';
 import { RentalAvailabilityService } from './rental-availability.service';
+import { RentalConditionPhotosService } from './pickup-decline/rental-condition-photos.service';
+import { RentalDeclineCountsService } from './pickup-decline/rental-decline-counts.service';
+import { RentalMomoRefundService } from './pickup-decline/rental-momo-refund.service';
+import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 
 @Module({
   imports: [
@@ -33,6 +38,7 @@ import { RentalAvailabilityService } from './rental-availability.service';
     NotificationsModule,
     ImageValidationModule,
     StripePaymentsModule,
+    MtnMomoModule,
     RentalCardWindowModule,
     RentalListingAiReviewModule,
   ],
@@ -51,6 +57,10 @@ import { RentalAvailabilityService } from './rental-availability.service';
     RentalNotReceivedService,
     RentalRenterReturnService,
     RentalInspectionEvidenceService,
+    RentalMomoRefundService,
+    RentalConditionPhotosService,
+    RentalPickupDeclineService,
+    RentalDeclineCountsService,
   ],
   exports: [RentalsService, RentalSearchService, RentalPaymentCallbackHandler, RentalCardWindowModule],
 })

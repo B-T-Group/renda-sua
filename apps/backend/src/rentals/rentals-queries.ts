@@ -621,6 +621,11 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       renter_return_escalated_at
       units_booked
       inspection_policy_version
+      condition_declined_at
+      refund_status
+      refund_amount
+      refund_currency
+      refunded_at
       return_handed_back_at
       return_resolution
       rental_pricing_snapshot
@@ -690,6 +695,7 @@ export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
       overtime_amount
       payment_timing
       payment_status
+      condition_declined_at
       actual_start_at
       actual_end_at
       rental_pricing_snapshot

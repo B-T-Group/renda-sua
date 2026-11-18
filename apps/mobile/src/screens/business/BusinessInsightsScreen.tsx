@@ -7,6 +7,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { BusinessAvailabilityCard } from '../../components/business/BusinessAvailabilityCard';
 import { BusinessOrderTimingCard } from '../../components/business/BusinessOrderTimingCard';
 import { BusinessExcitementStats } from '../../components/business/BusinessExcitementStats';
+import { DeclineInsightsStat } from '../../components/rentals/DeclinePickupScreens';
 import { BusinessTopViewedProducts } from '../../components/business/BusinessTopViewedProducts';
 import { useBusinessInsightsScreen } from '../../hooks/business/useBusinessInsightsScreen';
 
@@ -19,6 +20,8 @@ export default function BusinessInsightsScreen() {
     refreshing,
     error,
     uniqueClientCount,
+    conditionDeclines90d,
+    pickupsReached90d,
     totalProductViews,
     productViewsLast7d,
     topViewedProducts,
@@ -86,6 +89,9 @@ export default function BusinessInsightsScreen() {
         <ActivityIndicator style={{ marginVertical: 24 }} color={colors.primary.main} />
       ) : null}
 
+      {conditionDeclines90d != null ? (
+        <DeclineInsightsStat declines={conditionDeclines90d} pickups={pickupsReached90d ?? 0} />
+      ) : null}
       <BusinessExcitementStats
         clientCount={uniqueClientCount}
         productViews={totalProductViews}

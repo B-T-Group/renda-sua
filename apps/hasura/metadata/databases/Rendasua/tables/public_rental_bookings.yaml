@@ -74,6 +74,11 @@ select_permissions:
         - reserved_cancel_after
         - claimed_damage_amount
         - overtime_amount_override
+        - condition_declined_at
+        - refund_status
+        - refund_amount
+        - refund_currency
+        - refunded_at
         - created_at
         - updated_at
       filter:
@@ -115,6 +120,11 @@ select_permissions:
         - reserved_cancel_after
         - claimed_damage_amount
         - overtime_amount_override
+        - condition_declined_at
+        - refund_status
+        - refund_amount
+        - refund_currency
+        - refunded_at
         - created_at
         - updated_at
       filter:

@@ -794,6 +794,13 @@ export class MobilePaymentCallbackProcessor {
   }
 
   /** Order attempt we cancelled to make room for a retry (or a late winner), #545. */
+  /** A rental collect cancelled because the renter declined, then approved anyway. */
+  private isSupersededRentalTx(tx: MobilePaymentTransaction): boolean {
+    if (tx.payment_entity !== 'rental_booking') return false;
+    if (tx.status !== 'cancelled' && tx.status !== 'failed') return false;
+    return String(tx.error_code || '') === 'SUPERSEDED_BY_DECLINE';
+  }
+
   private isSupersededOrderTx(tx: MobilePaymentTransaction): boolean {
     return (
       tx.payment_entity === 'order' &&
@@ -809,6 +816,7 @@ export class MobilePaymentCallbackProcessor {
    */
   private isRecoverableLateOrderSuccess(tx: MobilePaymentTransaction): boolean {
     if (this.isSupersededOrderTx(tx)) return true;
+    if (this.isSupersededRentalTx(tx)) return true;
     if (tx.payment_entity !== 'order' || tx.status !== 'failed') return false;
     const code = String(tx.error_code || '');
     return code === PROVIDER_TERMINAL_ON_RETRY || SUPERSEDED_ERROR_CODES.has(code);
@@ -1400,6 +1408,10 @@ export class MobilePaymentCallbackProcessor {
     transaction: MobilePaymentTransaction
   ): Promise<void> {
     const fresh = await this.databaseService.getTransactionById(transaction.id);
+    if (fresh && this.isRecoverableLateOrderSuccess(fresh)) {
+      await this.handleLateSuccessOnSupersededOrderTx(fresh, fresh.transaction_id || '');
+      return;
+    }
     if (fresh?.status === 'success') {
       await this.retrySuccessSideEffects(fresh);
       return;

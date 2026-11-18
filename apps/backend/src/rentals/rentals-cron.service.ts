@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
+import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
 import { RentalsService } from './rentals.service';
@@ -24,8 +25,19 @@ export class RentalsCronService {
     private readonly notificationsService: NotificationsService,
     private readonly inspections: RentalInspectionService,
     private readonly rentalsService: RentalsService,
-    private readonly renterReturns: RentalRenterReturnService
+    private readonly renterReturns: RentalRenterReturnService,
+    private readonly declines: RentalPickupDeclineService
   ) {}
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async reconcileConditionRefunds(): Promise<void> {
+    try {
+      const updated = await this.declines.reconcilePending();
+      if (updated > 0) this.logger.log(`Updated ${updated} condition-decline refund(s)`);
+    } catch (error: any) {
+      this.logger.error(`condition refund poll: ${error?.message ?? error}`);
+    }
+  }
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleRentalPeriodEnd(): Promise<void> {

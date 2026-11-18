@@ -43,6 +43,8 @@ export function useBusinessInsightsScreen() {
     refreshing,
     error,
     uniqueClientCount: error ? null : (data?.uniqueClientCount ?? null),
+    conditionDeclines90d: error ? null : (data?.conditionDeclines90d ?? null),
+    pickupsReached90d: error ? null : (data?.pickupsReached90d ?? null),
     totalProductViews: error ? null : (data?.totalProductViews ?? null),
     productViewsLast7d: error ? null : (data?.productViewsLast7d ?? null),
     topViewedProducts: error ? [] : (data?.topViewedProducts ?? []),

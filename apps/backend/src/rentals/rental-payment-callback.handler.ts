@@ -23,6 +23,14 @@ export class RentalPaymentCallbackHandler implements PaymentCallbackHandler {
     await this.rentalsService.processRentalBookingPayment(transaction);
   }
 
+  /** The renter approved a prompt after the decline. Credit is already in the wallet. */
+  async onLateSuccessAfterSupersede(
+    transaction: MobilePaymentTransaction
+  ): Promise<'applied' | 'duplicate'> {
+    const queued = await this.rentalsService.recoverDeclinedLateCollect(transaction);
+    return queued ? 'applied' : 'duplicate';
+  }
+
   /** Stripe manual-capture authorization (contract + deposit held on card). */
   async onPaymentAuthorized(
     transaction: MobilePaymentTransaction

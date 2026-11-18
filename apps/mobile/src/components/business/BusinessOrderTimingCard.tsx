@@ -13,7 +13,8 @@ import { formatPreferredDate, formatTimeSlotValue } from '../../utils/deliveryWi
 
 type Scheduled = Extract<BusinessOrderTiming, { kind: 'scheduled' }>;
 
-export function BusinessOrderTimingCard({ order, locale }: { order: Order; locale: string }) {
+export function BusinessOrderTimingCard({ order, locale = 'en' }: { order?: Order | null; locale?: string }) {
+  if (!order) return null;
   const timing = resolveBusinessOrderTiming(order);
   if (timing.kind === 'none') return null;
   if (timing.kind === 'asap') return <AsapTiming pickup={timing.pickup} />;

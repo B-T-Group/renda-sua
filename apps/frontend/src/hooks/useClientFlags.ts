@@ -26,7 +26,8 @@ export type ClientFlagKey =
   | 'rentals_card_window_guard_enabled'
   | 'rentals_pickup_photo_rules_enabled'
   | 'rentals_inspection_confirmations_enabled'
-  | 'rentals_inspection_optin_enabled';
+  | 'rentals_inspection_optin_enabled'
+  | 'rentals_pickup_decline_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -64,6 +65,8 @@ const DEFAULT_FLAGS: ClientFlags = {
   rentals_inspection_confirmations_enabled: false,
   /** Per-item inspection opt-in. Off until a config row turns it on. No NODE_ENV override. */
   rentals_inspection_optin_enabled: false,
+  /** Renter decline at pickup. Off until a config row turns it on. No NODE_ENV override. */
+  rentals_pickup_decline_enabled: false,
 };
 
 /**

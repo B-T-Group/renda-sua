@@ -12,7 +12,7 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
@@ -24,6 +24,9 @@ import { ConfirmReportedReturnDto } from './dto/confirm-reported-return.dto';
 import { RentalNotReceivedService } from './inspection/rental-not-received.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { RentalsService } from './rentals.service';
+import { MarkDeclineRefundDto } from './pickup-decline/pickup-decline.dto';
+import { RentalDeclineCountsService } from './pickup-decline/rental-decline-counts.service';
+import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 
 interface RequestWithUser extends Request {
   user: { id: string };
@@ -49,7 +52,9 @@ export class AdminRentalBookingsController {
     private readonly rentalsService: RentalsService,
     private readonly inspections: RentalInspectionService,
     private readonly notReceived: RentalNotReceivedService,
-    private readonly renterReturns: RentalRenterReturnService
+    private readonly renterReturns: RentalRenterReturnService,
+    private readonly declineCounts: RentalDeclineCountsService,
+    private readonly pickupDecline: RentalPickupDeclineService
   ) {}
 
   @Post('bookings/:id/start-overwrite-code')
@@ -157,5 +162,35 @@ export class AdminRentalBookingsController {
       body.reason,
       body.damageAmount
     );
+  }
+
+  @Get('condition-declines')
+  @ApiOperation({ summary: 'Parties with condition declines in the last 90 days' })
+  @ApiResponse({ status: 200, description: 'Counts, pickup reach, and the 5-decline flag' })
+  @ApiResponse({ status: 404, description: 'Pickup decline is off' })
+  listConditionDeclines() {
+    return this.declineCounts.list();
+  }
+
+  @Get('bookings/:id/condition-decline')
+  @ApiOperation({ summary: 'Decline reason and private photos for support' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Signed photo URLs' })
+  @ApiResponse({ status: 404, description: 'No decline, or the flag is off' })
+  conditionDecline(@Param('id', ParseUUIDPipe) bookingId: string) {
+    return this.pickupDecline.adminDetail(bookingId);
+  }
+
+  @Post('bookings/:id/refund-status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark a pending Mobile Money refund refunded or failed' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: MarkDeclineRefundDto })
+  @ApiResponse({ status: 200, description: 'Refund status updated' })
+  @ApiResponse({ status: 400, description: 'Missing provider reference and note' })
+  @ApiResponse({ status: 403, description: 'FINANCIAL_REFUNDS is required' })
+  @ApiResponse({ status: 409, description: 'Refund is not pending' })
+  markDeclineRefund(@Param('id', ParseUUIDPipe) bookingId: string, @Body() body: MarkDeclineRefundDto) {
+    return this.pickupDecline.markRefund(bookingId, body);
   }
 }

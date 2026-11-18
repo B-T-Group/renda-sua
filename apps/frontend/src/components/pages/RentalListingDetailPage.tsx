@@ -28,6 +28,8 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
+import { ListingConditionPhotos } from '../rentals/ListingConditionPhotos';
+import { confirmationTimeZone } from '../../utils/rentals/confirmationFormat';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -813,6 +815,12 @@ const RentalListingDetailPage: React.FC = () => {
                 >
                   {row.rental_item.description || '—'}
                 </Typography>
+                {listingId ? (
+                  <ListingConditionPhotos
+                    listingId={listingId}
+                    timeZone={confirmationTimeZone(row.business_location.address?.country, row.rental_item.currency)}
+                  />
+                ) : null}
                 {tags.length > 0 && (
                   <Box sx={{ mt: 2.5 }}>
                     <Typography variant="caption" color="text.secondary" display="block" gutterBottom>

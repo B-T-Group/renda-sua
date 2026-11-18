@@ -38,6 +38,9 @@ export interface DashboardAggregatesDto {
   totalProductViews: number;
   /** Product view events with last_viewed_at in the last 7 days. */
   productViewsLast7d: number;
+  /** Null while pickup decline is off, so the insights card stays hidden. */
+  conditionDeclines90d?: number | null;
+  pickupsReached90d?: number | null;
   topViewedProducts: TopViewedProductDto[];
   /** Approved sell items (moderation approved). */
   approvedItemCount: number;
@@ -172,7 +175,63 @@ export class DashboardService {
       result.businessesVerified = adminAggregates.businessesVerified;
       result.businessesNotVerified = adminAggregates.businessesNotVerified;
     }
+    const declines = await this.conditionDeclineStats(businessId);
+    result.conditionDeclines90d = declines.conditionDeclines90d;
+    result.pickupsReached90d = declines.pickupsReached90d;
     return result;
+  }
+
+  private async conditionDeclineStats(businessId: string): Promise<{
+    conditionDeclines90d: number | null;
+    pickupsReached90d: number | null;
+  }> {
+    const hidden = { conditionDeclines90d: null, pickupsReached90d: null };
+    try {
+      if (!(await this.pickupDeclineOn())) return hidden;
+      return await this.readDeclineStats(businessId);
+    } catch (error: any) {
+      void error;
+      return hidden;
+    }
+  }
+
+  private async pickupDeclineOn(): Promise<boolean> {
+    const flag = await this.hasuraSystemService.executeQuery<{
+      application_configurations: Array<{ boolean_value?: boolean | null }>;
+    }>(
+      `query PickupDeclineFlag {
+        application_configurations(
+          where: {
+            config_key: { _eq: "rentals_pickup_decline_enabled" }
+            status: { _eq: "active" }
+          }
+        ) { boolean_value }
+      }`,
+      {}
+    );
+    return (flag.application_configurations ?? []).some((row) => row.boolean_value === true);
+  }
+
+  private async readDeclineStats(businessId: string) {
+    const result = await this.hasuraSystemService.executeQuery<{
+      rental_condition_decline_counts_90d: Array<{ decline_count: number }>;
+      rental_business_pickup_reach_90d: Array<{ pickups_reached: number }>;
+    }>(
+      `query BusinessDeclineStat($id: uuid!) {
+        rental_condition_decline_counts_90d(
+          where: { role: { _eq: "business" }, party_id: { _eq: $id } }
+          limit: 1
+        ) { decline_count }
+        rental_business_pickup_reach_90d(where: { business_id: { _eq: $id } }, limit: 1) {
+          pickups_reached
+        }
+      }`,
+      { id: businessId }
+    );
+    return {
+      conditionDeclines90d: result.rental_condition_decline_counts_90d?.[0]?.decline_count ?? 0,
+      pickupsReached90d: result.rental_business_pickup_reach_90d?.[0]?.pickups_reached ?? 0,
+    };
   }
 
   private async canViewPlatformStats(userId: string): Promise<boolean> {

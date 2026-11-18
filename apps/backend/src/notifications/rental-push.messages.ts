@@ -477,3 +477,29 @@ export function buildRentalAvailablePush(params: {
       : `${params.itemName} is free for your dates (${dates}).`,
   };
 }
+
+export function buildConditionDeclinedNotice(params: {
+  renterName: string;
+  rentalItemName: string;
+  bookingNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  return {
+    title: fr ? 'Le locataire a refusé l’état des lieux' : 'Renter declined the condition',
+    body: fr
+      ? `${params.renterName} a refusé l’état des lieux de ${params.rentalItemName} (${params.bookingNumber}). La réservation est annulée et l’article est libre. Aucun frais.`
+      : `${params.renterName} declined the condition of ${params.rentalItemName} (${params.bookingNumber}). The booking is cancelled and the unit is free. No charge.`,
+  };
+}
+
+export function buildConditionRefundSupportNotice(params: {
+  rentalItemName: string;
+  bookingNumber: string;
+  outcome: string;
+}): { title: string; body: string } {
+  return {
+    title: 'Mobile Money refund needs review',
+    body: `A Mobile Money refund for ${params.rentalItemName} (${params.bookingNumber}) is ${params.outcome}. Review it in rental declines.`,
+  };
+}

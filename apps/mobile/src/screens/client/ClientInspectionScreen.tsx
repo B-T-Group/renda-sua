@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MobileMoneyConfirmIllustration } from '../../components/illustrations/MobileMoneyConfirmIllustration';
 import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
+import { DeclineConditionSheet } from '../../components/rentals/DeclinePickupScreens';
 import { RentalStartedConfirmation } from '../../components/rentals/inspection/RentalStartedConfirmation';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -43,6 +44,7 @@ export default function ClientInspectionScreen() {
   const model = useClientInspection(bookingId, stage);
   const [panel, setPanel] = useState<'review' | 'correction' | 'dispute'>('review');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [declineOpen, setDeclineOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [momoPhase, setMomoPhase] = useState<'waiting' | 'failed' | 'stalled' | null>(null);
   const [notice, setNotice] = useState<'conflict' | 'update_required' | 'unavailable' | null>(null);
@@ -382,6 +384,11 @@ export default function ClientInspectionScreen() {
                   ? t('rentalInspection.reportProblem', 'Report a problem')
                   : t('rentalInspection.requestCorrection', 'Request a correction')}
             </Button>
+            {pickupStart && flags.rentals_pickup_decline_enabled ? (
+              <Button textColor={colors.error.main} onPress={() => setDeclineOpen(true)}>
+                {t('pickupDecline.cta', 'Not as described? Decline')}
+              </Button>
+            ) : null}
           </>
         ) : (
           <Button
@@ -397,6 +404,12 @@ export default function ClientInspectionScreen() {
           </Button>
         )}
       </View>
+      {declineOpen && model.booking ? (
+        <DeclineConditionSheet
+          money={declinePreview(model.booking)}
+          onClose={() => setDeclineOpen(false)}
+        />
+      ) : null}
       <Modal visible={confirmOpen} transparent animationType="none" onRequestClose={() => setConfirmOpen(false)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => !starting && setConfirmOpen(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: '#FFFFFF', width: '100%', paddingBottom: insets.bottom + 16 }]} onPress={() => undefined}>
@@ -501,6 +514,24 @@ function conditionLine(condition: string, t: (key: string, fallback: string) => 
 function wearLine(wear: string, t: (key: string, fallback: string) => string): string {
   if (!wear || wear === 'none') return t('rentalInspection.noWear', 'No existing wear');
   return wear;
+}
+
+function declinePreview(booking: { currency: string; payment_status?: string | null; authorized_amount?: number | string | null; total_amount: number; booking_number?: string | null }) {
+  const code = booking.currency.toUpperCase();
+  const momo = code === 'XAF' || code === 'XOF';
+  const authorized = Number(booking.authorized_amount) || 0;
+  const rail = momo
+    ? booking.payment_status === 'paid' ? 'momo_paid' as const : 'momo_unpaid' as const
+    : authorized > 0 ? 'card' as const : 'wallet' as const;
+  return {
+    rail,
+    amount: momo ? Number(booking.total_amount) || 0 : authorized,
+    currency: booking.currency,
+    timeZone: momo ? 'Africa/Douala' : 'America/Toronto',
+    place: '',
+    item: '',
+    bookingNumber: booking.booking_number ?? '',
+  };
 }
 
 function noticeText(notice: string, t: (key: string, fallback: string) => string): string {
