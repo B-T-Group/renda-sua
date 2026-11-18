@@ -31,7 +31,7 @@ import { formatListingDay, formatListingStamp, slotTileLabel } from '../../utils
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { formatListingDue } from '../../utils/rentalRequestFormat';
-import { confirmationTimeZone, formatConfirmationDue } from '../../utils/rentals/confirmationFormat';
+import { confirmationTimeZone, formatConfirmationDue, formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
 import {
   CORRECTION_REASON_CODES,
   REQUIRED_PHOTO_ROLES,
@@ -626,7 +626,7 @@ export function RentalInspectionPanel({
           {stage === 'pickup' && !damaged && (booking.accept_start_preview?.amount_due_at_pickup ?? 0) > 0 ? (
             <Typography textAlign="center">
               {t('rentalInspection.payNow', "You'll pay {{amount}} now", {
-                amount: fcfaAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF'),
+                amount: listedAmount(booking.accept_start_preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF', i18n.language),
               })}
             </Typography>
           ) : null}
@@ -651,7 +651,16 @@ export function RentalInspectionPanel({
                 ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
                 : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
           </Button>
-          <Button fullWidth variant="outlined" color="error" sx={{ minHeight: 48 }} onClick={() => setPanel(damaged ? 'dispute' : 'correction')}>
+          <Button
+            fullWidth
+            variant="outlined"
+            color={stage === 'pickup' && !damaged ? 'inherit' : 'error'}
+            sx={{
+              minHeight: 48,
+              ...(stage === 'pickup' && !damaged ? { color: 'text.primary', borderColor: 'divider' } : {}),
+            }}
+            onClick={() => setPanel(damaged ? 'dispute' : 'correction')}
+          >
             {damaged
               ? t('rentalInspection.disputeClaim', 'Dispute this claim')
               : stage === 'pickup'
@@ -671,13 +680,8 @@ export function RentalInspectionPanel({
   );
 }
 
-function fcfaAmount(amount: number, currency: string): string {
-  const code = currency.toUpperCase();
-  const rounded = Math.round(amount);
-  const sign = rounded < 0 ? '-' : '';
-  const digits = String(Math.abs(rounded)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  if (code === 'XAF' || code === 'XOF' || code === 'FCFA') return `${sign}${digits} FCFA`;
-  return `${sign}${digits} ${currency}`;
+function listedAmount(amount: number, currency: string, language: string): string {
+  return formatConfirmationMoney(amount, currency, language);
 }
 
 function AcceptStartDialog({
@@ -696,7 +700,7 @@ function AcceptStartDialog({
   const { t, i18n } = useTranslation();
   const due = booking.end_at ? formatListingDue(booking.end_at, i18n.language) : '';
   const preview = booking.accept_start_preview;
-  const amount = fcfaAmount(preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF');
+  const amount = listedAmount(preview?.amount_due_at_pickup ?? 0, booking.currency ?? 'XAF', i18n.language);
   const showPay = (preview?.amount_due_at_pickup ?? 0) > 0;
   return (
     <Dialog
@@ -763,7 +767,7 @@ function BusinessAcceptHero({
   if (!started && !waiting) return null;
   const name = booking.client?.user?.first_name || t('rentalInspection.renterFallback', 'The renter');
   const due = booking.end_at ? formatListingDue(booking.end_at, i18n.language) : '';
-  const paid = fcfaAmount(Number(booking.total_amount) || 0, booking.currency ?? 'XAF');
+  const paid = listedAmount(Number(booking.total_amount) || 0, booking.currency ?? 'XAF', i18n.language);
   return (
     <Stack spacing={1} sx={{ textAlign: 'center' }}>
       <Typography variant="h5">
@@ -969,7 +973,7 @@ function PhotoRow({
   const slides = photoSlides(unit, roles);
   return (
     <>
-      <PhotoTiles roles={roles} unit={unit} readOnly={readOnly} slides={slides} onFile={onFile} onOpen={setOpen} />
+      <PhotoTiles roles={roles} unit={unit} readOnly={readOnly} slides={slides} timeZone={timeZone} onFile={onFile} onOpen={setOpen} />
       <PhotoLightbox slides={slides} index={open} submittedAt={submittedAt} timeZone={timeZone} onClose={() => setOpen(null)} onMove={setOpen} />
     </>
   );
@@ -1034,6 +1038,7 @@ function PhotoTiles({
   unit,
   readOnly,
   slides,
+  timeZone,
   onFile,
   onOpen,
 }: {
@@ -1041,6 +1046,7 @@ function PhotoTiles({
   unit: InspectionUnit;
   readOnly: boolean;
   slides: PhotoSlide[];
+  timeZone: string;
   onFile: (role: PhotoRole, file: File) => void;
   onOpen: (index: number) => void;
 }) {
@@ -1052,6 +1058,7 @@ function PhotoTiles({
           role={role}
           photo={unit.photos.find((row) => row.role === role)}
           readOnly={readOnly}
+          timeZone={timeZone}
           onFile={onFile}
           onOpen={() => onOpen(slideIndex(slides, role))}
         />
@@ -1064,20 +1071,27 @@ function PhotoTile({
   role,
   photo,
   readOnly,
+  timeZone,
   onFile,
   onOpen,
 }: {
   role: PhotoRole;
   photo: InspectionUnit['photos'][number] | undefined;
   readOnly: boolean;
+  timeZone: string;
   onFile: (role: PhotoRole, file: File) => void;
   onOpen: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const label = t(ROLE_KEY[role][0], ROLE_KEY[role][1]);
   const thumb = photoThumb(photo?.url, label);
+  const origin = photo?.reused
+    ? t('rentalInspection.reusedBadge', 'Reused')
+    : t('rentalInspection.newBadge', 'New');
+  const day = photo?.capturedAt ? formatListingDay(photo.capturedAt, timeZone, i18n.language) : '';
+  const dated = Boolean(photo?.captureSource || photo?.reused);
   return (
-    <Stack spacing={0.5} alignItems="center" sx={{ width: 96 }}>
+    <Stack spacing={0.5} alignItems="center" sx={{ width: 148 }}>
       {readOnly && photo?.url ? (
         <Button variant="outlined" sx={{ minHeight: 96, minWidth: 96, p: 0.5 }} onClick={onOpen} aria-label={label}>
           {thumb}
@@ -1086,10 +1100,18 @@ function PhotoTile({
         <UploadTile label={label} role={role} readOnly={readOnly} onFile={onFile} thumb={thumb} />
       )}
       {photo?.url ? <Typography variant="caption" color="text.secondary" align="center">{label}</Typography> : null}
-      {photo?.captureSource || photo?.reused ? (
-        <Typography variant="caption" color="text.secondary" align="center">
-          {photo.reused ? t('rentalInspection.reusedBadge', 'Reused') : t('rentalInspection.newBadge', 'New')}
-          {photo.capturedAt ? ` · ${photo.capturedAt.slice(0, 10)}` : ''}
+      {dated ? <PhotoDate origin={origin} day={day} /> : null}
+    </Stack>
+  );
+}
+
+function PhotoDate({ origin, day }: { origin: string; day: string }) {
+  return (
+    <Stack direction="row" justifyContent="center" sx={{ maxWidth: 148 }}>
+      <Typography variant="caption" color="text.secondary" noWrap sx={{ minWidth: 0 }}>{origin}</Typography>
+      {day ? (
+        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+          {` · ${day}`}
         </Typography>
       ) : null}
     </Stack>

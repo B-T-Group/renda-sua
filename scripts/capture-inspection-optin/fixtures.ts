@@ -20,19 +20,20 @@ function hours() {
 
 function item(scene: string) {
   const baseline = scene === 'baseline';
+  const momo = scene === 'explainer-momo';
   return {
     id: 'item-1',
     name: 'JBL PartyBox 310',
     description: 'Portable party speaker with lights and a microphone.',
     rental_category_id: 'cat-audio',
-    currency: 'CAD',
+    currency: momo ? 'XAF' : 'CAD',
     tags: ['speaker', 'party'],
     is_active: true,
     operation_mode: 'business_operated',
     rental_item_images: [{ id: 'img-1', image_url: heroUrl(), display_order: 0 }],
     inspection: {
       enabled: false,
-      rail: scene === 'explainer-momo' ? 'momo' : 'card',
+      rail: momo ? 'momo' as const : 'card' as const,
       baselineComplete: false,
       photos: baseline ? [{ id: 'base-1', slotKey: 'overview', status: 'ready' }] : [],
     },
@@ -40,9 +41,9 @@ function item(scene: string) {
       {
         id: 'list-1',
         business_location_id: 'loc-1',
-        base_price_per_hour: 15,
-        base_price_per_day: 45,
-        security_deposit_amount: 20,
+        base_price_per_hour: momo ? null : 15,
+        base_price_per_day: momo ? 45000 : 45,
+        security_deposit_amount: momo ? 0 : 20,
         min_rental_hours: 1,
         max_rental_hours: null,
         units_available: 2,
@@ -51,7 +52,7 @@ function item(scene: string) {
         pickup_instructions: 'Ask at the counter.',
         dropoff_instructions: 'Return to the counter.',
         weekly_availability: hours(),
-        business_location: { id: 'loc-1', name: 'Atelier Nord, Toronto' },
+        business_location: { id: 'loc-1', name: momo ? 'Atelier Bonanjo, Douala' : 'Atelier Nord, Toronto' },
       },
     ],
   };
@@ -78,7 +79,8 @@ export function booking(scene = sceneName()) {
   };
 }
 
-function photos() {
+function photos(scene: string) {
+  if (scene === 'damage') return [];
   const hero = heroUrl();
   return [
     { id: 'p1', role: 'overview', url: hero, capturedAt: '2026-11-14T15:14:00Z', reused: false, captureSource: 'camera' },
@@ -108,7 +110,7 @@ function inspectionView(scene: string, stage: 'pickup' | 'return') {
         condition: 'good',
         accessories: [{ name: 'Microphone', count: 1 }],
         wear: 'none',
-        photos: photos(),
+        photos: photos(scene),
       },
     ],
   };
@@ -157,11 +159,15 @@ export function bodyFor(url: string, _method = 'GET', scene = sceneName()) {
   if (path.includes('supported-countries')) {
     return {
       success: true,
-      countries: [{ code: 'CA', name: 'Canada', currencyCode: 'CAD', serviceStatus: 'active', deliveryEnabled: true, supportedPaymentMethods: ['card'] }],
+      countries: [
+        { code: 'CA', name: 'Canada', currencyCode: 'CAD', serviceStatus: 'active', deliveryEnabled: true, supportedPaymentMethods: ['card'] },
+        { code: 'CM', name: 'Cameroon', currencyCode: 'XAF', serviceStatus: 'active', deliveryEnabled: true, supportedPaymentMethods: ['mobile_money'] },
+      ],
     };
   }
   if (path.includes('/business-items/locations')) {
-    return { success: true, data: { primary_address_country: 'CA', locations: [] } };
+    const momo = scene === 'explainer-momo';
+    return { success: true, data: { primary_address_country: momo ? 'CM' : 'CA', locations: [] } };
   }
   if (path.includes('/rentals/categories')) {
     return { success: true, data: { categories: [{ id: 'cat-audio', name: 'Audio', slug: 'audio' }] } };

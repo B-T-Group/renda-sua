@@ -1,4 +1,5 @@
 import React from 'react';
+import type { TFunction } from 'i18next';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +18,7 @@ export interface SlotPhoto {
   fromLabel?: string;
   tileLabel?: string;
   origin?: string;
+  reused?: boolean;
   failed?: boolean;
   pending?: boolean;
 }
@@ -61,57 +63,113 @@ export function InspectionPhotoSlots({
         ) : null}
       </View>
       <View style={[styles.grid, { gap: spacing.sm }]}>
-        {slots.map((slot, index) => {
-          const [key, fallback] = ROLE_KEY[slot.role] ?? ROLE_KEY.wear;
-          const extra = slot.slotKey?.startsWith('extra:') ? slot.slotKey.slice(6) : '';
-          const label = slot.tileLabel
-            ?? (extra ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: extra }) : t(key, fallback));
-          const ghost = !slot.uri && !!slot.ghostUri;
-          return (
-            <Pressable
-              key={slot.key}
-              accessibilityRole="button"
-              accessibilityLabel={label}
-              onPress={() => (slot.failed ? onRetry(index) : onAdd(slot.role, index))}
-              style={[
-                styles.slot,
-                {
-                  borderRadius: borderRadius.lg,
-                  borderColor: slot.uri ? colors.cta.main : colors.cta.light,
-                  backgroundColor: slot.uri ? colors.surfaceElevated : colors.cta.soft,
-                },
-              ]}
-            >
-              {slot.uri ? <Image source={{ uri: slot.uri }} style={styles.image} /> : null}
-              {ghost ? <Image source={{ uri: slot.ghostUri }} style={styles.ghost} /> : null}
-              {slot.uri ? (
-                <View style={[styles.badge, { backgroundColor: colors.cta.main }]}>
-                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>✓</Text>
-                </View>
-              ) : null}
-              <Text numberOfLines={1} style={[typography.caption, styles.tileName, { color: slot.uri ? '#fff' : colors.text.primary }]}>
-                {slot.failed ? t('rentalInspection.photoUploadFailed', 'Photo upload failed. Retry.') : `${label}${slot.origin ? ` · ${slot.origin}` : ''}`}
-              </Text>
-              {onGallery && galleryLabel ? (
-                <Pressable accessibilityRole="button" onPress={() => onGallery(slot.role, index)}>
-                  <Text style={[typography.caption, { color: colors.primary.main }]}>{galleryLabel}</Text>
-                </Pressable>
-              ) : null}
-              {slot.stamp && slot.uri ? (
-                <Text numberOfLines={1} style={[typography.caption, styles.tileStamp, { color: '#fff' }]}>{slot.stamp}</Text>
-              ) : null}
-              {ghost && slot.fromLabel ? (
-                <Text numberOfLines={1} style={[typography.caption, styles.tileStamp, { color: colors.text.secondary }]}>{slot.fromLabel}</Text>
-              ) : null}
-              {slot.pending ? (
-                <Text style={[typography.caption, { color: colors.warning.dark }]}>
-                  {t('rentalInspection.photosNotSynced', 'Photos not synced. Connect to submit.')}
-                </Text>
-              ) : null}
-            </Pressable>
-          );
-        })}
+        {slots.map((slot, index) => (
+          <SlotTile
+            key={slot.key}
+            slot={slot}
+            index={index}
+            galleryLabel={galleryLabel}
+            onAdd={onAdd}
+            onRetry={onRetry}
+            onGallery={onGallery}
+          />
+        ))}
       </View>
+    </View>
+  );
+}
+
+function SlotTile({
+  slot,
+  index,
+  galleryLabel,
+  onAdd,
+  onRetry,
+  onGallery,
+}: {
+  slot: SlotPhoto;
+  index: number;
+  galleryLabel?: string;
+  onAdd: (role: PhotoRole, index: number) => void;
+  onRetry: (index: number) => void;
+  onGallery?: (role: PhotoRole, index: number) => void;
+}) {
+  const { t } = useTranslation();
+  const { colors, borderRadius, typography } = useTheme();
+  const label = slotLabel(slot, t);
+  const ghost = !slot.uri && !!slot.ghostUri;
+  const failed = t('rentalInspection.photoUploadFailed', 'Photo upload failed. Retry.');
+  return (
+    <View style={styles.tile}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={() => (slot.failed ? onRetry(index) : onAdd(slot.role, index))}
+        style={[styles.frame, frameColors(slot, colors, borderRadius.lg)]}
+      >
+        {slot.uri ? <Image source={{ uri: slot.uri }} style={styles.image} /> : null}
+        {ghost ? <Image source={{ uri: slot.ghostUri }} style={styles.ghost} /> : null}
+        <CornerMark slot={slot} />
+      </Pressable>
+      <Text numberOfLines={1} style={[typography.caption, styles.role, { color: colors.text.primary }]}>
+        {slot.failed ? failed : label}
+      </Text>
+      {slot.uri && (slot.origin || slot.stamp) ? <OriginDate origin={slot.origin} stamp={slot.stamp} /> : null}
+      {ghost && slot.fromLabel ? <Text style={[typography.caption, { color: colors.text.secondary }]}>{slot.fromLabel}</Text> : null}
+      {onGallery && galleryLabel ? (
+        <Pressable accessibilityRole="button" onPress={() => onGallery(slot.role, index)}>
+          <Text style={[typography.caption, { color: colors.primary.main }]}>{galleryLabel}</Text>
+        </Pressable>
+      ) : null}
+      {slot.pending ? <Text style={[typography.caption, { color: colors.warning.dark }]}>{t('rentalInspection.photosNotSynced', 'Photos not synced. Connect to submit.')}</Text> : null}
+    </View>
+  );
+}
+
+function slotLabel(slot: SlotPhoto, t: TFunction): string {
+  if (slot.tileLabel) return slot.tileLabel;
+  const extra = slot.slotKey?.startsWith('extra:') ? slot.slotKey.slice(6) : '';
+  if (extra) return t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: extra });
+  const [key, fallback] = ROLE_KEY[slot.role] ?? ROLE_KEY.wear;
+  return t(key, fallback);
+}
+
+function frameColors(slot: SlotPhoto, colors: { cta: { main: string; light: string; soft: string }; surfaceElevated: string }, radius: number) {
+  return {
+    borderRadius: radius,
+    borderColor: slot.uri ? colors.cta.main : colors.cta.light,
+    backgroundColor: slot.uri ? colors.surfaceElevated : colors.cta.soft,
+  };
+}
+
+function CornerMark({ slot }: { slot: SlotPhoto }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  if (slot.reused) {
+    return (
+      <View style={[styles.reused, { backgroundColor: colors.text.primary }]}>
+        <Text style={styles.reusedText}>{t('rentalInspection.reusedBadge', 'Reused')}</Text>
+      </View>
+    );
+  }
+  if (!slot.uri) return null;
+  return (
+    <View style={[styles.badge, { backgroundColor: colors.cta.main }]}>
+      <Text style={styles.badgeText}>✓</Text>
+    </View>
+  );
+}
+
+function OriginDate({ origin, stamp }: { origin?: string; stamp?: string }) {
+  const { colors, typography } = useTheme();
+  return (
+    <View style={styles.metaRow}>
+      {origin ? (
+        <Text numberOfLines={1} style={[typography.caption, styles.metaWord, { color: colors.text.secondary }]}>{origin}</Text>
+      ) : null}
+      {stamp ? (
+        <Text style={[typography.caption, styles.metaDate, { color: colors.text.secondary }]}>{`${origin ? ' · ' : ''}${stamp}`}</Text>
+      ) : null}
     </View>
   );
 }
@@ -120,20 +178,18 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pill: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  slot: {
-    width: '31%',
-    minHeight: 112,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 8,
-    overflow: 'hidden',
-  },
-  image: { ...StyleSheet.absoluteFillObject, opacity: 0.85 },
-  badge: { position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  tileName: { position: 'absolute', left: 4, right: 4, bottom: 16, textAlign: 'center' },
-  tileStamp: { position: 'absolute', left: 2, right: 2, bottom: 2, textAlign: 'center' },
+  tile: { width: '31%', alignItems: 'center' },
+  frame: { width: '100%', height: 96, borderWidth: 1, overflow: 'hidden' },
+  image: { ...StyleSheet.absoluteFillObject },
   ghost: { ...StyleSheet.absoluteFillObject, opacity: 0.35 },
+  badge: { position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  reused: { position: 'absolute', top: 4, right: 4, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
+  reusedText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  role: { textAlign: 'center', marginTop: 4 },
+  metaRow: { flexDirection: 'row', justifyContent: 'center', maxWidth: '100%' },
+  metaWord: { flexShrink: 1 },
+  metaDate: { flexShrink: 0 },
 });
 
 export const inspectionTouch = { minHeight: TARGET };

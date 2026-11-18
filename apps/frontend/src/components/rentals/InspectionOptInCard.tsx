@@ -15,10 +15,12 @@ import {
   Switch,
   Typography,
 } from '@mui/material';
+import type { TFunction } from 'i18next';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useClientFlags } from '../../hooks/useClientFlags';
+import { formatConfirmationMoney, inspectionExplainerRail } from '../../utils/rentals/confirmationFormat';
 
 const SLOTS = ['overview', 'other_side', 'accessories'] as const;
 type Slot = (typeof SLOTS)[number];
@@ -29,11 +31,25 @@ interface BaselinePhoto {
   status: string;
 }
 
+interface ListingPrice {
+  base_price_per_day?: number | null;
+  base_price_per_hour?: number | null;
+  security_deposit_amount?: number | null;
+}
+
+interface ItemInspection {
+  currency?: string;
+  rental_location_listings?: ListingPrice[];
+  inspection?: Omit<InspectionSummary, 'currency' | 'exampleAmount'>;
+}
+
 interface InspectionSummary {
   enabled: boolean;
   rail: 'card' | 'momo';
   baselineComplete: boolean;
   photos: BaselinePhoto[];
+  currency: string;
+  exampleAmount: number;
 }
 
 export function InspectionOptInCard({ itemId, itemName }: { itemId: string; itemName: string }) {
@@ -43,10 +59,10 @@ export function InspectionOptInCard({ itemId, itemName }: { itemId: string; item
   const [sheet, setSheet] = useState<'explainer' | 'baseline' | null>(null);
   const on = loaded && flags.rentals_inspection_optin_enabled;
   const load = useCallback(async () => {
-    const { data } = await api.get<{ success: boolean; data: { item: { inspection?: InspectionSummary } } }>(
+    const { data } = await api.get<{ success: boolean; data: { item: ItemInspection } }>(
       `/rentals/business/items/${itemId}`
     );
-    setSummary(data.data.item.inspection ?? null);
+    setSummary(readSummary(data.data.item));
   }, [api, itemId]);
   useEffect(() => {
     if (on) void load().catch(() => setSummary(null));
@@ -111,29 +127,53 @@ function OptInRow({
           ? t('rentalInspection.optInOn', 'On. You take condition photos at each pickup.')
           : t('rentalInspection.optInOff', 'Off. No condition report at pickup.')}
       </Typography>
-      <Explainer open={sheet === 'explainer'} itemName={itemName} rail={summary.rail} onClose={() => onSheet(null)} onTurnOn={() => void turnOn()} />
+      <Explainer open={sheet === 'explainer'} itemName={itemName} rail={summary.rail} currency={summary.currency} exampleAmount={summary.exampleAmount} onClose={() => onSheet(null)} onTurnOn={() => void turnOn()} />
       <BaselineDialog open={sheet === 'baseline'} itemId={itemId} photos={summary.photos} onClose={() => onSheet(null)} onSaved={onReload} />
     </Box>
   );
+}
+
+function readSummary(item: ItemInspection): InspectionSummary | null {
+  if (!item.inspection) return null;
+  const hold = exampleHold(item);
+  return { ...item.inspection, currency: hold.currency, exampleAmount: hold.amount };
+}
+
+function exampleHold(item: ItemInspection): { amount: number; currency: string } {
+  const listing = item.rental_location_listings?.[0];
+  const rental = Number(listing?.base_price_per_day ?? listing?.base_price_per_hour ?? 0);
+  const deposit = Number(listing?.security_deposit_amount ?? 0);
+  return { amount: rental + deposit, currency: item.currency || 'XAF' };
+}
+
+function payLine(rail: 'card' | 'momo', amount: string, t: TFunction): string {
+  if (rail === 'momo') {
+    return t('rentalInspection.optInPayMomo', 'On Mobile Money, the renter pays {{amount}} at pickup. No deposit is held. If you report damage, it is recorded and Rendasua support helps you recover it — it is not charged automatically.', { amount });
+  }
+  return t('rentalInspection.optInPayCard', 'On card payments, the renter’s card holds the rental plus the deposit (for example {{amount}}). The deposit is released unless there is damage or a late return.', { amount });
 }
 
 function Explainer({
   open,
   itemName,
   rail,
+  currency,
+  exampleAmount,
   onClose,
   onTurnOn,
 }: {
   open: boolean;
   itemName: string;
   rail: 'card' | 'momo';
+  currency: string;
+  exampleAmount: number;
   onClose: () => void;
   onTurnOn: () => void;
 }) {
-  const { t } = useTranslation();
-  const pay = rail === 'card'
-    ? t('rentalInspection.optInPayCard', 'On card payments, the renter’s card holds the rental plus the deposit (for example $65.00). The deposit is released unless there is damage or a late return.')
-    : t('rentalInspection.optInPayMomo', 'On Mobile Money, the renter pays the rental at pickup. No deposit is held. If you report damage, it is recorded and Rendasua support helps you recover it — it is not charged automatically.');
+  const { t, i18n } = useTranslation();
+  const shown = inspectionExplainerRail(rail, currency);
+  const amount = formatConfirmationMoney(exampleAmount, currency, i18n.language);
+  const pay = payLine(shown, amount, t);
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{t('rentalInspection.optInSheetTitle', 'Inspection for this item')}</DialogTitle>
@@ -229,7 +269,9 @@ function BaselineSlot({
   const label = t(`rentalInspection.slot.${slot}`, slot);
   return (
     <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 0.5 }}>
-      <Typography sx={{ flex: 1 }}>{label}{ready ? '' : ` · ${t('rentalInspection.baselineRequired', 'Required')}`}</Typography>
+      <Typography sx={{ flex: 1 }}>
+        {`${label} · ${t('rentalInspection.baselineRequired', 'Required')}${ready ? ' ✓' : ''}`}
+      </Typography>
       <SlotFile itemId={itemId} slot={slot} source="camera" label={t('rentalInspection.camera', 'Camera')} icon={<PhotoCameraOutlinedIcon />} capture onSaved={onSaved} />
       <SlotFile itemId={itemId} slot={slot} source="gallery" label={t('rentalInspection.gallery', 'Gallery')} icon={<PhotoLibraryOutlinedIcon />} onSaved={onSaved} />
       <SlotFile itemId={itemId} slot={slot} source="web" label={t('rentalInspection.upload', 'Upload')} icon={<UploadFileOutlinedIcon />} onSaved={onSaved} />

@@ -14,7 +14,7 @@ import {
   PickupSubmitBlocked,
 } from '../../components/rentals/inspection/PickupPhotoChrome';
 import { blockedScreenRows, submitLeftCount } from '../../utils/rentals/blockedGuideRows';
-import { formatListingDay, formatListingStamp, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
+import { formatListingDay, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
 import { ReportSentConfirmation } from '../../components/rentals/inspection/ReportSentConfirmation';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -198,8 +198,9 @@ export default function BusinessInspectionScreen() {
                   ? t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })
                   : undefined,
                 stamp: photo.capturedAt && model.rules?.timezone
-                  ? formatListingStamp(photo.capturedAt, model.rules.timezone, i18n.language)
+                  ? formatListingDay(photo.capturedAt, model.rules.timezone, i18n.language)
                   : undefined,
+                reused: optIn && photo.reused === true,
                 origin: optIn && photo.mediaId
                   ? (photo.reused
                     ? t('rentalInspection.reusedBadge', 'Reused')

@@ -16,10 +16,14 @@ import { buildMobile, buildWeb } from './build.mjs';
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
 const here = import.meta.dirname;
-const outDir = process.env.OUT_DIR ?? '/opt/cursor/artifacts/inspection-optin/v2';
+const outDir = process.env.OUT_DIR ?? '/opt/cursor/artifacts/inspection-optin/v3';
 const webJs = '/tmp/capture-inspection-optin/web.js';
 const mobileJs = '/tmp/capture-inspection-optin/mobile.js';
 const hero = readFileSync(path.join(here, 'hero.png'));
+const iconFont = readFileSync(path.join(
+  here,
+  '../../apps/mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf',
+));
 const en = JSON.parse(readFileSync(path.join(here, '../../apps/frontend/public/locales/en.json'), 'utf8')).rentalInspection;
 const fr = JSON.parse(readFileSync(path.join(here, '../../apps/frontend/public/locales/fr.json'), 'utf8')).rentalInspection;
 
@@ -28,7 +32,7 @@ mkdirSync('/tmp/capture-inspection-optin', { recursive: true });
 await buildWeb(webJs);
 await buildMobile(mobileJs);
 
-const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,#root{margin:0;background:#FAF9F7}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>`;
+const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>@font-face{font-family:'material-community';src:url('/fonts/MaterialCommunityIcons.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:block}html,body,#root{margin:0;background:#FAF9F7}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>`;
 
 function listen(js, port) {
   const server = createServer((req, res) => {
@@ -36,6 +40,12 @@ function listen(js, port) {
     if (url === '/hero.png') {
       res.setHeader('content-type', 'image/png');
       res.end(hero);
+      return;
+    }
+    if (url === '/fonts/MaterialCommunityIcons.ttf') {
+      res.setHeader('content-type', 'font/ttf');
+      res.setHeader('cache-control', 'public, max-age=86400');
+      res.end(iconFont);
       return;
     }
     if (url === '/app.js') {
@@ -96,8 +106,8 @@ function strings(pack) {
   return {
     off: pack.optInOff,
     turnOn: pack.optInTurnOn,
-    card: pack.optInPayCard.includes('65,00') ? '65,00 $' : '$65.00',
-    momo: pack.optInPayMomo.slice(0, 18),
+    card: pack.optInPayCard.includes('par exemple') ? '65,00' : '$65.00',
+    momo: 'FCFA',
     baseline: pack.baselineMore.replace('{{count}}', '2'),
     baselineTitle: pack.baselineTitle,
     reuse: pack.reuseAction,
@@ -118,6 +128,10 @@ async function shoot({ browser, lang, scene, file, port, width, height }) {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${port}/?scene=${scene}&lang=${lang}`, { waitUntil: 'networkidle' });
   await prepare(page, scene, copy[lang]);
+  await page.evaluate(async () => {
+    await document.fonts.load("20px 'material-community'");
+    await document.fonts.ready;
+  });
   const png = await page.screenshot({ type: 'png' });
   await writeCompressed(path.join(outDir, file), png);
   if (errors.length) console.log(`errors ${file}: ${errors.slice(0, 2).join(' | ')}`);
