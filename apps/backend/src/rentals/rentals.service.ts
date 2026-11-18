@@ -6285,7 +6285,7 @@ export class RentalsService {
         { moderation_status: { _eq: 'approved' } },
         { is_active: { _eq: true } },
         { deleted_at: { _is_null: true } },
-        { rental_item: { deleted_at: { _is_null: true } } },
+        { rental_item: { deleted_at: { _is_null: true }, is_active: { _eq: true } } },
         {
           rental_item: {
             business: { is_storefront_visible: { _eq: true } },
