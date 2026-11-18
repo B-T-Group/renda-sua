@@ -66,16 +66,18 @@ WHERE NOT EXISTS (
   WHERE c.config_key = v.k AND c.country_code IS NULL
 );
 
--- A down leaves these rows inactive. Applying this file again turns them back on.
+-- Only rows the down marked. A country row an admin set inactive has no tag and stays inactive.
 UPDATE public.application_configurations
-SET status = 'active'
+SET status = 'active',
+    tags = array_remove(tags, 'ranking_migration_off')
 WHERE config_key IN (
   'rentals_decline_ranking_enabled',
   'rentals_decline_rank_weight',
   'rentals_decline_rank_min_sample',
   'rentals_decline_rank_start',
   'rentals_decline_rank_full'
-);
+)
+  AND 'ranking_migration_off' = ANY(COALESCE(tags, ARRAY[]::text[]));
 
 UPDATE public.application_configurations
 SET number_value = 0.30

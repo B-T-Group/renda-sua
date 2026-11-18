@@ -34,7 +34,7 @@ describe('DeclineRankingService', () => {
     expect(result.get('busy')).toBeLessThan(1);
     expect(result.has('new')).toBe(false);
     expect(result.has('clean')).toBe(false);
-    expect(flags.declineRankingEnabled).toHaveBeenCalledWith(undefined);
+    expect(flags.declineRankingEnabled).toHaveBeenCalledWith(null);
   });
 
   it('caps declines at pickups reached and ignores a weight of 1', async () => {
@@ -50,6 +50,13 @@ describe('DeclineRankingService', () => {
     expect(result.get('busy')).toBeLessThan(1);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it('looks up the flag with the normalized country code', async () => {
+    flags.declineRankingEnabled.mockResolvedValue(false);
+    await service.multipliersFor(['busy'], ' cm ');
+    expect(flags.declineRankingEnabled).toHaveBeenCalledWith('CM');
+    expect(flags.declineRankingEnabled).not.toHaveBeenCalledWith(' cm ');
   });
 
   it('keeps one cache per country', async () => {

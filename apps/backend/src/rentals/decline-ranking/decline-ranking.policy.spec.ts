@@ -81,6 +81,8 @@ describe('decline exclusion rules', () => {
     expect(down).toContain("status = 'inactive'");
     expect(down).not.toContain('DELETE FROM');
     expect(sql).toContain("SET status = 'active'");
+    expect(sql).toContain('ranking_migration_off');
+    expect(down).toContain('ranking_migration_off');
     expect(sql).toContain('rentals_decline_rank_weight_range');
     expect(sql).toContain('number_value <= 0.9');
   });

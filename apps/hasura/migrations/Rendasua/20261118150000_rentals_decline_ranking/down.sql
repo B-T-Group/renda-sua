@@ -4,10 +4,15 @@ ALTER TABLE public.application_configurations
   DROP CONSTRAINT IF EXISTS rentals_decline_rank_min_sample_range,
   DROP CONSTRAINT IF EXISTS rentals_decline_rank_weight_range;
 
--- Deactivate every ranking config row, including country rows. Do not delete them.
+-- Deactivate every ranking config row, including country rows, and mark them so up can restore only these.
 UPDATE public.application_configurations
 SET boolean_value = false,
-    status = 'inactive'
+    status = 'inactive',
+    tags = CASE
+      WHEN tags IS NULL THEN ARRAY['ranking_migration_off']::text[]
+      WHEN 'ranking_migration_off' = ANY(tags) THEN tags
+      ELSE tags || ARRAY['ranking_migration_off']::text[]
+    END
 WHERE config_key IN (
   'rentals_decline_ranking_enabled',
   'rentals_decline_rank_weight',

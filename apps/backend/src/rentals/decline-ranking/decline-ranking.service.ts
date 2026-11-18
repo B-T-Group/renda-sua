@@ -47,12 +47,16 @@ export class DeclineRankingService {
   }
 
   private async cached(countryCode?: string | null): Promise<Map<string, number>> {
-    const key = (countryCode ?? '').trim().toUpperCase() || '*';
+    const key = this.countryKey(countryCode);
     const hit = this.cache.get(key);
     if (hit && Date.now() - hit.at < CACHE_MS) return hit.multipliers;
-    const multipliers = await this.load(countryCode);
+    const multipliers = await this.load(key === '*' ? null : key);
     this.cache.set(key, { at: Date.now(), multipliers });
     return multipliers;
+  }
+
+  private countryKey(countryCode?: string | null): string {
+    return (countryCode ?? '').trim().toUpperCase() || '*';
   }
 
   private async load(countryCode?: string | null): Promise<Map<string, number>> {
