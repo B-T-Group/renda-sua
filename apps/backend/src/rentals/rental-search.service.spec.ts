@@ -628,10 +628,12 @@ describe('RentalSearchService', () => {
       filterMode: 'specific' as const,
       degraded: false,
     }));
+    const row = listing('a', 'A');
+    row.business_location.address.state = 'Centre Region Province';
     const catalog = {
       resolveSearchMarket,
-      collectPublicRentalListings: jest.fn().mockResolvedValue([listing('a', 'A')]),
-      loadPublicRentalListingsByIds: jest.fn(async (ids: string[]) => ids.map((id) => listing(id, id))),
+      collectPublicRentalListings: jest.fn().mockResolvedValue([row]),
+      loadPublicRentalListingsByIds: jest.fn(async () => [row]),
     };
     const cached = new RentalSearchService(catalog as never, hasura as never);
     await cached.search({ country_code: 'cm', state: 'centre region province' });
@@ -710,13 +712,88 @@ describe('RentalSearchService', () => {
     expect(page1.hasMore).toBe(true);
     expect(page2.listings.map((row) => row.listing.id)).toEqual(['b']);
     expect(page2.hasMore).toBe(true);
-    const warm = await cached.search({ ...query, page: 2 });
-    expect(warm.listings).toEqual([]);
-    expect(warm.hasMore).toBe(false);
-    const again = cached.search({ ...query, page: 1 });
+    const warmPromise = cached.search({ ...query, page: 2 });
     for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    expect(collect).toHaveBeenCalledTimes(2);
     release(rows);
-    await again;
+    const warm = await warmPromise;
+    expect(warm.listings.map((row) => row.listing.id)).toEqual(['b']);
+    expect(warm.hasMore).toBe(true);
+    await cached.search({ ...query, page: 1 });
+    expect(collect).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not emit an unhandledRejection when a cold search fails for several waiters', async () => {
+    let rejectCollect: (error: Error) => void = () => undefined;
+    const collect = jest.fn(
+      () =>
+        new Promise<PublicRentalListingRow[]>((_, reject) => {
+          rejectCollect = reject;
+        })
+    );
+    const catalog = {
+      collectPublicRentalListings: collect,
+      loadPublicRentalListingsByIds: jest.fn(async (ids: string[]) => ids.map((id) => listing(id, id))),
+    };
+    const cached = new RentalSearchService(catalog as never, hasura as never);
+    const settle = (pending: Promise<unknown>) =>
+      pending.then(
+        (value) => ({ ok: true as const, value }),
+        (reason: unknown) => ({ ok: false as const, reason })
+      );
+    const unhandled = await captureUnhandledRejections(async () => {
+      const first = settle(cached.search({ country_code: 'CM' }));
+      for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      const rest = [settle(cached.search({ country_code: 'CM' })), settle(cached.search({ country_code: 'CM' }))];
+      for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      expect(collect).toHaveBeenCalledTimes(1);
+      rejectCollect(new Error('hasura down'));
+      const settled = await Promise.all([first, ...rest]);
+      expect(settled.map((row) => row.ok)).toEqual([false, false, false]);
+    });
+    expect(unhandled).toEqual([]);
+    collect.mockResolvedValueOnce([listing('a', 'A')]);
+    const recovered = await cached.search({ country_code: 'CM' });
+    expect(recovered.listings.map((row) => row.listing.id)).toEqual(['a']);
+    expect(collect).toHaveBeenCalledTimes(2);
+  });
+
+  it('recomputes a warm page whose rows were hidden so later pages stay reachable', async () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const hidden = new Set<string>();
+    const collect = jest.fn(async () => ids.filter((id) => !hidden.has(id)).map((id) => listing(id, id)));
+    const loadByIds = jest.fn(async (pageIds: string[]) =>
+      pageIds.filter((id) => !hidden.has(id)).map((id) => listing(id, id))
+    );
+    const catalog = { collectPublicRentalListings: collect, loadPublicRentalListingsByIds: loadByIds };
+    const cached = new RentalSearchService(catalog as never, hasura as never);
+    const query = { country_code: 'CM', limit: 2 };
+    const first = await cached.search({ ...query, page: 1 });
+    expect(first.listings.map((row) => row.listing.id)).toEqual(['a', 'b']);
+    expect(first.hasMore).toBe(true);
+    expect(first.total).toBe(8);
+    hidden.add('c');
+    hidden.add('d');
+    const second = await cached.search({ ...query, page: 2 });
+    expect(second.listings.map((row) => row.listing.id)).toEqual(['e', 'f']);
+    expect(second.hasMore).toBe(true);
+    expect(second.total).toBe(6);
     expect(collect).toHaveBeenCalledTimes(2);
   });
 });
+
+async function captureUnhandledRejections(work: () => Promise<void>): Promise<unknown[]> {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => {
+    unhandled.push(reason);
+  };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    await work();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    return unhandled;
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+}

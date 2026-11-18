@@ -204,9 +204,12 @@ export class RentalSearchService {
   ) {
     const pending = this.flights.get(key);
     if (pending) return pending.then((flight) => this.pageFlight(flight, query, market, range, window));
-    const flight = this.computeFlight(key, degraded, queried, query, market, range, window);
+    // Chain finally on the stored promise. A separate `void flight.finally` rejects again
+    // and Node treats that second rejection as an unhandledRejection.
+    const flight = this.computeFlight(key, degraded, queried, query, market, range, window).finally(() =>
+      this.clearFlight(key, flight)
+    );
     this.flights.set(key, flight);
-    void flight.finally(() => this.clearFlight(key, flight));
     return flight.then((value) => this.pageFlight(value, query, market, range, window));
   }
 
@@ -261,9 +264,21 @@ export class RentalSearchService {
     const bounds = this.pageBounds(query);
     const ids = cached.ids.slice(bounds.start, bounds.start + bounds.limit);
     const rows = await this.rowsForIds(ids, query, market);
+    if (rows.length < ids.length) return this.refreshShortPage(key, queried, query, market, range, window);
     const listings = await this.finishPage(await this.annotate(rows, range), market.country, range, window);
-    if (!listings.length && ids.length) this.idCache.delete(key, queried);
     return this.pageBody(listings, cached.ids.length, cached.availableCount, bounds, range, window);
+  }
+
+  private refreshShortPage(
+    key: string,
+    queried: boolean,
+    query: RentalSearchQueryDto,
+    market: SearchMarket,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
+    this.idCache.delete(key, queried);
+    return this.joinFlight(key, false, queried, query, market, range, window);
   }
 
   private async rowsForIds(

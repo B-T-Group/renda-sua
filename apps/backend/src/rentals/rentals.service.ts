@@ -8,6 +8,7 @@ import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payment
 import { MobilePaymentsService, MobilePaymentRequest } from '../mobile-payments/mobile-payments.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { isCardDepositCurrency, shownSecurityDeposit } from './rental-deposit';
+import { geoStateKey } from '../rbac/geo-state.util';
 import { listingsInIdOrder, marketFromQuery, pickStoredMarket, type SearchMarket } from './rental-search-id-cache';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -423,7 +424,7 @@ function compareListingId(a: { id: string }, b: { id: string }): number {
  * Request identity comes from nestjs-cls via HasuraUserService (optional explicit RequestContext).
  */
 const STORED_RENTAL_MARKET = `query StoredRentalMarket($where: supported_country_states_bool_exp!) {
-  supported_country_states(where: $where, limit: 50) { country_code state_name }
+  supported_country_states(where: $where, limit: 50) { country_code state_name state_key }
 }`;
 
 @Injectable()
@@ -6169,15 +6170,16 @@ export class RentalsService {
 
   private async storedSearchMarket(country?: string, state?: string) {
     const response = await this.hasuraSystemService.executeQuery<{
-      supported_country_states: Array<{ country_code: string; state_name: string }>;
+      supported_country_states: Array<{ country_code: string; state_name: string; state_key?: string }>;
     }>(STORED_RENTAL_MARKET, { where: this.storedMarketWhere(country, state) });
     return pickStoredMarket(response.supported_country_states ?? [], country, state);
   }
 
   private storedMarketWhere(country?: string, state?: string): Record<string, unknown> {
+    const stateKey = state ? geoStateKey(state) : '';
     return {
-      ...(country ? { country_code: { _ilike: country } } : {}),
-      ...(state ? { state_name: { _ilike: state } } : {}),
+      ...(country ? { country_code: { _eq: country } } : {}),
+      ...(stateKey ? { state_key: { _eq: stateKey } } : {}),
     };
   }
 

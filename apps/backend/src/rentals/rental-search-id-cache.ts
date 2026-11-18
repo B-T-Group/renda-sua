@@ -1,3 +1,5 @@
+import { geoStateKey } from '../rbac/geo-state.util';
+
 /** Repeat pages reuse this order. Long enough to cover a scroll, short enough to pick up edits. */
 export const RENTAL_SEARCH_ID_CACHE_TTL_MS = 45_000;
 
@@ -49,6 +51,7 @@ export interface CachedSearchOrder {
 export interface StoredMarketRow {
   country_code: string;
   state_name: string;
+  state_key?: string | null;
 }
 
 export interface ListingVisibility {
@@ -202,7 +205,9 @@ function sameCountry(stored: string, requested: string): boolean {
 
 function sameState(row: StoredMarketRow, country: string | undefined, state: string): boolean {
   if (country && !sameCountry(row.country_code, country)) return false;
-  return row.state_name.trim().toLowerCase() === state.trim().toLowerCase();
+  if (row.state_name.trim().toLowerCase() === state.trim().toLowerCase()) return true;
+  const key = row.state_key?.trim();
+  return Boolean(key) && key === geoStateKey(state);
 }
 
 function addressMatches(

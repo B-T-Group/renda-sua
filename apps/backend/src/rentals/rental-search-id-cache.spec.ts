@@ -71,6 +71,13 @@ describe('rentalSearchOrderKey', () => {
         'centre region province'
       )
     ).toEqual({ country: 'CM', state: 'Centre Region Province' });
+    expect(
+      pickStoredMarket(
+        [{ country_code: 'CM', state_name: 'Centre Region Province', state_key: 'centre' }],
+        'CM',
+        'centré region province'
+      )
+    ).toEqual({ country: 'CM', state: 'Centre Region Province' });
   });
 });
 
