@@ -113,7 +113,7 @@ const RentalsDefaultCatalog: React.FC = () => {
           stayLabel={stay ? formatStay(stay, i18n.language) : null}
           onOpen={(id) => navigate(`/rentals/${id}`)}
         />
-        {catalog.hits.length > 0 && catalog.hits.length < catalog.total ? (
+        {catalog.hits.length > 0 && (catalog.hasMore ?? catalog.hits.length < catalog.total) ? (
           <Button fullWidth variant="outlined" sx={{ mt: 2 }} onClick={catalog.loadMore} disabled={catalog.loadingMore}>
             {catalog.loadingMore
               ? t('rentals.catalog.loadingMore', 'Loading more…')

@@ -72,8 +72,8 @@ export class DeclineRankingService {
       });
       return this.scores(snapshot, countryCode ?? null);
     } catch (error: any) {
-      void error;
-      return new Map();
+      this.logger.warn(`decline ranking snapshot failed: ${error?.message ?? 'unknown'}`);
+      throw error;
     }
   }
 
