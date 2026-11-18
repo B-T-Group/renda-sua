@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import {
@@ -19,6 +19,8 @@ import {
   parseRentalSelectionWindowsFromJson,
 } from '../../../utils/rentals';
 import { formatRequestAmount } from '../../../utils/rentals/rentalRequestFormat';
+import { contractHoursOffer, requestStartIso } from '../../../utils/rentals/dashboardRentalRequests';
+import { buildRequestCardModel } from '../../../utils/rentals/rentalRequestCardModel';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { rentalsApi } from '../../../services/rentalsApi';
 
@@ -84,6 +86,15 @@ export function BusinessRentalRespondDialog({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const startIso = request ? requestStartIso(request) : null;
+  const hourOffer = contractHoursOffer(startIso);
+
+  useEffect(() => {
+    if (!visible) return;
+    const offer = contractHoursOffer(startIso);
+    setContractHours(String(offer.hidden ? 1 : offer.hours));
+  }, [startIso, visible]);
+
   const offerPreview = useMemo(() => {
     if (!request || mode !== 'available') return null;
     try {
@@ -94,25 +105,21 @@ export function BusinessRentalRespondDialog({
   }, [mode, request]);
 
   const resetAndClose = useCallback(() => {
-    setContractHours('48');
+    setContractHours(String(contractHoursOffer(request ? requestStartIso(request) : null).hours || 1));
     setTotalOverride('');
     setAvailableNote('');
     setReasonCode('');
     setUnavailableNote('');
     setError(null);
     onDismiss();
-  }, [onDismiss]);
+  }, [onDismiss, request]);
 
   const submitAvailable = useCallback(async () => {
     if (!request) return;
-    const h = parseInt(contractHours, 10);
-    if (!Number.isInteger(h) || h < 1 || h > 168) {
-      setError(
-        t(
-          'business.rentals.respondValidationHours',
-          'Enter a whole number of hours between 1 and 168.'
-        )
-      );
+    const offer = contractHoursOffer(requestStartIso(request));
+    const h = offer.hidden ? 1 : parseInt(contractHours, 10);
+    if (!offer.hidden && (!Number.isInteger(h) || h < 1 || h > offer.maxHours)) {
+      setError(t('business.rentals.respondValidationHours', 'Enter a whole number of hours from 1 to {{count}}.', { count: offer.maxHours }));
       return;
     }
     const overridden = parseTotalOverride(totalOverride);
@@ -192,13 +199,15 @@ export function BusinessRentalRespondDialog({
         <Dialog.Title>
           {mode === 'available'
             ? t('business.rentals.respondDialogTitleAvailable', 'Confirm availability')
-            : t('business.rentals.respondDialogTitleUnavailable', 'Mark unavailable')}
+            : t('business.rentals.respondDialogTitleUnavailable', 'Decline request')}
         </Dialog.Title>
         <Dialog.Content>
           <ScrollView style={{ maxHeight: 360 }}>
             {request ? (
               <Text variant="bodyMedium" style={{ marginBottom: 12, color: colors.text.secondary }}>
                 {request.rental_location_listing.rental_item.name}
+                {'\n'}
+                {buildRequestCardModel(request, i18n.language, new Date(), t).schedule.summary}
               </Text>
             ) : null}
 
@@ -228,17 +237,21 @@ export function BusinessRentalRespondDialog({
                     'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'
                   )}
                 </Text>
-                <TextInput
-                  label={t(
-                    'business.rentals.contractHours',
-                    'Contract valid for (hours)'
-                  )}
-                  value={contractHours}
-                  onChangeText={setContractHours}
-                  keyboardType="number-pad"
-                  mode="outlined"
-                  style={styles.field}
-                />
+                {hourOffer.hidden ? null : (
+                  <TextInput
+                    label={t('business.rentals.contractHours', 'Contract valid for (hours)')}
+                    value={contractHours}
+                    onChangeText={setContractHours}
+                    keyboardType="number-pad"
+                    mode="outlined"
+                    style={styles.field}
+                  />
+                )}
+                {hourOffer.hidden ? null : (
+                  <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+                    {t('business.rentals.contractExpiryHelper', 'Up to {{count}} hours, and not past the start.', { count: hourOffer.maxHours })}
+                  </Text>
+                )}
                 <TextInput
                   label={t('business.rentals.responseNote', 'Note (optional)')}
                   value={availableNote}
@@ -293,13 +306,17 @@ export function BusinessRentalRespondDialog({
             {t('common.cancel', 'Cancel')}
           </Button>
           <Button
+            mode="contained"
             loading={submitting}
+            disabled={submitting || declineBlocked(mode, reasonCode, unavailableNote)}
             onPress={() => {
               if (mode === 'available') void submitAvailable();
               else void submitUnavailable();
             }}
           >
-            {t('business.rentals.submitResponse', 'Send response')}
+            {mode === 'available'
+              ? t('business.rentals.accept', 'Accept')
+              : t('business.rentals.submitResponse', 'Send response')}
           </Button>
         </Dialog.Actions>
       </Dialog>
@@ -308,6 +325,16 @@ export function BusinessRentalRespondDialog({
 }
 
 /** Confirm soft-delete helper used by detail screens. */
+function declineBlocked(
+  mode: 'available' | 'unavailable' | null,
+  reason: UnavailableRentalReasonCode | '',
+  note: string
+): boolean {
+  if (mode !== 'unavailable') return false;
+  if (!reason) return true;
+  return reason === 'other' && !note.trim();
+}
+
 function respondErrorText(
   error: unknown,
   locale: string,

@@ -459,6 +459,43 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     expect(service.emailClientRentalRequestAccepted).not.toHaveBeenCalled();
   });
 
+  it('does not release a hold when a still-pending request is declined', async () => {
+    const { service, executeMutation } = responder(pendingRequest());
+    service.releaseLinkedDeclineHold = jest.fn();
+    executeMutation.mockResolvedValue({ update_rental_requests: { affected_rows: 1 } });
+    await service.respondToRentalRequest('request-1', {
+      status: RespondRentalRequestStatusDto.unavailable,
+      unavailableReasonCode: UnavailableRentalReasonCode.fully_booked,
+      expectedVersion: 1,
+    });
+    expect(service.releaseLinkedDeclineHold).not.toHaveBeenCalled();
+    expect(service.emailClientRentalRequestRejected).toHaveBeenCalled();
+  });
+
+  it('ends the contract at the start when the rental is under an hour away', async () => {
+    const start = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+    const { service } = responder(pendingRequest({
+      requested_start_at: start,
+      rental_selection_windows: [{ billing: 'all_day', calendar_date: '2026-11-18', start_at: start, end_at: start }],
+    }));
+    await service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1 });
+    expect(service.insertProposedBookingRow).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      new Date(start).toISOString()
+    );
+  });
+
+  it('rejects a contract longer than 48 hours', async () => {
+    const { service } = responder(pendingRequest());
+    await expect(
+      service.respondToRentalRequest('request-1', { ...accept, contractExpiryHours: 49, expectedVersion: 1 })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(service.insertProposedBookingRow).not.toHaveBeenCalled();
+  });
+
   it('reports an accepted request on a lost decline without deleting a booking', async () => {
     const { service, executeMutation } = responder(pendingRequest(), false, { status: 'available' });
     executeMutation.mockResolvedValue({ update_rental_requests: { affected_rows: 0 } });

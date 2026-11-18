@@ -1,7 +1,11 @@
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import { Avatar, Box, Chip, IconButton, Stack, Typography } from '@mui/material';
+import HandymanOutlinedIcon from '@mui/icons-material/HandymanOutlined';
+import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
+import { Box, Chip, IconButton, Stack, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BusinessRentalRequestRow } from '../../hooks/useRentalApi';
@@ -24,7 +28,7 @@ export function BusinessDashboardRentalRequestCard({
   const amber = request.respond_by ? respondWithinAmber(request.respond_by) : false;
   return (
     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', p: 1.5, border: 1, borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
-      <Avatar src={requestPhotoUrl(request) ?? undefined} variant="rounded" sx={{ width: 56, height: 56 }} alt="" />
+      <ItemThumb request={request} />
       <CardCopy model={model} hours={hours} amber={amber} open={open} onToggle={() => setOpen((value) => !value)} />
       <DecisionButtons request={request} disabled={model.acceptDisabled} onAccept={onAccept} onDecline={onDecline} />
     </Box>
@@ -49,6 +53,7 @@ function CardCopy({
     <Box sx={{ flex: 1, minWidth: 0 }}>
       <CardChips model={model} />
       <Typography fontWeight={800} noWrap>{model.itemName}{model.quantity ? ` × ${model.quantity}` : ''}</Typography>
+      {model.renterName ? <Typography variant="body2" noWrap>{model.renterName}</Typography> : null}
       {model.place ? <Typography variant="body2" color="text.secondary" noWrap>{model.place}</Typography> : null}
       <ScheduleLine model={model} open={open} onToggle={onToggle} />
       {model.receiveLine ? <Typography fontWeight={800}>{model.receiveLine}</Typography> : null}
@@ -59,6 +64,26 @@ function CardCopy({
       {model.sentClock ? <Typography variant="caption" color="text.secondary" display="block">{t('rentals.requestCard.sent', 'Sent {{time}}', { time: model.sentClock })}</Typography> : null}
     </Box>
   );
+}
+
+function ItemThumb({ request }: { request: Parameters<typeof requestPhotoUrl>[0] }) {
+  const url = requestPhotoUrl(request);
+  if (url) {
+    return <Box component="img" src={url} alt="" sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: 'cover', flexShrink: 0 }} />;
+  }
+  const Icon = categoryIcon(request.rental_location_listing.rental_item.rental_category?.name || request.rental_location_listing.rental_item.name);
+  return (
+    <Box sx={{ width: 56, height: 56, borderRadius: 1.5, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <Icon color="action" />
+    </Box>
+  );
+}
+
+function categoryIcon(name: string) {
+  if (/camera|photo|caméra|appareil/i.test(name)) return PhotoCameraOutlinedIcon;
+  if (/equipment|équipement|equipement|tool|outil|light/i.test(name)) return HandymanOutlinedIcon;
+  if (/power|électr|electr|éclair/i.test(name)) return BoltOutlinedIcon;
+  return CategoryOutlinedIcon;
 }
 
 function CardChips({ model }: { model: RequestCardModel }) {

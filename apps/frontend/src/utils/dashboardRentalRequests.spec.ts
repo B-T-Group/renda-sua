@@ -1,5 +1,6 @@
 import {
   compareSoonestRequestStart,
+  contractHoursOffer,
   dashboardPeriodLabel,
   formatYouReceive,
   respondWithinAmber,
@@ -8,6 +9,14 @@ import {
 } from './dashboardRentalRequests';
 
 describe('dashboard rental request display', () => {
+  it('caps the contract at 48 hours and hides it under one hour', () => {
+    const now = new Date('2026-11-18T15:00:00.000Z');
+    const soon = new Date(now.getTime() + 20 * 60 * 1000).toISOString();
+    const later = new Date(now.getTime() + 72 * 60 * 60 * 1000).toISOString();
+    expect(contractHoursOffer(soon, now).hidden).toBe(true);
+    expect(contractHoursOffer(later, now)).toEqual({ hidden: false, hours: 48, maxHours: 48 });
+  });
+
   it('counts whole hours and turns amber under 4 hours', () => {
     const now = Date.parse('2026-11-14T14:41:00.000Z');
     expect(respondWithinHours('2026-11-14T16:41:00.000Z', now)).toBe(2);

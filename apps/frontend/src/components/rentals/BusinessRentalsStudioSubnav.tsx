@@ -50,7 +50,7 @@ const BusinessRentalsStudioSubnav: React.FC = () => {
     >
       <Tab label={t('business.rentals.catalogTab', 'Catalog')} />
       <Tab label={t('business.rentals.requestsTab', 'Requests')} />
-      <Tab label={t('business.rentals.myScheduleTab', 'MySchedule')} />
+      <Tab label={t('business.rentals.myScheduleTab', 'My schedule')} />
     </Tabs>
   );
 };

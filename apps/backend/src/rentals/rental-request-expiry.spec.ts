@@ -126,6 +126,49 @@ describe('releaseLinkedDeclineHold', () => {
   });
 });
 
+describe('cancelClientRentalRequest', () => {
+  function cancelService(affected: number) {
+    const service = Object.create(RentalsService.prototype) as RentalsService & {
+      hasuraUserService: { getUser: jest.Mock };
+      hasuraSystemService: { executeQuery: jest.Mock; executeMutation: jest.Mock };
+      releaseLinkedDeclineHold: jest.Mock;
+      cancelProposedBooking: jest.Mock;
+    };
+    service.hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'client-user',
+        active_persona: 'client',
+        client: { id: 'client-1' },
+      }),
+    };
+    service.hasuraSystemService = {
+      executeQuery: jest.fn().mockResolvedValue({
+        rental_requests_by_pk: { id: 'req-1', client_id: 'client-1', status: 'pending' },
+      }),
+      executeMutation: jest.fn().mockResolvedValue({ update_rental_requests: { affected_rows: affected } }),
+    };
+    service.releaseLinkedDeclineHold = jest.fn();
+    service.cancelProposedBooking = jest.fn();
+    return service;
+  }
+
+  it('does not cancel or release a hold when accept or auto-decline already won', async () => {
+    const service = cancelService(0);
+    await expect(service.cancelClientRentalRequest('req-1')).rejects.toMatchObject({ status: 400 });
+    expect(service.releaseLinkedDeclineHold).not.toHaveBeenCalled();
+  });
+
+  it('cancels a still-pending request without releasing a hold', async () => {
+    const service = cancelService(1);
+    await expect(service.cancelClientRentalRequest('req-1')).resolves.toEqual({ success: true });
+    expect(service.releaseLinkedDeclineHold).not.toHaveBeenCalled();
+    expect(service.hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('status: { _eq: $status }'),
+      { id: 'req-1', status: 'pending' }
+    );
+  });
+});
+
 describe('no-response copy', () => {
   it('uses the 24h sentence and the start-time sentence in English and French', () => {
     const sla = buildRentalRequestNoResponsePush({

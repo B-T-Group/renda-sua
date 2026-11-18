@@ -16,6 +16,9 @@ const outDir = process.argv[2] || '/opt/cursor/artifacts/dashboard-rental-reques
 const tmp = '/tmp/capture-drr';
 mkdirSync(tmp, { recursive: true });
 mkdirSync(outDir, { recursive: true });
+await sharp({
+  create: { width: 128, height: 128, channels: 3, background: { r: 32, g: 74, b: 128 } },
+}).png().toFile(path.join(tmp, 'item-photo.png'));
 
 await buildWeb(path.join(tmp, 'web.js'));
 await buildMobile(path.join(tmp, 'mobile.js'));
@@ -36,6 +39,11 @@ html,body,#root{margin:0;background:#FAF9F7}
 function listen(port) {
   const server = createServer((req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
+    if (url.pathname === '/item-photo.png') {
+      res.setHeader('content-type', 'image/png');
+      res.end(readFileSync(path.join(tmp, 'item-photo.png')));
+      return;
+    }
     if (url.pathname === '/fonts/MaterialCommunityIcons.ttf') {
       res.setHeader('content-type', 'font/ttf');
       res.end(readFileSync(iconFont));
@@ -64,18 +72,24 @@ const shots = [
   ['mobile', 'dashboard', '01-dashboard-mobile', 390, 844],
   ['web', 'dashboard', '02-accept-web', 1040, 900, 'accept'],
   ['mobile', 'dashboard', '02-accept-mobile', 390, 844, 'accept'],
+  ['web', 'hours', '02-accept-hours-web', 1040, 720, 'accept'],
+  ['mobile', 'hours', '02-accept-hours-mobile', 390, 720, 'accept'],
   ['web', 'dashboard', '03-decline-web', 1040, 900, 'decline'],
   ['mobile', 'dashboard', '03-decline-mobile', 390, 844, 'decline'],
-  ['web', 'empty', '04-empty-web', 1040, 320],
-  ['mobile', 'empty', '04-empty-mobile', 390, 320],
   ['web', 'after', '05-after-accept-web', 1040, 900],
   ['mobile', 'after', '05-after-accept-mobile', 390, 844],
   ['web', 'expired', '06-expired-business-web', 1040, 900],
   ['mobile', 'expired', '06-expired-business-mobile', 390, 844],
   ['web', 'renter', '06-expired-renter-web', 1040, 640],
   ['mobile', 'renter', '06-expired-renter-mobile', 390, 640],
-  ['web', 'list', '07-requests-list-web', 1040, 1100],
+  ['web', 'list', '07-requests-list-web', 1100, 1100],
   ['mobile', 'list', '07-requests-list-mobile', 390, 844],
+  ['web', 'conflict', '08-accept-disabled-web', 1040, 520],
+  ['mobile', 'conflict', '08-accept-disabled-mobile', 390, 520],
+  ['web', 'updated', '09-updated-web', 1040, 420],
+  ['mobile', 'updated', '09-updated-mobile', 390, 520],
+  ['mobile', 'detail', '10-detail-mobile', 390, 844],
+  ['mobile', 'dashboard', '11-amber-mobile', 390, 844],
 ];
 
 async function shoot(page, kind, scene, stem, lang, width, height, action) {
@@ -101,7 +115,7 @@ async function shoot(page, kind, scene, stem, lang, width, height, action) {
     await page.getByLabel(label).first().click();
     const title = action === 'accept'
       ? (lang === 'fr' ? 'Confirmer la disponibilité' : 'Confirm availability')
-      : (lang === 'fr' ? 'Marquer comme indisponible' : 'Mark unavailable');
+      : (lang === 'fr' ? 'Refuser la demande' : 'Decline request');
     await page.getByText(title).first().waitFor({ timeout: 8000 });
   }
   if (errors.length) console.error(errors[0].split('\n').slice(0, 6).join('\n'));

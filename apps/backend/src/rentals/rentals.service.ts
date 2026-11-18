@@ -50,7 +50,7 @@ import { buildRentalRequestQuote } from './rental-request-quote';
 import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, shouldNotifyPriceChange } from './rental-price-change';
 import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
-import { computeRespondBy, earliestRequestStartIso } from './rental-respond-by';
+import { cappedContractExpiry, computeRespondBy, earliestRequestStartIso } from './rental-respond-by';
 import { dashboardRequestsEnabled, type DashboardRequestFlagRow } from './rental-dashboard-flag';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
@@ -1421,12 +1421,9 @@ export class RentalsService {
     }
     const computedSnapshot = this.computePricingSnapshotForRequest(req);
     this.assertSnapshotCurrency(computedSnapshot, req);
-    const hours = dto.contractExpiryHours;
-    if (!Number.isInteger(hours) || hours < 1 || hours > 168) {
-      throw new HttpException('contractExpiryHours must be between 1 and 168', HttpStatus.BAD_REQUEST);
-    }
-    const listingId = req.rental_location_listing_id;
     const now = new Date();
+    const contractExpiresAt = this.contractExpiryIso(req, dto.contractExpiryHours, now);
+    const listingId = req.rental_location_listing_id;
     const unitsRequested = this.normalizeUnitsRequested(req.units_requested);
     const unitsAvailable = Math.max(
       1,
@@ -1444,7 +1441,6 @@ export class RentalsService {
     }
     const snap = priced.snapshot;
     const total = Number(snap.total);
-    const contractExpiresAt = new Date(now.getTime() + hours * 3600000).toISOString();
     const clientId = req.client_id;
     let bookingId: string | null = null;
     try {
@@ -1926,36 +1922,56 @@ export class RentalsService {
   }
 
   async cancelClientRentalRequest(requestId: string): Promise<{ success: boolean }> {
+    const user = await this.requireCancelClient();
+    const req = await this.fetchRequest(requestId);
+    this.assertCancelOwner(req, user.clientId);
+    if (req.status !== 'pending' && req.status !== 'available') {
+      throw new HttpException('This request cannot be cancelled', HttpStatus.BAD_REQUEST);
+    }
+    const won = await this.casCancelRequest(requestId, req.status);
+    if (!won) throw new HttpException('This request cannot be cancelled', HttpStatus.BAD_REQUEST);
+    await this.cancelProposedIfAny(req, user.userId);
+    return { success: true };
+  }
+
+  private async requireCancelClient(): Promise<{ userId: string; clientId: string }> {
     const user = await this.hasuraUserService.getUser();
     if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException('Only clients can cancel requests', HttpStatus.FORBIDDEN);
     }
-    const req = await this.fetchRequest(requestId);
-    if (req.client_id !== user.client.id) {
-      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    return { userId: user.id, clientId: user.client.id };
+  }
+
+  private assertCancelOwner(req: { client_id?: string }, clientId: string): void {
+    if (req.client_id !== clientId) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+  }
+
+  private async casCancelRequest(id: string, status: string): Promise<boolean> {
+    const saved = await this.hasuraSystemService.executeMutation<{
+      update_rental_requests: { affected_rows: number } | null;
+    }>(Q.CANCEL_RENTAL_REQUEST, { id, status });
+    return (saved.update_rental_requests?.affected_rows ?? 0) > 0;
+  }
+
+  private async cancelProposedIfAny(
+    req: { status?: string; rental_booking?: { id?: string; status?: string } | null },
+    userId: string
+  ): Promise<void> {
+    if (req.status !== 'available') return;
+    const booking = req.rental_booking;
+    if (booking?.id && booking.status === 'proposed') await this.cancelProposedBooking(booking.id, userId);
+  }
+
+  private contractExpiryIso(req: Parameters<typeof earliestRequestStartIso>[0], hours: number, now: Date): string {
+    const startIso = earliestRequestStartIso(req);
+    const expiry = cappedContractExpiry(startIso, hours, now);
+    if (!expiry) {
+      throw new HttpException(
+        'contractExpiryHours must be a whole number from 1 up to 48, and not past the rental start',
+        HttpStatus.BAD_REQUEST
+      );
     }
-    if (req.status === 'pending') {
-      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
-        id: requestId,
-        status: 'cancelled',
-      });
-      return { success: true };
-    }
-    if (req.status === 'available') {
-      const booking = req.rental_booking as { id?: string; status?: string } | null | undefined;
-      if (booking?.id && booking.status === 'proposed') {
-        await this.cancelProposedBooking(booking.id, user.id);
-      }
-      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
-        id: requestId,
-        status: 'cancelled',
-      });
-      return { success: true };
-    }
-    throw new HttpException(
-      'This request cannot be cancelled',
-      HttpStatus.BAD_REQUEST
-    );
+    return expiry;
   }
 
   async createBusinessRentalItem(dto: CreateBusinessRentalItemDto): Promise<string> {

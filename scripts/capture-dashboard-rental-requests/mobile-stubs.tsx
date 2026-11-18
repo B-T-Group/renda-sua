@@ -13,7 +13,11 @@ export function ClientFlagsProvider({ children }: { children?: unknown }) {
 }
 
 const getDashboardRequests = async () => dashboardPayload();
-const getBusinessRequests = async () => listPayload();
+const getBusinessRequests = async (init?: { id?: string }) => {
+  const rows = listPayload();
+  if (!init?.id) return rows;
+  return rows.filter((row) => row.id === init.id);
+};
 
 export const rentalsApi = new Proxy(
   {},
@@ -49,6 +53,9 @@ export function useNavigation() {
 
 export function useRoute() {
   const scene = (globalThis as { __SCENE?: string }).__SCENE;
+  if (scene === 'detail') {
+    return { name: 'BusinessRentalRequestDetail', params: { requestId: 'dji' }, key: 'detail' };
+  }
   return { name: 'BusinessRentalsStudio', params: { tab: scene === 'list' ? 'requests' : 'catalog' }, key: 'capture' };
 }
 

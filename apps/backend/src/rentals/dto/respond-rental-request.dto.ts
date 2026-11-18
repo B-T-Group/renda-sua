@@ -38,15 +38,16 @@ export class RespondRentalRequestDto {
   rentalPricingSnapshot?: RentalPricingSnapshotDto;
 
   @ApiProperty({
-    description: 'Hours until the proposed contract expires (1–168). Required when status is available.',
+    description:
+      'Whole hours until the renter must confirm (1–48, and not past the rental start). Required when status is available. Under one hour, the server ends the contract at the start.',
     required: false,
     minimum: 1,
-    maximum: 168,
+    maximum: 48,
   })
   @ValidateIf((o) => o.status === RespondRentalRequestStatusDto.available)
   @IsInt()
   @Min(1)
-  @Max(168)
+  @Max(48)
   contractExpiryHours?: number;
 
   @ApiProperty({

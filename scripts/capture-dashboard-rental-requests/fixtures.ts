@@ -1,6 +1,6 @@
 /** Fixture payloads for the capture harness. Not imported by the apps. */
 
-export type Scene = 'dashboard' | 'empty' | 'after' | 'expired' | 'renter' | 'list';
+export type Scene = 'dashboard' | 'empty' | 'after' | 'expired' | 'renter' | 'list' | 'conflict' | 'updated' | 'detail' | 'hours';
 
 export function torontoToday(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -66,7 +66,10 @@ function request(input: {
         name: input.name,
         currency: 'CAD',
         business: { name: 'Atelier Nord' },
-        rental_item_images: [],
+        rental_category: { name: 'Equipment' },
+        rental_item_images: input.id === 'canon'
+          ? [{ id: 'canon-photo', image_url: '/item-photo.png', display_url: '/item-photo.png' }]
+          : [],
       },
     },
     client: { user: { first_name: input.renter[0], last_name: input.renter[1] } },
@@ -75,7 +78,7 @@ function request(input: {
 
 export function pendingRequests() {
   const today = torontoToday();
-  return [
+  const rows = [
     request({
       id: 'godox',
       name: 'Godox lighting kit',
@@ -102,14 +105,17 @@ export function pendingRequests() {
       updated: true,
     }),
   ];
+  if (sceneName() === 'conflict') return [{ ...rows[0], dates_available: false }];
+  if (sceneName() === 'hours') return [rows[1]];
+  if (sceneName() === 'updated' || sceneName() === 'detail') return [rows[2]];
+  return rows;
 }
+
+const SCENES: Scene[] = ['empty', 'after', 'expired', 'renter', 'list', 'conflict', 'updated', 'detail', 'hours'];
 
 export function sceneName(): Scene {
   const value = (globalThis as { __SCENE?: string }).__SCENE;
-  if (value === 'empty' || value === 'after' || value === 'expired' || value === 'renter' || value === 'list') {
-    return value;
-  }
-  return 'dashboard';
+  return SCENES.find((scene) => scene === value) ?? 'dashboard';
 }
 
 export function dashboardPayload() {
@@ -134,22 +140,29 @@ export function listPayload() {
 }
 
 export function renterRequest() {
-  const start = addDays(torontoToday(), 3);
+  const day = torontoToday();
+  const window = allDay(day);
+  const startMs = Date.parse(window.start_at);
   return {
     id: 'godox-renter',
-    created_at: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+    created_at: new Date(startMs - 30 * 60 * 60 * 1000).toISOString(),
     status: 'unavailable',
     unavailable_reason_code: 'no_response',
     quoted_total: 45,
     units_requested: 1,
     rental_pricing_snapshot: { version: 4, currency: 'CAD', total: 45 },
-    rental_selection_windows: [allDay(start)],
-    requested_start_at: `${start}T05:00:00.000Z`,
+    rental_selection_windows: [window],
+    requested_start_at: window.start_at,
     listing_timezone: 'America/Toronto',
     rental_location_listing: {
       id: 'listing-godox',
       business_location: { name: 'Atelier Nord', address: { city: 'Toronto', country: 'CA' } },
-      rental_item: { name: 'Godox lighting kit', currency: 'CAD', business: { name: 'Atelier Nord' } },
+      rental_item: {
+        name: 'Godox lighting kit',
+        currency: 'CAD',
+        business: { name: 'Atelier Nord' },
+        rental_category: { name: 'Equipment' },
+      },
     },
   };
 }

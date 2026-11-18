@@ -8,6 +8,7 @@ import { ThemeProvider, useTheme } from '../../apps/mobile/src/contexts/ThemeCon
 import { DashboardRentalRequests } from '../../apps/mobile/src/components/business/DashboardRentalRequests';
 import BusinessRentalsStudioScreen from '../../apps/mobile/src/screens/business/BusinessRentalsStudioScreen';
 import { ClientRentalRequestRow } from '../../apps/mobile/src/components/rentals/ClientRentalRequestRow';
+import BusinessRentalRequestDetailScreen from '../../apps/mobile/src/screens/business/BusinessRentalRequestDetailScreen';
 import { sceneName, renterRequest } from './fixtures';
 
 function Ready() {
@@ -33,6 +34,7 @@ function Shell() {
     <PaperProvider theme={paperTheme}>
       <Ready />
       {scene === 'list' ? <BusinessRentalsStudioScreen /> : null}
+      {scene === 'detail' ? <BusinessRentalRequestDetailScreen /> : null}
       {scene === 'renter' ? (
         <ClientRentalRequestRow
           row={renterRequest() as never}
@@ -43,7 +45,7 @@ function Shell() {
           onBrowseRentals={() => undefined}
         />
       ) : null}
-      {scene !== 'list' && scene !== 'renter' ? <DashboardRentalRequests /> : null}
+      {scene !== 'list' && scene !== 'renter' && scene !== 'detail' ? <DashboardRentalRequests /> : null}
     </PaperProvider>
     </SafeAreaProvider>
   );

@@ -211,6 +211,7 @@ export interface BusinessRentalRequestRow {
     rental_item: {
       name: string;
       currency: string;
+      rental_category?: { name?: string | null } | null;
       rental_item_images?: Array<{
         id: string;
         image_url: string;

@@ -122,10 +122,16 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
     },
     'client'
   );
-  const statusLabel = t(phase.labelKey, row.status);
+  const reasonCode = row.unavailable_reason_code?.trim();
+  const autoDeclined = row.status === 'unavailable' && reasonCode === 'no_response';
+  const statusLabel = autoDeclined
+    ? t('rentals.clientRequests.declinedBadge', 'Declined')
+    : t(phase.labelKey, row.status);
+  const heading = autoDeclined
+    ? t('rentals.clientRequests.declinedTitle', 'Rental request declined')
+    : itemName;
   const deadlineIso = proposedContractDeadlineIso(row);
   const canBookNow = row.status === 'available' && isProposedContractOpen(row);
-  const reasonCode = row.unavailable_reason_code?.trim();
   const bookingId = row.rental_booking?.id;
   const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
   const periodLines = clientRequestPeriodLines(selectionWindows, i18n.language, (count) =>
@@ -155,8 +161,11 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="h6" component="h2" fontWeight={700} sx={{ fontSize: '1.05rem' }}>
-              {itemName}
+              {heading}
             </Typography>
+            {autoDeclined ? (
+              <Typography variant="body2" color="text.secondary">{itemName}</Typography>
+            ) : null}
             {locName ? (
               <Stack direction="row" alignItems="center" gap={0.5} sx={{ mt: 0.25 }}>
                 <LocationOn sx={{ fontSize: 16, color: 'text.secondary' }} />

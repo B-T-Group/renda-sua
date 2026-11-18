@@ -829,6 +829,17 @@ export const INSERT_RENTAL_STATUS_HISTORY = `
   }
 `;
 
+export const CANCEL_RENTAL_REQUEST = `
+  mutation CancelRentalRequest($id: uuid!, $status: rental_request_status_enum!) {
+    update_rental_requests(
+      where: { id: { _eq: $id }, status: { _eq: $status } }
+      _set: { status: cancelled }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
 export const UPDATE_RENTAL_REQUEST_STATUS = `
   mutation UpdateRentalRequestStatus($id: uuid!, $status: rental_request_status_enum!) {
     update_rental_requests_by_pk(pk_columns: { id: $id }, _set: { status: $status }) {

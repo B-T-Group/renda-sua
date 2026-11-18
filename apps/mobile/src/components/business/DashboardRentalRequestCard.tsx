@@ -6,6 +6,7 @@ import { Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessRentalRequestRow } from '../../types/rentals';
 import { respondWithinAmber, respondWithinHours } from '../../utils/rentals/dashboardRentalRequests';
+import { rentalCategoryIcon } from '../../utils/rentals/rentalCategoryIcon';
 import { buildRequestCardModel, type RequestCardModel } from '../../utils/rentals/rentalRequestCardModel';
 
 export function DashboardRentalRequestCard({
@@ -29,17 +30,29 @@ export function DashboardRentalRequestCard({
   const model = buildRequestCardModel(request, i18n.language, new Date(), t);
   const hours = request.respond_by ? respondWithinHours(request.respond_by) : 0;
   const amber = Boolean(request.respond_by && respondWithinAmber(request.respond_by));
-  const photo = request.rental_location_listing.rental_item.rental_item_images?.[0];
-  const uri = photo?.display_url || photo?.thumbnail || photo?.image_url;
   return (
     <View style={[styles.card, { width, borderColor: colors.divider, backgroundColor: colors.surface, padding: spacing.sm }]}>
       <Pressable accessibilityRole={onOpen ? 'button' : undefined} accessibilityLabel={t('rentals.requestCard.openRequest', 'Open request')} onPress={onOpen ? () => onOpen(request) : undefined}>
         <View style={styles.row}>
-          {uri ? <Image source={{ uri }} style={styles.photo} /> : <View style={[styles.photo, { backgroundColor: colors.divider }]} />}
+          <ItemThumb request={request} />
           <CardCopy model={model} hours={hours} amber={amber} open={open} onToggle={() => setOpen((value) => !value)} />
         </View>
       </Pressable>
       {showActions ? <CardActions request={request} disabled={model.acceptDisabled} onAccept={onAccept} onDecline={onDecline} /> : null}
+    </View>
+  );
+}
+
+function ItemThumb({ request }: { request: BusinessRentalRequestRow }) {
+  const { colors } = useTheme();
+  const photo = request.rental_location_listing.rental_item.rental_item_images?.[0];
+  const uri = photo?.display_url || photo?.thumbnail || photo?.image_url;
+  if (uri) return <Image source={{ uri }} style={styles.photo} />;
+  const name = request.rental_location_listing.rental_item.rental_category?.name
+    || request.rental_location_listing.rental_item.name;
+  return (
+    <View style={[styles.photo, styles.thumb, { backgroundColor: colors.primary.main + '14' }]}>
+      <MaterialCommunityIcons name={rentalCategoryIcon(name)} size={28} color={colors.primary.main} />
     </View>
   );
 }
@@ -137,6 +150,7 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 16, marginRight: 12 },
   row: { flexDirection: 'row', gap: 12 },
   photo: { width: 64, height: 64, borderRadius: 12 },
+  thumb: { alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, gap: 2 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
   iconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },

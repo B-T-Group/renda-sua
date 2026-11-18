@@ -23,6 +23,7 @@ import {
   formatRequestAmount,
   formatRentalPeriod,
 } from '../../utils/rentals/rentalRequestFormat';
+import { rentalCategoryIcon } from '../../utils/rentals/rentalCategoryIcon';
 import { requestStartIso, respondWindow } from '../../utils/rentals/dashboardRentalRequests';
 
 export interface ClientRentalRequestRowProps {
@@ -77,7 +78,13 @@ export function ClientRentalRequestRow({
     'client'
   );
   const statusColors = rentalPhaseColors(phase.phase, colors);
-  const statusLabel = cardStatusLabel(row.status, phase.labelKey, t);
+  const autoDeclined = row.status === 'unavailable' && row.unavailable_reason_code === 'no_response';
+  const statusLabel = autoDeclined
+    ? t('rentals.clientRequests.declinedBadge', 'Declined')
+    : cardStatusLabel(row.status, phase.labelKey, t);
+  const heading = autoDeclined
+    ? t('rentals.clientRequests.declinedTitle', 'Rental request declined')
+    : itemName;
   const updated = (row.change_summary?.fields?.length ?? 0) > 0;
   const deadlineIso = proposedContractDeadlineIso(row);
   const canBookNow = row.status === 'available' && isProposedContractOpen(row);
@@ -89,7 +96,7 @@ export function ClientRentalRequestRow({
   const total = quotedAmount(row, quote?.total);
   const currency = listing?.rental_item?.currency || quote?.currency || 'XAF';
   const amount = Number.isFinite(total)
-    ? `${row.units_requested ?? 1} × · ${formatRequestAmount(total as number, currency, i18n.language)}`
+    ? requestAmountLine(row.units_requested, formatRequestAmount(total as number, currency, i18n.language))
     : null;
 
   return (
@@ -136,12 +143,21 @@ export function ClientRentalRequestRow({
           onPress={() => listing?.id && onViewListing(listing.id)}
           style={[styles.thumb, { backgroundColor: colors.primary.main + '18' }]}
         >
-          <MaterialCommunityIcons name="warehouse" size={26} color={colors.primary.main} />
+          <MaterialCommunityIcons
+            name={rentalCategoryIcon(listing?.rental_item?.rental_category?.name || itemName)}
+            size={26}
+            color={colors.primary.main}
+          />
         </Pressable>
         <View style={styles.flex}>
           <Text style={[typography.subtitle1, { color: colors.text.primary, fontFamily: fontFamily.medium }]}>
-            {itemName}
+            {heading}
           </Text>
+          {autoDeclined ? (
+            <Text style={[typography.caption, { color: colors.text.secondary, fontFamily: fontFamily.medium }]}>
+              {itemName}
+            </Text>
+          ) : null}
           {subtitle ? (
             <Text style={[typography.caption, { color: colors.text.secondary, fontFamily: fontFamily.medium }]}>
               {subtitle}
@@ -314,6 +330,11 @@ export function ClientRentalRequestRow({
       ) : null}
     </View>
   );
+}
+
+function requestAmountLine(units: number | null | undefined, money: string): string {
+  const count = units ?? 1;
+  return count > 1 ? `${count} × ${money}` : money;
 }
 
 function placeLine(row: ClientRentalRequest): string {

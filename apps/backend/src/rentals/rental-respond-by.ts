@@ -16,6 +16,36 @@ export function computeRespondBy(input: {
   return { respondBy: new Date(sla).toISOString(), window: 'sla' };
 }
 
+const CONTRACT_HOUR_CAP = 48;
+
+/** Default and maximum contract length: min(48, whole hours until start). Hidden under 1 hour. */
+export function contractHoursOffer(startIso: string | null, now = new Date()): {
+  hidden: boolean;
+  hours: number;
+  maxHours: number;
+} {
+  const remaining = hoursUntil(startIso, now);
+  if (remaining == null) return { hidden: false, hours: CONTRACT_HOUR_CAP, maxHours: CONTRACT_HOUR_CAP };
+  if (remaining < 1) return { hidden: true, hours: Math.max(0, remaining), maxHours: 0 };
+  const maxHours = Math.min(CONTRACT_HOUR_CAP, Math.floor(remaining));
+  return { hidden: false, hours: maxHours, maxHours };
+}
+
+function hoursUntil(startIso: string | null, now: Date): number | null {
+  if (!startIso) return null;
+  const start = Date.parse(startIso);
+  if (!Number.isFinite(start)) return null;
+  return (start - now.getTime()) / (60 * 60 * 1000);
+}
+
+/** When the start is under an hour away, the contract ends at that start. */
+export function cappedContractExpiry(startIso: string | null, hours: number, now = new Date()): string | null {
+  const offer = contractHoursOffer(startIso, now);
+  if (offer.hidden) return startIso;
+  if (!Number.isInteger(hours) || hours < 1 || hours > offer.maxHours) return null;
+  return new Date(now.getTime() + hours * 60 * 60 * 1000).toISOString();
+}
+
 export function earliestRequestStartIso(row: {
   requested_start_at?: string | null;
   rental_selection_windows?: unknown;
