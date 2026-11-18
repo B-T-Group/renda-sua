@@ -144,6 +144,8 @@ import {
   buildRentalPeriodEndedPush,
   buildRentalRequestAcceptedPush,
   buildRentalRequestRejectedPush,
+  buildConditionDeclinedNotice,
+  buildConditionRefundSupportNotice,
 } from './rental-push.messages';
 import {
   buildItemAiProposalPushMessage,
@@ -4427,6 +4429,98 @@ export class NotificationsService {
       rentalBookingId: params.bookingId,
       url: `/rentals/bookings/${params.bookingId}`,
     });
+  }
+
+  /** In-app row plus a push when the renter declines the pickup condition. */
+  async sendConditionDeclinedNotice(params: {
+    businessUserId: string;
+    renterName: string;
+    rentalItemName: string;
+    bookingId: string;
+    bookingNumber: string;
+  }): Promise<void> {
+    const uid = params.businessUserId.trim();
+    if (!uid) return;
+    try {
+      await this.deliverConditionDeclined(uid, params);
+    } catch (error: any) {
+      this.logger.warn(`sendConditionDeclinedNotice: ${error?.message ?? error}`);
+    }
+  }
+
+  /** Support hears when a Mobile Money refund cannot be confirmed. */
+  async notifySupportConditionRefund(payload: {
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+    outcome: string;
+  }): Promise<void> {
+    try {
+      await this.emailSupportRefund(payload);
+      await this.pushSupportRefund(payload);
+    } catch (error: any) {
+      this.logger.error(`notifySupportConditionRefund: ${error?.message ?? error}`);
+    }
+  }
+
+  private async deliverConditionDeclined(
+    userId: string,
+    params: { renterName: string; rentalItemName: string; bookingId: string; bookingNumber: string }
+  ): Promise<void> {
+    const lang = await this.languageFor(userId);
+    const msg = buildConditionDeclinedNotice({ ...params, preferredLanguage: lang });
+    const path = `/rentals/bookings/${params.bookingId}?persona=business`;
+    await this.insertRentalUserMessage(userId, params.bookingId, 'CONDITION_DECLINED', msg.body, path, 'condition_declined');
+    await this.pushConditionDeclined(userId, params.bookingId, msg, path);
+  }
+
+  private async pushConditionDeclined(
+    userId: string,
+    bookingId: string,
+    msg: { title: string; body: string },
+    path: string
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    await this.sendPushNotificationByUserId(userId, msg.title, msg.body, {
+      type: 'condition_declined',
+      rentalBookingId: bookingId,
+      persona: 'business',
+      url: path,
+    });
+  }
+
+  private async emailSupportRefund(payload: {
+    bookingNumber: string;
+    rentalItemName: string;
+    outcome: string;
+  }): Promise<void> {
+    const msg = buildConditionRefundSupportNotice(payload);
+    await this.sendSimpleLifecycleEmail({
+      to: process.env.ADMIN_NOTIFICATION_EMAIL || 'support@rendasua.com',
+      subject: msg.title,
+      html: `<p>${escapeHtmlForEmail(msg.body)}</p>`,
+    });
+  }
+
+  private async pushSupportRefund(payload: {
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+    outcome: string;
+  }): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const recipients = buildOrderRiskRecipients({
+      staff: await this.rbacService.listUsersWithRoles(),
+      roleKeys: [PlatformRoles.SUPERUSER, PlatformRoles.SUPPORT, PlatformRoles.ORDER_MANAGER],
+    });
+    const msg = buildConditionRefundSupportNotice(payload);
+    for (const recipient of recipients) {
+      await this.sendPushNotificationByUserId(recipient.userId, msg.title, msg.body, {
+        type: 'condition_refund_review',
+        rentalBookingId: payload.bookingId,
+        url: '/admin/rentals/declines',
+      });
+    }
   }
 
   /** T−30m end-of-rental reminder: email + push to both client and business. */

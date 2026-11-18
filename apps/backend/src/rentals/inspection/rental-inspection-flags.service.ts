@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
+import { PICKUP_DECLINE_FLAG } from '../pickup-decline/pickup-decline.policy';
 
 const FLAG_KEY = 'rental_inspection_enabled';
 const ALLOW_SELF_BOOKING_KEY = 'rentals_inspection_allow_self_booking';
@@ -35,6 +36,11 @@ export class RentalInspectionFlags {
   /** Date-picker guard and create-time rejection. Seeded false. */
   async cardWindowGuardEnabled(countryCode?: string | null): Promise<boolean> {
     return this.booleanConfig(CARD_WINDOW_GUARD_KEY, countryCode, false);
+  }
+
+  /** Renter decline at pickup. Seeded false. No NODE_ENV override. */
+  async pickupDeclineEnabled(countryCode?: string | null): Promise<boolean> {
+    return this.booleanConfig(PICKUP_DECLINE_FLAG, countryCode, false);
   }
 
   /** Per-item opt-in. Seeded false. No NODE_ENV override. */

@@ -1,0 +1,10 @@
+table:
+  name: rental_condition_decline_photos
+  schema: public
+object_relationships:
+  - name: rental_booking
+    using:
+      foreign_key_constraint_on: rental_booking_id
+  - name: decline
+    using:
+      foreign_key_constraint_on: decline_id

@@ -1,0 +1,3 @@
+table:
+  name: rental_business_pickup_reach_90d
+  schema: public

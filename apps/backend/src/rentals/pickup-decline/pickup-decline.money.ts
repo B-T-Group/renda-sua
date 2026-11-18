@@ -72,11 +72,11 @@ export function providerRefundPlan(provider: string): ProviderRefundPlan {
 const REFUNDED = new Set(['successful', 'success', 'approved', 'transferred', 'sent']);
 const FAILED = new Set(['failed', 'failure', 'declined', 'canceled', 'cancelled', 'rejected']);
 
-export function mapRefundPoll(code: string | null | undefined): 'refunded' | 'failed' | 'pending' {
+export function mapRefundPoll(code: string | null | undefined): 'refunded' | 'failed' | 'refund_pending' {
   const normalized = (code ?? '').trim().toLowerCase();
   if (REFUNDED.has(normalized)) return 'refunded';
   if (FAILED.has(normalized)) return 'failed';
-  return 'pending';
+  return 'refund_pending';
 }
 
 /** Full ledger refund, still capped if a caller passes the booking total by mistake. */

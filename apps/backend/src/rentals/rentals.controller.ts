@@ -13,6 +13,8 @@ import {
   Patch,
   Post,
   Query,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -46,6 +48,9 @@ import { RentalRenterReturnService } from './renter-return/rental-renter-return.
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { readLatestCardEndAt } from './rental-card-window';
 import { RentalsService } from './rentals.service';
+import { DeclineConditionDto, DeclinePhotoPresignDto } from './pickup-decline/pickup-decline.dto';
+import { RentalConditionPhotosService } from './pickup-decline/rental-condition-photos.service';
+import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 
 @ApiTags('rentals')
 @ApiBearerAuth('access-token')
@@ -58,7 +63,9 @@ export class RentalsController {
     private readonly rentalStartPinShare: RentalStartPinShareService,
     private readonly notReceived: RentalNotReceivedService,
     private readonly renterReturns: RentalRenterReturnService,
-    private readonly inspectionOptIn: InspectionOptInService
+    private readonly inspectionOptIn: InspectionOptInService,
+    private readonly pickupDecline: RentalPickupDeclineService,
+    private readonly conditionPhotos: RentalConditionPhotosService
   ) {}
 
   @Public()
@@ -737,6 +744,54 @@ export class RentalsController {
     return this.renterReturns.report(bookingId);
   }
 
+  @Post('bookings/:id/decline-condition')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({ summary: 'Renter declines the pickup condition and cancels before start' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: DeclineConditionDto })
+  @ApiResponse({ status: 200, description: 'Booking cancelled, or the same decline returned again' })
+  @ApiResponse({ status: 403, description: 'Only the renter can decline' })
+  @ApiResponse({ status: 404, description: 'Flag off or booking missing' })
+  @ApiResponse({ status: 409, description: 'Start, cancel, or a newer condition report won' })
+  declineCondition(@Param('id', ParseUUIDPipe) bookingId: string, @Body() body: DeclineConditionDto) {
+    return this.pickupDecline.decline(bookingId, body);
+  }
+
+  @Post('bookings/:id/decline-photos/presign')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({ summary: 'Presign a private condition-decline photo' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: DeclinePhotoPresignDto })
+  @ApiResponse({ status: 200, description: 'Upload URL returned' })
+  presignDeclinePhoto(@Param('id', ParseUUIDPipe) bookingId: string, @Body() body: DeclinePhotoPresignDto) {
+    return this.conditionPhotos.presign(bookingId, body);
+  }
+
+  @Post('bookings/:id/decline-photos/:photoId/finalize')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Store a private condition-decline photo' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiParam({ name: 'photoId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Photo is ready' })
+  finalizeDeclinePhoto(
+    @Param('id', ParseUUIDPipe) bookingId: string,
+    @Param('photoId', ParseUUIDPipe) photoId: string
+  ) {
+    return this.conditionPhotos.finalize(bookingId, photoId);
+  }
+
+  @Public()
+  @Get('listings/:listingId/condition-photos')
+  @ApiOperation({ summary: 'Public condition photos for an opted-in listing' })
+  @ApiParam({ name: 'listingId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Short-lived photo URLs' })
+  @ApiResponse({ status: 404, description: 'Flag off, not public, or baseline incomplete' })
+  conditionPhotosForListing(@Param('listingId', ParseUUIDPipe) listingId: string) {
+    return this.conditionPhotos.forListing(listingId);
+  }
+
   @Get('bookings/:id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -749,7 +804,9 @@ export class RentalsController {
   })
   @ApiResponse({ status: 404, description: 'Booking not found (or not visible)' })
   async getBooking(@Param('id') bookingId: string) {
-    const booking = await this.rentalsService.getBookingDetailForViewer(bookingId);
+    const booking = await this.pickupDecline.decorateBooking(
+      await this.rentalsService.getBookingDetailForViewer(bookingId)
+    );
     const report = await this.notReceived.findForBooking(bookingId);
     const returnPlace = await this.renterReturns.placeFor(bookingId);
     return {

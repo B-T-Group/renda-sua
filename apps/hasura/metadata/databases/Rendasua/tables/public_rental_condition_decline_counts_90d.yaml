@@ -1,0 +1,3 @@
+table:
+  name: rental_condition_decline_counts_90d
+  schema: public

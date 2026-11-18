@@ -3282,6 +3282,17 @@ export class RentalsService {
    * otherwise). Throws on a real void failure so callers do not mark the
    * booking cancelled while a card hold is still outstanding.
    */
+  /** Wallet hold release and Stripe void used by a free cancel and a condition decline. */
+  async releaseFreeCancelFunds(booking: {
+    id: string;
+    booking_number?: string | null;
+    currency: string;
+    client: { user_id: string };
+  }): Promise<void> {
+    await this.releaseHoldIfNeeded(booking.id, booking);
+    await this.cancelStripeAuthorizationIfAny(booking);
+  }
+
   private async cancelStripeAuthorizationIfAny(booking: any): Promise<void> {
     const bookingNumber = booking.booking_number as string | undefined;
     if (!bookingNumber) return;
