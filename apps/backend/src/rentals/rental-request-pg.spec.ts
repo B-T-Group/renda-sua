@@ -57,7 +57,7 @@ describe('rental request SQL on Postgres', () => {
     await client.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
     await client.query(schema);
     await client.query(readFileSync(join(root, '20261114200000_rental_requests_respond_by_index/up.sql'), 'utf8'));
-    await client.query(readFileSync(join(root, '20261118180000_rental_request_qa_round2/up.sql'), 'utf8'));
+    await client.query(readFileSync(join(root, '20261118210000_rental_request_qa_round2/up.sql'), 'utf8'));
   });
 
   afterAll(async () => {

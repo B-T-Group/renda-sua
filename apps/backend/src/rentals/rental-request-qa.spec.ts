@@ -6,7 +6,7 @@ import { computeRespondBy } from './rental-respond-by';
 import { RentalsService } from './rentals.service';
 
 const qaSql = readFileSync(
-  join(__dirname, '../../../hasura/migrations/Rendasua/20261118160000_rental_request_qa_fixes/up.sql'),
+  join(__dirname, '../../../hasura/migrations/Rendasua/20261118200000_rental_request_qa_fixes/up.sql'),
   'utf8'
 );
 
@@ -26,7 +26,7 @@ describe('rental request QA sql', () => {
 
   it('L5 backfills respond_by in batches without a generated column', () => {
     const backfill = readFileSync(
-      join(__dirname, '../../../hasura/migrations/Rendasua/20261118180000_rental_request_qa_round2/up.sql'),
+      join(__dirname, '../../../hasura/migrations/Rendasua/20261118210000_rental_request_qa_round2/up.sql'),
       'utf8'
     );
     expect(qaSql).toContain('ADD COLUMN IF NOT EXISTS respond_by timestamptz');

@@ -67,7 +67,7 @@ END $$;
 ALTER TABLE public.rental_requests
   ADD COLUMN IF NOT EXISTS respond_by timestamptz;
 
--- The backfill lives in 20261118180000 so this ADD COLUMN lock is not held
+-- The backfill lives in 20261118210000 so this ADD COLUMN lock is not held
 -- through the table update.
 
 CREATE INDEX IF NOT EXISTS idx_rental_requests_status_respond_by

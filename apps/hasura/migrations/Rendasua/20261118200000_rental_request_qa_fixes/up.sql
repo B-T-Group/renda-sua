@@ -22,7 +22,7 @@ END $$;
 ALTER TABLE public.rental_requests
   ADD COLUMN IF NOT EXISTS respond_by timestamptz;
 
--- Pending-row backfill is 20261118180000, after this column lock commits.
+-- Pending-row backfill is 20261118210000, after this column lock commits.
 
 CREATE INDEX IF NOT EXISTS idx_rental_requests_status_respond_by
   ON public.rental_requests (status, respond_by);
