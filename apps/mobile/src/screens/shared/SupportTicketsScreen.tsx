@@ -13,6 +13,7 @@ import { AppModal } from '../../components/common/AppModal';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { agentApi, type SupportTicket } from '../../services/agentApi';
+import { supportBookingNumber } from './supportBookingNumber';
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString(undefined, {
@@ -36,7 +37,7 @@ function statusLabel(status: string, t: (k: string) => string): string {
 
 export default function SupportTicketsScreen({ route }: { route?: { params?: { bookingNumber?: string } } }) {
   const { t } = useTranslation();
-  const bookingNumber = (route?.params?.bookingNumber ?? '').trim();
+  const bookingNumber = supportBookingNumber(route?.params?.bookingNumber);
   const { colors, typography, borderRadius } = useTheme();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);

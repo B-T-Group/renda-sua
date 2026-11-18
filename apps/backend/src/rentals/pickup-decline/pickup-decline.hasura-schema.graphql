@@ -71,6 +71,7 @@ input rental_condition_declines_insert_input {
   rental_booking_id: uuid
   effects_recorded_at: timestamptz
 }
+input rental_bookings_order_by { refund_status_at: order_by }
 input rental_condition_declines_order_by { created_at: order_by }
 input rental_condition_declines_pk_columns_input { id: uuid! }
 
@@ -215,7 +216,11 @@ type rental_item_baseline_photos {
 
 type query_root {
   rental_bookings_by_pk(id: uuid!): rental_bookings
-  rental_bookings(where: rental_bookings_bool_exp limit: Int): [rental_bookings!]!
+  rental_bookings(
+    where: rental_bookings_bool_exp
+    order_by: rental_bookings_order_by
+    limit: Int
+  ): [rental_bookings!]!
   rental_condition_declines(
     where: rental_condition_declines_bool_exp
     limit: Int

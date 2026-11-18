@@ -631,7 +631,6 @@ async function applyMutation(pool: Pool, query: string, vars: Record<string, unk
   if (query.includes('StampDeclineRefundSent')) return { update_rental_bookings: { affected_rows: await stampSent(pool, vars) } };
   if (query.includes('StampDeclineRefund')) return { update_rental_bookings: { affected_rows: await stamp(pool, vars) } };
   if (query.includes('ClaimDeclineRefund')) return { update_rental_bookings: { affected_rows: await claimWork(pool, vars) } };
-  if (query.includes('RememberDeclineRefundRef')) return { update_rental_bookings: { affected_rows: await remember(pool, vars) } };
   if (query.includes('KeepDeclineRefundClaim')) return { update_rental_bookings: { affected_rows: await keep(pool, vars) } };
   if (query.includes('ApplyOwnedDeclineRefund')) return { update_rental_bookings: { affected_rows: await owned(pool, vars) } };
   if (query.includes('KeepDeclineProviderRef')) return { update_rental_bookings: { affected_rows: await keepRef(pool, vars) } };
@@ -653,15 +652,6 @@ async function claimWork(pool: Pool, vars: Record<string, unknown>): Promise<num
     `id = $1 AND refund_status = 'refund_pending' AND refund_attempts = $2 AND (refund_claim_at IS NULL OR refund_claim_at < $3)`,
     [vars.id, vars.attempts, vars.stale]
   );
-}
-
-async function remember(pool: Pool, vars: Record<string, unknown>): Promise<number> {
-  const result = await pool.query(
-    `UPDATE rental_bookings SET refund_provider = $2, refund_provider_ref = $3
-     WHERE id = $1 AND refund_status = 'refund_pending' AND refund_provider_ref IS NULL`,
-    [vars.id, vars.provider, vars.ref]
-  );
-  return result.rowCount ?? 0;
 }
 
 async function keep(pool: Pool, vars: Record<string, unknown>): Promise<number> {

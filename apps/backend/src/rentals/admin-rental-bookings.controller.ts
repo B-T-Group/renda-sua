@@ -187,7 +187,7 @@ export class AdminRentalBookingsController {
 
   @Post('bookings/:id/refund-status')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Mark a pending Mobile Money refund refunded, failed, or confirmed unpaid' })
+  @ApiOperation({ summary: 'Mark a pending Mobile Money refund refunded, failed, confirmed unpaid, or manually overridden' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiBody({ type: MarkDeclineRefundDto })
   @ApiResponse({ status: 200, description: 'Refund status updated' })

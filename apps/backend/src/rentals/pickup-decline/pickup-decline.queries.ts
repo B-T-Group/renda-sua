@@ -174,19 +174,6 @@ export const CLAIM_REFUND = `
   }
 `;
 
-export const REMEMBER_REFUND_REF = `
-  mutation RememberDeclineRefundRef($id: uuid!, $provider: String!, $ref: String!) {
-    update_rental_bookings(
-      where: {
-        id: { _eq: $id }
-        refund_status: { _eq: "refund_pending" }
-        refund_provider_ref: { _is_null: true }
-      }
-      _set: { refund_provider: $provider, refund_provider_ref: $ref }
-    ) { affected_rows }
-  }
-`;
-
 export const DELETE_DECLINE = `
   mutation DeleteConditionDecline($id: uuid!) {
     delete_rental_condition_declines_by_pk(id: $id) { id }
@@ -390,16 +377,22 @@ export const DECLINE_PHOTO_ROWS = `
 `;
 
 export const RENTER_NOTICE_RETRIES = `
-  query DeclineRenterNoticeRetries($landed: jsonb!, $try1: jsonb!, $try2: jsonb!) {
+  query DeclineRenterNoticeRetries($landed: jsonb!, $try1: jsonb!, $try2: jsonb!, $try3: jsonb!) {
     rental_bookings(
       where: {
-        refund_status: { _in: ["failed", "manual", "refunded"] }
-        _not: { refund_notices: { _contains: $landed } }
-        _or: [
-          { refund_notices: { _contains: $try1 } }
-          { refund_notices: { _contains: $try2 } }
+        _and: [
+          { refund_status: { _in: ["failed", "manual", "refunded"] } }
+          { _not: { refund_notices: { _contains: $landed } } }
+          { _not: { refund_notices: { _contains: $try3 } } }
+          {
+            _or: [
+              { refund_notices: { _contains: $try1 } }
+              { refund_notices: { _contains: $try2 } }
+            ]
+          }
         ]
       }
+      order_by: { refund_status_at: asc }
       limit: 20
     ) {
       id
