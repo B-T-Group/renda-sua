@@ -99,7 +99,10 @@ async function shoot(page, kind, scene, stem, lang, width, height, action) {
   if (action) {
     const label = action === 'accept' ? (lang === 'fr' ? 'Accepter' : 'Accept') : lang === 'fr' ? 'Refuser' : 'Decline';
     await page.getByLabel(label).first().click();
-    await page.waitForSelector('[role=dialog]', { timeout: 8000 });
+    const title = action === 'accept'
+      ? (lang === 'fr' ? 'Confirmer la disponibilité' : 'Confirm availability')
+      : (lang === 'fr' ? 'Marquer comme indisponible' : 'Mark unavailable');
+    await page.getByText(title).first().waitFor({ timeout: 8000 });
   }
   if (errors.length) console.error(errors[0].split('\n').slice(0, 6).join('\n'));
   await page.waitForTimeout(200);
