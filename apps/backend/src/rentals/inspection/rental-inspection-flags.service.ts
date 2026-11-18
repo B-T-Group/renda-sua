@@ -49,6 +49,11 @@ export class RentalInspectionFlags {
     return this.booleanConfig(PICKUP_DECLINE_FLAG, countryCode, false);
   }
 
+  /** True when the global row or any country row is on. The support list uses this. */
+  async declineRankingEnabledAnywhere(): Promise<boolean> {
+    return this.anyEnabled(DECLINE_RANKING_FLAG);
+  }
+
   /** Search penalty and support exclusion. Seeded false. No NODE_ENV override. */
   async declineRankingEnabled(countryCode?: string | null): Promise<boolean> {
     return this.booleanConfig(DECLINE_RANKING_FLAG, countryCode, false);

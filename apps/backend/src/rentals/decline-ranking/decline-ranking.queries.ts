@@ -16,11 +16,12 @@ export const RANK_SNAPSHOT = `
 `;
 
 export const EXCLUSION_ROWS = `
-  query DeclineExclusionRows($since: timestamptz!) {
+  query DeclineExclusionRows($since: timestamptz!, $limit: Int!, $offset: Int!) {
     rental_condition_declines(
       where: { created_at: { _gte: $since } }
       order_by: { created_at: desc }
-      limit: 12
+      limit: $limit
+      offset: $offset
     ) {
       id
       reason
@@ -51,8 +52,7 @@ export const DECLINE_FOR_EXCLUSION = `
   query DeclineForExclusion($bookingId: uuid!) {
     rental_condition_declines(
       where: { rental_booking_id: { _eq: $bookingId } }
-      order_by: { created_at: desc }
-      limit: 1
+      order_by: { created_at: asc }
     ) { id rental_booking { id status } }
   }
 `;

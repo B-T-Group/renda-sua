@@ -1,12 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { RentalInspectionFlags } from '../inspection/rental-inspection-flags.service';
 import {
-  RANK_DEFAULTS,
   RANK_FULL_KEY,
   RANK_MIN_SAMPLE_KEY,
   RANK_START_KEY,
   RANK_WEIGHT_KEY,
+  clampRankConfig,
   platformRate,
   rankMultiplier,
 } from './decline-ranking.policy';
@@ -28,6 +28,8 @@ interface BusinessStat {
 
 @Injectable()
 export class DeclineRankingService {
+  private readonly logger = new Logger(DeclineRankingService.name);
+  /** One process, 60 seconds. The platform rate is pooled across countries. */
   private cache: { at: number; multipliers: Map<string, number> } | null = null;
 
   constructor(
@@ -35,8 +37,8 @@ export class DeclineRankingService {
     private readonly flags: RentalInspectionFlags
   ) {}
 
-  async multipliersFor(businessIds: string[]): Promise<Map<string, number>> {
-    const all = await this.cached();
+  async multipliersFor(businessIds: string[], countryCode?: string | null): Promise<Map<string, number>> {
+    const all = await this.cached(countryCode);
     return this.pick(businessIds, all);
   }
 
@@ -44,16 +46,16 @@ export class DeclineRankingService {
     this.cache = null;
   }
 
-  private async cached(): Promise<Map<string, number>> {
+  private async cached(countryCode?: string | null): Promise<Map<string, number>> {
     if (this.cache && Date.now() - this.cache.at < CACHE_MS) return this.cache.multipliers;
-    const multipliers = await this.load();
+    const multipliers = await this.load(countryCode);
     this.cache = { at: Date.now(), multipliers };
     return multipliers;
   }
 
-  private async load(): Promise<Map<string, number>> {
+  private async load(countryCode?: string | null): Promise<Map<string, number>> {
     try {
-      if (!(await this.flags.declineRankingEnabled())) return new Map();
+      if (!(await this.flags.declineRankingEnabled(countryCode))) return new Map();
       return this.scores(await this.hasura.executeQuery<Snapshot>(RANK_SNAPSHOT, { keys: KEYS }));
     } catch (error: any) {
       void error;
@@ -77,22 +79,29 @@ export class DeclineRankingService {
     }
     for (const row of snapshot.rental_condition_decline_counts_90d ?? []) {
       const current = stats.get(row.party_id) ?? { n: 0, d: 0 };
-      stats.set(row.party_id, { n: current.n, d: row.decline_count ?? 0 });
+      const declines = row.decline_count ?? 0;
+      stats.set(row.party_id, { n: current.n, d: Math.min(declines, current.n) });
     }
     return stats;
   }
 
   private config(rows: Snapshot['application_configurations']) {
-    const value = (key: string, fallback: number) => {
-      const raw = Number(rows.find((row) => row.config_key === key)?.number_value);
-      return Number.isFinite(raw) ? raw : fallback;
+    const value = (key: string): number | null => {
+      const raw = rows.find((row) => row.config_key === key)?.number_value;
+      if (raw == null) return null;
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : null;
     };
-    return {
-      w: value(RANK_WEIGHT_KEY, RANK_DEFAULTS.weight),
-      minSample: value(RANK_MIN_SAMPLE_KEY, RANK_DEFAULTS.minSample),
-      start: value(RANK_START_KEY, RANK_DEFAULTS.start),
-      full: value(RANK_FULL_KEY, RANK_DEFAULTS.full),
-    };
+    const clamped = clampRankConfig({
+      w: value(RANK_WEIGHT_KEY),
+      minSample: value(RANK_MIN_SAMPLE_KEY),
+      start: value(RANK_START_KEY),
+      full: value(RANK_FULL_KEY),
+    });
+    if (clamped.warnings.length > 0) {
+      this.logger.warn(`decline ranking config fell back to defaults: ${clamped.warnings.join(', ')}`);
+    }
+    return clamped;
   }
 
   private pick(ids: string[], all: Map<string, number>): Map<string, number> {

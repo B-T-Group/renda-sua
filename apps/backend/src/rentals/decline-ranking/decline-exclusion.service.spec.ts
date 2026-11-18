@@ -2,18 +2,18 @@ import { HttpException } from '@nestjs/common';
 import { DeclineExclusionService } from './decline-exclusion.service';
 
 describe('DeclineExclusionService', () => {
-  const flags = { declineRankingEnabled: jest.fn() };
+  const flags = { declineRankingEnabledAnywhere: jest.fn() };
   const hasura = { executeQuery: jest.fn(), executeMutation: jest.fn() };
   const ranking = { clearCache: jest.fn() };
   const service = new DeclineExclusionService(hasura as any, flags as any, ranking as any);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    flags.declineRankingEnabled.mockResolvedValue(true);
+    flags.declineRankingEnabledAnywhere.mockResolvedValue(true);
   });
 
   it('is a no-op when the flag is off', async () => {
-    flags.declineRankingEnabled.mockResolvedValue(false);
+    flags.declineRankingEnabledAnywhere.mockResolvedValue(false);
     await expect(service.list()).rejects.toBeInstanceOf(HttpException);
     await expect(service.set('booking', 'user', true)).rejects.toBeInstanceOf(HttpException);
     expect(hasura.executeMutation).not.toHaveBeenCalled();
@@ -72,5 +72,28 @@ describe('DeclineExclusionService', () => {
     const listed = await service.list();
     expect(listed.rows[0].businessDeclines).toBe(4);
     expect(listed.rows[0].renterDeclines).toBe(6);
+    expect(listed.pageSize).toBe(20);
+  });
+
+  it('excludes an older decline row, not only the latest', async () => {
+    hasura.executeQuery.mockImplementation((query: string) => {
+      if (query.includes('DeclineExclusionRoles')) return { user_roles: [{ role: { key: 'support' } }] };
+      if (query.includes('DeclineForExclusion')) {
+        return {
+          rental_condition_declines: [
+            { id: 'older', rental_booking: { id: 'booking', status: 'cancelled' } },
+            { id: 'latest', rental_booking: { id: 'booking', status: 'cancelled' } },
+          ],
+        };
+      }
+      return { rental_condition_declines: [] };
+    });
+    hasura.executeMutation.mockResolvedValue({});
+    await expect(service.set('booking', 'support-user', true)).rejects.toMatchObject({ status: 409 });
+    await service.set('booking', 'support-user', true, 'Transit', 'older');
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('SetDeclineExclusion'),
+      expect.objectContaining({ id: 'older' })
+    );
   });
 });

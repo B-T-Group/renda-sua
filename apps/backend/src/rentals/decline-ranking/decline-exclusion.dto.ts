@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class SetDeclineExclusionDto {
   @ApiProperty({ description: 'True when support marks the decline as not the business fault' })
@@ -11,4 +11,9 @@ export class SetDeclineExclusionDto {
   @IsString()
   @MaxLength(500)
   note?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'The decline row. Required when the booking has more than one.' })
+  @IsOptional()
+  @IsUUID()
+  declineId?: string;
 }

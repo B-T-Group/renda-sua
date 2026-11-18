@@ -23,6 +23,50 @@ export interface RankInput {
   minSample: number;
 }
 
+export interface RankConfig {
+  w: number;
+  minSample: number;
+  start: number;
+  full: number;
+}
+
+/**
+ * Weight stays in [0, 0.9], the sample is at least 1, and 0 ≤ start < full ≤ 1.
+ * A null or out-of-range value falls back to the seeded default.
+ */
+export function clampRankConfig(input: {
+  w: number | null;
+  minSample: number | null;
+  start: number | null;
+  full: number | null;
+}): RankConfig & { warnings: string[] } {
+  const warnings: string[] = [];
+  let w = input.w;
+  if (w == null || w < 0 || w > 0.9) {
+    warnings.push('weight');
+    w = RANK_DEFAULTS.weight;
+  }
+  let minSample = input.minSample;
+  if (minSample == null || minSample < 1) {
+    warnings.push('min_sample');
+    minSample = RANK_DEFAULTS.minSample;
+  } else {
+    minSample = Math.floor(minSample);
+  }
+  let start = input.start;
+  if (start == null || start < 0 || start >= 1) {
+    warnings.push('start');
+    start = RANK_DEFAULTS.start;
+  }
+  let full = input.full;
+  if (full == null || full <= start || full > 1) {
+    warnings.push('full');
+    full = RANK_DEFAULTS.full;
+    if (full <= start) start = RANK_DEFAULTS.start;
+  }
+  return { w, minSample, start, full, warnings };
+}
+
 /** Smoothed decline rate. Below the sample, or with weight 0, the listing stays put. */
 export function rankMultiplier(input: RankInput): number {
   if (input.w === 0 || input.n < input.minSample) return 1;

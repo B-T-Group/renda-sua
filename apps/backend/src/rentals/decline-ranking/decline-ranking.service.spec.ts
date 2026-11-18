@@ -34,5 +34,21 @@ describe('DeclineRankingService', () => {
     expect(result.get('busy')).toBeLessThan(1);
     expect(result.has('new')).toBe(false);
     expect(result.has('clean')).toBe(false);
+    expect(flags.declineRankingEnabled).toHaveBeenCalledWith(undefined);
+  });
+
+  it('caps declines at pickups reached and ignores a weight of 1', async () => {
+    flags.declineRankingEnabled.mockResolvedValue(true);
+    const warn = jest.spyOn(service['logger'], 'warn').mockImplementation(() => undefined);
+    hasura.executeQuery.mockResolvedValue({
+      application_configurations: [{ config_key: 'rentals_decline_rank_weight', number_value: null }],
+      rental_condition_decline_counts_90d: [{ party_id: 'busy', decline_count: 40 }],
+      rental_business_pickup_reach_90d: [{ business_id: 'busy', pickups_reached: 12 }],
+    });
+    const result = await service.multipliersFor(['busy'], 'CM');
+    expect(flags.declineRankingEnabled).toHaveBeenCalledWith('CM');
+    expect(result.get('busy')).toBeLessThan(1);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

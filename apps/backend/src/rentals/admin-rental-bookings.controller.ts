@@ -7,12 +7,13 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
   UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
@@ -199,10 +200,11 @@ export class AdminRentalBookingsController {
 
   @Get('condition-exclusions')
   @ApiOperation({ summary: 'Recent declines with the support exclusion toggle' })
-  @ApiResponse({ status: 200, description: 'Decline rows and the counts support sees' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiResponse({ status: 200, description: 'One page of decline rows and the counts support sees' })
   @ApiResponse({ status: 404, description: 'Decline ranking is off' })
-  listDeclineExclusions() {
-    return this.exclusions.list();
+  listDeclineExclusions(@Query('page') page?: string) {
+    return this.exclusions.list(Number(page) || 1);
   }
 
   @Post('bookings/:id/condition-exclusion')
@@ -213,11 +215,12 @@ export class AdminRentalBookingsController {
   @ApiResponse({ status: 200, description: 'Exclusion stored and audited' })
   @ApiResponse({ status: 403, description: 'Not a support or admin role' })
   @ApiResponse({ status: 404, description: 'Ranking is off, or there is no decline' })
+  @ApiResponse({ status: 409, description: 'The booking has more than one decline and no decline id' })
   setDeclineExclusion(
     @Param('id', ParseUUIDPipe) bookingId: string,
     @Body() body: SetDeclineExclusionDto,
     @Req() req: RequestWithUser
   ) {
-    return this.exclusions.set(bookingId, req.user.id, body.excluded, body.note);
+    return this.exclusions.set(bookingId, req.user.id, body.excluded, body.note, body.declineId);
   }
 }

@@ -52,23 +52,36 @@ export class DeclineExclusionService {
     private readonly ranking: DeclineRankingService
   ) {}
 
-  async list(): Promise<{ rows: ExclusionRow[] }> {
+  async list(page = 1): Promise<{ rows: ExclusionRow[]; page: number; pageSize: number }> {
     await this.assertOn();
-    const snapshot = await this.hasura.executeQuery<ExclusionSnapshot>(EXCLUSION_ROWS, { since: this.since() });
-    return { rows: (snapshot.rental_condition_declines ?? []).map((row) => this.row(row, snapshot)) };
+    const size = 20;
+    const current = Math.max(1, Math.floor(page) || 1);
+    const snapshot = await this.hasura.executeQuery<ExclusionSnapshot>(EXCLUSION_ROWS, {
+      since: this.since(),
+      limit: size,
+      offset: (current - 1) * size,
+    });
+    const rows = (snapshot.rental_condition_declines ?? []).map((row) => this.row(row, snapshot));
+    return { rows, page: current, pageSize: size };
   }
 
-  async set(bookingId: string, userId: string, excluded: boolean, note?: string): Promise<{ excluded: boolean }> {
+  async set(
+    bookingId: string,
+    userId: string,
+    excluded: boolean,
+    note?: string,
+    declineId?: string
+  ): Promise<{ excluded: boolean }> {
     await this.assertOn();
     await this.assertSupport(userId);
-    const decline = await this.find(bookingId);
+    const decline = await this.find(bookingId, declineId);
     await this.write(decline, userId, excluded, note);
     this.ranking.clearCache();
     return { excluded };
   }
 
   private async assertOn(): Promise<void> {
-    if (!(await this.flags.declineRankingEnabled())) {
+    if (!(await this.flags.declineRankingEnabledAnywhere())) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     }
   }
@@ -82,12 +95,14 @@ export class DeclineExclusionService {
     if (!exclusionAllowed(roles)) throw new HttpException('Access denied', HttpStatus.FORBIDDEN);
   }
 
-  private async find(bookingId: string): Promise<ExclusionDecline> {
+  private async find(bookingId: string, declineId?: string): Promise<ExclusionDecline> {
     const result = await this.hasura.executeQuery<{ rental_condition_declines: ExclusionDecline[] }>(
       DECLINE_FOR_EXCLUSION,
       { bookingId }
     );
-    const decline = result.rental_condition_declines?.[0];
+    const rows = (result.rental_condition_declines ?? []).filter((row) => row.rental_booking);
+    const decline = declineId ? rows.find((row) => row.id === declineId) : rows.length === 1 ? rows[0] : undefined;
+    if (!decline && rows.length > 1) throw new HttpException('Choose the decline', HttpStatus.CONFLICT);
     if (!decline?.rental_booking) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     return decline;
   }

@@ -18,7 +18,7 @@ SELECT
   ('renter:' || b.client_id::text) AS id,
   'renter'::text AS role,
   b.client_id AS party_id,
-  count(*)::int AS decline_count,
+  count(DISTINCT d.rental_booking_id)::int AS decline_count,
   max(d.created_at) AS last_decline_at
 FROM public.rental_condition_declines d
 JOIN public.rental_bookings b ON b.id = d.rental_booking_id
@@ -29,7 +29,7 @@ SELECT
   ('business:' || b.business_id::text) AS id,
   'business'::text AS role,
   b.business_id AS party_id,
-  count(*)::int AS decline_count,
+  count(DISTINCT d.rental_booking_id)::int AS decline_count,
   max(d.created_at) AS last_decline_at
 FROM public.rental_condition_declines d
 JOIN public.rental_bookings b ON b.id = d.rental_booking_id
@@ -50,7 +50,7 @@ FROM (VALUES
    'boolean', false, NULL::numeric, NULL::numeric, NULL::numeric),
   ('rentals_decline_rank_weight', 'Decline ranking weight',
    'How far a high decline rate can move a listing. 0 leaves the order unchanged. Default 0.30.',
-   'number', NULL, 0.30, 0, 1),
+   'number', NULL, 0.30, 0, 0.9),
   ('rentals_decline_rank_min_sample', 'Decline ranking minimum pickups',
    'Pickups reached in 90 days before a business can be penalized. Default 10.',
    'number', NULL, 10, 1, 1000),

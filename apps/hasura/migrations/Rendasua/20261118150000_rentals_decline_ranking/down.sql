@@ -1,11 +1,14 @@
-DELETE FROM public.application_configurations
+-- Deactivate every ranking config row, including country rows. Do not delete them.
+UPDATE public.application_configurations
+SET boolean_value = false,
+    status = 'inactive'
 WHERE config_key IN (
   'rentals_decline_ranking_enabled',
   'rentals_decline_rank_weight',
   'rentals_decline_rank_min_sample',
   'rentals_decline_rank_start',
   'rentals_decline_rank_full'
-) AND country_code IS NULL;
+);
 
 CREATE OR REPLACE VIEW public.rental_condition_decline_counts_90d AS
 SELECT
