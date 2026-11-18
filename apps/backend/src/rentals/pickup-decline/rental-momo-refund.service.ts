@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { FedaPayService } from '../../mobile-payments/providers/fedapay.service';
-import { FreemopayService } from '../../mobile-payments/providers/freemopay.service';
+import { freemopayRequestUnsent, FreemopayService } from '../../mobile-payments/providers/freemopay.service';
 import { MyPVitService } from '../../mobile-payments/providers/mypvit.service';
 import { MtnMomoService } from '../../mtn-momo/mtn-momo.service';
 import { mapRefundPoll, providerRefundPlan, type ProviderRefundPlan, type RefundStatus } from './pickup-decline.money';
@@ -24,6 +24,8 @@ export interface MomoRefundResult {
   unsupported: boolean;
   /** The withdrawal never reached the provider. The caller may clear refund_sent_at. */
   unsent?: boolean;
+  /** True only for a connect failure. A read timeout stays false. */
+  connectFailure?: boolean;
 }
 
 @Injectable()
@@ -50,6 +52,18 @@ export class RentalMomoRefundService {
   }
 
   /** `missing` is a 404. `unknown` is a lookup that did not prove the payout is absent. */
+  async probeByExternalId(provider: string, externalId: string): Promise<RefundStatus | 'missing' | 'unknown'> {
+    if (providerRefundPlan(provider) !== 'fedapay') return 'unknown';
+    const found = await this.fedapay.findPayoutByExternalId(externalId);
+    if (found.unknown) return 'unknown';
+    if (!found.found) return 'missing';
+    return mapRefundPoll(found.status);
+  }
+
+  externalRefundId(bookingId: string): string {
+    return this.externalId(bookingId);
+  }
+
   async probe(provider: string, providerRef: string): Promise<RefundStatus | 'missing' | 'unknown'> {
     const plan = providerRefundPlan(provider);
     if (plan === 'unsupported') return 'refund_pending';
@@ -88,7 +102,9 @@ export class RentalMomoRefundService {
       payerMessage: 'Rental condition decline refund',
       payeeNote: request.bookingId,
     });
-    if (!sent.status && !sent.statusCode) return this.unsentResult('mtn');
+    if (!sent.status && !sent.statusCode) {
+      return this.unsentResult('mtn', freemopayRequestUnsent({ code: sent.requestCode }));
+    }
     const code = Number(sent.statusCode);
     if (!sent.status && code >= 400 && code < 500) return this.failed('mtn', sent.financialTransactionId ?? null);
     return this.pending('mtn', sent.financialTransactionId ?? null, false);
@@ -122,7 +138,7 @@ export class RentalMomoRefundService {
       callback: this.callbackUrl('freemopay'),
     });
     const ref = sent.reference || sent.transactionId || externalId;
-    if (sent.unsent) return this.unsentResult('freemopay');
+    if (sent.unsent) return this.unsentResult('freemopay', true);
     if (!sent.success && sent.ambiguous) return this.pending('freemopay', externalId, false);
     if (!sent.success) return this.failed('freemopay', sent.reference ?? sent.transactionId ?? null);
     return this.pending('freemopay', ref, false);
@@ -187,8 +203,8 @@ export class RentalMomoRefundService {
     return request.referenceId?.trim() || this.externalId(request.bookingId);
   }
 
-  private unsentResult(provider: string): MomoRefundResult {
-    return { status: 'refund_pending', provider, providerRef: null, unsupported: false, unsent: true };
+  private unsentResult(provider: string, connectFailure = false): MomoRefundResult {
+    return { status: 'refund_pending', provider, providerRef: null, unsupported: false, unsent: true, connectFailure };
   }
 
   private pending(provider: string, providerRef: string | null, unsupported: boolean): MomoRefundResult {

@@ -192,7 +192,7 @@ export class AdminRentalBookingsController {
   @ApiBody({ type: MarkDeclineRefundDto })
   @ApiResponse({ status: 200, description: 'Refund status updated' })
   @ApiResponse({ status: 400, description: 'Missing provider reference and note' })
-  @ApiResponse({ status: 403, description: 'FINANCIAL_REFUNDS is required' })
+  @ApiResponse({ status: 403, description: 'FINANCIAL_REFUNDS, or the admin override permission' })
   @ApiResponse({ status: 409, description: 'Refund is not pending, or a payout may be in progress' })
   markDeclineRefund(@Param('id', ParseUUIDPipe) bookingId: string, @Body() body: MarkDeclineRefundDto) {
     return this.pickupDecline.markRefund(bookingId, body);

@@ -25,8 +25,9 @@ const HARDENING = join(__dirname, '../../../../hasura/migrations/Rendasua/202611
 const PREDEDUPE = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119135000_rentals_decline_history_prededupe/up.sql');
 const CLAIM_MIGRATION = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql');
 const NOTICE_TYPES = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119180000_condition_refund_message_types/up.sql');
+const SEND_ATTEMPT = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119190000_decline_refund_send_attempt/up.sql');
 const NOTICE_TYPES_DOWN = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119180000_condition_refund_message_types/down.sql');
-const MIGRATIONS = [PREDEDUPE, CLAIM_MIGRATION, HARDENING, NOTICE_TYPES];
+const MIGRATIONS = [PREDEDUPE, CLAIM_MIGRATION, HARDENING, NOTICE_TYPES, SEND_ATTEMPT];
 
 describe('decline refund postgres job', () => {
   it('is configured when CI runs this workflow', () => {
@@ -628,6 +629,8 @@ function shape(row: Record<string, unknown> | undefined) {
 }
 
 async function applyMutation(pool: Pool, query: string, vars: Record<string, unknown>) {
+  if (query.includes('StampDeclineSendAttempt')) return { update_rental_bookings: { affected_rows: await stampAttempt(pool, vars) } };
+  if (query.includes('ClearDeclineSendAttempt')) return { update_rental_bookings: { affected_rows: await clearAttempt(pool, vars) } };
   if (query.includes('StampDeclineRefundSent')) return { update_rental_bookings: { affected_rows: await stampSent(pool, vars) } };
   if (query.includes('StampDeclineRefund')) return { update_rental_bookings: { affected_rows: await stamp(pool, vars) } };
   if (query.includes('ClaimDeclineRefund')) return { update_rental_bookings: { affected_rows: await claimWork(pool, vars) } };
@@ -670,6 +673,25 @@ async function owned(pool: Pool, vars: Record<string, unknown>): Promise<number>
     `id = $1 AND refund_status = 'refund_pending' AND refund_claim_token = $2`,
     [vars.id, vars.token]
   );
+}
+
+async function stampAttempt(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_send_attempted_at = $3
+     WHERE id = $1 AND refund_claim_token = $2 AND refund_status = 'refund_pending'
+       AND refund_send_attempted_at IS NULL`,
+    [vars.id, vars.token, vars.at]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function clearAttempt(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_send_attempted_at = NULL
+     WHERE id = $1 AND refund_claim_token = $2 AND refund_status = 'refund_pending'`,
+    [vars.id, vars.token]
+  );
+  return result.rowCount ?? 0;
 }
 
 async function stampSent(pool: Pool, vars: Record<string, unknown>): Promise<number> {

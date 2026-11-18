@@ -50,7 +50,7 @@ export class DeclinePhotoPresignDto {
 export class MarkDeclineRefundDto {
   @ApiProperty({
     enum: ['refunded', 'failed', 'unpaid', 'manual_override'],
-    description: 'unpaid credits a provider-confirmed failure. manual_override credits a row that was never sent.',
+    description: 'unpaid credits a provider-confirmed failure. manual_override credits a row that never reached a provider.',
   })
   @IsIn(['refunded', 'failed', 'unpaid', 'manual_override'])
   status!: 'refunded' | 'failed' | 'unpaid' | 'manual_override';

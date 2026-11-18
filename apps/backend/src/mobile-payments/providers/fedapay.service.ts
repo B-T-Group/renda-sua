@@ -489,6 +489,20 @@ export class FedaPayService implements OnModuleInit {
     }
   }
 
+  /** Read-only. Does not create a payout. `unknown` means the lookup did not answer. */
+  async findPayoutByExternalId(externalId: string): Promise<{ found: boolean; status: string | null; unknown: boolean }> {
+    if (this.mockEnabled) return { found: false, status: null, unknown: false };
+    try {
+      const existing = await this.liveLookup('payout', () => Payout.all({ 'custom_metadata.externalId': externalId }));
+      const payouts = (existing as { payouts?: Array<{ status?: string; custom_metadata?: { externalId?: string } }> })?.payouts ?? [];
+      const match = payouts.find((row) => row.custom_metadata?.externalId === externalId);
+      return match ? { found: true, status: String(match.status || 'pending'), unknown: false } : { found: false, status: null, unknown: false };
+    } catch (error: any) {
+      void error;
+      return { found: false, status: null, unknown: true };
+    }
+  }
+
   async withdraw(
     withdrawalRequest: FedaPayWithdrawalRequest,
     reference?: string

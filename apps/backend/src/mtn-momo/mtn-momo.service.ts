@@ -95,6 +95,8 @@ export interface MtnMomoResponse {
   statusCode?: string;
   statusMessage?: string;
   error?: string;
+  /** Axios/undici code when the transfer call had no HTTP status. */
+  requestCode?: string;
 }
 
 @Injectable()
@@ -390,6 +392,7 @@ export class MtnMomoService {
         financialTransactionId: referenceId,
         externalId: request.externalId,
         statusCode: code != null ? String(code) : undefined,
+        requestCode: error?.code ?? error?.cause?.code,
         error: error?.response?.data?.message || error?.message,
       };
     }

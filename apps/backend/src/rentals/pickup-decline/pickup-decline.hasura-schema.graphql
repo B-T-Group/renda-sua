@@ -11,6 +11,7 @@ enum payment_entity_enum { rental_booking }
 
 input uuid_comparison_exp { _eq: uuid _in: [uuid!] _is_null: Boolean }
 input string_comparison_exp { _eq: String _in: [String!] _is_null: Boolean }
+input accounts_bool_exp { user_id: uuid_comparison_exp currency: string_comparison_exp }
 input int_comparison_exp { _eq: Int _lt: Int _lte: Int _is_null: Boolean }
 input timestamptz_comparison_exp { _eq: timestamptz _lt: timestamptz _lte: timestamptz _is_null: Boolean }
 input jsonb_comparison_exp { _contains: jsonb _is_null: Boolean }
@@ -27,6 +28,7 @@ input rental_bookings_bool_exp {
   refund_claim_token: uuid_comparison_exp
   refund_provider_ref: string_comparison_exp
   refund_sent_at: timestamptz_comparison_exp
+  refund_send_attempted_at: timestamptz_comparison_exp
   refund_credited_at: timestamptz_comparison_exp
   refund_notices: jsonb_comparison_exp
   condition_declined_at: timestamptz_comparison_exp
@@ -50,6 +52,7 @@ input rental_bookings_set_input {
   refund_claim_token: uuid
   refund_next_at: timestamptz
   refund_sent_at: timestamptz
+  refund_send_attempted_at: timestamptz
   refund_credited_at: timestamptz
   refunded_at: timestamptz
   status: rental_booking_status_enum
@@ -122,6 +125,21 @@ input rental_item_baseline_photos_bool_exp {
 input rental_item_baseline_photos_order_by { slot_key: order_by }
 
 type users { first_name: String last_name: String }
+type accounts { id: uuid }
+input close_decline_refund_args {
+  p_booking_id: uuid!
+  p_token: uuid!
+  p_status: String!
+  p_provider: String!
+  p_provider_ref: String
+  p_account_id: uuid
+  p_amount: numeric!
+  p_memo: String
+  p_idempotency_key: String!
+  p_changed_by: uuid!
+  p_notes: String!
+  p_previous_status: String!
+}
 type clients { id: uuid user_id: uuid user: users }
 type businesses { id: uuid user_id: uuid name: String }
 type addresses { country: String }
@@ -147,6 +165,8 @@ type rental_bookings {
   refund_provider: String
   refund_provider_ref: String
   refund_sent_at: timestamptz
+  refund_send_attempted_at: timestamptz
+  refund_requested_at: timestamptz
   refund_credited_at: timestamptz
   refund_claim_at: timestamptz
   refund_notices: jsonb
@@ -248,6 +268,7 @@ type query_root {
     limit: Int
   ): [rental_business_pickup_reach_90d!]!
   clients(where: clients_bool_exp): [clients!]!
+  accounts(where: accounts_bool_exp, limit: Int): [accounts!]!
   businesses(where: businesses_bool_exp): [businesses!]!
   rental_items_by_pk(id: uuid!): rental_items
   rental_item_baseline_photos(
@@ -288,4 +309,5 @@ type mutation_root {
     _set: mobile_payment_transactions_set_input
   ): mobile_payment_transactions_mutation_response
   insert_rental_status_history_one(object: rental_status_history_insert_input!): rental_status_history
+  close_decline_refund(args: close_decline_refund_args!): Int
 }

@@ -18,6 +18,9 @@ export const DECLINE_BOOKING = `
       refund_provider
       refund_provider_ref
       refund_sent_at
+      refund_send_attempted_at
+      refund_requested_at
+      refund_claim_at
       refund_credited_at
       authorized_amount
       total_amount
@@ -266,6 +269,71 @@ export const CLEAR_STABLE_REF = `
       }
       _set: { refund_provider_ref: null }
     ) { affected_rows }
+  }
+`;
+
+export const STAMP_ATTEMPT = `
+  mutation StampDeclineSendAttempt($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_claim_token: { _eq: $token }
+        refund_send_attempted_at: { _is_null: true }
+      }
+      _set: { refund_send_attempted_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+export const CLEAR_ATTEMPT = `
+  mutation ClearDeclineSendAttempt($id: uuid!, $token: uuid!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_send_attempted_at: null }
+    ) { affected_rows }
+  }
+`;
+
+export const REFUND_ACCOUNT = `
+  query DeclineRefundAccount($userId: uuid!, $currency: String!) {
+    accounts(where: { user_id: { _eq: $userId }, currency: { _eq: $currency } }, limit: 1) { id }
+  }
+`;
+
+export const CLOSE_DECLINE_REFUND = `
+  mutation CloseDeclineRefund(
+    $id: uuid!
+    $token: uuid!
+    $status: String!
+    $provider: String!
+    $providerRef: String
+    $accountId: uuid
+    $amount: numeric!
+    $memo: String
+    $idempotencyKey: String!
+    $changedBy: uuid!
+    $notes: String!
+    $previousStatus: String!
+  ) {
+    close_decline_refund(args: {
+      p_booking_id: $id
+      p_token: $token
+      p_status: $status
+      p_provider: $provider
+      p_provider_ref: $providerRef
+      p_account_id: $accountId
+      p_amount: $amount
+      p_memo: $memo
+      p_idempotency_key: $idempotencyKey
+      p_changed_by: $changedBy
+      p_notes: $notes
+      p_previous_status: $previousStatus
+    })
   }
 `;
 

@@ -61,7 +61,16 @@ describe('RentalMomoRefundService', () => {
     });
     const result = await api.refund({ ...request, referenceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
     expect(result.unsent).toBe(true);
+    expect(result.connectFailure).toBe(false);
     expect(mtn.transfer).toHaveBeenCalledWith(expect.objectContaining({ referenceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }));
+    const refused = service({
+      mtn: { transfer: jest.fn(async () => ({ status: false, requestCode: 'ECONNREFUSED' })) },
+    });
+    expect((await refused.api.refund(request)).connectFailure).toBe(true);
+    const timedOut = service({
+      mtn: { transfer: jest.fn(async () => ({ status: false, requestCode: 'ECONNABORTED' })) },
+    });
+    expect((await timedOut.api.refund(request)).connectFailure).toBe(false);
   });
 
   it('sends an MTN disbursement and waits for SUCCESSFUL', async () => {
@@ -199,6 +208,7 @@ describe('RentalMomoRefundService', () => {
     });
     const result = await refused.api.refund({ ...request, provider: 'freemopay' });
     expect(result.unsent).toBe(true);
+    expect(result.connectFailure).toBe(true);
     expect(result.providerRef).toBeNull();
     expect(refused.freemopay.checkTransactionStatus).not.toHaveBeenCalled();
   });
