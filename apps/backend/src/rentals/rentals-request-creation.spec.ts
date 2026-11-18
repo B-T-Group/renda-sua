@@ -77,6 +77,7 @@ describe('RentalsService.createRentalRequest', () => {
         client_request_note: null,
         inspection_policy_version: null,
         quoted_total: null,
+        rental_pricing_snapshot: null,
       },
     });
     expect(result).toEqual({ success: true, requestId: 'request-1', inspection_policy_version: null });

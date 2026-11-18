@@ -1264,6 +1264,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       }
       rental_location_listing {
         id
+        units_available
         base_price_per_hour
         base_price_per_day
         security_deposit_amount
