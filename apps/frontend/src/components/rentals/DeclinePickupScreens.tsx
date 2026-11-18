@@ -1,3 +1,5 @@
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import PhotoLibraryOutlinedIcon from '@mui/icons-material/PhotoLibraryOutlined';
@@ -165,23 +167,27 @@ export function declineRefundView(status?: string | null): DeclineRefundView {
   return 'none';
 }
 
-export function DeclineOutcomeCard({ money, refundStatus }: { money: DeclineMoney; refundStatus: DeclineRefundView }) {
+export function DeclineOutcomeCard({
+  money,
+  refundStatus,
+  onViewWallet,
+  onBrowse,
+}: {
+  money: DeclineMoney;
+  refundStatus: DeclineRefundView;
+  onViewWallet?: () => void;
+  onBrowse?: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const amount = declineAmount(money.amount, money.currency, i18n.language);
-  const pending = refundStatus === 'refund_pending';
-  const done = refundStatus === 'refunded';
-  const title = pending
-    ? t('pickupDecline.refundProgress', 'Refund in progress')
-    : done
-      ? t('pickupDecline.refunded', 'Refunded')
-      : t('pickupDecline.cancelledTitle', 'Booking cancelled');
+  const wallet = refundStatus === 'failed' || refundStatus === 'manual';
   return (
-    <Stack spacing={2} sx={{ p: 2, maxWidth: 420 }}>
-      <DeclineArt />
-      <Typography variant="h5">{title}</Typography>
+    <Stack spacing={2} sx={{ p: 2, maxWidth: 420, width: '100%', mx: 'auto' }}>
+      {wallet ? <WalletMark /> : <DeclineArt />}
+      <Typography variant="h5">{outcomeTitle(refundStatus, t)}</Typography>
       <Typography color="text.secondary">{money.place} · {money.bookingNumber}</Typography>
       <Typography>{outcomeBody(money, amount, refundStatus, t)}</Typography>
-      <Button variant="contained" color="primary">{t('pickupDecline.browse', 'Browse rentals')}</Button>
+      <OutcomeActions wallet={wallet} onViewWallet={onViewWallet} onBrowse={onBrowse} />
     </Stack>
   );
 }
@@ -459,6 +465,32 @@ function tileCaption(numbered: boolean, index: number, slotKey: string | undefin
   return t(`pickupDecline.slots.${slotKey}`, slotKey ?? '');
 }
 
+function outcomeTitle(refundStatus: DeclineRefundView, t: any): string {
+  if (refundStatus === 'refund_pending') return t('pickupDecline.refundProgress', 'Refund in progress');
+  if (refundStatus === 'refunded') return t('pickupDecline.refunded', 'Refunded');
+  return t('pickupDecline.cancelledTitle', 'Booking cancelled');
+}
+
+function OutcomeActions({ wallet, onViewWallet, onBrowse }: { wallet: boolean; onViewWallet?: () => void; onBrowse?: () => void }) {
+  const { t } = useTranslation();
+  if (!wallet) return <Button variant="contained" color="primary" onClick={onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>;
+  return (
+    <>
+      <Button variant="contained" color="primary" onClick={onViewWallet}>{t('pickupDecline.viewWallet', 'View wallet')}</Button>
+      <Button color="primary" onClick={onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
+    </>
+  );
+}
+
+function WalletMark() {
+  return (
+    <Box sx={{ position: 'relative', width: 40, height: 40 }} aria-hidden>
+      <AccountBalanceWalletIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+      <CheckCircleIcon sx={{ position: 'absolute', right: -6, bottom: -2, fontSize: 18, color: 'success.main', bgcolor: '#FAF9F7', borderRadius: '50%' }} />
+    </Box>
+  );
+}
+
 function DeclineArt() {
   return (
     <Box component="svg" viewBox="0 0 120 72" role="img" aria-label="" sx={{ width: 120, height: 72 }}>
@@ -506,7 +538,11 @@ function outcomeBody(
     return t('pickupDecline.refundedBody', '{{amount}} was sent to {{phone}}.', { amount, phone: money.phoneMask ?? '' });
   }
   if (refundStatus === 'failed' || refundStatus === 'manual') {
-    return t('pickupDecline.walletReturned', '{{amount}} is back in your wallet.', { amount });
+    return t(
+      'pickupDecline.walletReturned',
+      "We couldn't send {{amount}} back to your Mobile Money number, so it's in your Rendasua wallet. You can withdraw it or use it on your next booking.",
+      { amount }
+    );
   }
   return moneyLine(money, amount, t);
 }

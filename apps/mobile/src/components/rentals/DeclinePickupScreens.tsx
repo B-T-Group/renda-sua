@@ -133,21 +133,27 @@ export function declineRefundView(status?: string | null): DeclineRefundView {
   return 'none';
 }
 
-export function DeclineOutcomeCard({ money, refundStatus }: { money: DeclineMoney; refundStatus: DeclineRefundView }) {
+export function DeclineOutcomeCard({
+  money,
+  refundStatus,
+  onViewWallet,
+  onBrowse,
+}: {
+  money: DeclineMoney;
+  refundStatus: DeclineRefundView;
+  onViewWallet?: () => void;
+  onBrowse?: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const amount = declineAmount(money.amount, money.currency, i18n.language);
-  const title = refundStatus === 'refund_pending'
-    ? t('pickupDecline.refundProgress', 'Refund in progress')
-    : refundStatus === 'refunded'
-      ? t('pickupDecline.refunded', 'Refunded')
-      : t('pickupDecline.cancelledTitle', 'Booking cancelled');
+  const wallet = refundStatus === 'failed' || refundStatus === 'manual';
   return (
     <View style={styles.pad}>
-      <MaterialCommunityIcons name="cash-refund" size={36} color={colors.primary.main} />
-      <Text variant="headlineSmall">{title}</Text>
+      {wallet ? <WalletMark /> : <MaterialCommunityIcons name="cash-refund" size={36} color={colors.primary.main} />}
+      <Text variant="headlineSmall">{outcomeTitle(refundStatus, t)}</Text>
       <Text>{money.place} · {money.bookingNumber}</Text>
       <Text>{outcomeBody(money, amount, refundStatus, t)}</Text>
-      <Button mode="contained" buttonColor={colors.primary.main}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
+      <OutcomeActions wallet={wallet} onViewWallet={onViewWallet} onBrowse={onBrowse} />
     </View>
   );
 }
@@ -378,13 +384,47 @@ function outcomeBody(money: DeclineMoney, amount: string, refundStatus: string, 
     return t('pickupDecline.refundedBody', '{{amount}} was sent to {{phone}}.', { amount, phone: money.phoneMask ?? '' });
   }
   if (refundStatus === 'failed' || refundStatus === 'manual') {
-    return t('pickupDecline.walletReturned', '{{amount}} is back in your wallet.', { amount });
+    return t(
+      'pickupDecline.walletReturned',
+      "We couldn't send {{amount}} back to your Mobile Money number, so it's in your Rendasua wallet. You can withdraw it or use it on your next booking.",
+      { amount }
+    );
   }
   return moneyLine(money, amount, t);
 }
 
+function outcomeTitle(refundStatus: string, t: any): string {
+  if (refundStatus === 'refund_pending') return t('pickupDecline.refundProgress', 'Refund in progress');
+  if (refundStatus === 'refunded') return t('pickupDecline.refunded', 'Refunded');
+  return t('pickupDecline.cancelledTitle', 'Booking cancelled');
+}
+
+function OutcomeActions({ wallet, onViewWallet, onBrowse }: { wallet: boolean; onViewWallet?: () => void; onBrowse?: () => void }) {
+  const { t } = useTranslation();
+  if (!wallet) {
+    return <Button mode="contained" buttonColor={colors.primary.main} onPress={onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>;
+  }
+  return (
+    <>
+      <Button mode="contained" buttonColor={colors.primary.main} onPress={onViewWallet}>{t('pickupDecline.viewWallet', 'View wallet')}</Button>
+      <Button mode="text" textColor={colors.primary.main} onPress={onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
+    </>
+  );
+}
+
+function WalletMark() {
+  return (
+    <View style={styles.mark}>
+      <MaterialCommunityIcons name="wallet-outline" size={36} color={colors.primary.main} />
+      <MaterialCommunityIcons name="check-circle" size={16} color={colors.success.main} style={styles.badge} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   pad: { padding: 16, gap: 12, backgroundColor: colors.background.default },
+  mark: { width: 40, height: 40 },
+  badge: { position: 'absolute', right: -4, bottom: -2, backgroundColor: colors.background.default, borderRadius: 8 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1, borderColor: colors.divider, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
   chipOn: { borderColor: colors.error.main },

@@ -462,6 +462,8 @@ export default function RentalBookingDetailScreen() {
               bookingNumber: booking.booking_number ?? '',
             }}
             refundStatus={declineRefundView(booking.refund_status)}
+            onViewWallet={() => navigation.navigate('ClientAccounts')}
+            onBrowse={() => navigation.navigate('ClientMainTabs', { screen: 'ClientBrowse', params: { segment: 'rentals' } })}
           />
         ) : null}
 

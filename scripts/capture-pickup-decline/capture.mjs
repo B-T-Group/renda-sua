@@ -290,8 +290,12 @@ async function assertScene(page, scene, lang, mobile) {
   }
   if (scene === 'admin' && !text.includes('5')) throw new Error('admin threshold copy missing 5');
   if (scene === 'refund-failed' || scene === 'refund-manual') {
-    const wallet = lang === 'fr' ? 'portefeuille' : 'wallet';
-    if (!text.toLowerCase().includes(wallet)) throw new Error(`${scene} ${lang} does not say the wallet`);
+    const body = lang === 'fr' ? 'portefeuille Rendasua' : 'Rendasua wallet';
+    const primary = lang === 'fr' ? 'Voir le portefeuille' : 'View wallet';
+    const secondary = lang === 'fr' ? 'Parcourir les locations' : 'Browse rentals';
+    for (const bit of [body, primary, secondary]) {
+      if (!text.includes(bit)) throw new Error(`${scene} ${lang} missing ${bit}`);
+    }
     if (text.includes('670') || text.toLowerCase().includes('phone')) {
       throw new Error(`${scene} ${lang} still names the phone`);
     }
