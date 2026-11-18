@@ -24,7 +24,12 @@ function Shell() {
   const { paperTheme } = useTheme();
   const scene = sceneName();
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider
+      initialMetrics={{
+        insets: { top: 0, right: 0, bottom: 0, left: 0 },
+        frame: { x: 0, y: 0, width: 390, height: 844 },
+      }}
+    >
     <PaperProvider theme={paperTheme}>
       <Ready />
       {scene === 'list' ? <BusinessRentalsStudioScreen /> : null}

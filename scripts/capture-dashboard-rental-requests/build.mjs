@@ -96,6 +96,7 @@ export async function buildMobile(outfile) {
     entryPoints: ['scripts/capture-dashboard-rental-requests/mobile-app.tsx'],
     outfile,
     nodePaths: ['apps/mobile/node_modules', 'node_modules'],
+    loader: { '.png': 'dataurl', '.svg': 'dataurl', '.jpg': 'dataurl', '.webp': 'dataurl', '.ttf': 'dataurl', '.js': 'jsx' },
     define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
     alias: { react: path.join(mobileNm, 'react'), 'react-dom': path.join(mobileNm, 'react-dom') },
     banner: {
