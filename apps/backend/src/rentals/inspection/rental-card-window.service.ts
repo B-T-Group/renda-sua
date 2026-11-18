@@ -24,11 +24,15 @@ export class RentalCardWindowService {
     private readonly hasura: HasuraSystemService
   ) {}
 
-  async forCountry(country: string | null | undefined, now = new Date()): Promise<ListingCardWindow> {
+  async forCountry(
+    country: string | null | undefined,
+    now = new Date(),
+    inspected?: boolean
+  ): Promise<ListingCardWindow> {
     const code = country?.trim().toUpperCase() || null;
     const [rail, inspectionEnabled, reviewHours, timezone, chargeAtPickupEnabled] = await Promise.all([
       this.rail(code),
-      this.flags.isEnabled(code),
+      inspected === undefined ? this.flags.isEnabled(code) : Promise.resolve(inspected),
       this.flags.numberConfig(REVIEW_HOURS_KEY, code, DEFAULT_STRIPE_REVIEW_HOURS),
       this.timezone(code),
       this.chargeAtPickup(code),

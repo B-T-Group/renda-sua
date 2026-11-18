@@ -206,10 +206,17 @@ export class RentalSearchService {
   ) {
     const code = listingCountryCode(hit.listing, fallback);
     const latest = readLatestCardEndAt(hit.listing);
-    const key = `${code}|${latest ?? ''}`;
-    const fields = cache.get(key) ?? (await this.cardWindow(code, latest));
+    const inspected = await this.itemInspected(code, hit.listing.rental_item?.id);
+    const key = `${code}|${latest ?? ''}|${String(inspected)}`;
+    const fields = cache.get(key) ?? (await this.cardWindow(code, latest, inspected));
     cache.set(key, fields);
     return { ...hit, ...fields };
+  }
+
+  private async itemInspected(code: string, itemId?: string | null): Promise<boolean | undefined> {
+    const flags = this.flags as { optInEnabled?: (country?: string | null) => Promise<boolean> } | undefined;
+    if (typeof flags?.optInEnabled !== 'function' || !(await flags.optInEnabled(code))) return undefined;
+    return (await this.rentals.listingInspectionPolicy(code, itemId)) != null;
   }
 
   private async railFor(code: string): Promise<'stripe' | 'mobile_money'> {

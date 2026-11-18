@@ -77,6 +77,25 @@ describe('GET request inspection policy', () => {
     expect(malformed.hasuraSystemService.executeQuery).not.toHaveBeenCalled();
   });
 
+  it('returns the snapshot stored on the request when opt-in is on', async () => {
+    const svc = service({ ...request, inspection_policy_version: null });
+    svc.inspectionFlags = { optInEnabled: jest.fn().mockResolvedValue(true) };
+    svc.hasuraUserService.getUser.mockResolvedValue({
+      active_persona: 'client',
+      client: { id: 'client-1' },
+    });
+    await expect(svc.getRequestInspectionPolicy(REQUEST_ID)).resolves.toBeNull();
+    expect(svc.listingInspectionPolicy).not.toHaveBeenCalled();
+    const accepted = service({ ...request, inspection_policy_version: null });
+    accepted.inspectionFlags = { optInEnabled: jest.fn().mockResolvedValue(true) };
+    accepted.inspectionOptIn = { stampsNewBooking: jest.fn().mockResolvedValue(true) };
+    accepted.enrolOrReject = jest.fn().mockResolvedValue(1);
+    const listing = request.rental_location_listing;
+    await expect(accepted.inspectionPolicyForInsert({ rental_location_listing: listing, inspection_policy_version: null })).resolves.toBeNull();
+    expect(accepted.inspectionOptIn.stampsNewBooking).not.toHaveBeenCalled();
+    await expect(accepted.inspectionPolicyForInsert({ rental_location_listing: listing, inspection_policy_version: 1 })).resolves.toBe(1);
+  });
+
   it('maps ParseUUIDPipe failures to that same 404', async () => {
     const failure = requestPolicyIdPipe.transform('not-a-uuid', { type: 'param', data: 'id' });
     await expect(failure).rejects.toBeInstanceOf(HttpException);

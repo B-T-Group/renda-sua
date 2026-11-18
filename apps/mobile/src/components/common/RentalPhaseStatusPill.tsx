@@ -13,6 +13,7 @@ const PHASE_DEFAULTS: Record<string, string> = {
   'rentals.phases.requested': 'Requested',
   'rentals.phases.offerReady': 'Offer ready',
   'rentals.phases.reserved': 'Reserved',
+  'rentals.phases.reservedShort': 'Reserved',
   'rentals.phases.readyForPickup': 'Ready for pickup',
   'rentals.phases.inProgress': 'In progress',
   'rentals.phases.done': 'Done',
@@ -41,11 +42,12 @@ export function RentalPhaseStatusPill({
       : resolveRentalPhase({ requestStatus, bookingStatus }, role);
 
   const phaseColors = rentalPhaseColors(info.phase, colors);
+  const labelKey = info.phase === 'reserved' ? 'rentals.phases.reservedShort' : info.labelKey;
 
   return (
     <StatusPill
       compact={compact}
-      label={t(info.labelKey, PHASE_DEFAULTS[info.labelKey] ?? info.phase)}
+      label={t(labelKey, PHASE_DEFAULTS[labelKey] ?? info.phase)}
       backgroundColor={phaseColors.backgroundColor}
       textColor={phaseColors.textColor}
       borderColor={phaseColors.borderColor}

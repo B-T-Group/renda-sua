@@ -617,7 +617,9 @@ const RentalBookingDetailPage: React.FC = () => {
                   ? detailStatusLabel
                   : status === 'awaiting_return'
                     ? t(detailStatusKey, 'Return due')
-                    : `${t('rentals.status', 'Status')}: ${t(`rentals.bookingStatus.${status}`, status)}`
+                    : status === 'reserved'
+                      ? t('rentals.phases.reservedShort', 'Reserved')
+                      : `${t('rentals.status', 'Status')}: ${t(`rentals.bookingStatus.${status}`, status)}`
               }
               color={reviewReady ? undefined : statusChipColor}
               sx={{

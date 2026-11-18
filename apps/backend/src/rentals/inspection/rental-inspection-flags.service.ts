@@ -4,8 +4,10 @@ import { HasuraSystemService } from '../../hasura/hasura-system.service';
 const FLAG_KEY = 'rental_inspection_enabled';
 const ALLOW_SELF_BOOKING_KEY = 'rentals_inspection_allow_self_booking';
 export const CARD_WINDOW_GUARD_KEY = 'rentals_card_window_guard_enabled';
+export const PICKUP_PHOTO_RULES_KEY = 'rentals_pickup_photo_rules_enabled';
 export const CARD_CHARGE_AT_PICKUP_KEY = 'rentals_card_charge_at_pickup_enabled';
 export const INSPECTION_CONFIRMATIONS_KEY = 'rentals_inspection_confirmations_enabled';
+export const INSPECTION_OPTIN_KEY = 'rentals_inspection_optin_enabled';
 
 /**
  * Country row wins over the global row. Missing or unreadable config stays off.
@@ -33,6 +35,16 @@ export class RentalInspectionFlags {
   /** Date-picker guard and create-time rejection. Seeded false. */
   async cardWindowGuardEnabled(countryCode?: string | null): Promise<boolean> {
     return this.booleanConfig(CARD_WINDOW_GUARD_KEY, countryCode, false);
+  }
+
+  /** Per-item opt-in. Seeded false. No NODE_ENV override. */
+  async optInEnabled(countryCode?: string | null): Promise<boolean> {
+    return this.booleanConfig(INSPECTION_OPTIN_KEY, countryCode, false);
+  }
+
+  /** Pickup-day camera, server timestamp, and last-return guide. Seeded false. */
+  async pickupPhotoRulesEnabled(countryCode?: string | null): Promise<boolean> {
+    return this.booleanConfig(PICKUP_PHOTO_RULES_KEY, countryCode, false);
   }
 
   /**

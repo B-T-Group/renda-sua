@@ -18,6 +18,7 @@ import {
   isInspectionPendingKey,
   validateInspectionUpload,
 } from './rental-inspection-evidence';
+import { PickupPhotoRulesService } from './pickup-photo-rules.service';
 
 export interface EvidencePresignInput {
   unitId: string;
@@ -25,6 +26,9 @@ export interface EvidencePresignInput {
   contentType: string;
   fileSize: number;
   sha256?: string;
+  slotKey?: string;
+  exifDateTime?: string;
+  captureSource?: string;
 }
 
 @Injectable()
@@ -34,18 +38,29 @@ export class RentalInspectionEvidenceService {
   constructor(
     private readonly hasura: HasuraSystemService,
     private readonly users: HasuraUserService,
-    private readonly aws: AwsService
+    private readonly aws: AwsService,
+    private readonly photoRules: PickupPhotoRulesService
   ) {}
 
-  async presign(bookingId: string, input: EvidencePresignInput) {
+  async presign(bookingId: string, input: EvidencePresignInput, platform?: string | string[]) {
     const upload = validateInspectionUpload(input.contentType, input.fileSize);
     const checksum = resolveInspectionChecksum(input.sha256);
     const actor = await this.actorForUpload(bookingId, input.role);
-    const inspection = await this.draftInspection(bookingId, input.role);
+    const stage = await this.uploadStage(bookingId, input.role);
+    const inspection = await this.inspectionFor(bookingId, stage);
+    await this.photoRules.assertUpload({
+      bookingId,
+      role: input.role,
+      platform,
+      slotKey: input.slotKey,
+      stage,
+    });
     await this.assertUnit(bookingId, input.unitId);
     const mediaId = randomUUID();
+    const capturedAt = new Date();
+    const columns = await this.photoRules.mediaColumns(bookingId, input.role, { ...input, platform }, capturedAt);
     const objectKey = inspectionPendingObjectKey(bookingId, mediaId, upload.ext);
-    await this.insertPending(bookingId, mediaId, inspection.id, input, objectKey, upload, actor.userId);
+    await this.insertPending(bookingId, mediaId, inspection.id, input, objectKey, upload, actor.userId, columns);
     const signed = await this.aws.generateStrictUploadUrl({
       bucketName: this.bucket(),
       key: objectKey,
@@ -64,6 +79,7 @@ export class RentalInspectionEvidenceService {
         'Content-Length': String(upload.size),
         ...(checksum ? { 'x-amz-checksum-sha256': checksum } : {}),
       },
+      capturedAt: columns.captured_at,
     };
   }
 
@@ -140,8 +156,13 @@ export class RentalInspectionEvidenceService {
     throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
   }
 
-  private async draftInspection(bookingId: string, role: string) {
-    const stage = role === 'counter' ? 'return' : await this.openStage(bookingId);
+  private async uploadStage(bookingId: string, role: string): Promise<'pickup' | 'return'> {
+    if (role === 'counter') return 'return';
+    const stage = await this.openStage(bookingId);
+    return stage === 'pickup' ? 'pickup' : 'return';
+  }
+
+  private async inspectionFor(bookingId: string, stage: 'pickup' | 'return') {
     const found = await this.hasura.executeQuery<{ rental_inspections: Array<{ id: string }> }>(
       `query DraftInspection($bookingId: uuid!, $stage: String!) {
         rental_inspections(where: { rental_booking_id: { _eq: $bookingId }, stage: { _eq: $stage } }, limit: 1) { id }
@@ -192,7 +213,8 @@ export class RentalInspectionEvidenceService {
     input: EvidencePresignInput,
     objectKey: string,
     upload: { contentType: string; size: number },
-    userId: string
+    userId: string,
+    columns: { captured_at: string; slot_key: string | null }
   ) {
     if (!isInspectionPendingKey(objectKey, bookingId) || isInspectionEvidenceKey(objectKey, bookingId)) {
       throw new HttpException('Invalid evidence key', HttpStatus.BAD_REQUEST);
@@ -212,6 +234,7 @@ export class RentalInspectionEvidenceService {
           expected_byte_size: upload.size,
           status: 'pending',
           created_by: userId,
+          ...columns,
         },
       }
     );

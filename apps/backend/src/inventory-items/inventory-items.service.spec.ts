@@ -593,6 +593,56 @@ describe('InventoryItemsService.getInventoryItems export flags', () => {
       })
     );
   });
+
+  it('pages export_only via Hasura limit/offset and skips fetch-all', async () => {
+    const { service } = createService();
+    jest
+      .spyOn(service as any, 'countDistinctCatalogItemIds')
+      .mockResolvedValue(30);
+    const fetchAll = jest
+      .spyOn(service as any, 'fetchAllCatalogInventoryRows')
+      .mockResolvedValue([]);
+    const fetchPage = jest
+      .spyOn(service as any, 'fetchExportCatalogPage')
+      .mockResolvedValue([
+        {
+          id: 'inv-1',
+          item_id: 'item-1',
+          selling_price: 10,
+          item: { id: 'item-1', name: 'Export tea', item_tags: [] },
+          business_location: { id: 'loc-1' },
+        },
+      ]);
+    jest
+      .spyOn(service as any, 'attachPaymentsEnabledToItemsAsync')
+      .mockImplementation(async (items: unknown[]) => items);
+    jest
+      .spyOn(service as any, 'getViewCountsByInventoryIds')
+      .mockResolvedValue({});
+    jest
+      .spyOn(service as any, 'getActiveDealsByInventoryIds')
+      .mockResolvedValue({});
+    jest
+      .spyOn(service as any, 'attachRatingAggregates')
+      .mockImplementation(async (items: unknown[]) => items);
+    jest
+      .spyOn(service as any, 'attachLikeState')
+      .mockImplementation(async (items: unknown[]) => items);
+
+    const result = await service.getInventoryItems({
+      export_only: true,
+      country_code: 'CM',
+      page: 2,
+      limit: 24,
+    });
+
+    expect(fetchAll).not.toHaveBeenCalled();
+    expect(fetchPage).toHaveBeenCalledWith(expect.anything(), 24, 24);
+    expect(result.total).toBe(30);
+    expect(result.totalPages).toBe(2);
+    expect(result.page).toBe(2);
+    expect(result.items).toHaveLength(1);
+  });
 });
 
 describe('InventoryItemsService.getSimilarInventoryItems', () => {

@@ -138,17 +138,23 @@ describe('ExportsPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders loading placeholders without crashing', () => {
+  it('renders loading skeletons and hides empty state and stale items', () => {
     mockUseInventoryItems.mockReturnValue({
-      inventoryItems: [],
+      inventoryItems: [
+        listing({ id: 'inv-stale', item: { name: 'Stale export' } as InventoryItem['item'] }),
+      ],
       loading: true,
       error: null,
       pagination: null,
     });
     expect(() => renderPage()).not.toThrow();
     expect(
+      screen.getByLabelText('Loading items…')
+    ).toBeInTheDocument();
+    expect(
       screen.queryByText('No export items for this market yet.')
     ).not.toBeInTheDocument();
+    expect(screen.queryByText('Stale export')).not.toBeInTheDocument();
   });
 
   it('passes item= so cards can read nested .item, and skips incomplete rows', () => {

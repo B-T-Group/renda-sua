@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   HttpException,
@@ -12,14 +13,19 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import {
   AcknowledgeInspectionDto,
+  ApplyPickupGuideDto,
   PresignInspectionEvidenceDto,
   SaveInspectionItemsDto,
+  ClearPickupSlotDto,
+  SkipPickupSlotDto,
   SubmitInspectionDto,
 } from './dto/rental-inspection.dto';
 import { RentalInspectionEvidenceService } from './inspection/rental-inspection-evidence.service';
+import { InspectionOptInService } from './inspection/inspection-optin.service';
+import { PickupPhotoRulesService } from './inspection/pickup-photo-rules.service';
 import {
   type InspectionStage,
   RentalInspectionService,
@@ -32,8 +38,66 @@ import {
 export class RentalInspectionsController {
   constructor(
     private readonly inspections: RentalInspectionService,
-    private readonly evidence: RentalInspectionEvidenceService
+    private readonly evidence: RentalInspectionEvidenceService,
+    private readonly photoRules: PickupPhotoRulesService,
+    private readonly optIn: InspectionOptInService
   ) {}
+
+  @Get('pickup/photo-rules')
+  @ApiOperation({ summary: 'Pickup-day window and last-return guide. Does not open a draft.' })
+  photoRulesFor(@Param('bookingId', ParseUUIDPipe) bookingId: string) {
+    return this.photoRules.getRules(bookingId);
+  }
+
+  @Post('pickup/reuse')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Copy the last accepted return, or the item baseline, into the pickup draft' })
+  @ApiResponse({ status: 200, description: 'Photos copied into the pickup draft' })
+  @ApiResponse({ status: 409, description: 'Reuse blocked or the rental has already started' })
+  reusePhotos(
+    @Param('bookingId', ParseUUIDPipe) bookingId: string
+  ) {
+    return this.optIn.reuse(bookingId, () => this.inspections.openDraft(bookingId, 'pickup'));
+  }
+
+  @Post('pickup/guide')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Use the last return as a display-only guide, or start blank' })
+  async applyGuide(
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+    @Body() body: ApplyPickupGuideDto,
+    @Headers('x-rendasua-platform') platform?: string | string[],
+    @Headers('x-client-platform') clientPlatform?: string | string[]
+  ) {
+    const caller = platform ?? clientPlatform;
+    // Same spoofable UX gate as presign. A missing header is web. The draft opens only after that check.
+    return this.photoRules.applyGuide(bookingId, body.mode, caller, () => this.inspections.openDraft(bookingId, 'pickup'));
+  }
+
+  @Post('pickup/slot-skips')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Skip an extra guide angle with a reason shown to the renter' })
+  skipSlot(
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+    @Body() body: SkipPickupSlotDto,
+    @Headers('x-rendasua-platform') platform?: string | string[],
+    @Headers('x-client-platform') clientPlatform?: string | string[]
+  ) {
+    // Same spoofable UX gate as presign. A missing header is web.
+    return this.photoRules.skipSlot(bookingId, body.unitId, body.slotKey, body.reason, platform ?? clientPlatform);
+  }
+
+  @Post('pickup/slot-skips/clear')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a skipped extra angle so it can be retaken' })
+  clearSlot(
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+    @Body() body: ClearPickupSlotDto,
+    @Headers('x-rendasua-platform') platform?: string | string[],
+    @Headers('x-client-platform') clientPlatform?: string | string[]
+  ) {
+    return this.photoRules.clearSlot(bookingId, body.unitId, body.slotKey, platform ?? clientPlatform);
+  }
 
   @Post(':stage/draft')
   @HttpCode(HttpStatus.OK)
@@ -104,9 +168,13 @@ export class RentalInspectionsController {
   @ApiOperation({ summary: 'Presign a private inspection photo upload' })
   presign(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
-    @Body() body: PresignInspectionEvidenceDto
+    @Body() body: PresignInspectionEvidenceDto,
+    @Headers('x-rendasua-platform') platform?: string | string[],
+    @Headers('x-client-platform') clientPlatform?: string | string[]
   ) {
-    return this.evidence.presign(bookingId, body);
+    // UX gate only. Either header can be spoofed. It is not proof of a camera capture.
+    // A missing x-rendasua-platform falls back to x-client-platform. Unknown values are web.
+    return this.evidence.presign(bookingId, body, platform ?? clientPlatform);
   }
 
   @Post('evidence/:mediaId/finalize')

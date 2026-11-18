@@ -5,6 +5,7 @@ import {
   formatBookedSpan,
   formatConfirmationDue,
   formatConfirmationMoney,
+  inspectionExplainerRail,
 } from './confirmationFormat';
 
 describe('confirmation timezone', () => {
@@ -38,5 +39,8 @@ describe('confirmation timezone', () => {
     ).toBe('17 nov. 15:00 → 18 nov. 20:00 (heure de Montréal)');
     expect(formatConfirmationMoney(65, 'CAD', 'en')).toBe('$65.00');
     expect(formatConfirmationMoney(65, 'CAD', 'fr')).toBe('65,00\u00a0$');
+    expect(formatConfirmationMoney(45000, 'XAF', 'fr')).toBe('45\u00a0000\u00a0FCFA');
+    expect(inspectionExplainerRail('momo', 'CAD')).toBe('card');
+    expect(inspectionExplainerRail('momo', 'XAF')).toBe('momo');
   });
 });

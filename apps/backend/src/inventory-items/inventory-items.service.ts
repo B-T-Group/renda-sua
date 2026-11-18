@@ -377,9 +377,7 @@ const TOP_LOCATIONS_INVENTORY_SCAN_LIMIT = 20000;
 /** Max listing rows to load when de-duplicating by catalog `item_id` (safety cap). */
 const INVENTORY_CATALOG_FETCH_MAX = 20000;
 
-const CATALOG_INVENTORY_LIST_GQL = `
-  query CatalogInventoryList($where: business_inventory_bool_exp!, $limit: Int!, $offset: Int!) {
-    business_inventory(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
+const CATALOG_INVENTORY_ROW_FIELDS = `
       id
       business_location_id
       item_id
@@ -546,6 +544,32 @@ const CATALOG_INVENTORY_LIST_GQL = `
           latitude
           longitude
         }
+      }
+`;
+
+const CATALOG_INVENTORY_LIST_GQL = `
+  query CatalogInventoryList($where: business_inventory_bool_exp!, $limit: Int!, $offset: Int!) {
+    business_inventory(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
+      ${CATALOG_INVENTORY_ROW_FIELDS}
+    }
+  }
+`;
+
+/** One page of distinct export items — avoids fetch-all + in-memory slice. */
+const CATALOG_EXPORT_PAGE_GQL = `
+  query CatalogExportPage($where: business_inventory_bool_exp!, $limit: Int!, $offset: Int!) {
+    items(
+      where: { business_inventories: $where }
+      limit: $limit
+      offset: $offset
+      order_by: { created_at: desc }
+    ) {
+      business_inventories(
+        where: $where
+        limit: 1
+        order_by: { created_at: desc }
+      ) {
+        ${CATALOG_INVENTORY_ROW_FIELDS}
       }
     }
   }
@@ -1999,6 +2023,9 @@ export class InventoryItemsService {
     semanticScores?: Map<string, number>;
     discovery?: { sort: DiscoverySort };
   }): Promise<PaginatedInventoryItems> {
+    if (params.query.export_only === true) {
+      return this.assembleExportListPage(params);
+    }
     const {
       where,
       storeWhere,
@@ -2084,6 +2111,84 @@ export class InventoryItemsService {
       totalPages,
       matched_stores,
     };
+  }
+
+  private async assembleExportListPage(params: {
+    where: Record<string, unknown>;
+    page: number;
+    limit: number;
+    discovery?: { sort: DiscoverySort };
+  }): Promise<PaginatedInventoryItems> {
+    const { where, page, limit } = params;
+    const total = await this.countDistinctCatalogItemIds(where);
+    if (total === 0) {
+      return { items: [], total: 0, page, limit, totalPages: 0 };
+    }
+    const offset = (page - 1) * limit;
+    const rawItems = await this.fetchExportCatalogPage(where, limit, offset);
+    const hydrated = await this.hydrateExportCatalogRows(rawItems);
+    const withLikes = await this.attachLikeState(hydrated);
+    return this.exportListPageResult(withLikes, total, page, limit, params.discovery);
+  }
+
+  private exportListPageResult(
+    items: InventoryItem[],
+    total: number,
+    page: number,
+    limit: number,
+    discovery?: { sort: DiscoverySort }
+  ): PaginatedInventoryItems {
+    const totalPages = Math.ceil(total / limit);
+    if (!discovery) {
+      return { items, total, page, limit, totalPages };
+    }
+    const nowMs = Date.now();
+    return {
+      items: items.map((item) => ({ ...item, ...trustSignals(item, nowMs) })),
+      total,
+      page,
+      limit,
+      totalPages,
+      discovery: { sort: discovery.sort, sort_control: sortControlState(total) },
+    };
+  }
+
+  private async fetchExportCatalogPage(
+    where: Record<string, unknown>,
+    limit: number,
+    offset: number
+  ): Promise<any[]> {
+    const res = await this.hasuraSystemService.executeQuery(
+      CATALOG_EXPORT_PAGE_GQL,
+      { where, limit, offset }
+    );
+    return this.flattenExportPageRows(res.items ?? []);
+  }
+
+  private flattenExportPageRows(items: any[]): any[] {
+    return items
+      .map((row) => row?.business_inventories?.[0])
+      .filter(Boolean);
+  }
+
+  private async hydrateExportCatalogRows(
+    rawItems: any[]
+  ): Promise<InventoryItem[]> {
+    const items = rawItems.map((inv) => this.mapItemTagsToTags(inv));
+    const withPayments = await this.attachPaymentsEnabledToItemsAsync(items);
+    return this.attachExportPageEnrichments(withPayments);
+  }
+
+  private async attachExportPageEnrichments(
+    items: InventoryItem[]
+  ): Promise<InventoryItem[]> {
+    const ids = items.map((i) => i.id);
+    const viewsMap = await this.getViewCountsByInventoryIds(ids);
+    const dealsMap = await this.getActiveDealsByInventoryIds(ids);
+    const withDeals = items.map((item) =>
+      this.attachDealAndViews(item, viewsMap, dealsMap)
+    );
+    return this.attachRatingAggregates(withDeals);
   }
 
   private async rankFetchedCatalogRows(params: {

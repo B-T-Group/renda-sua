@@ -20,3 +20,4 @@
 - "!include public_rental_submit_inspection.yaml"
 - "!include public_rental_availability_scan.yaml"
 - "!include public_rental_submit_inspection_with_claim.yaml"
+- "!include public_rental_apply_pickup_reuse.yaml"

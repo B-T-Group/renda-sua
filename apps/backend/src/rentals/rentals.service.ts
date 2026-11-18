@@ -56,6 +56,8 @@ import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
 import type { ListingCardWindow } from './rental-card-window';
+import { listingWindowInspected, snapshotInspected } from './inspection/inspection-optin';
+import { InspectionOptInService } from './inspection/inspection-optin.service';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
   acceptStartConflict,
@@ -123,6 +125,11 @@ export const RENTAL_OVERWRITE_BUSINESS_FORBIDDEN =
 
 /** Default security deposit = 8x the listing hourly rate (business can overwrite). */
 const RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER = 8;
+
+function cardDepositCurrency(currency: string | null | undefined): boolean {
+  const code = (currency ?? '').trim().toUpperCase();
+  return code !== 'XAF' && code !== 'XOF';
+}
 
 const ACCEPT_PICKUP_VERSION = `mutation AcceptPickup($id: uuid!, $version: uuid!, $actor: uuid!) {
   rental_accept_pickup_version(args: { p_booking_id: $id, p_version_id: $version, p_actor: $actor }) { id }
@@ -430,6 +437,7 @@ export class RentalsService {
     private readonly rentalListingAiReviewService: RentalListingAiReviewService,
     private readonly rentalStartPinShare: RentalStartPinShareService,
     private readonly inspectionFlags: RentalInspectionFlags,
+    private readonly inspectionOptIn: InspectionOptInService,
     private readonly cardWindow: RentalCardWindowService
   ) {}
 
@@ -787,29 +795,46 @@ export class RentalsService {
 
   private async attachCardWindows(rows: PublicRentalListingRow[]): Promise<PublicRentalListingRow[]> {
     if (!rows.length || !this.cardWindow) return rows;
-    const map = await this.cardWindow.forCountries(
-      rows.map((row) => row.business_location?.address?.country)
-    );
-    return rows.map((row) => this.withCardFields(row, map));
+    const inspected = await this.listingOptIn(rows);
+    return Promise.all(rows.map((row) => this.rowCard(row, inspected)));
   }
 
-  private withCardFields(
-    row: PublicRentalListingRow,
-    map: Map<string, ListingCardWindow>
-  ): PublicRentalListingRow {
-    const code = resolveItemCountry(row.business_location?.address?.country)?.toUpperCase() || '';
-    const fields = map.get(code);
-    return fields ? { ...row, ...fields } : row;
+  private async listingOptIn(rows: PublicRentalListingRow[]): Promise<Map<string, boolean | undefined>> {
+    const map = new Map<string, boolean | undefined>();
+    for (const row of rows) {
+      const itemId = row.rental_item?.id;
+      if (!itemId || map.has(itemId)) continue;
+      map.set(itemId, await this.optInForListing(row.business_location?.address?.country, itemId));
+    }
+    return map;
+  }
+
+  private async optInForListing(country: string | null | undefined, itemId: string): Promise<boolean | undefined> {
+    const on = await this.optInFlag(country);
+    const stamps = on ? await this.inspectionOptIn.stampsNewBooking(itemId) : false;
+    return listingWindowInspected(on, stamps);
+  }
+
+  private async rowCard(row: PublicRentalListingRow, inspected: Map<string, boolean | undefined>) {
+    const country = row.business_location?.address?.country;
+    const fields = await this.cardWindow.forCountry(country, new Date(), inspected.get(row.rental_item?.id));
+    return { ...row, ...fields };
   }
 
   private async rejectUnfitCardRequest(
-    listing: { business_location?: { address?: { country?: string | null } | null } | null },
+    listing: {
+      rental_item?: { id?: string | null } | null;
+      business_location?: { address?: { country?: string | null } | null } | null;
+    },
     endIso: string
   ): Promise<void> {
     const country = resolveItemCountry(listing?.business_location?.address?.country);
     if (!this.inspectionFlags?.cardWindowGuardEnabled) return;
     if (!(await this.inspectionFlags.cardWindowGuardEnabled(country))) return;
-    this.throwIfCardEndMisses(endIso, await this.stripeWindowFields(country));
+    const inspected = (await this.optInFlag(country))
+      ? await this.inspectionOptIn.stampsNewBooking(listing?.rental_item?.id)
+      : undefined;
+    this.throwIfCardEndMisses(endIso, await this.stripeWindowFields(country, inspected));
   }
 
   private throwIfCardEndMisses(endIso: string, fields: ListingCardWindow): void {
@@ -818,9 +843,22 @@ export class RentalsService {
     throw cardWindowRejected(INSPECTION_CODES.STRIPE_WINDOW, STRIPE_WINDOW_MESSAGE, fields);
   }
 
-  private async stripeWindowFields(country: string | null): Promise<ListingCardWindow> {
-    if (this.cardWindow) return this.cardWindow.forCountry(country);
-    return emptyStripeFields();
+  private async stripeWindowFields(country: string | null, inspected?: boolean): Promise<ListingCardWindow> {
+    if (!this.cardWindow) return emptyStripeFields();
+    if (inspected === undefined) return this.cardWindow.forCountry(country);
+    return this.cardWindow.forCountry(country, new Date(), inspected);
+  }
+
+  private async knownInspected(country: string | null, row: { inspection_policy_version?: number | null }): Promise<boolean | undefined> {
+    if (!(await this.optInFlag(country))) return undefined;
+    if (!row || !('inspection_policy_version' in row)) return undefined;
+    return snapshotInspected(row.inspection_policy_version);
+  }
+
+  private async optInFlag(country?: string | null): Promise<boolean> {
+    const flags = this.inspectionFlags as { optInEnabled?: (code?: string | null) => Promise<boolean> } | undefined;
+    if (typeof flags?.optInEnabled !== 'function') return false;
+    return flags.optInEnabled(country);
   }
 
   async getPublicRentalListingById(
@@ -925,6 +963,7 @@ export class RentalsService {
     await this.validateRentalRequestWindowsPlan(plan, listing, unitsRequested);
     await this.rejectUnfitCardRequest(listing, plan.envelopeEndIso);
     const note = dto.clientRequestNote?.trim();
+    const inspectionPolicyVersion = await this.requestPolicyVersion(listing);
     const row = await this.hasuraSystemService.executeMutation<{
       insert_rental_requests_one: { id: string };
     }>(Q.INSERT_RENTAL_REQUEST, {
@@ -938,6 +977,7 @@ export class RentalsService {
         status: 'pending',
         units_requested: unitsRequested,
         client_request_note: note || null,
+        inspection_policy_version: inspectionPolicyVersion,
         quoted_total: quotePlanTotal(
           plan.windows,
           Number(listing.base_price_per_day),
@@ -954,16 +994,12 @@ export class RentalsService {
       plan.envelopeEndIso,
       user
     );
-    return {
-      success: true,
-      requestId,
-      inspection_policy_version: await this.requestPolicyVersion(listing),
-    };
+    return { success: true, requestId, inspection_policy_version: inspectionPolicyVersion };
   }
 
   private async requestPolicyVersion(listing: any): Promise<number | null> {
     const country = listing?.business_location?.address?.country ?? null;
-    return this.listingInspectionPolicy(country);
+    return this.listingInspectionPolicy(country, listing?.rental_item?.id);
   }
 
   private assertModifyVersion(
@@ -1517,6 +1553,8 @@ export class RentalsService {
     const user = await this.hasuraUserService.getUser();
     const req = await this.loadRequestQuietly(requestId);
     if (!this.mayReadRequestPolicy(user, req)) throw requestPolicyNotFound();
+    const country = req.rental_location_listing?.business_location?.address?.country ?? null;
+    if (await this.optInFlag(country)) return req.inspection_policy_version ?? null;
     return this.requestPolicyVersion(req.rental_location_listing);
   }
 
@@ -1652,7 +1690,7 @@ export class RentalsService {
       ? await this.paymentRoutingService.resolveRailForCountry(listingCountry)
       : await this.paymentRoutingService.resolveRailForUser(user.id);
     if (rail === 'stripe') {
-      const fields = await this.stripeWindowFields(listingCountry);
+      const fields = await this.stripeWindowFields(listingCountry, await this.knownInspected(listingCountry, booking));
       this.assertStripeRentalEndWithinAuthWindow(booking.end_at as string, fields);
       await this.assertEnrolledStripeReviewWindow(
         bookingId,
@@ -1771,7 +1809,7 @@ export class RentalsService {
     dto: CreateBusinessRentalListingDto
   ): Promise<string> {
     const businessId = await this.requireBusinessId();
-    await this.assertRentalItemForBusiness(dto.rental_item_id, businessId);
+    const currency = await this.assertRentalItemForBusiness(dto.rental_item_id, businessId);
     await this.assertLocationForBusiness(dto.business_location_id, businessId);
     const minHours = dto.min_rental_hours ?? 1;
     const maxHours =
@@ -1792,7 +1830,8 @@ export class RentalsService {
     }
     const securityDeposit = this.resolveListingSecurityDeposit(
       dto.security_deposit_amount,
-      price
+      price,
+      currency
     );
     const availability = this.normalizeWeeklyAvailability(dto.weekly_availability);
     const row = await this.hasuraUserService.executeMutation<{
@@ -1865,7 +1904,9 @@ export class RentalsService {
     if (!r.rental_items_by_pk) {
       throw new HttpException('Rental item not found', HttpStatus.NOT_FOUND);
     }
-    return this.attachListingRejectionReasons(r.rental_items_by_pk);
+    const item = await this.attachListingRejectionReasons(r.rental_items_by_pk);
+    item.inspection = await this.inspectionOptIn.summaryIfEnabled(itemId);
+    return item;
   }
 
   async updateBusinessRentalItem(
@@ -2038,24 +2079,23 @@ export class RentalsService {
     return out;
   }
 
-  /** Explicit deposit when provided, otherwise 8x the hourly rate. */
+  /** Explicit deposit when provided. Card listings default to 8x hourly. XAF and XOF stay 0. */
   private resolveListingSecurityDeposit(
     raw: number | undefined,
-    hourlyRate: number
+    hourlyRate: number,
+    currency?: string | null
   ): number {
-    if (raw !== undefined) {
-      const v = Number(raw);
-      if (Number.isNaN(v) || v < 0) {
-        throw new HttpException(
-          'Invalid security_deposit_amount',
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      return Number(v.toFixed(2));
+    if (raw !== undefined) return this.explicitDeposit(raw);
+    if (!cardDepositCurrency(currency)) return 0;
+    return Number((hourlyRate * RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER).toFixed(2));
+  }
+
+  private explicitDeposit(raw: number): number {
+    const value = Number(raw);
+    if (Number.isNaN(value) || value < 0) {
+      throw new HttpException('Invalid security_deposit_amount', HttpStatus.BAD_REQUEST);
     }
-    return Number(
-      (hourlyRate * RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER).toFixed(2)
-    );
+    return Number(value.toFixed(2));
   }
 
   private async assertListingMinMaxAfterPatch(
@@ -2196,10 +2236,11 @@ export class RentalsService {
     itemId: string,
     businessId: string,
     options: { allowDeleted?: boolean } = {}
-  ): Promise<void> {
+  ): Promise<string> {
     const r = await this.hasuraSystemService.executeQuery<{
       rental_items_by_pk: {
         business_id: string;
+        currency?: string | null;
         deleted_at: string | null;
       } | null;
     }>(Q.GET_RENTAL_ITEM_BUSINESS_CHECK, { id: itemId });
@@ -2208,11 +2249,9 @@ export class RentalsService {
       throw new HttpException('Rental item not found', HttpStatus.NOT_FOUND);
     }
     if (!options.allowDeleted && row.deleted_at) {
-      throw new HttpException(
-        'This rental item was removed',
-        HttpStatus.BAD_REQUEST
-      );
+      throw new HttpException('This rental item was removed', HttpStatus.BAD_REQUEST);
     }
+    return row.currency ?? '';
   }
 
   private async assertLocationForBusiness(
@@ -2455,7 +2494,7 @@ export class RentalsService {
       );
     }
     const enrolledEnd = this.requestWindowEnvelope(params.req).endAt;
-    const fields = await this.stripeWindowFields(listingCountry);
+    const fields = await this.stripeWindowFields(listingCountry, await this.knownInspected(listingCountry, params.req));
     this.assertStripeRentalEndWithinAuthWindow(enrolledEnd, fields);
     await this.assertEnrolledStripeReviewWindow(params.bookingId, enrolledEnd, listingCountry);
     const total = Number(snap.total);
@@ -5157,6 +5196,10 @@ export class RentalsService {
     const country = resolveItemCountry(
       req.rental_location_listing?.business_location?.address?.country
     );
+    if (await this.optInFlag(country)) {
+      if (req.inspection_policy_version == null) return null;
+      return this.enrolOrReject(req, country);
+    }
     const enabled = await this.inspectionFlags.isEnabled(country);
     if (!enabled) return null;
     return this.enrolOrReject(req, country);
@@ -5168,13 +5211,17 @@ export class RentalsService {
       return decision.outcome === 'enrol' ? decision.policyVersion : null;
     }
     if (decision.code === INSPECTION_CODES.STRIPE_WINDOW) {
-      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country));
+      const inspected = (await this.optInFlag(country)) ? true : undefined;
+      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country, inspected));
     }
     throw inspectionRejected(decision.code, decision.message);
   }
 
   /** 1 when a new booking in this country would be inspected. Does not reject the listing. */
-  async listingInspectionPolicy(country?: string | null): Promise<number | null> {
+  async listingInspectionPolicy(country?: string | null, itemId?: string | null): Promise<number | null> {
+    if (await this.optInFlag(country)) {
+      return (await this.inspectionOptIn.stampsNewBooking(itemId)) ? 1 : null;
+    }
     const enabled = await this.inspectionFlags.isEnabled(country);
     return enabled ? 1 : null;
   }
@@ -5263,7 +5310,8 @@ export class RentalsService {
     };
     const decision = decideInspectionEnrolment(input);
     if (decision.outcome === 'reject') {
-      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country));
+      const inspected = (await this.optInFlag(country)) ? true : undefined;
+      throw cardWindowRejected(decision.code, decision.message, await this.stripeWindowFields(country, inspected));
     }
   }
 

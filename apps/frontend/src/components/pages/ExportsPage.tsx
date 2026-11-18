@@ -28,11 +28,24 @@ import {
 } from '../../utils/metaPixelContentCategory';
 import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
+import ItemCardSkeleton from '../common/ItemCardSkeleton';
 import ExportCatalogIllustration from '../illustrations/ExportCatalogIllustration';
 import SEOHead from '../seo/SEOHead';
 import { MarketSelector } from '../market/MarketSelector';
 
 const ITEMS_PER_PAGE = 24;
+const EXPORT_SKELETON_COUNT = 8;
+
+const EXPORT_GRID_SX = {
+  display: 'grid',
+  gridTemplateColumns: {
+    xs: 'repeat(1, 1fr)',
+    sm: 'repeat(2, 1fr)',
+    md: 'repeat(3, 1fr)',
+    lg: 'repeat(4, 1fr)',
+  },
+  gap: 3,
+};
 
 export function hasCatalogItem(
   row: InventoryItem | undefined | null
@@ -80,6 +93,7 @@ const ExportsPage: React.FC = () => {
     limit: ITEMS_PER_PAGE,
     is_active: true,
     export_only: true,
+    pageMode: 'replace',
     anonymousOrigin: browserGeo,
   });
 
@@ -174,7 +188,19 @@ const ExportsPage: React.FC = () => {
         </Alert>
       ) : null}
 
-      {!loading && renderableItems.length === 0 ? (
+      {loading ? (
+        <Box
+          sx={EXPORT_GRID_SX}
+          aria-busy="true"
+          aria-label={t('public.items.results.loading', 'Loading items…')}
+        >
+          {Array.from({ length: EXPORT_SKELETON_COUNT }).map((_, i) => (
+            <Box key={i} sx={{ minWidth: 0 }}>
+              <ItemCardSkeleton />
+            </Box>
+          ))}
+        </Box>
+      ) : renderableItems.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
           <ExportCatalogIllustration size={120} />
           <Typography sx={{ mt: 2 }} color="text.secondary">
@@ -182,44 +208,31 @@ const ExportsPage: React.FC = () => {
           </Typography>
         </Paper>
       ) : (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: 'repeat(1, 1fr)',
-              sm: 'repeat(2, 1fr)',
-              md: 'repeat(3, 1fr)',
-              lg: 'repeat(4, 1fr)',
-            },
-            gap: 3,
-          }}
-        >
-          {loading
-            ? Array.from({ length: 8 }).map((_, i) => <Box key={i} />)
-            : renderableItems.map((inventoryItem) => (
-                <Box key={inventoryItem.id}>
-                  <DashboardItemCard
-                    item={inventoryItem}
-                    formatCurrency={formatCurrency}
-                    onOrderClick={handleOrderClick}
-                    onAddToCart={handleAddToCart}
-                    isPublicView={!isAuthenticated}
-                    canOrder={!isAuthenticated || isClientUser}
-                    showCartButtons={isAuthenticated && isClientUser}
-                    loginButtonText={t(
-                      'public.items.login',
-                      'Sign In to Order'
-                    )}
-                    orderButtonText={t('common.orderNow', 'Order Now')}
-                    addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
-                    buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-                  />
-                </Box>
-              ))}
+        <Box sx={EXPORT_GRID_SX}>
+          {renderableItems.map((inventoryItem) => (
+            <Box key={inventoryItem.id}>
+              <DashboardItemCard
+                item={inventoryItem}
+                formatCurrency={formatCurrency}
+                onOrderClick={handleOrderClick}
+                onAddToCart={handleAddToCart}
+                isPublicView={!isAuthenticated}
+                canOrder={!isAuthenticated || isClientUser}
+                showCartButtons={isAuthenticated && isClientUser}
+                loginButtonText={t(
+                  'public.items.login',
+                  'Sign In to Order'
+                )}
+                orderButtonText={t('common.orderNow', 'Order Now')}
+                addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+                buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+              />
+            </Box>
+          ))}
         </Box>
       )}
 
-      {pagination && pagination.totalPages > 1 ? (
+      {!loading && pagination && pagination.totalPages > 1 ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
           <Pagination
             count={pagination.totalPages}

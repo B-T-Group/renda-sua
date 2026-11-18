@@ -76,6 +76,20 @@ export function useInventoryCatalog({
   const [effectiveSort, setEffectiveSort] = useState<DiscoverySortMode | undefined>(undefined);
   const [sortControl, setSortControl] = useState<SortControlState | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
+  const exportOnlyKey = export_only === true;
+  const [activeExportOnly, setActiveExportOnly] = useState(exportOnlyKey);
+  // Clear immediately when Exports is toggled so skeletons show (not stale local items).
+  if (exportOnlyKey !== activeExportOnly) {
+    setActiveExportOnly(exportOnlyKey);
+    setItems([]);
+    setMatchedStores([]);
+    setLoading(true);
+    setLoadingMore(false);
+    setError(null);
+    setPage(1);
+    setTotalPages(0);
+    setTotal(0);
+  }
 
   const runFetch = useCallback(
     async (nextPage: number, append: boolean) => {

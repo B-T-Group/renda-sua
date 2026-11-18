@@ -30,6 +30,17 @@ function formatFcfa(amount: number, fr: boolean): string {
   return `${digits}\u00a0FCFA`;
 }
 
+const STRIPE_CURRENCIES = new Set(['CAD', 'USD', 'EUR', 'GBP']);
+
+export function inspectionExplainerRail(
+  rail: string | null | undefined,
+  currency: string | null | undefined
+): 'card' | 'momo' {
+  const code = (currency || '').toUpperCase();
+  if (rail === 'momo' && !STRIPE_CURRENCIES.has(code)) return 'momo';
+  return 'card';
+}
+
 export function formatConfirmationDue(
   iso: string | null | undefined,
   timeZone: string,
