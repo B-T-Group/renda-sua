@@ -15,6 +15,12 @@ import {
 } from './rental-card-window';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { DeclineRankingService } from './decline-ranking/decline-ranking.service';
+import {
+  listingsInIdOrder,
+  rentalSearchOrderKey,
+  RentalSearchIdCache,
+  type CachedSearchOrder,
+} from './rental-search-id-cache';
 import { RentalsService, type PublicRentalListingRow } from './rentals.service';
 
 const DAY_MS = 86_400_000;
@@ -40,18 +46,18 @@ export class RentalSearchService {
     private readonly hasura: HasuraSystemService,
     private readonly routing?: PaymentRoutingService,
     private readonly flags?: RentalInspectionFlags,
-    private readonly ranking?: DeclineRankingService
+    private readonly ranking?: DeclineRankingService,
+    private readonly idCache = new RentalSearchIdCache()
   ) {}
 
   async search(query: RentalSearchQueryDto) {
     const range = this.dateRange(query.start_date, query.end_date);
-    const rows = await this.rentals.collectPublicRentalListings(this.catalogQuery(query));
     const window = await this.cardWindow(query.country_code);
-    const ordered = await this.orderedHits(await this.annotate(rows, range), query.country_code, window, range);
-    const paged = this.page(ordered.hits, query, range, window);
-    if (ordered.guard) return paged;
-    const listings = await this.stampPage(paged.listings, query.country_code, window);
-    return { ...paged, listings };
+    if (!this.canPageFromIds()) return this.searchFresh(query, range, window, null);
+    const key = await this.orderKey(query);
+    const cached = this.idCache.get(key);
+    if (cached) return this.pageFromIds(cached, query, range, window);
+    return this.searchFresh(query, range, window, key);
   }
 
   async cardWindow(country?: string | null, latest?: string | null, inspected?: boolean): Promise<CardPaymentPolicy> {
@@ -159,27 +165,126 @@ export class RentalSearchService {
     return res.rental_bookings ?? [];
   }
 
+  private async searchFresh(
+    query: RentalSearchQueryDto,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy,
+    key: string | null
+  ) {
+    const rows = await this.rentals.collectPublicRentalListings(this.catalogQuery(query));
+    const ordered = await this.orderedHits(await this.annotate(rows, range), query.country_code, window, range);
+    this.remember(key, ordered.hits);
+    const paged = this.page(ordered.hits, query, range, window);
+    if (ordered.guard) return paged;
+    const listings = await this.stampPage(paged.listings, query.country_code, window);
+    return { ...paged, listings };
+  }
+
+  private remember(key: string | null, hits: Array<RentalSearchHit & { catalogIndex: number }>): void {
+    if (!key) return;
+    const availableCount = hits.filter((hit) => hit.available === true).length;
+    this.idCache.set(key, { ids: hits.map((hit) => hit.listing.id), availableCount });
+  }
+
+  private async pageFromIds(
+    cached: CachedSearchOrder,
+    query: RentalSearchQueryDto,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
+    const bounds = this.pageBounds(query);
+    const ids = cached.ids.slice(bounds.start, bounds.start + bounds.limit);
+    const rows = await this.rowsForIds(ids);
+    const listings = await this.finishPage(await this.annotate(rows, range), query, range, window);
+    return this.pageBody(listings, cached.ids.length, cached.availableCount, bounds, range, window);
+  }
+
+  private async rowsForIds(ids: string[]): Promise<PublicRentalListingRow[]> {
+    if (!ids.length) return [];
+    const load = this.rentals.loadPublicRentalListingsByIds;
+    return listingsInIdOrder(ids, await load.call(this.rentals, ids));
+  }
+
+  private async finishPage(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    query: RentalSearchQueryDto,
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
+    const guard = range ? await this.cardGuardEnabled(query.country_code) : false;
+    const prepared = await this.prepareHits(hits, query.country_code, window, range, guard);
+    const listings = prepared.map(stripCatalogIndex);
+    if (guard) return listings;
+    return this.stampPage(listings, query.country_code, window);
+  }
+
   private page(
     hits: Array<RentalSearchHit & { catalogIndex: number }>,
     query: RentalSearchQueryDto,
     range: SearchDateRange | null,
     window: CardPaymentPolicy
   ) {
+    const bounds = this.pageBounds(query);
+    const slice = hits.slice(bounds.start, bounds.start + bounds.limit).map(stripCatalogIndex);
+    const availableCount = hits.filter((hit) => hit.available === true).length;
+    return this.pageBody(slice, hits.length, availableCount, bounds, range, window);
+  }
+
+  private pageBounds(query: RentalSearchQueryDto) {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
-    const start = (page - 1) * limit;
-    const slice = hits.slice(start, start + limit).map(stripCatalogIndex);
+    return { page, limit, start: (page - 1) * limit };
+  }
+
+  private pageBody(
+    listings: RentalSearchHit[],
+    total: number,
+    availableCount: number,
+    bounds: { page: number; limit: number },
+    range: SearchDateRange | null,
+    window: CardPaymentPolicy
+  ) {
     return {
-      listings: slice,
-      total: hits.length,
-      page,
-      limit,
-      availableCount: hits.filter((hit) => hit.available === true).length,
-      dates: range
-        ? { startDate: range.startDate, endDate: range.endDate, dayCount: range.dayCount }
-        : null,
+      listings,
+      total,
+      page: bounds.page,
+      limit: bounds.limit,
+      availableCount,
+      dates: range ? { startDate: range.startDate, endDate: range.endDate, dayCount: range.dayCount } : null,
       ...window,
     };
+  }
+
+  private canPageFromIds(): boolean {
+    return typeof this.rentals.loadPublicRentalListingsByIds === 'function';
+  }
+
+  private async orderKey(query: RentalSearchQueryDto): Promise<string> {
+    return rentalSearchOrderKey({
+      country: query.country_code,
+      state: query.state,
+      q: query.q,
+      categoryId: query.category_id,
+      sort: query.sort,
+      minPrice: query.min_price,
+      maxPrice: query.max_price,
+      startDate: query.start_date,
+      endDate: query.end_date,
+      operationMode: query.operation_mode,
+      rankingEnabled: await this.rankingFlag(query.country_code),
+      cardGuardEnabled: await this.cardGuardEnabled(query.country_code),
+    });
+  }
+
+  private async rankingFlag(country?: string | null): Promise<boolean> {
+    const read = this.flags?.declineRankingEnabled;
+    if (typeof read !== 'function') return false;
+    try {
+      return await read.call(this.flags, country);
+    } catch (error: any) {
+      this.logger.warn(`ranking flag read failed, caching unranked: ${error?.message ?? 'unknown'}`);
+      return false;
+    }
   }
 
   private catalogQuery(query: RentalSearchQueryDto) {

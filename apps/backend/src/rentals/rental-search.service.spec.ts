@@ -1,5 +1,6 @@
 import { latestExclusiveEndDate } from './rental-card-window';
 import { DeclineRankingService } from './decline-ranking/decline-ranking.service';
+import { RentalSearchIdCache } from './rental-search-id-cache';
 import { RentalSearchService } from './rental-search.service';
 import type { PublicRentalListingRow } from './rentals.service';
 
@@ -501,5 +502,77 @@ describe('RentalSearchService', () => {
     expect(byId('a')?.inspection_enabled).toBe(true);
     expect(byId('b')?.inspection_enabled).toBe(false);
     expect(result.total).toBe(2);
+  });
+
+  it('keeps one ordered id list across pages, then drops it when the cache expires', async () => {
+    const rows = ['a', 'b', 'c', 'd', 'e'].map((id) => listing(id, id));
+    const loadByIds = jest.fn(async (ids: string[]) => ids.map((id) => listing(id, id)).reverse());
+    const catalog = {
+      collectPublicRentalListings: jest.fn().mockResolvedValue(rows),
+      loadPublicRentalListingsByIds: loadByIds,
+    };
+    const windowCalls: string[][] = [];
+    hasura.executeQuery.mockImplementation(async (_query: string, vars: { ids?: string[] }) => {
+      if (vars?.ids) windowCalls.push([...vars.ids]);
+      return { rental_booking_windows: [] };
+    });
+    jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 10, 10));
+    try {
+      let now = 5_000;
+      const cache = new RentalSearchIdCache(4, 1_000, () => now);
+      const cached = new RentalSearchService(catalog as never, hasura as never, undefined, undefined, undefined, cache);
+      const query = {
+        country_code: 'CM',
+        sort: 'newest' as const,
+        start_date: '2026-11-22',
+        end_date: '2026-11-25',
+        limit: 2,
+      };
+      const first = await cached.search({ ...query, page: 1 });
+      const second = await cached.search({ ...query, page: 2 });
+      const third = await cached.search({ ...query, page: 3 });
+      expect(first.listings.map((row) => row.listing.id)).toEqual(['a', 'b']);
+      expect(second.listings.map((row) => row.listing.id)).toEqual(['c', 'd']);
+      expect(third.listings.map((row) => row.listing.id)).toEqual(['e']);
+      const seen = [...first.listings, ...second.listings, ...third.listings].map((row) => row.listing.id);
+      expect(seen).toEqual(['a', 'b', 'c', 'd', 'e']);
+      expect(second.total).toBe(5);
+      expect(second.availableCount).toBe(5);
+      expect(catalog.collectPublicRentalListings).toHaveBeenCalledTimes(1);
+      expect(loadByIds).toHaveBeenNthCalledWith(1, ['c', 'd']);
+      expect(loadByIds).toHaveBeenNthCalledWith(2, ['e']);
+      expect(windowCalls[0]).toEqual(['a', 'b', 'c', 'd', 'e']);
+      expect(windowCalls[1]).toEqual(['c', 'd']);
+      expect(windowCalls[2]).toEqual(['e']);
+      now += 1_000;
+      await cached.search({ ...query, page: 1 });
+      expect(catalog.collectPublicRentalListings).toHaveBeenCalledTimes(2);
+    } finally {
+      hasura.executeQuery.mockReset();
+      jest.restoreAllMocks();
+    }
+  });
+
+  it('does not reuse an order when the ranking flag changes, and flag off keeps catalog order', async () => {
+    const rows = [listing('a', 'A'), listing('b', 'B')];
+    const catalog = {
+      collectPublicRentalListings: jest.fn().mockResolvedValue(rows),
+      loadPublicRentalListingsByIds: jest.fn(async (ids: string[]) => ids.map((id) => listing(id, id))),
+    };
+    const flags = {
+      declineRankingEnabled: jest.fn().mockResolvedValue(false),
+      cardWindowGuardEnabled: jest.fn().mockResolvedValue(false),
+      chargeAtPickupEnabled: jest.fn().mockResolvedValue(false),
+      isEnabled: jest.fn().mockResolvedValue(false),
+      numberConfig: jest.fn().mockResolvedValue(72),
+    };
+    const cached = new RentalSearchService(catalog as never, hasura as never, undefined, flags as never);
+    const first = await cached.search({ country_code: 'CM', sort: 'newest' });
+    expect(first.listings.map((row) => row.listing.id)).toEqual(['a', 'b']);
+    await cached.search({ country_code: 'CM', sort: 'newest', page: 2 });
+    expect(catalog.collectPublicRentalListings).toHaveBeenCalledTimes(1);
+    flags.declineRankingEnabled.mockResolvedValue(true);
+    await cached.search({ country_code: 'CM', sort: 'newest' });
+    expect(catalog.collectPublicRentalListings).toHaveBeenCalledTimes(2);
   });
 });

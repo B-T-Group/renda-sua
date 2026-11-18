@@ -8,6 +8,7 @@ import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payment
 import { MobilePaymentsService, MobilePaymentRequest } from '../mobile-payments/mobile-payments.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { isCardDepositCurrency, shownSecurityDeposit } from './rental-deposit';
+import { listingsInIdOrder } from './rental-search-id-cache';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -484,6 +485,24 @@ export class RentalsService {
     rows = await this.enrichRentalListingsWithDistance(rows, query);
     rows = this.sortRentalListingRows(rows, sort);
     return this.hideMomoDeposits(this.filterListingsByPrice(rows, query.min_price, query.max_price));
+  }
+
+  /** Page rows for a cached id list. Order follows `ids`, not the query. */
+  async loadPublicRentalListingsByIds(ids: string[]): Promise<PublicRentalListingRow[]> {
+    const unique = [...new Set(ids)].filter(Boolean);
+    if (!unique.length) return [];
+    const fetched = await this.fetchListingsByIds(unique);
+    const visible = await this.filterListingsByPaymentsEnabled(fetched);
+    const enriched = await this.enrichRentalListingsWithDistance(this.hideMomoDeposits(visible));
+    return listingsInIdOrder(ids, enriched);
+  }
+
+  private async fetchListingsByIds(ids: string[]): Promise<PublicRentalListingRow[]> {
+    const where = this.whereExcludingActiveProposedContracts({ id: { _in: ids } });
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_location_listings: PublicRentalListingRow[];
+    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, { where, order_by: [{ id: 'asc' }] });
+    return r.rental_location_listings ?? [];
   }
 
   async getTopRentalLocations(
