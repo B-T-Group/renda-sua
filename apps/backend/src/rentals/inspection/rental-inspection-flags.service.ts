@@ -39,6 +39,11 @@ export class RentalInspectionFlags {
   }
 
   /** Renter decline at pickup. Seeded false. No NODE_ENV override. */
+  /** True when the global row or any country row is on. Admin and dashboard checks use this. */
+  async pickupDeclineEnabledAnywhere(): Promise<boolean> {
+    return this.anyEnabled(PICKUP_DECLINE_FLAG);
+  }
+
   async pickupDeclineEnabled(countryCode?: string | null): Promise<boolean> {
     return this.booleanConfig(PICKUP_DECLINE_FLAG, countryCode, false);
   }
@@ -83,6 +88,25 @@ export class RentalInspectionFlags {
     } catch (error: any) {
       this.logger.warn(`inspection flag ${key}: ${error?.message ?? error}`);
       return fallback;
+    }
+  }
+
+  private async anyEnabled(key: string): Promise<boolean> {
+    try {
+      const result = await this.hasura.executeQuery<{
+        application_configurations: Array<{ boolean_value?: boolean | null }>;
+      }>(
+        `query FlagAnywhere($key: String!) {
+          application_configurations(
+            where: { config_key: { _eq: $key }, status: { _eq: "active" } }
+          ) { boolean_value }
+        }`,
+        { key }
+      );
+      return (result.application_configurations ?? []).some((row) => row.boolean_value === true);
+    } catch (error: any) {
+      this.logger.warn(`inspection flag ${key}: ${error?.message ?? error}`);
+      return false;
     }
   }
 

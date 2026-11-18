@@ -12,6 +12,7 @@ export interface MomoRefundRequest {
   provider: string;
   phone: string | null;
   transactionId: string | null;
+  channel?: 'moov_tg' | 'togocel' | null;
 }
 
 export interface MomoRefundResult {
@@ -72,8 +73,11 @@ export class RentalMomoRefundService {
       payerMessage: 'Rental condition decline refund',
       payeeNote: request.bookingId,
     });
-    if (!sent.financialTransactionId) return this.pending('mtn', null, false);
-    return this.pending('mtn', sent.financialTransactionId, false);
+    const code = Number(sent.statusCode);
+    if (!sent.status && code >= 400 && code < 500) {
+      return this.failed('mtn', sent.financialTransactionId ?? null);
+    }
+    return this.pending('mtn', sent.financialTransactionId ?? null, false);
   }
 
   private async initiateFreemopay(request: MomoRefundRequest): Promise<MomoRefundResult> {
@@ -96,7 +100,7 @@ export class RentalMomoRefundService {
       externalId: this.externalId(request.bookingId),
       description: 'Rental condition decline refund',
       callback: this.callbackUrl('fedapay'),
-      channel: 'togocel',
+      channel: request.channel === 'moov_tg' ? 'moov_tg' : 'togocel',
     });
     const ref = sent.transactionId ?? sent.reference ?? null;
     if (!sent.success && !sent.ambiguous) return this.failed('fedapay', ref);

@@ -346,8 +346,8 @@ export class MtnMomoService {
    * Transfer (Disbursement) - Send money to a customer
    */
   async transfer(request: DisbursementRequest): Promise<MtnMomoResponse> {
+    const referenceId = this.generateReferenceId();
     try {
-      const referenceId = this.generateReferenceId();
       const currency = request.currency || this.config.currency;
       const amount = formatMtnAmount(request.amount, currency);
       const token = await this.getToken('disbursement');
@@ -379,9 +379,16 @@ export class MtnMomoService {
         payerMessage: request.payerMessage,
         payeeNote: request.payeeNote,
       };
-    } catch (error) {
-      this.logger.error(`Disbursement failed: ${(error as Error).message}`);
-      return this.failure(error);
+    } catch (error: any) {
+      this.logger.error(`Disbursement failed: ${error?.message ?? error}`);
+      const code = error?.response?.status;
+      return {
+        status: false,
+        financialTransactionId: referenceId,
+        externalId: request.externalId,
+        statusCode: code != null ? String(code) : undefined,
+        error: error?.response?.data?.message || error?.message,
+      };
     }
   }
 

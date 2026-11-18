@@ -204,14 +204,12 @@ export class DashboardService {
           where: {
             config_key: { _eq: "rentals_pickup_decline_enabled" }
             status: { _eq: "active" }
-            country_code: { _is_null: true }
           }
-          limit: 1
         ) { boolean_value }
       }`,
       {}
     );
-    return flag.application_configurations?.[0]?.boolean_value === true;
+    return (flag.application_configurations ?? []).some((row) => row.boolean_value === true);
   }
 
   private async readDeclineStats(businessId: string) {

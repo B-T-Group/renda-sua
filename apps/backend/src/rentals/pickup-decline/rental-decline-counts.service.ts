@@ -33,7 +33,7 @@ export class RentalDeclineCountsService {
   ) {}
 
   async list(): Promise<{ threshold: number; parties: DeclineCountRow[] }> {
-    if (!(await this.flags.pickupDeclineEnabled())) {
+    if (!(await this.flags.pickupDeclineEnabledAnywhere())) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     }
     const counts = await this.hasura.executeQuery<{
@@ -49,7 +49,7 @@ export class RentalDeclineCountsService {
   }
 
   async forBusiness(businessId: string): Promise<{ conditionDeclines90d: number; pickupsReached90d: number } | null> {
-    if (!(await this.flags.pickupDeclineEnabled())) return null;
+    if (!(await this.flags.pickupDeclineEnabledAnywhere())) return null;
     try {
       const result = await this.hasura.executeQuery<{
         rental_condition_decline_counts_90d: Array<{ decline_count: number }>;

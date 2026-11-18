@@ -78,7 +78,7 @@ describe('decline counters', () => {
         return { clients: [{ id: 'c', user: { first_name: 'Jean', last_name: 'K' } }], businesses: [{ id: 'b', name: 'Studio Akwa' }] };
       }),
     };
-    const service = new RentalDeclineCountsService(hasura as never, { pickupDeclineEnabled: async () => true } as never);
+    const service = new RentalDeclineCountsService(hasura as never, { pickupDeclineEnabledAnywhere: async () => true } as never);
     const result = await service.list();
     expect(result.threshold).toBe(5);
     expect(result.parties.find((row) => row.role === 'renter')?.flagged).toBe(false);
@@ -90,8 +90,82 @@ describe('decline counters', () => {
 
   it('returns null stats when the flag is off', async () => {
     const hasura = { executeQuery: jest.fn() };
-    const service = new RentalDeclineCountsService(hasura as never, { pickupDeclineEnabled: async () => false } as never);
+    const service = new RentalDeclineCountsService(hasura as never, { pickupDeclineEnabledAnywhere: async () => false } as never);
     await expect(service.forBusiness('b')).resolves.toBeNull();
     expect(hasura.executeQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe('decline photo uploads', () => {
+  it('stops at 6 photos and deletes the pending original after finalize', async () => {
+    const deleted: string[] = [];
+    const hasura = {
+      executeQuery: jest.fn(async (query: string) => {
+        if (query.includes('DeclinePhotoCount')) {
+          return { rental_condition_decline_photos_aggregate: { aggregate: { count: 6 } } };
+        }
+        if (query.includes('DeclineBooking')) {
+          return {
+            rental_bookings_by_pk: {
+              id: 'booking',
+              client_id: 'client',
+              pickup_current_version_id: 'version',
+              status: 'reserved',
+              actual_start_at: null,
+              inspection_policy_version: 1,
+              rental_location_listing: { business_location: { address: { country: 'CM' } } },
+            },
+          };
+        }
+        if (query.includes('DeclinePhotoById')) {
+          return { rental_condition_decline_photos: [{ object_key: 'pending/original.jpg', status: 'pending' }] };
+        }
+        return {};
+      }),
+      executeMutation: jest.fn(async () => ({})),
+    };
+    const service = new RentalConditionPhotosService(
+      hasura as never,
+      { getUser: jest.fn(async () => ({ id: 'user', active_persona: 'client', client: { id: 'client' } })) } as never,
+      { pickupDeclineEnabled: jest.fn(async () => true) } as never,
+      {
+        deleteObject: jest.fn(async (_bucket: string, key: string) => {
+          deleted.push(key);
+        }),
+        readObjectBytes: jest.fn(async () => Buffer.from('image')),
+        putPrivateObject: jest.fn(async () => undefined),
+      } as never,
+      {} as never
+    );
+    await expect(
+      service.presign('11111111-1111-4111-8111-111111111111', {
+        contentType: 'image/jpeg',
+        fileSize: 1000,
+        captureSource: 'camera',
+      })
+    ).rejects.toMatchObject({ status: 409 });
+    jest.spyOn(hasura, 'executeQuery').mockImplementation(async (query: string) => {
+      if (query.includes('DeclineBooking')) {
+        return {
+          rental_bookings_by_pk: {
+            id: '11111111-1111-4111-8111-111111111111',
+            client_id: 'client',
+            pickup_current_version_id: '22222222-2222-4222-8222-222222222222',
+            status: 'reserved',
+            actual_start_at: null,
+            inspection_policy_version: 1,
+            rental_location_listing: { business_location: { address: { country: 'CM' } } },
+          },
+        };
+      }
+      if (query.includes('DeclinePhotoById')) {
+        return { rental_condition_decline_photos: [{ object_key: 'pending/original.jpg', status: 'pending' }] };
+      }
+      return {};
+    });
+    const sharp = require('sharp');
+    jest.spyOn(sharp.prototype, 'jpeg').mockReturnValue({ toBuffer: async () => Buffer.from('jpeg') });
+    await service.finalize('11111111-1111-4111-8111-111111111111', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    expect(deleted).toContain('pending/original.jpg');
   });
 });

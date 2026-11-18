@@ -10,19 +10,39 @@ export interface DeclineGuardBooking {
   actual_start_at: string | null;
   inspection_policy_version: number | null;
   pickup_current_version_id: string | null;
+  pickup_accepted_version_id?: string | null;
 }
 
-export type DeclineGuard = 'ok' | 'not_inspected' | 'closed' | 'version';
+export type DeclineGuard = 'ok' | 'not_inspected' | 'closed' | 'version' | 'accepted';
 
-/** Open inspected bookings only. A pending correction does not close this. */
+export const MAX_DECLINE_PHOTOS = 6;
+export const FINANCIAL_REFUNDS_PERMISSION = 'platform.financial.refunds';
+
+/** Open inspected bookings only. An accepted pickup report uses Report a problem. */
 export function declineGuard(booking: DeclineGuardBooking, versionId: string): DeclineGuard {
   if (booking.inspection_policy_version == null) return 'not_inspected';
   if (booking.actual_start_at) return 'closed';
   if (booking.status !== 'reserved' && booking.status !== 'confirmed') return 'closed';
+  if (
+    booking.pickup_accepted_version_id &&
+    booking.pickup_accepted_version_id === booking.pickup_current_version_id
+  ) {
+    return 'accepted';
+  }
   if (!booking.pickup_current_version_id || booking.pickup_current_version_id !== versionId) {
     return 'version';
   }
   return 'ok';
+}
+
+export function refundMarkAllowed(access: { isSuperuser?: boolean; permissions?: string[] }): boolean {
+  if (access.isSuperuser) return true;
+  return (access.permissions ?? []).includes(FINANCIAL_REFUNDS_PERMISSION);
+}
+
+/** A manual refund records either the provider reference or a written note. */
+export function refundMarkEvidence(providerRef?: string | null, note?: string | null): boolean {
+  return Boolean((providerRef ?? '').trim() || (note ?? '').trim());
 }
 
 export function otherReasonText(reason: string, text: string | undefined): string | null {

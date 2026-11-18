@@ -695,6 +695,7 @@ export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
       overtime_amount
       payment_timing
       payment_status
+      condition_declined_at
       actual_start_at
       actual_end_at
       rental_pricing_snapshot

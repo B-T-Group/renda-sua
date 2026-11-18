@@ -71,6 +71,33 @@ describe('RentalMomoRefundService', () => {
     expect(mypvit.getSupportedPaymentMethods).toHaveBeenCalled();
   });
 
+  it('sends Moov on the channel from the original collect', async () => {
+    const { api, fedapay } = service();
+    await api.refund({ ...request, provider: 'fedapay', currency: 'XOF', channel: 'moov_tg' });
+    expect(fedapay.withdraw).toHaveBeenCalledWith(expect.objectContaining({ channel: 'moov_tg' }));
+  });
+
+  it('treats an MTN 4xx as failed and keeps a timeout reference', async () => {
+    const rejected = service({
+      mtn: {
+        transfer: jest.fn(async () => ({ status: false, financialTransactionId: 'mtn-ref', statusCode: '409' })),
+        transferDeliveryNotification: jest.fn(),
+      },
+    });
+    const failed = await rejected.api.refund(request);
+    expect(failed.status).toBe('failed');
+    expect(failed.providerRef).toBe('mtn-ref');
+    const timed = service({
+      mtn: {
+        transfer: jest.fn(async () => ({ status: false, financialTransactionId: 'mtn-ref', statusCode: '504' })),
+        transferDeliveryNotification: jest.fn(async () => ({ statusCode: 'PENDING' })),
+      },
+    });
+    const pending = await timed.api.refund(request);
+    expect(pending.status).toBe('refund_pending');
+    expect(pending.providerRef).toBe('mtn-ref');
+  });
+
   it('stays pending when a poll cannot be reached', async () => {
     const { api } = service({ mtn: { transfer: jest.fn(async () => ({ status: false })), transferDeliveryNotification: jest.fn(async () => { throw new Error('down'); }) } });
     const result = await api.refund(request);

@@ -13,7 +13,7 @@ import {
 } from '../inspection/rental-inspection-evidence';
 import { RentalInspectionFlags } from '../inspection/rental-inspection-flags.service';
 import { RentalsService } from '../rentals.service';
-import { declineGuard } from './pickup-decline.policy';
+import { declineGuard, MAX_DECLINE_PHOTOS } from './pickup-decline.policy';
 import { declineFinalKey, declinePendingKey, isPublicBaselineKey } from './pickup-decline.keys';
 import * as Q from './pickup-decline.queries';
 
@@ -47,10 +47,11 @@ export class RentalConditionPhotosService {
   ) {}
 
   async forListing(listingId: string): Promise<{ photos: PublicConditionPhoto[] }> {
-    if (!(await this.flags.pickupDeclineEnabled())) {
+    const listing = await this.rentals.getPublicRentalListingById(listingId);
+    const country = listing?.business_location?.address?.country ?? null;
+    if (!(await this.flags.pickupDeclineEnabled(country))) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     }
-    const listing = await this.rentals.getPublicRentalListingById(listingId);
     const itemId = (listing?.rental_item as ListingItem | undefined)?.id;
     if (!listing || !itemId || !(await this.optedIn(itemId))) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
@@ -63,6 +64,7 @@ export class RentalConditionPhotosService {
     body: { contentType: string; fileSize: number; captureSource: string; sha256?: string }
   ) {
     const booking = await this.openBooking(bookingId);
+    await this.assertRoom(booking.id);
     const upload = validateInspectionUpload(body.contentType, body.fileSize);
     const photoId = randomUUID();
     const key = declinePendingKey(booking.id, photoId, upload.ext);
@@ -86,6 +88,7 @@ export class RentalConditionPhotosService {
     const key = declineFinalKey(bookingId, photoId, 'jpg');
     await this.aws.putPrivateObject(inspectionEvidenceBucket(), key, jpeg, 'image/jpeg');
     await this.markReady(photoId, key, jpeg.length);
+    await this.dropOriginal(row.object_key, key);
     return { photoId, status: 'ready' };
   }
 
@@ -166,6 +169,25 @@ export class RentalConditionPhotosService {
       throw new HttpException('This pickup can no longer be photographed', HttpStatus.CONFLICT);
     }
     return booking as { id: string };
+  }
+
+  private async assertRoom(bookingId: string): Promise<void> {
+    const result = await this.hasura.executeQuery<{
+      rental_condition_decline_photos_aggregate?: { aggregate?: { count?: number } };
+    }>(Q.PHOTO_COUNT, { bookingId });
+    const count = result.rental_condition_decline_photos_aggregate?.aggregate?.count ?? 0;
+    if (count >= MAX_DECLINE_PHOTOS) {
+      throw new HttpException('You can add up to 6 photos', HttpStatus.CONFLICT);
+    }
+  }
+
+  private async dropOriginal(pendingKey: string, finalKey: string): Promise<void> {
+    if (!pendingKey || pendingKey === finalKey) return;
+    try {
+      await this.aws.deleteObject(inspectionEvidenceBucket(), pendingKey);
+    } catch (error: any) {
+      void error;
+    }
   }
 
   private async insertPending(

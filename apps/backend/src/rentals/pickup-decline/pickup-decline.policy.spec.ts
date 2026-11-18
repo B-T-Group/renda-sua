@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { capRefund, declineRail, mapRefundPoll, maskMomoPhone, providerRefundPlan, refundFromLedger, sumCollected } from './pickup-decline.money';
-import { DECLINE_FLAG_THRESHOLD, declineGuard, renterPartyName } from './pickup-decline.policy';
+import { capRefund, consumeHoldForPayout, creditFailedPayout, declineRail, fedapayChannel, mapRefundPoll, maskMomoPhone, nextRefundAt, providerRefundPlan, REFUND_ATTEMPT_LIMIT, refundFromLedger, sumCollected } from './pickup-decline.money';
+import { DECLINE_FLAG_THRESHOLD, declineGuard, refundMarkAllowed, refundMarkEvidence, renterPartyName } from './pickup-decline.policy';
 import { isDeclineEvidenceKey, isPublicBaselineKey } from './pickup-decline.keys';
 import { BASELINE_PHOTOS } from './pickup-decline.queries';
 
@@ -35,6 +35,23 @@ describe('pickup decline money', () => {
     expect(mapRefundPoll(null)).toBe('refund_pending');
     expect(maskMomoPhone('2376700006712')).toBe('····· 67 12');
   });
+
+  it('consumes a hold as one debit and credits it back only when the payout fails', () => {
+    const held = consumeHoldForPayout({ available: 0, withheld: 100 }, 100);
+    expect(held).toEqual({ available: 0, withheld: 0 });
+    expect(held.available + 100).toBe(100);
+    expect(creditFailedPayout(held, 100)).toEqual({ available: 100, withheld: 0 });
+    expect(consumeHoldForPayout({ available: 20, withheld: 100 }, 100).available).toBe(20);
+  });
+
+  it('uses the collect channel, then the Togo prefix, and stops retrying at five', () => {
+    expect(fedapayChannel('22878000000', null)).toBe('moov_tg');
+    expect(fedapayChannel('22890000000', 'moov')).toBe('moov_tg');
+    expect(fedapayChannel('22890000000', 'togocel')).toBe('togocel');
+    expect(fedapayChannel('22890000000', null)).toBe('togocel');
+    expect(nextRefundAt(1, 0)).toBe(new Date(60_000).toISOString());
+    expect(nextRefundAt(REFUND_ATTEMPT_LIMIT, 0)).toBeNull();
+  });
 });
 
 describe('pickup decline guards', () => {
@@ -52,6 +69,16 @@ describe('pickup decline guards', () => {
     expect(declineGuard({ ...open, status: 'active' }, 'version')).toBe('closed');
     expect(declineGuard({ ...open, actual_start_at: '2026-01-01' }, 'version')).toBe('closed');
     expect(declineGuard(open, 'other')).toBe('version');
+    expect(declineGuard({ ...open, pickup_accepted_version_id: 'version' }, 'version')).toBe('accepted');
+  });
+
+  it('requires financial refunds and a reference or a note', () => {
+    expect(refundMarkAllowed({ isSuperuser: true })).toBe(true);
+    expect(refundMarkAllowed({ permissions: ['platform.financial.refunds'] })).toBe(true);
+    expect(refundMarkAllowed({ permissions: ['platform.rentals.moderate'] })).toBe(false);
+    expect(refundMarkEvidence(null, '  ')).toBe(false);
+    expect(refundMarkEvidence('ref-1', null)).toBe(true);
+    expect(refundMarkEvidence(null, 'paid by hand')).toBe(true);
   });
 
   it('flags a party at 5 declines, not 4', () => {
@@ -96,5 +123,16 @@ describe('pickup decline migration', () => {
     expect(up).toContain('refund_status');
     expect(up).toContain('rental_condition_decline_counts_90d');
     expect(up).toContain('5 or more');
+    const guards = join(__dirname, '../../../../hasura/migrations/Rendasua/20261118170000_rentals_pickup_decline_guards');
+    const guardUp = readFileSync(join(guards, 'up.sql'), 'utf8');
+    const guardDown = readFileSync(join(guards, 'down.sql'), 'utf8');
+    const down = readFileSync(join(dir, 'down.sql'), 'utf8');
+    expect(guardUp).toContain('UNIQUE (rental_booking_id)');
+    expect(guardUp).toContain('REFERENCES public.rental_inspection_versions(id)');
+    expect(guardUp).toContain('refund_attempts');
+    expect(down).toContain("status = 'inactive'");
+    expect(down).not.toContain('DELETE FROM public.application_configurations');
+    expect(guardDown).toContain("config_key = 'rentals_pickup_decline_enabled'");
+    expect(guardDown).not.toContain('DELETE FROM');
   });
 });

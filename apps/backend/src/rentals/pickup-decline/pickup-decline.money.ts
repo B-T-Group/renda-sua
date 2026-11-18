@@ -7,6 +7,13 @@ export interface CollectedPayment {
   provider: string;
   phone: string | null;
   transactionId: string | null;
+  /** Operator or channel stored on the original collect, when the provider sent one. */
+  channel?: string | null;
+}
+
+export interface DeclineWallet {
+  available: number;
+  withheld: number;
 }
 
 /** Two-decimal money. Non-finite or non-positive values contribute nothing. */
@@ -83,4 +90,49 @@ export function mapRefundPoll(code: string | null | undefined): 'refunded' | 'fa
 export function refundFromLedger(collected: number, bookingTotal: number): number {
   const paid = moneyAmount(collected);
   return capRefund(paid, Math.max(paid, moneyAmount(bookingTotal)));
+}
+
+/**
+ * One payout. Release the withheld hold into available, then debit that same
+ * amount. Available does not rise, so a phone payout is not a second refund.
+ */
+export function consumeHoldForPayout(wallet: DeclineWallet, amount: number): DeclineWallet {
+  const payout = moneyAmount(amount);
+  const released = Math.min(Math.max(wallet.withheld, 0), payout);
+  const available = Math.round((wallet.available + released - payout) * 100) / 100;
+  const withheld = Math.round((Math.max(wallet.withheld, 0) - released) * 100) / 100;
+  return { available, withheld };
+}
+
+/** Definitive payout failure. The debit comes back to the wallet. The phone was not paid. */
+export function creditFailedPayout(wallet: DeclineWallet, amount: number): DeclineWallet {
+  return {
+    available: Math.round((wallet.available + moneyAmount(amount)) * 100) / 100,
+    withheld: wallet.withheld,
+  };
+}
+
+const MOOV_PREFIXES = ['78', '79', '96', '97', '98', '99'];
+
+/** FedaPay channel from the collect, then from the Togo number prefix. */
+export function fedapayChannel(phone: string | null, channel?: string | null): 'moov_tg' | 'togocel' {
+  const stored = (channel ?? '').trim().toLowerCase();
+  if (stored.includes('moov')) return 'moov_tg';
+  if (stored.includes('togo') || stored.includes('mixx')) return 'togocel';
+  const national = (phone ?? '').replace(/\D/g, '').replace(/^228/, '');
+  return MOOV_PREFIXES.some((prefix) => national.startsWith(prefix)) ? 'moov_tg' : 'togocel';
+}
+
+export const REFUND_ATTEMPT_LIMIT = 5;
+const REFUND_BACKOFF_MINUTES = [1, 5, 15, 60, 360];
+
+/** Null once support should take the refund. Earlier attempts wait. */
+export function nextRefundAt(attempts: number, now = Date.now()): string | null {
+  if (attempts >= REFUND_ATTEMPT_LIMIT) return null;
+  const minutes = REFUND_BACKOFF_MINUTES[Math.max(0, attempts - 1)] ?? 360;
+  return new Date(now + minutes * 60_000).toISOString();
+}
+
+export function cardReleaseNeedsRefund(message?: string | null): boolean {
+  return (message ?? '').toLowerCase().includes('use refund');
 }

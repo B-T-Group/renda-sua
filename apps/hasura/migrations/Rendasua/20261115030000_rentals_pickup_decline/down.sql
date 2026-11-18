@@ -1,5 +1,8 @@
-DELETE FROM public.application_configurations
-WHERE config_key = 'rentals_pickup_decline_enabled' AND country_code IS NULL;
+-- Deactivate every pickup-decline flag row, including country rows. Do not delete them.
+UPDATE public.application_configurations
+SET boolean_value = false,
+    status = 'inactive'
+WHERE config_key = 'rentals_pickup_decline_enabled';
 
 DROP VIEW IF EXISTS public.rental_business_pickup_reach_90d;
 DROP VIEW IF EXISTS public.rental_condition_decline_counts_90d;

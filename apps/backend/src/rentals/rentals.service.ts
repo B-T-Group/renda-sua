@@ -1,9 +1,4 @@
-import {
-  HttpException,
-  HttpStatus,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { AccountsService } from '../accounts/accounts.service';
@@ -56,6 +51,7 @@ import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, shouldNotifyPriceChan
 import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
+import { refundLateCollectIfDeclined } from './pickup-decline/late-collect-refund';
 import type { ListingCardWindow } from './rental-card-window';
 import { attachListingCardWindows, inspectedByItem } from './inspection/listing-card-batch';
 import { snapshotInspected } from './inspection/inspection-optin';
@@ -2991,6 +2987,7 @@ export class RentalsService {
       );
       return;
     }
+    if (await refundLateCollectIfDeclined(booking)) return;
     if (booking.status === 'proposed' || booking.status === 'reserved') {
       await this.confirmBookingAfterContractPayment(booking, bookingNumber);
       return;
@@ -3289,8 +3286,64 @@ export class RentalsService {
     currency: string;
     client: { user_id: string };
   }): Promise<void> {
-    await this.releaseHoldIfNeeded(booking.id, booking);
     await this.cancelStripeAuthorizationIfAny(booking);
+    await this.releaseHoldIfNeeded(booking.id, booking);
+  }
+
+  /**
+   * MoMo decline. The collect already credited the wallet and placed a hold.
+   * Release that hold and debit the payout in the same booking key so the
+   * phone transfer is the only money that leaves.
+   */
+  async consumeDeclineHold(
+    booking: { id: string; currency: string; client: { user_id: string } },
+    amount: number
+  ): Promise<void> {
+    if (!(amount > 0)) return;
+    const hold = await this.getHold(booking.id);
+    const account = await this.hasuraSystemService.getAccount(booking.client.user_id, booking.currency);
+    if (!account?.id) throw new HttpException('Account missing', HttpStatus.BAD_GATEWAY);
+    if (hold?.status === 'active') {
+      await this.releaseRentalHold(
+        booking.id,
+        Number(hold.client_hold_amount),
+        account.id,
+        this.holdAttemptId(hold, booking.id)
+      );
+      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
+        bookingId: booking.id,
+        from: 'active',
+        status: 'completed',
+      });
+    }
+    const paid = await this.accountsService.registerTransaction({
+      accountId: account.id,
+      amount,
+      transactionType: 'payment',
+      memo: `Condition decline refund ${booking.id}`,
+      referenceId: booking.id,
+      idempotencyKey: rentalLedgerKey(booking.id, 'decline:refund'),
+    });
+    assertLedgerResult(paid, 'decline refund');
+  }
+
+  /** Payout did not land. Put the debited amount back in the wallet and alert the caller. */
+  async restoreDeclinePayout(
+    booking: { id: string; currency: string; client: { user_id: string } },
+    amount: number
+  ): Promise<void> {
+    if (!(amount > 0)) return;
+    const account = await this.hasuraSystemService.getAccount(booking.client.user_id, booking.currency);
+    if (!account?.id) throw new HttpException('Account missing', HttpStatus.BAD_GATEWAY);
+    const credited = await this.accountsService.registerTransaction({
+      accountId: account.id,
+      amount,
+      transactionType: 'deposit',
+      memo: `Condition decline refund returned ${booking.id}`,
+      referenceId: booking.id,
+      idempotencyKey: rentalLedgerKey(booking.id, 'decline:refund:reversal'),
+    });
+    assertLedgerResult(credited, 'decline refund reversal');
   }
 
   private async cancelStripeAuthorizationIfAny(booking: any): Promise<void> {
@@ -3301,11 +3354,28 @@ export class RentalsService {
       orderId: booking.id,
     });
     if (!result.success && !result.skipped) {
+      if ((result.message ?? '').toLowerCase().includes('use refund')) {
+        await this.refundCapturedCard(bookingNumber, booking.id);
+        return;
+      }
       this.logger.error(
         `cancelStripeAuthorizationIfAny failed for ${bookingNumber}: ${result.message}`
       );
       throw new HttpException(
         'Could not release the card authorization. Please try again.',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+  }
+
+  private async refundCapturedCard(bookingNumber: string, bookingId: string): Promise<void> {
+    const refunded = await this.stripeCaptureService.refundCapturedPayment({
+      orderNumber: bookingNumber,
+      idempotencyKey: rentalLedgerKey(bookingId, 'decline:card-refund'),
+    });
+    if (!refunded.success) {
+      throw new HttpException(
+        'Could not refund the captured card payment. Please try again.',
         HttpStatus.BAD_GATEWAY
       );
     }

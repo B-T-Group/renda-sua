@@ -9,8 +9,12 @@ export const DECLINE_BOOKING = `
       actual_start_at
       inspection_policy_version
       pickup_current_version_id
+      pickup_accepted_version_id
       condition_declined_at
       refund_status
+      refund_attempts
+      refund_next_at
+      refund_amount
       refund_provider
       refund_provider_ref
       authorized_amount
@@ -87,9 +91,42 @@ export const DECLINE_COLLECTS = `
       amount
       currency
       provider
+      payment_method
       customer_phone
       transaction_id
     }
+  }
+`;
+
+export const CANCEL_PENDING_COLLECTS = `
+  mutation CancelPendingDeclineCollects($bookingNumber: String!) {
+    update_mobile_payment_transactions(
+      where: {
+        payment_entity: { _eq: rental_booking }
+        entity_id: { _eq: $bookingNumber }
+        status: { _in: ["pending", "processing"] }
+      }
+      _set: { status: "cancelled", error_code: "SUPERSEDED_BY_DECLINE" }
+    ) { affected_rows }
+  }
+`;
+
+export const DECLINE_CANCEL = `
+  mutation DeclineCancelBooking(
+    $id: uuid!
+    $from: [rental_booking_status_enum!]!
+    $versionId: uuid!
+    $set: rental_bookings_set_input!
+  ) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        status: { _in: $from }
+        pickup_current_version_id: { _eq: $versionId }
+        actual_start_at: { _is_null: true }
+      }
+      _set: $set
+    ) { affected_rows }
   }
 `;
 
@@ -160,18 +197,25 @@ export const DECLINE_PHOTO_ROWS = `
 `;
 
 export const PENDING_REFUNDS = `
-  query PendingDeclineRefunds {
+  query PendingDeclineRefunds($now: timestamptz!) {
     rental_bookings(
       where: {
         refund_status: { _eq: "refund_pending" }
-        refund_provider_ref: { _is_null: false }
         condition_declined_at: { _is_null: false }
+        refund_attempts: { _lt: 5 }
+        _or: [
+          { refund_next_at: { _is_null: true } }
+          { refund_next_at: { _lte: $now } }
+        ]
       }
       limit: 40
     ) {
       id
       booking_number
+      currency
       refund_status
+      refund_attempts
+      refund_amount
       refund_provider
       refund_provider_ref
       rental_location_listing { rental_item { name } }
@@ -241,6 +285,14 @@ export const BASELINE_PHOTOS = `
 export const INSERT_PENDING_PHOTO = `
   mutation InsertDeclinePhoto($object: rental_condition_decline_photos_insert_input!) {
     insert_rental_condition_decline_photos_one(object: $object) { id }
+  }
+`;
+
+export const PHOTO_COUNT = `
+  query DeclinePhotoCount($bookingId: uuid!) {
+    rental_condition_decline_photos_aggregate(
+      where: { rental_booking_id: { _eq: $bookingId } }
+    ) { aggregate { count } }
   }
 `;
 

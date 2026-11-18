@@ -51,4 +51,16 @@ export class MarkDeclineRefundDto {
   @ApiProperty({ enum: ['refunded', 'failed'] })
   @IsIn(['refunded', 'failed'])
   status!: 'refunded' | 'failed';
+
+  @ApiPropertyOptional({ description: 'Provider payout reference' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  providerRef?: string;
+
+  @ApiPropertyOptional({ description: 'Why support marked this refund' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  note?: string;
 }
