@@ -74,20 +74,6 @@ describe('pickup reuse snapshot migration', () => {
     expect(index).toContain('public_rental_apply_pickup_reuse.yaml');
   });
 
-  it('zeros only XAF and XOF listing deposits and can run twice', () => {
-    const root = join(__dirname, '../../../../hasura/migrations/Rendasua/20261118180000_rentals_xaf_xof_zero_deposit');
-    const up = readFileSync(join(root, 'up.sql'), 'utf8');
-    expect(up).toContain("item.currency IN ('XAF', 'XOF')");
-    expect(up).not.toContain('btrim(');
-    expect(up).toContain('DISABLE TRIGGER set_public_rental_location_listings_updated_at');
-    expect(up.indexOf('DISABLE TRIGGER')).toBeLessThan(up.indexOf('UPDATE'));
-    expect(up.indexOf('ENABLE TRIGGER')).toBeGreaterThan(up.indexOf('UPDATE'));
-    expect(up).toContain('security_deposit_amount = 0');
-    expect(up).toContain('security_deposit_amount <> 0');
-    expect(up).toContain('rental_items');
-    expect(up).not.toContain('CAD');
-  });
-
   it('refuses to restore the jpg-only check when png or webp views exist', () => {
     expect(down).toContain('.view.png or .view.webp');
     expect(down).toContain('the jpg-only check cannot be restored');

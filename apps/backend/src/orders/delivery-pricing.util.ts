@@ -97,6 +97,8 @@ const COUNTRY_NAMES: Record<string, string> = {
   'RÉPUBLIQUE DÉMOCRATIQUE DU CONGO': 'CD',
   'REPUBLIQUE DEMOCRATIQUE DU CONGO': 'CD',
   PHILIPPINES: 'PH',
+  'UNITED STATES': 'US',
+  USA: 'US',
 };
 
 /** Customer pays 0. Stored base is restored so the agent is paid the pre-waiver fee. */
