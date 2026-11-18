@@ -1,5 +1,7 @@
 import { RentalsService } from './rentals.service';
 import {
+  autodeclineBounds,
+  cutoffForCountry,
   expireUnansweredRentalRequests,
   type UnansweredRentalRequest,
 } from './rental-request-expiry';
@@ -126,6 +128,63 @@ describe('releaseLinkedDeclineHold', () => {
   });
 });
 
+describe('autodecline cutoff', () => {
+  const now = new Date('2026-11-18T15:00:00.000Z');
+
+  it('M3 leaves every already-due request alone when no cutoff is stored', () => {
+    const bounds = autodeclineBounds(now, []);
+    expect(bounds.since).toBe(now.toISOString());
+    expect(bounds.limit).toBe(50);
+    expect(cutoffForCountry([], 'CM', now)).toBe(now.toISOString());
+  });
+
+  it('M3 keeps requests before the stored cutoff and caps the batch', () => {
+    const rows = [
+      {
+        config_key: 'rentals_dashboard_requests_autodecline_since',
+        country_code: null,
+        string_value: '2026-11-01T00:00:00.000Z',
+      },
+      { config_key: 'rentals_dashboard_requests_autodecline_batch', country_code: null, number_value: 20 },
+    ];
+    expect(autodeclineBounds(now, rows)).toEqual({ since: '2026-11-01T00:00:00.000Z', limit: 20 });
+    expect(Date.parse('2026-10-01T00:00:00.000Z') < Date.parse(cutoffForCountry(rows, 'CA', now))).toBe(true);
+  });
+});
+
+describe('L4 failed decline side effects are retried', () => {
+  it('L4 records a failed release and retries it on the next run', async () => {
+    const due = row();
+    const releaseHolds = jest.fn()
+      .mockRejectedValueOnce(new Error('stripe down'))
+      .mockResolvedValueOnce(undefined);
+    const recordFailure = jest.fn(async () => undefined);
+    const clearRetry = jest.fn(async () => undefined);
+    const jobs = [{ id: 'job-1', kind: 'release' as const, row: due, window: 'sla' as const }];
+    await expireUnansweredRentalRequests({
+      now: new Date('2026-11-18T16:00:00.000Z'),
+      isEnabled: async () => true,
+      listPending: async () => [due],
+      casDecline: async () => true,
+      releaseHolds,
+      notify: async () => undefined,
+      recordFailure,
+    });
+    expect(recordFailure).toHaveBeenCalledWith(due, 'release', 'sla', expect.any(Error));
+    await expireUnansweredRentalRequests({
+      now: new Date('2026-11-18T16:05:00.000Z'),
+      isEnabled: async () => true,
+      listPending: async () => [],
+      casDecline: async () => false,
+      releaseHolds,
+      notify: async () => undefined,
+      listRetries: async () => jobs,
+      clearRetry,
+    });
+    expect(clearRetry).toHaveBeenCalledWith('job-1');
+  });
+});
+
 describe('cancelClientRentalRequest', () => {
   function cancelService(affected: number) {
     const service = Object.create(RentalsService.prototype) as RentalsService & {
@@ -145,27 +204,37 @@ describe('cancelClientRentalRequest', () => {
       executeQuery: jest.fn().mockResolvedValue({
         rental_requests_by_pk: { id: 'req-1', client_id: 'client-1', status: 'pending' },
       }),
-      executeMutation: jest.fn().mockResolvedValue({ update_rental_requests: { affected_rows: affected } }),
+      executeMutation: jest.fn().mockResolvedValue({
+        cancel_client_rental_request: affected
+          ? [{ id: 'req-1', released_booking_id: affected === 2 ? 'booking-1' : null }]
+          : [],
+      }),
     };
     service.releaseLinkedDeclineHold = jest.fn();
     service.cancelProposedBooking = jest.fn();
     return service;
   }
 
-  it('does not cancel or release a hold when accept or auto-decline already won', async () => {
+  it('M2 returns 409 and does not release a hold when the request is no longer open', async () => {
     const service = cancelService(0);
-    await expect(service.cancelClientRentalRequest('req-1')).rejects.toMatchObject({ status: 400 });
+    await expect(service.cancelClientRentalRequest('req-1')).rejects.toMatchObject({ status: 409 });
     expect(service.releaseLinkedDeclineHold).not.toHaveBeenCalled();
   });
 
-  it('cancels a still-pending request without releasing a hold', async () => {
+  it('M2 cancels a still-pending request without releasing a hold', async () => {
     const service = cancelService(1);
     await expect(service.cancelClientRentalRequest('req-1')).resolves.toEqual({ success: true });
     expect(service.releaseLinkedDeclineHold).not.toHaveBeenCalled();
     expect(service.hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('status: { _eq: $status }'),
-      { id: 'req-1', status: 'pending' }
+      expect.stringContaining('cancel_client_rental_request'),
+      { requestId: 'req-1', clientId: 'client-1' }
     );
+  });
+
+  it('M2 releases the proposed booking when accept already created one', async () => {
+    const service = cancelService(2);
+    await expect(service.cancelClientRentalRequest('req-1')).resolves.toEqual({ success: true });
+    expect(service.releaseLinkedDeclineHold).toHaveBeenCalledWith('req-1');
   });
 });
 

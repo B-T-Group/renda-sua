@@ -22,6 +22,7 @@ import { formatRequestAmount } from '../../../utils/rentals/rentalRequestFormat'
 import { contractHoursOffer, requestStartIso } from '../../../utils/rentals/dashboardRentalRequests';
 import { buildRequestCardModel } from '../../../utils/rentals/rentalRequestCardModel';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useClientFlags } from '../../../contexts/ClientFlagsContext';
 import { rentalsApi } from '../../../services/rentalsApi';
 
 function isStaleVersion(error: unknown): boolean {
@@ -49,7 +50,7 @@ function parseTotalOverride(raw: string): number | null | 'invalid' {
   const trimmed = raw.trim();
   if (!trimmed) return null;
   const value = Number(trimmed);
-  if (!Number.isFinite(value) || value < 0) return 'invalid';
+  if (!Number.isFinite(value) || value <= 0) return 'invalid';
   return Number(value.toFixed(2));
 }
 
@@ -57,7 +58,8 @@ function buildPricingSnapshot(req: BusinessRentalRequestRow) {
   const windows = parseRentalSelectionWindowsFromJson(req.rental_selection_windows);
   const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
   const ratePerDay = Number(req.rental_location_listing.base_price_per_day ?? 0);
-  const { lines, total } = computeRentalPricingLines(windows, ratePerHour, ratePerDay);
+  const units = Math.max(1, Math.floor(Number(req.units_requested)) || 1);
+  const { lines, total } = computeRentalPricingLines(windows, ratePerHour, ratePerDay, units);
   return {
     version: 3,
     currency: req.rental_location_listing.rental_item.currency,
@@ -76,6 +78,8 @@ export function BusinessRentalRespondDialog({
   onStale,
 }: BusinessRentalRespondDialogProps) {
   const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
+  const canChangeTotal = flags.rentals_dashboard_requests_enabled;
   const { colors } = useTheme();
   const [contractHours, setContractHours] = useState('48');
   const [totalOverride, setTotalOverride] = useState('');
@@ -124,17 +128,17 @@ export function BusinessRentalRespondDialog({
     }
     const overridden = parseTotalOverride(totalOverride);
     if (overridden === 'invalid') {
-      setError(t('business.rentals.changeTotalInvalid', 'Enter a total of zero or more.'));
+      setError(t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.'));
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
       const snap = buildPricingSnapshot(request);
-      if (overridden != null) snap.total = overridden;
       await rentalsApi.respondToRequest(request.id, {
         status: 'available',
         rentalPricingSnapshot: snap,
+        totalOverride: canChangeTotal && overridden != null ? overridden : undefined,
         contractExpiryHours: h,
         businessResponseNote: availableNote.trim() || undefined,
         expectedVersion: request.edit_version ?? 1,
@@ -151,7 +155,7 @@ export function BusinessRentalRespondDialog({
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, contractHours, i18n.language, onStale, onSuccess, request, resetAndClose, t, totalOverride]);
+  }, [availableNote, canChangeTotal, contractHours, i18n.language, onStale, onSuccess, request, resetAndClose, t, totalOverride]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -223,6 +227,7 @@ export function BusinessRentalRespondDialog({
                     )}
                   </Text>
                 ) : null}
+                {canChangeTotal ? (
                 <TextInput
                   label={t('business.rentals.changeTotalLabel', 'Change total (optional)')}
                   value={totalOverride}
@@ -231,12 +236,15 @@ export function BusinessRentalRespondDialog({
                   mode="outlined"
                   style={styles.field}
                 />
+                ) : null}
+                {canChangeTotal ? (
                 <Text variant="bodySmall" style={{ color: colors.text.secondary, marginBottom: 8 }}>
                   {t(
                     'business.rentals.changeTotalHelper',
                     'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'
                   )}
                 </Text>
+                ) : null}
                 {hourOffer.hidden ? null : (
                   <TextInput
                     label={t('business.rentals.contractHours', 'Contract valid for (hours)')}

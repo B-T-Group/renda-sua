@@ -343,7 +343,8 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
   function responder(
     request: Record<string, unknown>,
     flag = false,
-    conflict: Record<string, unknown> = {}
+    conflict: Record<string, unknown> = {},
+    dashboard = false
   ) {
     const executeMutation = jest.fn().mockResolvedValue({
       update_rental_requests: { affected_rows: 1 },
@@ -361,8 +362,9 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     service.hasuraSystemService = {
       executeMutation,
       executeQuery: jest.fn(async (query: string) => {
-        if (query.includes('GetModifyRequestFlag')) {
-          return { application_configurations: [{ boolean_value: flag, country_code: null }] };
+        if (query.includes('GetModifyRequestFlag') || query.includes('DashboardRequestsFlag')) {
+          const on = query.includes('DashboardRequestsFlag') ? dashboard : flag;
+          return { application_configurations: [{ boolean_value: on, country_code: null }] };
         }
         fetches += 1;
         return {
@@ -426,11 +428,19 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     expect(service.insertProposedBookingRow).not.toHaveBeenCalled();
   });
 
-  it('keeps the old respond mutation when the client sends no version and the flag is off', async () => {
+  it('M1 compare-and-sets status even when the client sends no version', async () => {
     const { service, executeMutation } = responder(pendingRequest(), false);
     await service.respondToRentalRequest('request-1', accept);
     expect(executeMutation).toHaveBeenCalledWith(Q.UPDATE_RENTAL_REQUEST_RESPOND, expect.any(Object));
-    expect(executeMutation).not.toHaveBeenCalledWith(Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS, expect.any(Object));
+    expect(Q.UPDATE_RENTAL_REQUEST_RESPOND).toContain('status: { _eq: pending }');
+    expect(Q.UPDATE_RENTAL_REQUEST_RESPOND).toContain('price_change_seen_at: null');
+    expect(Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS).toContain('price_change_seen_at: null');
+  });
+
+  it('M1 returns 409 when an auto-decline already won and no version was sent', async () => {
+    const { service, executeMutation } = responder(pendingRequest(), false, { status: 'unavailable' });
+    executeMutation.mockResolvedValue({ update_rental_requests: { affected_rows: 0 } });
+    await expect(service.respondToRentalRequest('request-1', accept)).rejects.toMatchObject({ status: 409 });
   });
 
   it('rejects a stale decline before any write', async () => {
@@ -512,5 +522,55 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     expect(executeMutation).toHaveBeenCalledWith(Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS, expect.any(Object));
     expect(service.deleteBooking).not.toHaveBeenCalled();
     expect(service.emailClientRentalRequestRejected).not.toHaveBeenCalled();
+  });
+
+  it('H2 charges the server quote and ignores the client snapshot total', async () => {
+    const { service, executeMutation } = responder(pendingRequest({ units_requested: 2, quoted_total: 15000 }));
+    service.computePricingSnapshotForRequest.mockReturnValue({
+      version: 4,
+      currency: 'XAF',
+      total: 15000,
+      lines: [],
+      computedAt: OPEN,
+      unitsBooked: 2,
+      securityDeposit: 0,
+    });
+    await service.respondToRentalRequest('request-1', {
+      ...accept,
+      rentalPricingSnapshot: { version: 3, currency: 'XAF', total: 7500, lines: [], computedAt: OPEN },
+    });
+    const persisted = executeMutation.mock.calls.find((call) => String(call[0]).includes('status: { _eq: pending }'));
+    expect(persisted?.[1].snapshot.total).toBe(15000);
+  });
+
+  it('H2 accepts a positive total override only when both flags are on', async () => {
+    const on = responder(pendingRequest(), true, {}, true);
+    on.service.computePricingSnapshotForRequest.mockReturnValue({
+      version: 4, currency: 'XAF', total: 15000, lines: [{ kind: 'hourly', subtotal: 15000 }],
+      computedAt: OPEN, unitsBooked: 2, securityDeposit: 0,
+    });
+    await on.service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1, totalOverride: 12000 });
+    const persisted = on.executeMutation.mock.calls.find((call) => String(call[0]).includes('edit_version'));
+    expect(persisted?.[1].snapshot.total).toBe(12000);
+
+    const off = responder(pendingRequest(), false, {}, false);
+    await expect(
+      off.service.respondToRentalRequest('request-1', { ...accept, totalOverride: 12000 })
+    ).rejects.toMatchObject({ status: 400 });
+    const zero = responder(pendingRequest(), true, {}, true);
+    await expect(
+      zero.service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1, totalOverride: 0 })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('L3 returns 409 expired when accept is after respond_by and the flag is on', async () => {
+    const { service } = responder(
+      pendingRequest({ created_at: '2026-11-01T00:00:00.000Z' }),
+      false,
+      {},
+      true
+    );
+    await expect(service.respondToRentalRequest('request-1', accept)).rejects.toMatchObject({ status: 409 });
+    expect(service.insertProposedBookingRow).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,11 @@
-import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, priceChangeCopy, shouldNotifyPriceChange } from './rental-price-change';
+import {
+  applyAcceptedPrice,
+  businessChangedThePrice,
+  paymentBlockedUntilPriceSeen,
+  priceChangeCopy,
+  quoteWithTotalOverride,
+  shouldNotifyPriceChange,
+} from './rental-price-change';
 
 const snap = {
   version: 4,
@@ -13,6 +20,20 @@ describe('rental price change', () => {
     expect(shouldNotifyPriceChange(2500, 3000)).toBe(true);
     expect(shouldNotifyPriceChange(2500, 2500)).toBe(false);
     expect(shouldNotifyPriceChange(null, 3000)).toBe(false);
+  });
+
+  it('H1 shows a price change only after the business has accepted', () => {
+    expect(businessChangedThePrice('pending', 2500, 3000)).toBe(false);
+    expect(businessChangedThePrice('available', 2500, 3000)).toBe(true);
+    expect(businessChangedThePrice('available', 2500, 2500)).toBe(false);
+  });
+
+  it('H2 scales a positive override and rejects a disabled or empty one', () => {
+    const priced = { ...snap, total: 15000, lines: [{ kind: 'hourly' as const, subtotal: 15000, billableHours: 3, ratePerHour: 2500, startAt: 'a', endAt: 'b' }] };
+    expect(quoteWithTotalOverride(priced, null, false).total).toBe(15000);
+    expect(quoteWithTotalOverride(priced, 12000, true).lines[0].subtotal).toBe(12000);
+    expect(() => quoteWithTotalOverride(priced, 12000, false)).toThrow('TOTAL_OVERRIDE_DISABLED');
+    expect(() => quoteWithTotalOverride(priced, 0, true)).toThrow('TOTAL_OVERRIDE_INVALID');
   });
 
   it('blocks payment until the renter has seen the new price', () => {

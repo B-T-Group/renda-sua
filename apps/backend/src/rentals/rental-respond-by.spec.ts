@@ -82,6 +82,7 @@ describe('no_response compare-and-set', () => {
 
   it('scans pending rows whose stored respond_by has passed', () => {
     expect(LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY).toContain('status: { _eq: pending }');
-    expect(LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY).toContain('respond_by: { _lte: $now }');
+    expect(LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY).toContain('respond_by: { _lte: $now, _gte: $since }');
+    expect(LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY).toContain('limit: $limit');
   });
 });

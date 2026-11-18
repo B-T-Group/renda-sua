@@ -1,0 +1,3 @@
+function:
+  name: enqueue_rental_side_effect
+  schema: public

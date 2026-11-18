@@ -5,6 +5,18 @@ import type {
 } from '../hooks/useRentalApi';
 import { formatConfirmationMoney } from './rentals/confirmationFormat';
 
+/** A pending request never shows “the business changed the price”. */
+export function businessChangedThePrice(
+  status: string | null | undefined,
+  quoted: unknown,
+  accepted: unknown
+): boolean {
+  if (status !== 'available') return false;
+  const left = Number(quoted);
+  const right = Number(accepted);
+  return Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) >= 0.01;
+}
+
 export function formatRentalRequestLocalDateTime(iso: string): string {
   try {
     return new Date(iso).toLocaleString(undefined, {

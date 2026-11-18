@@ -47,11 +47,11 @@ import {
   type RentalWindowSnapshot,
 } from './rental-request-edit';
 import { buildRentalRequestQuote } from './rental-request-quote';
-import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, shouldNotifyPriceChange } from './rental-price-change';
+import { paymentBlockedUntilPriceSeen, quoteWithTotalOverride, shouldNotifyPriceChange } from './rental-price-change';
 import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { cappedContractExpiry, computeRespondBy, earliestRequestStartIso } from './rental-respond-by';
-import { dashboardRequestsEnabled, type DashboardRequestFlagRow } from './rental-dashboard-flag';
+import { listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { refundLateCollectIfDeclined } from './pickup-decline/late-collect-refund';
@@ -1200,13 +1200,10 @@ export class RentalsService {
     respondedAt: string;
     userId: string;
   }): Promise<void> {
-    if (vars.version == null) {
-      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_RESPOND, vars);
-      return;
-    }
+    const mutation = vars.version == null ? Q.UPDATE_RENTAL_REQUEST_RESPOND : Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS;
     const saved = await this.hasuraSystemService.executeMutation<{
       update_rental_requests: { affected_rows: number } | null;
-    }>(Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS, vars);
+    }>(mutation, vars);
     if ((saved.update_rental_requests?.affected_rows ?? 0) < 1) {
       throw await this.rentalRespondConflict(vars.id);
     }
@@ -1423,6 +1420,7 @@ export class RentalsService {
     this.assertSnapshotCurrency(computedSnapshot, req);
     const now = new Date();
     const contractExpiresAt = this.contractExpiryIso(req, dto.contractExpiryHours, now);
+    await this.assertRespondWindowOpen(req, now);
     const listingId = req.rental_location_listing_id;
     const unitsRequested = this.normalizeUnitsRequested(req.units_requested);
     const unitsAvailable = Math.max(
@@ -1435,11 +1433,7 @@ export class RentalsService {
       req,
       unitsRequested
     );
-    const priced = applyAcceptedPrice(computedSnapshot, dto.rentalPricingSnapshot);
-    if (priced.currencyMismatch) {
-      throw new HttpException('Accepted price currency does not match the quote', HttpStatus.BAD_REQUEST);
-    }
-    const snap = priced.snapshot;
+    const snap = await this.acceptedSnapshot(req, dto, computedSnapshot);
     const total = Number(snap.total);
     const clientId = req.client_id;
     let bookingId: string | null = null;
@@ -1466,10 +1460,52 @@ export class RentalsService {
       await this.notifyClientIfPriceChanged(req, snap.total, requestId);
     } catch (e: any) {
       if (bookingId) await this.deleteBooking(bookingId);
-      throw e instanceof HttpException
-        ? e
-        : new HttpException(e?.message || 'Failed to respond', HttpStatus.BAD_REQUEST);
+      throw this.respondFailure(e);
     }
+  }
+
+  private respondFailure(error: any): HttpException {
+    if (error instanceof HttpException) return error;
+    const text = String(error?.message ?? error);
+    if (text.includes('rental_request_unavailable')) {
+      return new HttpException('No units available for these dates', HttpStatus.CONFLICT);
+    }
+    return new HttpException(error?.message || 'Failed to respond', HttpStatus.BAD_REQUEST);
+  }
+
+  private async assertRespondWindowOpen(req: any, now: Date): Promise<void> {
+    const flags = await this.loadDashboardRequestFlags();
+    const country = req.rental_location_listing?.business_location?.address?.country;
+    if (!listingDashboardFlag(flags, country)) return;
+    const decision = computeRespondBy({ createdAt: req.created_at, startAt: earliestRequestStartIso(req) });
+    if (now.getTime() <= Date.parse(decision.respondBy)) return;
+    throw new HttpException(
+      { message: 'This request has expired', code: 'RENTAL_REQUEST_EXPIRED' },
+      HttpStatus.CONFLICT
+    );
+  }
+
+  private async acceptedSnapshot(
+    req: any,
+    dto: RespondRentalRequestDto,
+    computed: RentalPricingSnapshotDto
+  ): Promise<RentalPricingSnapshotDto> {
+    try {
+      return quoteWithTotalOverride(computed, dto.totalOverride, await this.totalOverrideEnabled(req));
+    } catch (error: any) {
+      const disabled = error?.message === 'TOTAL_OVERRIDE_DISABLED';
+      throw new HttpException(
+        disabled ? 'Changing the total is not enabled' : 'Enter a total greater than zero',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async totalOverrideEnabled(req: any): Promise<boolean> {
+    if (!(await this.isModifyRequestEnabled())) return false;
+    const flags = await this.loadDashboardRequestFlags();
+    const country = req.rental_location_listing?.business_location?.address?.country;
+    return listingDashboardFlag(flags, country);
   }
 
   private async notifyClientIfPriceChanged(
@@ -1505,12 +1541,26 @@ export class RentalsService {
     if (!clientId) throw new HttpException('Only the renter can confirm the price', HttpStatus.FORBIDDEN);
     const row = await this.fetchRequest(requestId);
     if (row.client_id !== clientId) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-    await this.hasuraSystemService.executeQuery(
+    if (row.status !== 'available') {
+      throw new HttpException(
+        { message: 'The price can be confirmed after the business accepts', code: 'PRICE_CHANGE_NOT_OPEN' },
+        HttpStatus.CONFLICT
+      );
+    }
+    const saved = await this.hasuraSystemService.executeQuery<{
+      update_rental_requests: { affected_rows: number } | null;
+    }>(
       `mutation SeeRentalPrice($id: uuid!, $seen: timestamptz!) {
-        update_rental_requests_by_pk(pk_columns: { id: $id }, _set: { price_change_seen_at: $seen }) { id }
+        update_rental_requests(
+          where: { id: { _eq: $id }, status: { _eq: available } }
+          _set: { price_change_seen_at: $seen }
+        ) { affected_rows }
       }`,
       { id: requestId, seen: new Date().toISOString() }
     );
+    if ((saved.update_rental_requests?.affected_rows ?? 0) < 1) {
+      throw new HttpException('The price can be confirmed after the business accepts', HttpStatus.CONFLICT);
+    }
     return { success: true };
   }
 
@@ -1527,13 +1577,13 @@ export class RentalsService {
   ): Promise<PaginatedBusinessRentalRequests> {
     const businessId = await this.requireBusinessId();
     const flags = await this.loadDashboardRequestFlags();
-    const enabled = dashboardRequestsEnabled(flags, null);
+    const enabled = flags.some((row) => row.boolean_value === true);
     const page = Math.max(1, Number(query.page) || 1);
     const limit = this.businessRequestLimit(query, enabled);
     const listed = await this.queryBusinessRequests(businessId, query, page, limit, enabled);
     const expiryNotices = enabled ? await this.recentNoResponseNotices(businessId) : [];
-    const requests = this.withRespondBy(listed.requests);
-    const withFacts = enabled ? await this.attachRequestCardFacts(requests) : requests;
+    const requests = this.withRespondBy(listed.requests, flags);
+    const withFacts = enabled ? await this.attachRequestCardFacts(requests, flags) : requests;
     return { ...listed, requests: withFacts, expiryNotices };
   }
 
@@ -1541,7 +1591,7 @@ export class RentalsService {
     const requested = Number(query.limit);
     const hasLimit = Number.isFinite(requested) && requested > 0;
     const pending = query.status?.trim() === 'pending';
-    if (enabled && pending) return hasLimit ? requested : 1000;
+    if (enabled && pending) return Math.min(100, hasLimit ? requested : 100);
     return Math.min(100, hasLimit ? requested : 50);
   }
 
@@ -1553,7 +1603,7 @@ export class RentalsService {
     soonestFirst: boolean
   ): Promise<Omit<PaginatedBusinessRentalRequests, 'expiryNotices'>> {
     const offset = (page - 1) * limit;
-    const where = this.buildBusinessRequestsWhere(businessId, query.status, query.id);
+    const where = this.buildBusinessRequestsWhere(businessId, query.status, soonestFirst ? query.id : undefined);
     const orderBy = soonestFirst
       ? [{ requested_start_at: 'asc' }, { created_at: 'asc' }]
       : [{ created_at: 'desc' }];
@@ -1596,19 +1646,104 @@ export class RentalsService {
     return where;
   }
 
-  private async attachRequestCardFacts(rows: any[]): Promise<any[]> {
-    const out: any[] = [];
-    for (const row of rows) out.push(await this.attachOneRequestCardFact(row));
-    return out;
+  private async attachRequestCardFacts(rows: any[], flags: DashboardRequestFlagRow[]): Promise<any[]> {
+    const shown = rows.filter((row) => this.rowDashboardOn(flags, row));
+    const rails = await this.railsByCountry(shown);
+    const held = await this.heldWindowsByListing(shown);
+    return rows.map((row) => this.withCardFacts(row, flags, rails, held));
   }
 
-  private async attachOneRequestCardFact(row: any): Promise<any> {
+  private rowDashboardOn(flags: DashboardRequestFlagRow[], row: any): boolean {
     const country = row.rental_location_listing?.business_location?.address?.country;
+    return listingDashboardFlag(flags, country);
+  }
+
+  private async railsByCountry(rows: any[]): Promise<Map<string, string | null>> {
+    const codes = new Set<string>();
+    for (const row of rows) {
+      const code = resolveItemCountry(row.rental_location_listing?.business_location?.address?.country);
+      if (code) codes.add(code);
+    }
+    const rails = new Map<string, string | null>();
+    for (const code of codes) rails.set(code, await this.paymentRailForCountry(code));
+    return rails;
+  }
+
+  private async heldWindowsByListing(rows: any[]): Promise<Map<string, Array<{ startMs: number; endMs: number; units: number }>>> {
+    const listingIds = [...new Set(rows.map((row) => row.rental_location_listing?.id).filter(Boolean))];
+    const grouped = new Map<string, Array<{ startMs: number; endMs: number; units: number }>>();
+    if (!listingIds.length) return grouped;
+    const loaded = await this.loadHeldWindows(listingIds);
+    for (const window of loaded) {
+      const id = window.rental_booking?.rental_location_listing_id;
+      if (!id) continue;
+      const list = grouped.get(id) ?? [];
+      list.push(this.heldWindow(window));
+      grouped.set(id, list);
+    }
+    return grouped;
+  }
+
+  private heldWindow(window: { start_at: string; end_at: string; rental_booking?: { units_booked?: number | null } | null }) {
+    return {
+      startMs: new Date(window.start_at).getTime(),
+      endMs: new Date(window.end_at).getTime(),
+      units: Math.max(1, Number(window.rental_booking?.units_booked) || 1),
+    };
+  }
+
+  private async loadHeldWindows(listingIds: string[]) {
+    const now = new Date().toISOString();
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_booking_windows: Array<{
+        start_at: string;
+        end_at: string;
+        rental_booking?: { rental_location_listing_id?: string; units_booked?: number | null } | null;
+      }>;
+    }>(Q.LIST_HELD_WINDOWS_FOR_LISTINGS, { listingIds, now });
+    return r.rental_booking_windows ?? [];
+  }
+
+  private withCardFacts(
+    row: any,
+    flags: DashboardRequestFlagRow[],
+    rails: Map<string, string | null>,
+    held: Map<string, Array<{ startMs: number; endMs: number; units: number }>>
+  ): any {
+    if (!this.rowDashboardOn(flags, row)) return row;
+    const code = resolveItemCountry(row.rental_location_listing?.business_location?.address?.country);
     return {
       ...row,
-      payment_rail: await this.paymentRailForCountry(country),
-      dates_available: await this.datesAvailableForRequest(row),
+      payment_rail: code ? rails.get(code) ?? null : null,
+      dates_available: this.datesFromHeld(row, held),
     };
+  }
+
+  private datesFromHeld(
+    row: any,
+    held: Map<string, Array<{ startMs: number; endMs: number; units: number }>>
+  ): boolean | null {
+    if (row.status !== 'pending') return null;
+    const listingId = row.rental_location_listing?.id;
+    if (!listingId) return null;
+    const cap = Math.max(1, Number(row.rental_location_listing?.units_available) || 1);
+    const want = this.normalizeUnitsRequested(row.units_requested);
+    const windows = held.get(listingId) ?? [];
+    for (const span of this.capacitySpans(row)) {
+      const used = this.peakConcurrentUnits(windows, span.start.getTime(), span.end.getTime());
+      if (used + want > cap) return false;
+    }
+    return true;
+  }
+
+  private capacitySpans(row: any): Array<{ start: Date; end: Date }> {
+    return this.parseRentalSelectionWindows(row).map((window) => {
+      if (window.billing === 'all_day' && window.calendarDate) {
+        const bounds = this.utcDayBoundsFromCalendarDate(window.calendarDate);
+        return { start: bounds.start, end: bounds.end };
+      }
+      return { start: window.start, end: window.end };
+    });
   }
 
   private async paymentRailForCountry(country: string | null | undefined): Promise<string | null> {
@@ -1621,26 +1756,8 @@ export class RentalsService {
     }
   }
 
-  private async datesAvailableForRequest(row: any): Promise<boolean | null> {
-    if (row.status !== 'pending') return null;
-    const listing = row.rental_location_listing;
-    if (!listing?.id) return null;
-    try {
-      await this.assertCapacityForRequestWindows(
-        listing.id,
-        Number(listing.units_available) || 1,
-        row,
-        Number(row.units_requested) || 1
-      );
-      return true;
-    } catch (error: any) {
-      if (error instanceof HttpException && error.getStatus() === HttpStatus.CONFLICT) return false;
-      return null;
-    }
-  }
-
-  private withRespondBy(rows: any[]): any[] {
-    return rows.map((row) => this.attachRespondBy(row));
+  private withRespondBy(rows: any[], flags: DashboardRequestFlagRow[]): any[] {
+    return rows.map((row) => (this.rowDashboardOn(flags, row) ? this.attachRespondBy(row) : row));
   }
 
   private attachRespondBy(row: any): any {
@@ -1651,7 +1768,7 @@ export class RentalsService {
       ...row,
       respond_by: decision.respondBy,
       respond_window: decision.window,
-      listing_timezone: marketTimeZone(country) ?? 'Africa/Douala',
+      listing_timezone: marketTimeZone(resolveItemCountry(country) ?? country) ?? 'Africa/Douala',
     };
   }
 
@@ -1925,13 +2042,34 @@ export class RentalsService {
     const user = await this.requireCancelClient();
     const req = await this.fetchRequest(requestId);
     this.assertCancelOwner(req, user.clientId);
-    if (req.status !== 'pending' && req.status !== 'available') {
-      throw new HttpException('This request cannot be cancelled', HttpStatus.BAD_REQUEST);
-    }
-    const won = await this.casCancelRequest(requestId, req.status);
-    if (!won) throw new HttpException('This request cannot be cancelled', HttpStatus.BAD_REQUEST);
-    await this.cancelProposedIfAny(req, user.userId);
+    const row = await this.cancelRequestRow(requestId, user.clientId);
+    if (row.released_booking_id) await this.releaseCancelledBooking(requestId);
     return { success: true };
+  }
+
+  private async cancelRequestRow(
+    requestId: string,
+    clientId: string
+  ): Promise<{ released_booking_id?: string | null }> {
+    try {
+      const saved = await this.hasuraSystemService.executeMutation<{
+        cancel_client_rental_request: Array<{ id: string; released_booking_id?: string | null }>;
+      }>(Q.CANCEL_CLIENT_RENTAL_REQUEST, { requestId, clientId });
+      const row = saved.cancel_client_rental_request?.[0];
+      if (!row) throw new HttpException('This request cannot be cancelled', HttpStatus.CONFLICT);
+      return row;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw this.mapEditSqlError(error);
+    }
+  }
+
+  private async releaseCancelledBooking(requestId: string): Promise<void> {
+    try {
+      await this.releaseLinkedDeclineHold(requestId);
+    } catch (error: any) {
+      await this.recordSideEffect(requestId, 'release', error);
+    }
   }
 
   private async requireCancelClient(): Promise<{ userId: string; clientId: string }> {
@@ -1944,22 +2082,6 @@ export class RentalsService {
 
   private assertCancelOwner(req: { client_id?: string }, clientId: string): void {
     if (req.client_id !== clientId) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-  }
-
-  private async casCancelRequest(id: string, status: string): Promise<boolean> {
-    const saved = await this.hasuraSystemService.executeMutation<{
-      update_rental_requests: { affected_rows: number } | null;
-    }>(Q.CANCEL_RENTAL_REQUEST, { id, status });
-    return (saved.update_rental_requests?.affected_rows ?? 0) > 0;
-  }
-
-  private async cancelProposedIfAny(
-    req: { status?: string; rental_booking?: { id?: string; status?: string } | null },
-    userId: string
-  ): Promise<void> {
-    if (req.status !== 'available') return;
-    const booking = req.rental_booking;
-    if (booking?.id && booking.status === 'proposed') await this.cancelProposedBooking(booking.id, userId);
   }
 
   private contractExpiryIso(req: Parameters<typeof earliestRequestStartIso>[0], hours: number, now: Date): string {
@@ -4690,46 +4812,6 @@ export class RentalsService {
     await this.deliveryPinService.setPinForClient(bookingId, pin);
   }
 
-  private async cancelProposedBooking(
-    bookingId: string,
-    userId: string
-  ): Promise<void> {
-    const booking = await this.fetchBooking(bookingId);
-    if (!booking || booking.status !== 'proposed') {
-      throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
-    }
-    const won = await this.casBooking(bookingId, ['proposed'], {
-      status: 'cancelled',
-      payment_status: 'cancelled',
-      contract_expires_at: null,
-    });
-    if (!won) {
-      throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
-    }
-    try {
-      await this.cancelStripeAuthorizationIfAny(booking);
-    } catch (error) {
-      await this.restoreProposedBooking(booking);
-      throw error;
-    }
-    await this.logHistory(
-      bookingId,
-      'cancelled',
-      'proposed',
-      userId,
-      'client',
-      'Client withdrew before confirming'
-    );
-  }
-
-  private async restoreProposedBooking(booking: any): Promise<void> {
-    await this.casBooking(booking.id, ['cancelled'], {
-      status: 'proposed',
-      payment_status: booking.payment_status,
-      contract_expires_at: booking.contract_expires_at,
-    });
-  }
-
   private async fetchUserContact(
     userId: string
   ): Promise<{ phone_number?: string | null; email?: string | null } | null> {
@@ -5487,9 +5569,58 @@ export class RentalsService {
     const policyVersion = await this.inspectionPolicyForInsert(req);
     const object = this.proposedBookingInsert(req, clientId, snap, total, contractExpiresAt, envelope, unitsBooked);
     if (policyVersion != null) object.inspection_policy_version = policyVersion;
-    return this.hasuraSystemService.executeMutation<{
-      insert_rental_bookings_one: { id: string; booking_number: string };
-    }>(Q.INSERT_RENTAL_BOOKING, { object });
+    return this.reserveProposedBooking(object);
+  }
+
+  private async reserveProposedBooking(object: Record<string, unknown>) {
+    const saved = await this.hasuraSystemService.executeMutation<{
+      reserve_proposed_rental_booking: Array<{ id: string; booking_number: string }>;
+    }>(Q.RESERVE_PROPOSED_RENTAL_BOOKING, this.reserveVars(object));
+    const row = saved.reserve_proposed_rental_booking?.[0];
+    if (!row) throw new HttpException('No units available for these dates', HttpStatus.CONFLICT);
+    return { insert_rental_bookings_one: row };
+  }
+
+  private reserveVars(object: Record<string, unknown>) {
+    const windows = object.rental_booking_windows as { data?: Array<{ start_at: string; end_at: string }> };
+    return {
+      listingId: object.rental_location_listing_id,
+      requestId: object.rental_request_id,
+      clientId: object.client_id,
+      businessId: object.business_id,
+      start: object.start_at,
+      end: object.end_at,
+      total: object.total_amount,
+      currency: object.currency,
+      snapshot: object.rental_pricing_snapshot,
+      bookingNumber: object.booking_number,
+      contractExpiresAt: object.contract_expires_at,
+      units: object.units_booked,
+      deposit: object.security_deposit_amount ?? 0,
+      windows: windows?.data ?? [],
+      now: new Date().toISOString(),
+      policyVersion: object.inspection_policy_version ?? null,
+    };
+  }
+
+  async recordSideEffect(
+    requestId: string,
+    kind: 'release' | 'notify',
+    error: unknown,
+    payload: Record<string, unknown> = {}
+  ): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error);
+    this.logger.warn(`rental side effect ${kind} ${requestId}: ${message}`);
+    try {
+      await this.hasuraSystemService.executeMutation(Q.ENQUEUE_RENTAL_SIDE_EFFECT, {
+        requestId,
+        kind,
+        payload: { requestId, kind, ...payload },
+        error: message,
+      });
+    } catch (enqueueError: any) {
+      this.logger.warn(`enqueue ${kind} ${requestId}: ${enqueueError?.message ?? enqueueError}`);
+    }
   }
 
   private proposedBookingInsert(

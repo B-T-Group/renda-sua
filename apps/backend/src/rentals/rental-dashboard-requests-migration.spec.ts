@@ -34,7 +34,7 @@ describe('rentals dashboard requests flag', () => {
     expect(constants).not.toMatch(/rentals_dashboard_requests_enabled:\s*isNonProduction/);
   });
 
-  it('indexes pending requests by the stored respond_by', () => {
+  it('L5 adds a nullable respond_by and backfills it in batches', () => {
     const index = readFileSync(
       join(root, 'hasura/migrations/Rendasua/20261114200000_rental_requests_respond_by_index/up.sql'),
       'utf8'
@@ -42,5 +42,9 @@ describe('rentals dashboard requests flag', () => {
     expect(index).toContain('idx_rental_requests_status_respond_by');
     expect(index).toContain('(status, respond_by)');
     expect(index).toContain("created_at + interval '24 hours'");
+    expect(index).not.toMatch(/LANGUAGE plpgsql\s+IMMUTABLE/);
+    expect(index).not.toContain('GENERATED ALWAYS');
+    expect(index).toContain('ADD COLUMN IF NOT EXISTS respond_by timestamptz');
+    expect(index).toContain('LIMIT 500');
   });
 });

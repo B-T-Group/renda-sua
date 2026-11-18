@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -6,8 +7,15 @@ import { RentalInspectionService } from './inspection/rental-inspection.service'
 import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
-import { dashboardRequestsEnabled, type DashboardRequestFlagRow } from './rental-dashboard-flag';
-import { expireUnansweredRentalRequests, type UnansweredRentalRequest } from './rental-request-expiry';
+import { listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
+import {
+  autodeclineBounds,
+  cutoffForCountry,
+  expireUnansweredRentalRequests,
+  type AutodeclineConfigRow,
+  type SideEffectJob,
+  type UnansweredRentalRequest,
+} from './rental-request-expiry';
 import type { RentalRespondWindow } from './rental-respond-by';
 import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
@@ -364,6 +372,10 @@ export class RentalsCronService {
       casDecline: (id, respondedAt) => this.casDeclineNoResponse(id, respondedAt),
       releaseHolds: (requestId) => this.rentalsService.releaseLinkedDeclineHold(requestId),
       notify: (row, window) => this.notifyNoResponse(row, window),
+      listRetries: () => this.listSideEffects(),
+      clearRetry: (id) => this.clearSideEffect(id),
+      recordFailure: (row, kind, window, error) =>
+        this.rentalsService.recordSideEffect(row.id, kind, error, { row, window }),
     });
   }
 
@@ -378,16 +390,87 @@ export class RentalsCronService {
     flags: DashboardRequestFlagRow[],
     now: Date
   ): Promise<UnansweredRentalRequest[]> {
-    const res = await this.hasuraSystemService.executeQuery<{ rental_requests: any[] }>(
-      Q.LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY,
-      { now: now.toISOString() }
-    );
-    return (res.rental_requests ?? []).filter((row) => this.rowFlagOn(flags, row)).map((row) => this.toUnanswered(row));
+    const config = await this.loadExpiryConfig();
+    const bounds = autodeclineBounds(now, config);
+    const rows = await this.pageDueRequests(flags, config, now, bounds);
+    return rows.map((row) => this.toUnanswered(row));
   }
 
-  private rowFlagOn(flags: DashboardRequestFlagRow[], row: any): boolean {
-    const country = row.rental_location_listing?.business_location?.address?.country ?? null;
-    return dashboardRequestsEnabled(flags, country);
+  private async pageDueRequests(
+    flags: DashboardRequestFlagRow[],
+    config: AutodeclineConfigRow[],
+    now: Date,
+    bounds: { since: string; limit: number }
+  ): Promise<any[]> {
+    const found: any[] = [];
+    for (let offset = 0; offset < bounds.limit * 20 && found.length < bounds.limit; offset += bounds.limit) {
+      const page = await this.fetchDuePage(now, bounds, offset);
+      this.collectDue(found, page, flags, config, now, bounds.limit);
+      if (page.length < bounds.limit) break;
+    }
+    return found;
+  }
+
+  private async fetchDuePage(
+    now: Date,
+    bounds: { since: string; limit: number },
+    offset: number
+  ): Promise<any[]> {
+    const res = await this.hasuraSystemService.executeQuery<{ rental_requests: any[] }>(
+      Q.LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY,
+      { now: now.toISOString(), since: bounds.since, limit: bounds.limit, offset }
+    );
+    return res.rental_requests ?? [];
+  }
+
+  private collectDue(
+    found: any[],
+    page: any[],
+    flags: DashboardRequestFlagRow[],
+    config: AutodeclineConfigRow[],
+    now: Date,
+    limit: number
+  ): void {
+    for (const row of page) {
+      if (found.length >= limit) return;
+      if (this.rowDue(flags, config, row, now)) found.push(row);
+    }
+  }
+
+  private rowDue(
+    flags: DashboardRequestFlagRow[],
+    config: AutodeclineConfigRow[],
+    row: any,
+    now: Date
+  ): boolean {
+    const raw = row.rental_location_listing?.business_location?.address?.country ?? null;
+    if (!listingDashboardFlag(flags, raw)) return false;
+    const cutoff = cutoffForCountry(config, resolveItemCountry(raw), now);
+    return Date.parse(row.respond_by) >= Date.parse(cutoff);
+  }
+
+  private async loadExpiryConfig(): Promise<AutodeclineConfigRow[]> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      application_configurations: AutodeclineConfigRow[];
+    }>(Q.DASHBOARD_REQUESTS_EXPIRY_CONFIG, {});
+    return res.application_configurations ?? [];
+  }
+
+  private async listSideEffects(): Promise<SideEffectJob[]> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      rental_request_side_effects: Array<{ id: string; kind: 'release' | 'notify'; payload: any }>;
+    }>(Q.LIST_RENTAL_SIDE_EFFECTS, {});
+    return (res.rental_request_side_effects ?? []).flatMap((row) => this.sideEffectJob(row));
+  }
+
+  private sideEffectJob(row: { id: string; kind: 'release' | 'notify'; payload: any }): SideEffectJob[] {
+    const payload = row.payload ?? {};
+    if (!payload.row?.id) return [];
+    return [{ id: row.id, kind: row.kind, row: payload.row, window: payload.window === 'start' ? 'start' : 'sla' }];
+  }
+
+  private async clearSideEffect(id: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(Q.DELETE_RENTAL_SIDE_EFFECT, { id });
   }
 
   private toUnanswered(row: any): UnansweredRentalRequest {
@@ -415,11 +498,7 @@ export class RentalsCronService {
   }
 
   private async notifyNoResponse(row: UnansweredRentalRequest, window: RentalRespondWindow): Promise<void> {
-    try {
-      await this.notificationsService.sendRentalRequestNoResponse({ ...row, window });
-    } catch (error: any) {
-      this.logger.warn(`notifyNoResponse ${row.id}: ${error?.message ?? error}`);
-    }
+    await this.notificationsService.sendRentalRequestNoResponse({ ...row, window });
   }
 
   private async logHistory(

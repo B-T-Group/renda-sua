@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -30,6 +31,18 @@ export class RespondRentalRequestDto {
   @ApiProperty({ enum: RespondRentalRequestStatusDto })
   @IsEnum(RespondRentalRequestStatusDto)
   status!: RespondRentalRequestStatusDto;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Replaces the server quote. Accepted only while modify-request and dashboard requests are both on. Must be positive, in the item currency.',
+    minimum: 0.01,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  totalOverride?: number;
 
   @ApiProperty({ type: RentalPricingSnapshotDto, required: false })
   @ValidateIf((o) => o.status === RespondRentalRequestStatusDto.available)

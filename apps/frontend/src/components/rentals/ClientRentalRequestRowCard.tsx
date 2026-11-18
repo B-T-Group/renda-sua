@@ -18,6 +18,7 @@ import { useClientFlags } from '../../hooks/useClientFlags';
 import { listReturnChip } from '../../utils/renterReturnPhase';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import {
+  businessChangedThePrice,
   formatRequestAmount,
   formatRentalRequestLocalDateTime,
   parseRentalSelectionWindows,
@@ -105,7 +106,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
   const quoted = Number(row.quoted_total);
   const accepted = Number(quote?.total);
-  const priceChanged = Number.isFinite(quoted) && Number.isFinite(accepted) && Math.abs(quoted - accepted) >= 0.01;
+  const priceChanged = businessChangedThePrice(row.status, quoted, accepted);
   useEffect(() => {
     if (!priceChanged) return;
     void trackSiteEvent({

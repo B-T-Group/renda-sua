@@ -1,4 +1,4 @@
-import { formatAssistantMoney, formatRequestAmount } from './rentalRequestDisplay';
+import { businessChangedThePrice, formatAssistantMoney, formatRequestAmount } from './rentalRequestDisplay';
 
 const NBSP = '\u00A0';
 
@@ -11,6 +11,13 @@ describe('formatAssistantMoney', () => {
     expect(formatAssistantMoney(25, 'CAD', 'en')).toBe('$25.00');
     expect(formatAssistantMoney(25, 'CAD', 'fr')).toBe('25,00\u00A0$');
     expect(formatAssistantMoney(2500, 'XAF', 'fr')).toBe('2\u00A0500\u00A0FCFA');
+  });
+});
+
+describe('businessChangedThePrice', () => {
+  it('H1 stays quiet on a pending request', () => {
+    expect(businessChangedThePrice('pending', 2500, 3000)).toBe(false);
+    expect(businessChangedThePrice('available', 2500, 3000)).toBe(true);
   });
 });
 

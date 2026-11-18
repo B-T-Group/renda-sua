@@ -163,6 +163,7 @@ export interface RentalTakenWindow {
 export interface RespondRentalRequestBody {
   status: 'available' | 'unavailable';
   rentalPricingSnapshot?: RentalPricingSnapshotBody;
+  totalOverride?: number;
   contractExpiryHours?: number;
   unavailableReasonCode?: UnavailableRentalReasonCode;
   businessResponseNote?: string;
@@ -504,7 +505,7 @@ export function useRentalApi() {
           window: 'sla' | 'start';
         }>;
       };
-    }>('/rentals/business/requests', { params: { status: 'pending', limit: 1000 } });
+    }>('/rentals/business/requests', { params: { status: 'pending', limit: 100 } });
     if (!data.success) return { requests: [], expiryNotices: [] };
     return {
       requests: data.data.requests ?? [],

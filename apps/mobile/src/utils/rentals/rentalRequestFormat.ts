@@ -25,6 +25,18 @@ function utcDate(iso: string): Date | null {
  * XAF, XOF, and FCFA use `45 000 FCFA` (non-breaking spaces).
  * CAD uses the shared confirmation formatter: `$65.00` / `65,00 $`.
  */
+/** A pending request never shows “the business changed the price”. */
+export function businessChangedThePrice(
+  status: string | null | undefined,
+  quoted: unknown,
+  accepted: unknown
+): boolean {
+  if (status !== 'available') return false;
+  const left = Number(quoted);
+  const right = Number(accepted);
+  return Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) >= 0.01;
+}
+
 export function formatRequestAmount(amount: number, currency: string, language: string): string {
   const code = currency.toUpperCase();
   if (code === 'XAF' || code === 'XOF' || code === 'FCFA') {

@@ -457,6 +457,7 @@ export type UnavailableRentalReasonCode =
 export interface RespondRentalRequestBody {
   status: 'available' | 'unavailable';
   rentalPricingSnapshot?: RentalPricingSnapshotBody;
+  totalOverride?: number;
   contractExpiryHours?: number;
   unavailableReasonCode?: UnavailableRentalReasonCode;
   businessResponseNote?: string;

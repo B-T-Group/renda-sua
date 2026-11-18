@@ -27,6 +27,7 @@ import {
   parseRentalSelectionWindowsFromJson,
 } from '../../utils/rentalPricingLines';
 import { formatRequestAmount } from '../../utils/rentalRequestDisplay';
+import { useClientFlags } from '../../hooks/useClientFlags';
 
 function isStaleVersion(error: unknown): boolean {
   const data = (error as { response?: { data?: { code?: string } } })?.response?.data;
@@ -63,7 +64,7 @@ function parseTotalOverride(raw: string): number | null | 'invalid' {
   const trimmed = raw.trim();
   if (!trimmed) return null;
   const value = Number(trimmed);
-  if (!Number.isFinite(value) || value < 0) return 'invalid';
+  if (!Number.isFinite(value) || value <= 0) return 'invalid';
   return Number(value.toFixed(2));
 }
 
@@ -73,10 +74,12 @@ function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnaps
   );
   const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
   const ratePerDay = Number(req.rental_location_listing.base_price_per_day ?? 0);
+  const units = Math.max(1, Math.floor(Number(req.units_requested)) || 1);
   const { lines, total } = computeRentalPricingLines(
     windows,
     ratePerHour,
-    ratePerDay
+    ratePerDay,
+    units
   );
   const cur = req.rental_location_listing.rental_item.currency;
   return {
@@ -122,6 +125,8 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   respondRequest,
 }) => {
   const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
+  const canChangeTotal = flags.rentals_dashboard_requests_enabled;
   const [contractHours, setContractHours] = useState('48');
   const [availableNote, setAvailableNote] = useState('');
   const [reasonCode, setReasonCode] = useState<UnavailableRentalReasonCode | ''>('');
@@ -154,17 +159,17 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     }
     const overridden = parseTotalOverride(totalOverride);
     if (overridden === 'invalid') {
-      setError(t('business.rentals.changeTotalInvalid', 'Enter a total of zero or more.'));
+      setError(t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.'));
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
       const snap = buildPricingSnapshot(request);
-      if (overridden != null) snap.total = overridden;
       await respondRequest(request.id, {
         status: 'available',
         rentalPricingSnapshot: snap,
+        totalOverride: canChangeTotal && overridden != null ? overridden : undefined,
         contractExpiryHours: h,
         businessResponseNote: availableNote.trim() || undefined,
         expectedVersion: request.edit_version ?? 1,
@@ -185,7 +190,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, contractHours, i18n.language, onClose, onStale, onSuccess, request, respondRequest, t, totalOverride]);
+  }, [availableNote, canChangeTotal, contractHours, i18n.language, onClose, onStale, onSuccess, request, respondRequest, t, totalOverride]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -232,10 +237,12 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
       );
       const ratePerHour = Number(request.rental_location_listing.base_price_per_hour);
       const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
+      const units = Math.max(1, Math.floor(Number(request.units_requested)) || 1);
       const { lines, total } = computeRentalPricingLines(
         windows,
         ratePerHour,
-        ratePerDay
+        ratePerDay,
+        units
       );
       const hours = totalRentalHoursForRequest(request);
       return { ok: true as const, lines, total, hours, cur: request.rental_location_listing.rental_item.currency };
@@ -303,18 +310,20 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 </Typography>
               </>
             ) : null}
+            {canChangeTotal ? (
             <TextField
               label={t('business.rentals.changeTotalLabel', 'Change total (optional)')}
               type="number"
               value={totalOverride}
               onChange={(e) => setTotalOverride(e.target.value)}
-              inputProps={{ min: 0, step: '0.01' }}
+              inputProps={{ min: 0.01, step: '0.01' }}
               helperText={t(
                 'business.rentals.changeTotalHelper',
                 'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'
               )}
               fullWidth
             />
+            ) : null}
             {hourOffer.hidden ? null : (
               <TextField
                 label={t('business.rentals.contractExpiryHoursLabel', 'Contract valid for (hours)')}

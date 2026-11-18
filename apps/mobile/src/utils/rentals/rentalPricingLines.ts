@@ -52,8 +52,10 @@ export function parseRentalSelectionWindowsFromJson(
 export function computeRentalPricingLines(
   windows: ParsedRentalWindow[],
   ratePerHour: number,
-  ratePerDay: number
+  ratePerDay: number,
+  units = 1
 ): { lines: RentalPricingLine[]; total: number } {
+  const qty = Math.max(1, Math.floor(units) || 1);
   const lines: RentalPricingLine[] = [];
   let total = 0;
   for (const p of windows) {
@@ -61,7 +63,7 @@ export function computeRentalPricingLines(
       if (!p.calendarDate) {
         throw new Error('all_day window missing calendar_date');
       }
-      const subtotal = Number(ratePerDay.toFixed(2));
+      const subtotal = Number((ratePerDay * qty).toFixed(2));
       total += subtotal;
       lines.push({
         kind: 'all_day',
@@ -71,7 +73,7 @@ export function computeRentalPricingLines(
       });
     } else {
       const h = rentalHoursCount(p.start, p.end);
-      const subtotal = Number((h * ratePerHour).toFixed(2));
+      const subtotal = Number((h * ratePerHour * qty).toFixed(2));
       total += subtotal;
       lines.push({
         kind: 'hourly',

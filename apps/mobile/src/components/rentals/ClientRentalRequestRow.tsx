@@ -19,6 +19,7 @@ import {
   rentalPhaseColors,
 } from '../../utils/rentals';
 import {
+  businessChangedThePrice,
   formatListingDeadline,
   formatRequestAmount,
   formatRentalPeriod,
@@ -62,7 +63,7 @@ export function ClientRentalRequestRow({
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
   const quoted = Number(row.quoted_total);
   const accepted = Number(quote?.total);
-  const priceChanged = Number.isFinite(quoted) && Number.isFinite(accepted) && Math.abs(quoted - accepted) >= 0.01;
+  const priceChanged = businessChangedThePrice(row.status, quoted, accepted);
   useEffect(() => {
     if (!priceChanged) return;
     const meta = priceChangeMeta(quoted, accepted);
