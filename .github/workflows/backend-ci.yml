@@ -118,4 +118,6 @@ jobs:
         env:
           RENTAL_QA_DATABASE_URL: postgres://rental_qa:rental_qa@localhost:5432/rental_qa
           RENTAL_QA_ALLOW_DROP: '1'
-        run: npx nx test backend --testPathPattern=src/rentals --skip-nx-cache
+        # money.qa.pg asserts its own job env whenever CI=true. The money-pg
+        # job is the only runner for that file; this pattern must not match it.
+        run: npx nx test backend --testPathPattern='src/rentals/(?!pickup-decline/money\.qa\.pg)' --skip-nx-cache
