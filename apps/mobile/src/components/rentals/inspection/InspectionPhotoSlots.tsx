@@ -1,5 +1,6 @@
 import React from 'react';
 import type { TFunction } from 'i18next';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
@@ -109,6 +110,7 @@ function SlotTile({
       >
         {slot.uri ? <Image source={{ uri: slot.uri }} style={styles.image} /> : null}
         {ghost ? <Image source={{ uri: slot.ghostUri }} style={styles.ghost} /> : null}
+        <EmptyCamera show={!slot.uri && !ghost} color={colors.cta.main} />
         <CornerMark slot={slot} />
       </Pressable>
       <Text numberOfLines={1} style={[typography.caption, styles.role, { color: colors.text.primary }]}>
@@ -140,6 +142,15 @@ function frameColors(slot: SlotPhoto, colors: { cta: { main: string; light: stri
     borderColor: slot.uri ? colors.cta.main : colors.cta.light,
     backgroundColor: slot.uri ? colors.surfaceElevated : colors.cta.soft,
   };
+}
+
+function EmptyCamera({ show, color }: { show: boolean; color: string }) {
+  if (!show) return null;
+  return (
+    <View pointerEvents="none" style={styles.camera}>
+      <MaterialCommunityIcons name="camera-outline" size={28} color={color} />
+    </View>
+  );
 }
 
 function CornerMark({ slot }: { slot: SlotPhoto }) {
@@ -182,6 +193,7 @@ const styles = StyleSheet.create({
   frame: { width: '100%', height: 96, borderWidth: 1, overflow: 'hidden' },
   image: { ...StyleSheet.absoluteFillObject },
   ghost: { ...StyleSheet.absoluteFillObject, opacity: 0.35 },
+  camera: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   reused: { position: 'absolute', top: 4, right: 4, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
