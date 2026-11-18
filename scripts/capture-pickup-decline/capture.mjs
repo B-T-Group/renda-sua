@@ -81,6 +81,8 @@ const WEB = [
   ['xaf-card', '03e-web-xaf-card'],
   ['xaf-unpaid', '03f-web-xaf-unpaid'],
   ['refund-nophone', '03g-web-refund-nophone'],
+  ['refunded-nophone', '03h-web-refunded-nophone'],
+  ['neutral', '03i-web-neutral'],
   ['business', '04-web-business-detail'],
   ['push', '04-web-push-copy'],
   ['listing', '05-web-listing'],
@@ -108,6 +110,8 @@ const MOBILE = [
   ['xaf-card', '03e-xaf-card'],
   ['xaf-unpaid', '03f-xaf-unpaid'],
   ['refund-nophone', '03g-refund-nophone'],
+  ['refunded-nophone', '03h-refunded-nophone'],
+  ['neutral', '03i-neutral'],
   ['business', '04-business-detail'],
   ['listing', '05-listing'],
   ['lightbox', '05b-lightbox'],
@@ -322,6 +326,20 @@ async function assertScene(page, scene, lang, mobile) {
   }
   if (scene === 'refund-nophone' && (text.includes('67') || text.includes('to .') || text.includes('au .'))) {
     throw new Error(`${scene} ${lang} still names a phone`);
+  }
+  if (scene === 'refunded-nophone') {
+    const past = lang === 'fr' ? 'a été remboursé' : 'was refunded';
+    if (!text.includes(past)) throw new Error(`${scene} ${lang} is not past tense`);
+    if (text.toLowerCase().includes(lang === 'fr' ? 'rembourserons' : "we'll refund")) {
+      throw new Error(`${scene} ${lang} is still future tense`);
+    }
+  }
+  if (scene === 'neutral') {
+    const line = lang === 'fr' ? 'Cette réservation est annulée' : 'This booking is cancelled';
+    if (!text.includes(line)) throw new Error(`${scene} ${lang} is not neutral`);
+    if (text.toLowerCase().includes(lang === 'fr' ? 'carte' : 'card hold')) {
+      throw new Error(`${scene} ${lang} fell back to card copy`);
+    }
   }
 }
 

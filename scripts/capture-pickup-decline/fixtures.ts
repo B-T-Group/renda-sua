@@ -45,6 +45,11 @@ export const MOMO_NO_PHONE = {
   phoneMask: '',
 };
 
+export const UNKNOWN_RAIL = {
+  ...MOMO_UNPAID,
+  rail: 'unknown' as const,
+};
+
 export const WALLET_XAF = {
   ...MOMO_UNPAID,
   rail: 'wallet' as const,

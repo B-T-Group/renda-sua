@@ -8836,6 +8836,8 @@
     "momoUnpaid": "You haven't paid anything.",
     "momoPaid": "We'll refund {{amount}} to {{phone}}.",
     "momoPaidNoPhone": "We'll refund {{amount}}.",
+    "refundedNoPhone": "{{amount}} was refunded.",
+    "neutralMoney": "This booking is cancelled.",
     "cancelledTitle": "Booking cancelled",
     "refundProgress": "Refund in progress",
     "refunded": "Refunded",

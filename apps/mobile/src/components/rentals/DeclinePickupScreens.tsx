@@ -18,7 +18,7 @@ export interface DeclinePhoto {
 }
 
 export interface DeclineMoney {
-  rail: 'card' | 'wallet' | 'momo_unpaid' | 'momo_paid';
+  rail: 'card' | 'wallet' | 'momo_unpaid' | 'momo_paid' | 'unknown';
   amount: number;
   currency: string;
   timeZone: string;
@@ -150,7 +150,7 @@ export function declineCardView(booking: {
   const decline = booking.condition_decline;
   const credited = Boolean(decline?.walletCredited) && declineRefundView(booking.refund_status) !== 'refunded';
   return {
-    rail: decline?.rail ?? 'card',
+    rail: decline?.rail ?? 'unknown',
     amount: Number(decline?.amount) || Number(booking.refund_amount) || Number(booking.authorized_amount) || 0,
     currency: decline?.currency || booking.refund_currency || booking.currency,
     phoneMask: decline?.phoneMask ?? null,
@@ -391,6 +391,7 @@ function PhotoGroup({
 }
 
 function moneyLine(money: DeclineMoney, amount: string, t: any): string {
+  if (money.rail === 'unknown') return t('pickupDecline.neutralMoney', 'This booking is cancelled.');
   if (money.rail === 'momo_paid') return paidLine(money, amount, t);
   if (money.rail === 'momo_unpaid') return t('pickupDecline.momoUnpaid', "You haven't paid anything.");
   if (money.rail === 'wallet') return t('pickupDecline.walletMoney', 'The hold on your wallet is released. You will not be charged.');
@@ -405,11 +406,17 @@ function paidLine(money: DeclineMoney, amount: string, t: any): string {
 
 function sentLine(status: string, money: DeclineMoney, amount: string, t: any): string {
   const phone = (money.phoneMask ?? '').trim();
-  if (money.rail !== 'momo_paid' || !phone) return moneyLine(money, amount, t);
-  if (status === 'refund_pending') {
+  if (money.rail === 'momo_paid' && phone && status === 'refund_pending') {
     return t('pickupDecline.refundProgressBody', '{{amount}} is on its way to {{phone}}.', { amount, phone });
   }
-  return t('pickupDecline.refundedBody', '{{amount}} was sent to {{phone}}.', { amount, phone });
+  if (money.rail === 'momo_paid' && phone && status === 'refunded') {
+    return t('pickupDecline.refundedBody', '{{amount}} was sent to {{phone}}.', { amount, phone });
+  }
+  if (status === 'refunded' && money.rail === 'momo_paid') {
+    return t('pickupDecline.refundedNoPhone', '{{amount}} was refunded.', { amount });
+  }
+  if (money.rail === 'unknown') return t('pickupDecline.neutralMoney', 'This booking is cancelled.');
+  return moneyLine(money, amount, t);
 }
 
 function outcomeBody(money: DeclineMoney, amount: string, refundStatus: string, t: any): string {

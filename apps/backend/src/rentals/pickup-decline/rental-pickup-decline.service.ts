@@ -347,7 +347,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
       if (!(await this.markSent(booking, source.provider, token))) return 'refund_pending';
       const result = await this.momo.refund(this.refundRequest(booking, ledger, source, referenceId));
       if (result.unsent) {
-        await this.clearSent(booking.id, token);
+        await this.clearUnsent(booking.id, token, referenceId);
         return 'refund_pending';
       }
       return this.settleResult(booking, ledger, result, referenceId, token);
@@ -576,6 +576,12 @@ export class RentalPickupDeclineService implements OnModuleInit {
     await this.hasura.executeMutation(Q.CLEAR_SENT, { id, token });
   }
 
+  /** A connect failure never left us. Drop the stable id so the next claim can send it, not a 404. */
+  private async clearUnsent(id: string, token: string, stableRef: string): Promise<void> {
+    await this.clearSent(id, token);
+    await this.hasura.executeMutation(Q.CLEAR_STABLE_REF, { id, token, stableRef });
+  }
+
   private async markCredited(id: string): Promise<void> {
     try {
       await this.hasura.executeMutation(Q.MARK_CREDITED, { id, at: new Date().toISOString() });
@@ -797,10 +803,10 @@ export class RentalPickupDeclineService implements OnModuleInit {
     const token = randomUUID();
     if (!(await this.claimWork(booking, attempts, token))) return false;
     const claimed = { ...booking, refund_attempts: attempts + 1, refund_claim_token: token };
-    if (attempts >= REFUND_ATTEMPT_LIMIT) return this.pollClaimed(claimed, token, false);
-    if (this.attemptMayExist(booking)) return this.pollClaimed(claimed, token, true);
-    if (this.needsSend(claimed)) return this.sendClaimed(claimed, token);
-    return this.pollClaimed(claimed, token, true);
+    if (attempts < REFUND_ATTEMPT_LIMIT && !this.attemptMayExist(booking) && this.needsSend(claimed)) {
+      return this.sendClaimed(claimed, token);
+    }
+    return this.pollClaimed(claimed, token);
   }
 
   /** A stored reference or a sent stamp means a withdrawal may already exist. */
@@ -844,32 +850,14 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return status === 'refunded' || status === 'failed';
   }
 
-  private async pollClaimed(booking: DeclineBooking, token: string, allowResend: boolean): Promise<boolean> {
+  private async pollClaimed(booking: DeclineBooking, token: string): Promise<boolean> {
     if (!(await this.keepClaim(booking.id, token))) return false;
     const ref = booking.refund_provider_ref ?? '';
     const probed = await this.momo.probe(booking.refund_provider ?? '', ref);
     if (probed === 'refunded') return this.markOwned(booking, token, 'refunded', ref);
     if (probed === 'failed') return this.failOwned(booking, this.refundPay(booking), ref, token).then((s) => s === 'failed');
-    if (probed === 'missing' && allowResend && this.ownStable(booking)) return this.resendStable(booking, token);
-    if (probed === 'missing' && allowResend) return this.resend(booking, token);
+    if (probed === 'missing' || probed === 'unknown') await this.tellSupport(booking, 'manual_check');
     await this.tellIfExhausted(booking);
-    return false;
-  }
-
-  private ownStable(booking: DeclineBooking): boolean {
-    const ref = booking.refund_provider_ref ?? '';
-    return !ref || ref === stableRefundReference(booking.id);
-  }
-
-  private async resendStable(booking: DeclineBooking, token: string): Promise<boolean> {
-    await this.clearSent(booking.id, token);
-    booking.refund_sent_at = null;
-    return this.sendClaimed(booking, token);
-  }
-
-  private async resend(booking: DeclineBooking, token: string): Promise<boolean> {
-    if (providerRefundPlan(booking.refund_provider ?? '') === 'mtn') return this.sendClaimed(booking, token);
-    await this.tellSupport(booking, 'manual_check');
     return false;
   }
 
@@ -901,9 +889,26 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   private async confirmUnpaid(booking: DeclineBooking, body: { note?: string }): Promise<void> {
     if (!(body.note ?? '').trim()) throw new HttpException('Add a note', HttpStatus.BAD_REQUEST);
+    const look = await this.unpaidLook(booking);
+    if (look !== 'failed') throw new HttpException(this.unpaidRefusal(look), HttpStatus.CONFLICT);
     const owned = await this.takeClaim(booking);
     const wrote = await this.failRefund(owned.booking, this.refundPay(booking), null, owned.token);
     if (!wrote) throw new HttpException('A payout may be in progress', HttpStatus.CONFLICT);
+  }
+
+  private unpaidRefusal(look: 'refunded' | 'unknown'): string {
+    if (look === 'refunded') return 'A payout exists';
+    return 'The provider did not confirm this payout is unpaid';
+  }
+
+  private async unpaidLook(booking: DeclineBooking): Promise<'failed' | 'refunded' | 'unknown'> {
+    const ref = booking.refund_provider_ref ?? '';
+    if (!ref && !booking.refund_sent_at) return 'failed';
+    if (!ref) return 'unknown';
+    const probed = await this.momo.probe(booking.refund_provider ?? '', ref);
+    if (probed === 'refunded') return 'refunded';
+    if (probed === 'failed') return 'failed';
+    return 'unknown';
   }
 
   private async markPaid(booking: DeclineBooking, body: { providerRef?: string }): Promise<void> {

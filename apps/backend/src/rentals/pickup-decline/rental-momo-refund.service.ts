@@ -45,16 +45,17 @@ export class RentalMomoRefundService {
 
   async poll(provider: string, providerRef: string): Promise<RefundStatus> {
     const probed = await this.probe(provider, providerRef);
-    return probed === 'missing' ? 'refund_pending' : probed;
+    if (probed === 'missing' || probed === 'unknown') return 'refund_pending';
+    return probed;
   }
 
-  /** `missing` means the provider has no transfer for this reference yet. */
-  async probe(provider: string, providerRef: string): Promise<RefundStatus | 'missing'> {
+  /** `missing` is a 404. `unknown` is a lookup that did not prove the payout is absent. */
+  async probe(provider: string, providerRef: string): Promise<RefundStatus | 'missing' | 'unknown'> {
     const plan = providerRefundPlan(provider);
     if (plan === 'unsupported') return 'refund_pending';
     const looked = await this.lookup(plan, providerRef);
     if (looked.kind === 'missing') return 'missing';
-    if (looked.kind === 'unknown') return 'refund_pending';
+    if (looked.kind === 'unknown') return 'unknown';
     return mapRefundPoll(looked.code);
   }
 

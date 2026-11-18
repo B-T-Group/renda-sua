@@ -227,6 +227,7 @@ suite('decline refund claim on real Postgres', () => {
        WHERE table_name = 'rental_bookings' AND column_name = 'refund_notices'`
     );
     expect(column.rows[0]).toMatchObject({ data_type: 'jsonb', is_nullable: 'NO' });
+    expect(readFileSync(HARDENING, 'utf8')).toContain("to_jsonb(coalesce(refund_notices, '{}'::text[]))");
     await expect(pool.query(`SELECT array_append('[]'::jsonb, 'failed')`)).rejects.toThrow();
     const id = await seed(pool);
     const hasura = sqlHasura(pool);
@@ -256,7 +257,7 @@ suite('decline refund claim on real Postgres', () => {
     expect(await statusOf(pool, id)).toBe('refunded');
   });
 
-  it('resends a stamped stable id when FreemoPay has no record of it', async () => {
+  it('asks support when a stamped stable id is missing, and does not send again', async () => {
     const id = await seed(pool);
     await pool.query(`UPDATE rental_bookings SET refund_sent_at = now() WHERE id = $1`, [id]);
     await pool.query(
@@ -269,8 +270,8 @@ suite('decline refund claim on real Postgres', () => {
       { amount: 1000, currency: 'XAF', provider: 'freemopay', customer_phone: '237600000000', transaction_id: 'tx' },
     ]);
     expect(await service.reconcilePending()).toBe(0);
-    expect(provider.withdraws).toHaveLength(1);
-    expect(provider.withdraws[0].externalId).toBe(stableRefundReference(id));
+    expect(provider.withdraws).toHaveLength(0);
+    expect(await statusOf(pool, id)).toBe('refund_pending');
   });
 
   it('dedupes decline history without dropping the live unique index', async () => {
@@ -651,11 +652,7 @@ async function claimNotice(pool: Pool, query: string, vars: Record<string, unkno
 
 async function releaseNotice(pool: Pool, vars: Record<string, unknown>): Promise<number> {
   const result = await pool.query(
-    `UPDATE rental_bookings
-     SET refund_notices = COALESCE((
-       SELECT jsonb_agg(elem) FROM jsonb_array_elements(refund_notices) elem WHERE elem <> to_jsonb($2::text)
-     ), '[]'::jsonb)
-     WHERE id = $1`,
+    `UPDATE rental_bookings SET refund_notices = refund_notices - $2 WHERE id = $1`,
     [vars.id, vars.outcome]
   );
   return result.rowCount ?? 0;

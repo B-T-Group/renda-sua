@@ -259,7 +259,21 @@ export const RELEASE_NOTICE = `
   mutation ReleaseDeclineRefundNotice($id: uuid!, $outcome: String!) {
     update_rental_bookings(
       where: { id: { _eq: $id } }
-      _delete_elem: { refund_notices: $outcome }
+      _delete_key: { refund_notices: $outcome }
+    ) { affected_rows }
+  }
+`;
+
+export const CLEAR_STABLE_REF = `
+  mutation ClearDeclineStableRef($id: uuid!, $token: uuid!, $stableRef: String!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_provider_ref: { _eq: $stableRef }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_provider_ref: null }
     ) { affected_rows }
   }
 `;

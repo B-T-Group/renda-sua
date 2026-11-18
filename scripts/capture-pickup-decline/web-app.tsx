@@ -20,7 +20,7 @@ import {
 } from '../../apps/frontend/src/components/rentals/DeclinePickupScreens';
 import en from '../../apps/frontend/public/locales/en.json';
 import fr from '../../apps/frontend/public/locales/fr.json';
-import { ADMIN_ROWS, CARD, CARD_XAF, MOMO_NO_PHONE, MOMO_PAID, MOMO_UNPAID, OTHER_TEXT, PHOTOS, RENTER_NOTE, RENTER_NOTE_FR, RENTER_PHOTOS, sceneName, WALLET_XAF } from './fixtures';
+import { ADMIN_ROWS, CARD, CARD_XAF, MOMO_NO_PHONE, MOMO_PAID, MOMO_UNPAID, OTHER_TEXT, PHOTOS, RENTER_NOTE, RENTER_NOTE_FR, RENTER_PHOTOS, sceneName, UNKNOWN_RAIL, WALLET_XAF } from './fixtures';
 
 const boot = new URLSearchParams(window.location.search).get('lang') === 'fr' ? 'fr' : 'en';
 
@@ -97,6 +97,8 @@ function CaptureApp() {
           {scene === 'xaf-card' ? <DeclineOutcomeCard money={CARD_XAF} refundStatus="none" /> : null}
           {scene === 'xaf-unpaid' ? <DeclineOutcomeCard money={MOMO_UNPAID} refundStatus="none" /> : null}
           {scene === 'refund-nophone' ? <DeclineOutcomeCard money={MOMO_NO_PHONE} refundStatus="none" /> : null}
+          {scene === 'refunded-nophone' ? <DeclineOutcomeCard money={MOMO_NO_PHONE} refundStatus="refunded" /> : null}
+          {scene === 'neutral' ? <DeclineOutcomeCard money={UNKNOWN_RAIL} refundStatus="none" /> : null}
           {scene === 'business' ? (
             <BusinessDeclineBanner
               reason="damaged"

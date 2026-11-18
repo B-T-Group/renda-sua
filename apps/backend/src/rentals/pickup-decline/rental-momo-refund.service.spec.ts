@@ -1,3 +1,4 @@
+import { freemopayRequestUnsent } from '../../mobile-payments/providers/freemopay.service';
 import { RentalMomoRefundService } from './rental-momo-refund.service';
 
 function service(overrides: Record<string, unknown> = {}) {
@@ -41,6 +42,18 @@ const request = {
   phone: '+237 670 00 67 12',
   transactionId: 'collect-1',
 };
+
+describe('freemopayRequestUnsent', () => {
+  it('treats a connect failure with no HTTP response as unsent, and any response as ambiguous', () => {
+    expect(freemopayRequestUnsent({ code: 'ECONNREFUSED' })).toBe(true);
+    expect(freemopayRequestUnsent({ code: 'ENOTFOUND' })).toBe(true);
+    expect(freemopayRequestUnsent({ code: 'EAI_AGAIN' })).toBe(true);
+    expect(freemopayRequestUnsent({ code: 'ETIMEDOUT' })).toBe(true);
+    expect(freemopayRequestUnsent({ code: 'ETIMEDOUT', request: {} })).toBe(false);
+    expect(freemopayRequestUnsent({ code: 'ECONNABORTED', request: {}, message: 'timeout' })).toBe(false);
+    expect(freemopayRequestUnsent({ response: { status: 503 }, code: 'ERR_BAD_RESPONSE' })).toBe(false);
+  });
+});
 
 describe('RentalMomoRefundService', () => {
   it('sends an MTN disbursement and waits for SUCCESSFUL', async () => {
@@ -118,7 +131,7 @@ describe('RentalMomoRefundService', () => {
     expect(result.providerRef).toBe(referenceId);
     expect(freemopay.withdraw).toHaveBeenCalledTimes(1);
     expect(freemopay.withdraw).toHaveBeenCalledWith(expect.objectContaining({ externalId: referenceId }));
-    expect(await api.probe('freemopay', referenceId)).toBe('refund_pending');
+    expect(await api.probe('freemopay', referenceId)).toBe('unknown');
     expect(freemopay.withdraw).toHaveBeenCalledTimes(1);
   });
 
@@ -138,7 +151,7 @@ describe('RentalMomoRefundService', () => {
     expect(result.status).toBe('refund_pending');
     expect(result.providerRef).toBe('FP-1');
     expect(freemopay.withdraw).toHaveBeenCalledTimes(1);
-    expect(await api.probe('freemopay', 'FP-1')).toBe('refund_pending');
+    expect(await api.probe('freemopay', 'FP-1')).toBe('unknown');
     expect(freemopay.withdraw).toHaveBeenCalledTimes(1);
   });
 
@@ -191,7 +204,7 @@ describe('RentalMomoRefundService', () => {
         }),
       },
     });
-    expect(await down.api.probe('freemopay', 'fp-1')).toBe('refund_pending');
+    expect(await down.api.probe('freemopay', 'fp-1')).toBe('unknown');
     const missing = service();
     expect(await missing.api.probe('freemopay', 'fp-1')).toBe('missing');
     const blank = service({
@@ -200,7 +213,7 @@ describe('RentalMomoRefundService', () => {
         checkTransactionStatus: jest.fn(async () => ({ status: '' })),
       },
     });
-    expect(await blank.api.probe('freemopay', 'fp-1')).toBe('refund_pending');
+    expect(await blank.api.probe('freemopay', 'fp-1')).toBe('unknown');
     expect(blank.freemopay.withdraw).not.toHaveBeenCalled();
   });
 

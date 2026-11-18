@@ -39,6 +39,17 @@ export interface FreemopayPaymentResponse {
   status?: string;
 }
 
+const CONNECT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT', 'ERR_SOCKET_CONNECTION_TIMEOUT']);
+
+/** True only when the HTTP request never left this process. Any response, including 503, is ambiguous. */
+export function freemopayRequestUnsent(error: any): boolean {
+  if (error?.response || Number(error?.response?.status) > 0) return false;
+  const code = String(error?.code ?? error?.cause?.code ?? '');
+  if (CONNECT_CODES.has(code)) return true;
+  const beforeSend = code === 'ETIMEDOUT' || code === 'ECONNABORTED';
+  return beforeSend && !error?.request;
+}
+
 export interface FreemopayWithdrawalResponse {
   success: boolean;
   transactionId?: string;
@@ -454,8 +465,7 @@ export class FreemopayService implements OnModuleInit {
     const sanitized = sanitizeProviderError(error);
     this.logger.error(`Failed to initiate Freemopay withdrawal: ${sanitized.message}`);
     const http = Number(sanitized.status ?? error?.response?.status ?? 0);
-    const code = String(error?.code ?? error?.cause?.code ?? '');
-    const unsent = this.neverReached(http, code);
+    const unsent = freemopayRequestUnsent(error);
     const definite = !unsent && http >= 400 && http < 500;
     return {
       success: false,
@@ -467,10 +477,6 @@ export class FreemopayService implements OnModuleInit {
     };
   }
 
-  private neverReached(http: number, code: string): boolean {
-    if (http === 503) return true;
-    return code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN';
-  }
 
   /**
    * Check transaction status (GET /api/v2/payment/:reference)
