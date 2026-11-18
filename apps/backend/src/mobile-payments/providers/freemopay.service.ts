@@ -46,6 +46,8 @@ export interface FreemopayWithdrawalResponse {
   message?: string;
   errorCode?: string;
   status?: string;
+  /** True when a timeout, network error, or 5xx may have created the payout. */
+  ambiguous?: boolean;
 }
 
 export interface FreemopayTransactionStatus {
@@ -444,8 +446,11 @@ export class FreemopayService implements OnModuleInit {
     } catch (error: any) {
       const sanitized = sanitizeProviderError(error);
       this.logger.error(`Failed to initiate Freemopay withdrawal: ${sanitized.message}`);
+      const http = Number(sanitized.status ?? error.response?.status);
+      const definite = http >= 400 && http < 500;
       return {
         success: false,
+        ambiguous: !definite,
         message: normalizeProviderMessage(
           error.response?.data?.message,
           'Failed to initiate withdrawal'
@@ -454,7 +459,7 @@ export class FreemopayService implements OnModuleInit {
           error.response?.data?.statusCode?.toString() ||
           error.response?.status?.toString() ||
           'WITHDRAWAL_FAILED',
-        status: 'FAILED',
+        status: definite ? 'FAILED' : 'UNKNOWN',
       };
     }
   }

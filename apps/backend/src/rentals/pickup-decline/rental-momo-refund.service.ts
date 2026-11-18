@@ -50,9 +50,10 @@ export class RentalMomoRefundService {
   async probe(provider: string, providerRef: string): Promise<RefundStatus | 'missing'> {
     const plan = providerRefundPlan(provider);
     if (plan === 'unsupported') return 'refund_pending';
-    const code = await this.pollCode(plan, providerRef);
-    if (code == null) return 'missing';
-    return mapRefundPoll(code);
+    const looked = await this.lookup(plan, providerRef);
+    if (looked.kind === 'missing') return 'missing';
+    if (looked.kind === 'unknown') return 'refund_pending';
+    return mapRefundPoll(looked.code);
   }
 
   private async unsupported(provider: string): Promise<MomoRefundResult> {
@@ -92,16 +93,11 @@ export class RentalMomoRefundService {
   }
 
   private async initiateFreemopay(request: MomoRefundRequest): Promise<MomoRefundResult> {
-    const sent = await this.freemopay.withdraw({
-      payee: this.msisdn(request.phone),
-      amount: request.amount,
-      externalId: this.externalId(request.bookingId),
-      description: 'Rental condition decline refund',
-      callback: this.callbackUrl('freemopay'),
-    });
-    if (!sent.success) return this.failed('freemopay', sent.reference ?? sent.transactionId ?? null);
-    const ref = sent.reference || sent.transactionId || this.externalId(request.bookingId);
-    return this.pending('freemopay', ref, false);
+    const externalId = this.stableId(request);
+    const looked = await this.lookup('freemopay', externalId);
+    if (looked.kind === 'unknown') return this.pending('freemopay', externalId, false);
+    if (looked.kind === 'code') return this.fromCode('freemopay', externalId, looked.code);
+    return this.sendFreemopay(request, externalId);
   }
 
   private async initiateFedapay(request: MomoRefundRequest): Promise<MomoRefundResult> {
@@ -118,20 +114,69 @@ export class RentalMomoRefundService {
     return this.pending('fedapay', ref, false);
   }
 
-  private async finishPoll(plan: ProviderRefundPlan, ref: string): Promise<MomoRefundResult> {
-    const status = mapRefundPoll(await this.pollCode(plan, ref));
-    return { status, provider: plan, providerRef: ref, unsupported: false };
+  private async sendFreemopay(request: MomoRefundRequest, externalId: string): Promise<MomoRefundResult> {
+    const sent = await this.freemopay.withdraw({
+      payee: this.msisdn(request.phone),
+      amount: request.amount,
+      externalId,
+      description: 'Rental condition decline refund',
+      callback: this.callbackUrl('freemopay'),
+    });
+    const ref = sent.reference || sent.transactionId || externalId;
+    if (!sent.success && sent.ambiguous) return this.pending('freemopay', externalId, false);
+    if (!sent.success) return this.failed('freemopay', sent.reference ?? sent.transactionId ?? null);
+    return this.pending('freemopay', ref, false);
   }
 
-  private async pollCode(plan: ProviderRefundPlan, ref: string): Promise<string | null> {
+  private async finishPoll(plan: ProviderRefundPlan, ref: string): Promise<MomoRefundResult> {
+    const looked = await this.lookup(plan, ref);
+    if (looked.kind !== 'code') return this.pending(plan, ref, false);
+    return this.fromCode(plan, ref, looked.code);
+  }
+
+  private async lookup(plan: ProviderRefundPlan, ref: string): Promise<PollLook> {
+    if (plan === 'mtn') return this.lookupMtn(ref);
+    if (plan === 'freemopay') return this.lookupFreemopay(ref);
+    if (plan === 'fedapay') return this.lookupFedapay(ref);
+    return { kind: 'unknown' };
+  }
+
+  private async lookupMtn(ref: string): Promise<PollLook> {
     try {
-      if (plan === 'mtn') return (await this.mtn.transferDeliveryNotification(ref)).statusCode ?? null;
-      if (plan === 'freemopay') return (await this.freemopay.checkTransactionStatus(ref)).status ?? null;
-      if (plan === 'fedapay') return (await this.fedapay.checkPayoutStatus(ref)).status ?? null;
-      return null;
+      const sent = await this.mtn.transferDeliveryNotification(ref);
+      if (sent.statusCode === '404') return { kind: 'missing' };
+      if (!sent.statusCode) return { kind: 'unknown' };
+      return { kind: 'code', code: sent.statusCode };
     } catch (error: any) {
-      return null;
+      return { kind: 'unknown' };
     }
+  }
+
+  private async lookupFreemopay(ref: string): Promise<PollLook> {
+    try {
+      const status = await this.freemopay.checkTransactionStatus(ref);
+      return { kind: 'code', code: status.status || 'PENDING' };
+    } catch (error: any) {
+      return Number(error?.status) === 404 ? { kind: 'missing' } : { kind: 'unknown' };
+    }
+  }
+
+  private async lookupFedapay(ref: string): Promise<PollLook> {
+    try {
+      const status = await this.fedapay.checkPayoutStatus(ref);
+      if (!status.status) return { kind: 'unknown' };
+      return { kind: 'code', code: status.status };
+    } catch (error: any) {
+      return { kind: 'unknown' };
+    }
+  }
+
+  private fromCode(provider: string, providerRef: string, code: string): MomoRefundResult {
+    return { status: mapRefundPoll(code), provider, providerRef, unsupported: false };
+  }
+
+  private stableId(request: MomoRefundRequest): string {
+    return request.referenceId?.trim() || this.externalId(request.bookingId);
   }
 
   private pending(provider: string, providerRef: string | null, unsupported: boolean): MomoRefundResult {
@@ -155,3 +200,5 @@ export class RentalMomoRefundService {
     return `${base}/rentals/refunds/${provider}/ignored`;
   }
 }
+
+type PollLook = { kind: 'code'; code: string } | { kind: 'missing' } | { kind: 'unknown' };

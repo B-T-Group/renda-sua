@@ -191,12 +191,56 @@ export const DELETE_DECLINE = `
   }
 `;
 
-export const STAMP_EFFECTS = `
-  mutation StampDeclineEffects($id: uuid!, $at: timestamptz!) {
+export const CLAIM_EFFECTS = `
+  mutation ClaimDeclineEffects($id: uuid!, $at: timestamptz!) {
+    update_rental_condition_declines(
+      where: { id: { _eq: $id }, effects_recorded_at: { _is_null: true } }
+      _set: { effects_recorded_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+export const CLEAR_EFFECTS = `
+  mutation ClearDeclineEffects($id: uuid!) {
     update_rental_condition_declines_by_pk(
       pk_columns: { id: $id }
-      _set: { effects_recorded_at: $at }
+      _set: { effects_recorded_at: null }
     ) { id }
+  }
+`;
+
+export const DECLINE_HISTORY = `
+  query DeclineHistoryNote($bookingId: uuid!, $notes: String!) {
+    rental_status_history(
+      where: { rental_booking_id: { _eq: $bookingId }, notes: { _eq: $notes } }
+      limit: 1
+    ) { id }
+  }
+`;
+
+export const KEEP_REFUND_CLAIM = `
+  mutation KeepDeclineRefundClaim($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_claim_token: { _eq: $token }
+      }
+      _set: { refund_claim_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+export const APPLY_OWNED_REFUND = `
+  mutation ApplyOwnedDeclineRefund($id: uuid!, $token: uuid!, $set: rental_bookings_set_input!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_claim_token: { _eq: $token }
+      }
+      _set: $set
+    ) { affected_rows }
   }
 `;
 

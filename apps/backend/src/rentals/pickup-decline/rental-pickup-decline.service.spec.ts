@@ -50,13 +50,18 @@ function harness(options: {
   refunds?: boolean;
   insertFails?: number;
   historyFails?: number;
+  pinFails?: number;
   claimLoses?: boolean;
+  stealClaim?: boolean;
   poll?: 'refunded' | 'failed' | 'refund_pending' | 'missing';
 } = {}) {
   const state = booking(options.booking);
   const declines = [...(options.declines ?? [])];
   let insertFails = options.insertFails ?? 0;
   let historyFails = options.historyFails ?? 0;
+  let pinFails = options.pinFails ?? 0;
+  let restoreFails = options.restoreThrows ? 1 : 0;
+  const notes = new Set<string>();
   const wallet: DeclineWallet = { available: 0, withheld: options.hold ?? 0 };
   const calls = {
     release: 0,
@@ -68,6 +73,7 @@ function harness(options: {
     refund: [] as unknown[],
     support: 0,
     cas: 0,
+    claimAtSend: null as string | null,
   };
   const hasura = {
     executeQuery: jest.fn(async (query: string) => {
@@ -81,6 +87,9 @@ function harness(options: {
         return { rental_holds: options.hold ? [{ client_hold_amount: options.hold, status: 'active' }] : [] };
       }
       if (query.includes('DeclineReadyPhotos')) return { rental_condition_decline_photos: [] };
+      if (query.includes('DeclineHistoryNote')) {
+        return { rental_status_history: notes.has('Renter declined the pickup condition') ? [{ id: 'h' }] : [] };
+      }
       return {};
     }),
     executeMutation: jest.fn(async (query: string, vars: { from?: string[]; set?: Record<string, unknown>; object?: Record<string, unknown>; versionId?: string }) => {
@@ -131,6 +140,32 @@ function harness(options: {
         Object.assign(row, { refund_provider: (vars as { provider?: string }).provider, refund_provider_ref: (vars as { ref?: string }).ref });
         return { update_rental_bookings: { affected_rows: 1 } };
       }
+      if (query.includes('KeepDeclineRefundClaim')) {
+        const row = refundRow((vars as { id?: string }).id);
+        const token = (vars as { token?: string }).token;
+        if (options.stealClaim || row.refund_claim_token !== token) {
+          return { update_rental_bookings: { affected_rows: 0 } };
+        }
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query.includes('ApplyOwnedDeclineRefund')) {
+        const row = refundRow((vars as { id?: string }).id);
+        const token = (vars as { token?: string }).token;
+        if (row.refund_claim_token !== token) return { update_rental_bookings: { affected_rows: 0 } };
+        Object.assign(row, vars.set);
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query.includes('ClaimDeclineEffects')) {
+        const row = declines[0] as { effects_recorded_at?: string | null } | undefined;
+        if (!row || row.effects_recorded_at) return { update_rental_condition_declines: { affected_rows: 0 } };
+        row.effects_recorded_at = (vars as { at?: string }).at ?? new Date().toISOString();
+        return { update_rental_condition_declines: { affected_rows: 1 } };
+      }
+      if (query.includes('ClearDeclineEffects')) {
+        const row = declines[0] as { effects_recorded_at?: string | null } | undefined;
+        if (row) row.effects_recorded_at = null;
+        return { update_rental_condition_declines_by_pk: { id: 'decline-1' } };
+      }
       if (query.includes('StampDeclineRefund') || query.includes('ApplyDeclineRefundPoll')) {
         Object.assign(refundRow((vars as { id?: string }).id), vars.set);
         return { update_rental_bookings: { affected_rows: 1 } };
@@ -139,6 +174,7 @@ function harness(options: {
         historyFails -= 1;
         throw new Error('history fk');
       }
+      if (query.includes('InsertRentalStatusHistory')) notes.add('Renter declined the pickup condition');
       return { update_rental_bookings: { affected_rows: 1 }, insert_rental_status_history_one: { id: 'h' } };
     }),
   };
@@ -149,6 +185,7 @@ function harness(options: {
   const momo = {
     refund: jest.fn(async (request: unknown) => {
       calls.refund.push(request);
+      calls.claimAtSend = (state.refund_claim_token as string | null) ?? null;
       if (options.refundThrows) throw new Error('timeout');
       return options.refund ?? { status: 'refunded', provider: 'mtn', providerRef: 'ref-1', unsupported: false };
     }),
@@ -169,7 +206,14 @@ function harness(options: {
         calls.support += 1;
       }),
     } as never,
-    { clearPinForOrder: jest.fn(async () => undefined) } as never,
+    {
+      clearPinForOrder: jest.fn(async () => {
+        if (pinFails > 0) {
+          pinFails -= 1;
+          throw new Error('pin down');
+        }
+      }),
+    } as never,
     {
       releaseFreeCancelFunds: jest.fn(async () => {
         calls.release += 1;
@@ -185,7 +229,10 @@ function harness(options: {
       }),
       restoreDeclinePayout: jest.fn(async (_booking: unknown, amount: number) => {
         calls.restore += 1;
-        if (options.restoreThrows) throw new Error('ledger down');
+        if (restoreFails > 0) {
+          restoreFails -= 1;
+          throw new Error('ledger down');
+        }
         const next = creditFailedPayout(wallet, amount);
         wallet.available = next.available;
         wallet.withheld = next.withheld;
@@ -348,19 +395,21 @@ describe('RentalPickupDeclineService', () => {
     expect(retry.calls.refund).toHaveLength(1);
   });
 
-  it('leaves an unsupported provider pending and tells support', async () => {
+  it('marks an unsupported provider manual after one credit, so a manual payout cannot double-pay', async () => {
     const { service, calls, state, wallet } = harness({
       hold: 45000,
       collects: [{ amount: 45000, currency: 'XAF', provider: 'mypvit', customer_phone: '2376700006712', transaction_id: 'tx' }],
       refund: { status: 'refund_pending', provider: 'mypvit', providerRef: null, unsupported: true },
     });
     const result = await service.decline(BOOKING, input);
-    expect(result.refundStatus).toBe('refund_pending');
-    expect(state.refund_status).toBe('refund_pending');
+    expect(result.refundStatus).toBe('manual');
+    expect(state.refund_status).toBe('manual');
     expect(calls.support).toBe(1);
     expect(calls.restore).toBe(1);
     expect(wallet.available).toBe(45000);
     expect((calls.refund[0] as { amount: number }).amount).toBe(45000);
+    expect(await service.reconcilePending()).toBe(0);
+    expect(calls.refund).toHaveLength(1);
   });
 
   it('returns the stored decline without calling the provider again', async () => {
@@ -445,10 +494,13 @@ describe('RentalPickupDeclineService', () => {
 
   it('credits the wallet before a failed poll can mark the refund failed', async () => {
     const pending = pendingRefund();
-    const crashed = harness({ pending: [pending], poll: 'failed', restoreThrows: true });
-    await expect(crashed.service.reconcilePending()).rejects.toThrow('ledger down');
+    const sibling = pendingRefund({ id: '44444444-4444-4444-8444-444444444444', booking_number: 'RB-2' });
+    const crashed = harness({ pending: [pending, sibling], poll: 'failed', restoreThrows: true });
+    await expect(crashed.service.reconcilePending()).resolves.toBe(1);
     expect(pending.refund_status).toBe('refund_pending');
-    expect(crashed.wallet.available).toBe(0);
+    expect(sibling.refund_status).toBe('failed');
+    expect(crashed.wallet.available).toBe(100);
+    expect(crashed.calls.support).toBeGreaterThan(0);
     const row = pendingRefund();
     const paid = harness({ pending: [row], poll: 'failed' });
     expect(await paid.service.reconcilePending()).toBe(1);
@@ -493,6 +545,55 @@ describe('RentalPickupDeclineService', () => {
     expect(calls.refund).toHaveLength(1);
     expect(wallet.withheld).toBe(0);
     expect(state.status).toBe('cancelled');
+  });
+
+  it('does not write a second history row when a later side effect is retried', async () => {
+    const { service, calls } = harness({
+      pinFails: 1,
+      booking: { currency: 'CAD', authorized_amount: 65, total_amount: 65 },
+    });
+    await service.decline(BOOKING, input);
+    expect(calls.history).toBe(1);
+    const second = await service.decline(BOOKING, input);
+    expect(second.idempotent).toBe(true);
+    expect(calls.history).toBe(1);
+  });
+
+  it('stamps the refund claim before the first provider call', async () => {
+    const { service, calls } = harness({ collects: collect() });
+    await service.decline(BOOKING, input);
+    expect(calls.claimAtSend).toEqual(expect.any(String));
+    expect(calls.refund).toHaveLength(1);
+  });
+
+  it('aborts a payout when another worker owns the claim token', async () => {
+    const row = pendingRefund({ refund_provider_ref: null });
+    const { service, calls } = harness({ pending: [row], collects: collect(), stealClaim: true });
+    expect(await service.reconcilePending()).toBe(0);
+    expect(calls.refund).toHaveLength(0);
+    expect(calls.restore).toBe(0);
+    expect(row.refund_status).toBe('refund_pending');
+  });
+
+  it('does not resend FreemoPay when its status lookup is missing', async () => {
+    const row = pendingRefund({ refund_provider: 'freemopay', refund_provider_ref: 'fp-1' });
+    const { service, calls } = harness({ pending: [row], poll: 'missing' });
+    expect(await service.reconcilePending()).toBe(0);
+    expect(calls.refund).toHaveLength(0);
+    expect(calls.support).toBe(1);
+    expect(row.refund_status).toBe('refund_pending');
+  });
+
+  it('does not tell support again for a duplicate late collect', async () => {
+    const { service, calls } = harness({
+      booking: { status: 'cancelled', condition_declined_at: '2026-11-18T00:00:00.000Z', refund_status: 'none' },
+      collects: [],
+    });
+    const extra = { amount: 100, currency: 'XAF', provider: 'mtn', phone: '2376700006712', transactionId: 'late' };
+    await service.refundLateCollect(BOOKING, extra);
+    await service.refundLateCollect(BOOKING, extra);
+    expect(calls.support).toBe(1);
+    expect(calls.refund).toHaveLength(1);
   });
 
   it('still returns the decline when the history insert fails, and retries that side effect', async () => {

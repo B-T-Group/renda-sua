@@ -425,10 +425,13 @@ export class MtnMomoService {
         statusCode: data.status,
         statusMessage: data.reason ?? data.status,
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Disbursement status check failed: ${(error as Error).message}`
       );
+      if (Number(error?.response?.status) === 404) {
+        return { status: false, statusCode: '404' };
+      }
       return this.failure(error);
     }
   }

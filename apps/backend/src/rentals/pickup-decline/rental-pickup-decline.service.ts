@@ -17,6 +17,7 @@ import {
   claimStaleAt,
   declineRail,
   fedapayChannel,
+  providerRefundPlan,
   maskMomoPhone,
   moneyAmount,
   nextRefundAt,
@@ -77,6 +78,7 @@ interface DeclineBooking {
   refund_amount?: number | string | null;
   refund_provider: string | null;
   refund_provider_ref: string | null;
+  refund_claim_token?: string | null;
   authorized_amount: number | string | null;
   total_amount: number | string | null;
   currency: string;
@@ -114,6 +116,7 @@ interface Ledger {
 
 @Injectable()
 export class RentalPickupDeclineService implements OnModuleInit {
+  private static readonly DECLINE_NOTE = 'Renter declined the pickup condition';
   private readonly logger = new Logger(RentalPickupDeclineService.name);
 
   constructor(
@@ -162,7 +165,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     });
     let updated = 0;
     for (const booking of result.rental_bookings ?? []) {
-      if (await this.reconcileOne(booking)) updated += 1;
+      updated += await this.reconcileRow(booking);
     }
     return updated;
   }
@@ -199,12 +202,11 @@ export class RentalPickupDeclineService implements OnModuleInit {
   async refundLateCollect(bookingId: string, extra?: CollectedPayment): Promise<void> {
     const booking = await this.requireBooking(bookingId);
     if (!booking.condition_declined_at) return;
-    await this.tellSupport(booking, 'late_collect');
     if (booking.refund_status && booking.refund_status !== 'none') return;
     const ledger = this.includeCollect(await this.ledger(booking), extra);
     if (ledger.rail !== 'momo_paid') return;
     await this.rentals.consumeDeclineHold(booking, ledger.amount);
-    await this.refundCollected(booking, ledger);
+    await this.refundCollected(booking, ledger, 'late_collect');
   }
 
   private async cancelAndRecord(
@@ -297,28 +299,25 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return this.refundCollected(booking, ledger);
   }
 
-  private async refundCollected(booking: DeclineBooking, ledger: Ledger): Promise<RefundStatus> {
+  private async refundCollected(booking: DeclineBooking, ledger: Ledger, notice?: string): Promise<RefundStatus> {
     const source = refundSource(ledger.collects, booking.currency);
-    if (!source || !(await this.claimRefund(booking.id, ledger, source.provider))) {
-      return source ? this.currentRefund(booking.id) : this.unsupported(booking, ledger);
-    }
-    return this.callProvider(booking, ledger, source);
+    if (!source) return this.unsupported(booking, ledger);
+    const token = await this.claimRefund(booking.id, ledger, source.provider);
+    if (!token) return this.currentRefund(booking.id);
+    if (notice) await this.tellSupport(booking, notice);
+    return this.callProvider(booking, ledger, source, token);
   }
 
   private async callProvider(
     booking: DeclineBooking,
     ledger: Ledger,
-    source: CollectedPayment
+    source: CollectedPayment,
+    token: string
   ): Promise<RefundStatus> {
     const referenceId = booking.refund_provider_ref ?? stableRefundReference(booking.id);
     await this.rememberRef(booking.id, source.provider, referenceId);
-    try {
-      const result = await this.momo.refund(this.refundRequest(booking, ledger, source, referenceId));
-      return this.settleResult(booking, ledger, result, referenceId);
-    } catch (error: any) {
-      this.logger.warn(`decline payout: ${error?.message ?? error}`);
-      return 'refund_pending';
-    }
+    if (!(await this.keepClaim(booking.id, token))) return 'refund_pending';
+    return this.sendOwned(booking, ledger, source, referenceId, token);
   }
 
   private refundRequest(booking: DeclineBooking, ledger: Ledger, source: CollectedPayment, referenceId: string) {
@@ -334,26 +333,42 @@ export class RentalPickupDeclineService implements OnModuleInit {
     };
   }
 
+  private async sendOwned(
+    booking: DeclineBooking,
+    ledger: Ledger,
+    source: CollectedPayment,
+    referenceId: string,
+    token: string
+  ): Promise<RefundStatus> {
+    try {
+      const result = await this.momo.refund(this.refundRequest(booking, ledger, source, referenceId));
+      return this.settleResult(booking, ledger, result, referenceId, token);
+    } catch (error: any) {
+      this.logger.warn(`decline payout: ${error?.message ?? error}`);
+      return 'refund_pending';
+    }
+  }
+
   private async settleResult(
     booking: DeclineBooking,
     ledger: Ledger,
     result: { status: RefundStatus; provider: string; providerRef: string | null; unsupported: boolean },
-    referenceId: string
+    referenceId: string,
+    token: string
   ): Promise<RefundStatus> {
-    if (result.unsupported) return this.holdUnsupported(booking, ledger);
-    if (result.status === 'failed') {
-      await this.failRefund(booking, ledger.amount, result.providerRef ?? referenceId);
-      return 'failed';
-    }
+    if (result.unsupported) return this.holdUnsupported(booking, ledger, token);
+    if (result.status === 'failed') return this.failOwned(booking, ledger.amount, result.providerRef ?? referenceId, token);
     const ref = result.providerRef ?? referenceId;
-    await this.writeRefund(booking.id, result.status, result.provider, ref);
-    return result.status;
+    const wrote = await this.writeOwned(booking.id, token, result.status, result.provider, ref);
+    return wrote ? result.status : 'refund_pending';
   }
 
-  private async holdUnsupported(booking: DeclineBooking, ledger: Ledger): Promise<RefundStatus> {
+  private async holdUnsupported(booking: DeclineBooking, ledger: Ledger, token: string): Promise<RefundStatus> {
+    if (!(await this.keepClaim(booking.id, token))) return 'refund_pending';
     await this.rentals.restoreDeclinePayout(booking, ledger.amount);
-    await this.tellSupport(booking, 'unsupported');
-    return 'refund_pending';
+    const wrote = await this.writeOwned(booking.id, token, 'manual', 'unsupported', null);
+    if (wrote) await this.tellSupport(booking, 'unsupported');
+    return wrote ? 'manual' : 'refund_pending';
   }
 
   private async claimCancel(booking: DeclineBooking, versionId: string): Promise<boolean> {
@@ -504,23 +519,30 @@ export class RentalPickupDeclineService implements OnModuleInit {
     };
   }
 
-  private async claimRefund(bookingId: string, ledger: Ledger, provider: string): Promise<boolean> {
-    const now = new Date().toISOString();
+  private async claimRefund(bookingId: string, ledger: Ledger, provider: string): Promise<string | null> {
+    const now = new Date();
+    const token = randomUUID();
     const result = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
       Q.STAMP_REFUND,
-      {
-        id: bookingId,
-        set: {
-          refund_status: 'refund_pending',
-          refund_requested_at: now,
-          refund_status_at: now,
-          refund_amount: ledger.amount,
-          refund_currency: ledger.currency,
-          refund_provider: provider,
-        },
-      }
+      { id: bookingId, set: this.refundStamp(ledger, provider, token, now) }
     );
-    return (result.update_rental_bookings?.affected_rows ?? 0) === 1;
+    return (result.update_rental_bookings?.affected_rows ?? 0) === 1 ? token : null;
+  }
+
+  private refundStamp(ledger: Ledger, provider: string, token: string, now: Date) {
+    const at = now.toISOString();
+    return {
+      refund_status: 'refund_pending',
+      refund_requested_at: at,
+      refund_status_at: at,
+      refund_amount: ledger.amount,
+      refund_currency: ledger.currency,
+      refund_provider: provider,
+      refund_attempts: 1,
+      refund_claim_at: at,
+      refund_claim_token: token,
+      refund_next_at: nextRefundAt(1, now.getTime()),
+    };
   }
 
   private async rememberRef(bookingId: string, provider: string, ref: string): Promise<void> {
@@ -551,28 +573,37 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return ledger.collects.some((row) => row.transactionId && row.transactionId === extra.transactionId);
   }
 
-  private async writeRefund(
+  private async writeOwned(
     bookingId: string,
+    token: string,
     status: RefundStatus,
     provider: string,
     providerRef: string | null
-  ): Promise<void> {
+  ): Promise<boolean> {
+    const result = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
+      Q.APPLY_OWNED_REFUND,
+      { id: bookingId, token, set: this.ownedSet(status, provider, providerRef) }
+    );
+    return (result.update_rental_bookings?.affected_rows ?? 0) === 1;
+  }
+
+  private ownedSet(status: RefundStatus, provider: string, providerRef: string | null) {
     const now = new Date().toISOString();
-    await this.hasura.executeMutation(Q.APPLY_REFUND_POLL, {
-      id: bookingId,
-      set: {
-        refund_status: status,
-        refund_status_at: now,
-        refund_provider: provider,
-        refund_provider_ref: providerRef,
-        refunded_at: status === 'refunded' ? now : null,
-      },
-    });
+    return {
+      refund_status: status,
+      refund_status_at: now,
+      refund_provider: provider,
+      ...(providerRef ? { refund_provider_ref: providerRef } : {}),
+      refunded_at: status === 'refunded' ? now : null,
+      refund_claim_at: null,
+      refund_claim_token: null,
+    };
   }
 
   private async unsupported(booking: DeclineBooking, ledger: Ledger): Promise<RefundStatus> {
-    await this.claimRefund(booking.id, ledger, 'unsupported');
-    return this.holdUnsupported(booking, ledger);
+    const token = await this.claimRefund(booking.id, ledger, 'unsupported');
+    if (!token) return this.currentRefund(booking.id);
+    return this.holdUnsupported(booking, ledger, token);
   }
 
   private async currentRefund(bookingId: string): Promise<RefundStatus> {
@@ -582,17 +613,18 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   private async afterOnce(booking: DeclineBooking, userId: string, row: DeclineRow, photos: string[]): Promise<void> {
     if (row.effects_recorded_at) return;
+    if (!(await this.claimEffects(row))) return;
     try {
       await this.applyEffects(booking, userId, row.id, photos);
-      await this.stampEffects(row);
     } catch (error: any) {
+      await this.clearEffects(row);
       this.logger.warn(`decline side effects: ${error?.message ?? error}`);
     }
   }
 
   private async applyEffects(booking: DeclineBooking, userId: string, declineId: string, photos: string[]): Promise<void> {
     if (photos.length > 0) await this.hasura.executeMutation(Q.LINK_PHOTOS, { ids: photos, bookingId: booking.id, declineId });
-    await this.hasura.executeMutation(INSERT_RENTAL_STATUS_HISTORY, { object: this.historyRow(booking, userId) });
+    await this.historyOnce(booking, userId);
     await this.pins.clearPinForOrder(booking.id);
     await this.notifyBusiness(booking);
   }
@@ -604,14 +636,47 @@ export class RentalPickupDeclineService implements OnModuleInit {
       previous_status: booking.status,
       changed_by_user_id: userId,
       changed_by_type: 'client',
-      notes: 'Renter declined the pickup condition',
+      notes: RentalPickupDeclineService.DECLINE_NOTE,
     };
   }
 
-  private async stampEffects(row: DeclineRow): Promise<void> {
+  private async claimEffects(row: DeclineRow): Promise<boolean> {
     const at = new Date().toISOString();
-    await this.hasura.executeMutation(Q.STAMP_EFFECTS, { id: row.id, at });
+    const result = await this.hasura.executeMutation<{ update_rental_condition_declines?: { affected_rows: number } }>(
+      Q.CLAIM_EFFECTS,
+      { id: row.id, at }
+    );
+    if ((result.update_rental_condition_declines?.affected_rows ?? 0) !== 1) return false;
     row.effects_recorded_at = at;
+    return true;
+  }
+
+  private async clearEffects(row: DeclineRow): Promise<void> {
+    await this.hasura.executeMutation(Q.CLEAR_EFFECTS, { id: row.id });
+    row.effects_recorded_at = null;
+  }
+
+  private async historyOnce(booking: DeclineBooking, userId: string): Promise<void> {
+    if (await this.historyExists(booking.id)) return;
+    try {
+      await this.hasura.executeMutation(INSERT_RENTAL_STATUS_HISTORY, { object: this.historyRow(booking, userId) });
+    } catch (error: any) {
+      if (this.duplicateHistory(error)) return;
+      throw error;
+    }
+  }
+
+  private async historyExists(bookingId: string): Promise<boolean> {
+    const result = await this.hasura.executeQuery<{ rental_status_history: Array<{ id: string }> }>(Q.DECLINE_HISTORY, {
+      bookingId,
+      notes: RentalPickupDeclineService.DECLINE_NOTE,
+    });
+    return (result.rental_status_history ?? []).length > 0;
+  }
+
+  private duplicateHistory(error: any): boolean {
+    const message = String(error?.message ?? error);
+    return message.includes('rental_status_history_one_decline') || message.includes('Uniqueness violation');
   }
 
   private async notifyBusiness(booking: DeclineBooking): Promise<void> {
@@ -660,54 +725,61 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   private async reconcileOne(booking: DeclineBooking): Promise<boolean> {
     const attempts = booking.refund_attempts ?? 0;
-    if (!(await this.claimWork(booking, attempts))) return false;
-    const claimed = { ...booking, refund_attempts: attempts + 1 };
-    if (!claimed.refund_provider_ref) return this.sendClaimed(claimed);
-    return this.pollClaimed(claimed);
+    const token = randomUUID();
+    if (!(await this.claimWork(booking, attempts, token))) return false;
+    const claimed = { ...booking, refund_attempts: attempts + 1, refund_claim_token: token };
+    if (!claimed.refund_provider_ref) return this.sendClaimed(claimed, token);
+    return this.pollClaimed(claimed, token);
   }
 
-  private async claimWork(booking: DeclineBooking, attempts: number): Promise<boolean> {
+  private async claimWork(booking: DeclineBooking, attempts: number, token: string): Promise<boolean> {
     const now = new Date();
     const result = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
       Q.CLAIM_REFUND,
-      { id: booking.id, attempts, stale: claimStaleAt(now.getTime()), set: this.claimSet(attempts, now) }
+      { id: booking.id, attempts, stale: claimStaleAt(now.getTime()), set: this.claimSet(attempts, now, token) }
     );
     return (result.update_rental_bookings?.affected_rows ?? 0) === 1;
   }
 
-  private claimSet(attempts: number, now: Date) {
+  private claimSet(attempts: number, now: Date, token: string) {
     const next = attempts + 1;
     return {
       refund_attempts: next,
       refund_claim_at: now.toISOString(),
-      refund_claim_token: randomUUID(),
+      refund_claim_token: token,
       refund_next_at: nextRefundAt(next, now.getTime()),
     };
   }
 
-  private async sendClaimed(booking: DeclineBooking): Promise<boolean> {
+  private async sendClaimed(booking: DeclineBooking, token: string): Promise<boolean> {
+    if (!(await this.keepClaim(booking.id, token))) return false;
     const ledger = await this.ledger(booking);
     const source = refundSource(ledger.collects, booking.currency);
-    const status = source ? await this.callProvider(booking, ledger, source) : 'refund_pending';
+    const status = source ? await this.callProvider(booking, ledger, source, token) : 'refund_pending';
     if (status === 'refund_pending') await this.tellIfExhausted(booking);
     return status === 'refunded' || status === 'failed';
   }
 
-  private async pollClaimed(booking: DeclineBooking): Promise<boolean> {
-    const provider = booking.refund_provider ?? '';
+  private async pollClaimed(booking: DeclineBooking, token: string): Promise<boolean> {
+    if (!(await this.keepClaim(booking.id, token))) return false;
     const ref = booking.refund_provider_ref ?? '';
-    const probed = await this.momo.probe(provider, ref);
-    if (probed === 'refunded') {
-      await this.writePolled(booking.id, 'refunded', ref);
-      return true;
-    }
-    if (probed === 'failed') {
-      await this.failRefund(booking, this.refundPay(booking), ref);
-      return true;
-    }
-    if (probed === 'missing') return this.sendClaimed(booking);
+    const probed = await this.momo.probe(booking.refund_provider ?? '', ref);
+    if (probed === 'refunded') return this.markOwned(booking, token, 'refunded', ref);
+    if (probed === 'failed') return this.failOwned(booking, this.refundPay(booking), ref, token).then((s) => s === 'failed');
+    if (probed === 'missing') return this.resend(booking, token);
     await this.tellIfExhausted(booking);
     return false;
+  }
+
+  private async resend(booking: DeclineBooking, token: string): Promise<boolean> {
+    if (providerRefundPlan(booking.refund_provider ?? '') === 'mtn') return this.sendClaimed(booking, token);
+    await this.tellSupport(booking, 'manual_check');
+    return false;
+  }
+
+  private async markOwned(booking: DeclineBooking, token: string, status: RefundStatus, ref: string): Promise<boolean> {
+    const provider = booking.refund_provider ?? '';
+    return this.writeOwned(booking.id, token, status, provider, ref);
   }
 
   private async tellIfExhausted(booking: DeclineBooking): Promise<void> {
@@ -715,33 +787,75 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   /** Credit the wallet before the row becomes failed, so a crash can retry the credit. */
-  private async failRefund(booking: DeclineBooking, amount: number, providerRef?: string | null): Promise<void> {
+  private async failRefund(
+    booking: DeclineBooking,
+    amount: number,
+    providerRef?: string | null,
+    token?: string
+  ): Promise<boolean> {
+    if (token && !(await this.keepClaim(booking.id, token))) return false;
     const full = booking.client?.user_id ? booking : await this.requireBooking(booking.id);
     const pay = amount > 0 ? amount : moneyAmount(full.refund_amount);
     if (pay > 0) await this.rentals.restoreDeclinePayout(full, pay);
-    await this.writePolled(full.id, 'failed', providerRef ?? undefined);
-    await this.tellSupport(full, 'failed');
+    const wrote = token
+      ? await this.writeOwned(full.id, token, 'failed', full.refund_provider ?? '', providerRef ?? null)
+      : await this.writePolled(full.id, 'failed', providerRef ?? undefined);
+    if (wrote) await this.tellSupport(full, 'failed');
+    return wrote;
+  }
+
+  private async failOwned(booking: DeclineBooking, amount: number, providerRef: string | null, token: string): Promise<RefundStatus> {
+    const done = await this.failRefund(booking, amount, providerRef, token);
+    return done ? 'failed' : 'refund_pending';
   }
 
   private refundPay(booking: DeclineBooking): number {
     return moneyAmount(booking.refund_amount);
   }
 
-  private async writePolled(
-    bookingId: string,
-    status: 'refunded' | 'failed',
-    providerRef?: string
-  ): Promise<void> {
+  private async writePolled(bookingId: string, status: 'refunded' | 'failed', providerRef?: string): Promise<boolean> {
     const now = new Date().toISOString();
-    await this.hasura.executeMutation(Q.APPLY_REFUND_POLL, {
-      id: bookingId,
-      set: {
-        refund_status: status,
-        refund_status_at: now,
-        refunded_at: status === 'refunded' ? now : null,
-        ...(providerRef ? { refund_provider_ref: providerRef } : {}),
-      },
-    });
+    const result = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
+      Q.APPLY_REFUND_POLL,
+      {
+        id: bookingId,
+        set: {
+          refund_status: status,
+          refund_status_at: now,
+          refunded_at: status === 'refunded' ? now : null,
+          refund_claim_at: null,
+          refund_claim_token: null,
+          ...(providerRef ? { refund_provider_ref: providerRef } : {}),
+        },
+      }
+    );
+    return (result.update_rental_bookings?.affected_rows ?? 0) === 1;
+  }
+
+  private async keepClaim(bookingId: string, token: string): Promise<boolean> {
+    const result = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
+      Q.KEEP_REFUND_CLAIM,
+      { id: bookingId, token, at: new Date().toISOString() }
+    );
+    return (result.update_rental_bookings?.affected_rows ?? 0) === 1;
+  }
+
+  private async reconcileRow(booking: DeclineBooking): Promise<number> {
+    try {
+      return (await this.reconcileOne(booking)) ? 1 : 0;
+    } catch (error: any) {
+      this.logger.error(`decline refund ${booking.booking_number}: ${error?.message ?? error}`);
+      await this.alertRefund(booking);
+      return 0;
+    }
+  }
+
+  private async alertRefund(booking: DeclineBooking): Promise<void> {
+    try {
+      await this.tellSupport(booking, 'retry');
+    } catch (error: any) {
+      this.logger.error(`decline refund alert: ${error?.message ?? error}`);
+    }
   }
 
   private async auditRefund(

@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 
 export type DeclineRail = 'card' | 'wallet' | 'momo_unpaid' | 'momo_paid';
-export type RefundStatus = 'none' | 'refund_pending' | 'refunded' | 'failed';
+export type RefundStatus = 'none' | 'refund_pending' | 'refunded' | 'failed' | 'manual';
 
 export interface CollectedPayment {
   amount: number;
