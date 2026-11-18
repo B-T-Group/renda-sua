@@ -29,6 +29,8 @@ import { RentalConditionPhotosService } from './pickup-decline/rental-condition-
 import { RentalDeclineCountsService } from './pickup-decline/rental-decline-counts.service';
 import { RentalMomoRefundService } from './pickup-decline/rental-momo-refund.service';
 import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
+import { DeclineExclusionService } from './decline-ranking/decline-exclusion.service';
+import { DeclineRankingService } from './decline-ranking/decline-ranking.service';
 
 @Module({
   imports: [
@@ -61,6 +63,8 @@ import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decli
     RentalConditionPhotosService,
     RentalPickupDeclineService,
     RentalDeclineCountsService,
+    DeclineRankingService,
+    DeclineExclusionService,
   ],
   exports: [RentalsService, RentalSearchService, RentalPaymentCallbackHandler, RentalCardWindowModule],
 })

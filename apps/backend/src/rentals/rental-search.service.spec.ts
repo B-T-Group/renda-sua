@@ -1,4 +1,5 @@
 import { latestExclusiveEndDate } from './rental-card-window';
+import { DeclineRankingService } from './decline-ranking/decline-ranking.service';
 import { RentalSearchService } from './rental-search.service';
 import type { PublicRentalListingRow } from './rentals.service';
 
@@ -376,5 +377,32 @@ describe('RentalSearchService', () => {
     });
     await service.topCategories({});
     expect(hasura.executeQuery.mock.calls.at(-1)?.[1].where.rental_location_listing).toBeUndefined();
+  });
+
+  it('sorts a 0.70 penalty later once the catalog is long enough, and weight 1.0 does not', async () => {
+    const first = listing('a', 'First');
+    first.rental_item.business = { id: 'clean', name: 'A' };
+    const second = listing('b', 'Second');
+    second.rental_item.business = { id: 'clean', name: 'B' };
+    const penalized = listing('c', 'Penalized');
+    penalized.rental_item.business = { id: 'penalized', name: 'C' };
+    const fourth = listing('d', 'Fourth');
+    fourth.rental_item.business = { id: 'clean', name: 'D' };
+    rentals.collectPublicRentalListings.mockResolvedValue([first, second, penalized, fourth]);
+    const ranking = { multipliersFor: jest.fn().mockResolvedValue(new Map([['penalized', 0.7]])) };
+    const ranked = new RentalSearchService(
+      rentals as never,
+      hasura as never,
+      undefined,
+      undefined,
+      ranking as unknown as DeclineRankingService
+    );
+    const moved = await ranked.search({ country_code: 'CM' });
+    expect(moved.listings.map((row) => row.listing.id)).toEqual(['a', 'b', 'd', 'c']);
+    expect(moved.total).toBe(4);
+    expect(ranking.multipliersFor).toHaveBeenCalledWith(['clean', 'clean', 'penalized', 'clean'], 'CM');
+    ranking.multipliersFor.mockResolvedValue(new Map([['penalized', 1]]));
+    const steady = await ranked.search({ country_code: 'CM' });
+    expect(steady.listings.map((row) => row.listing.id)).toEqual(['a', 'b', 'c', 'd']);
   });
 });

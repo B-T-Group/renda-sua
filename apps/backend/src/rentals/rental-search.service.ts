@@ -14,6 +14,7 @@ import {
   type CardPaymentPolicy,
 } from './rental-card-window';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
+import { DeclineRankingService } from './decline-ranking/decline-ranking.service';
 import { RentalsService, type PublicRentalListingRow } from './rentals.service';
 
 const DAY_MS = 86_400_000;
@@ -34,7 +35,8 @@ export class RentalSearchService {
     private readonly rentals: RentalsService,
     private readonly hasura: HasuraSystemService,
     private readonly routing?: PaymentRoutingService,
-    private readonly flags?: RentalInspectionFlags
+    private readonly flags?: RentalInspectionFlags,
+    private readonly ranking?: DeclineRankingService
   ) {}
 
   async search(query: RentalSearchQueryDto) {
@@ -197,10 +199,22 @@ export class RentalSearchService {
     range: SearchDateRange | null
   ) {
     const guard = range ? await this.cardGuardEnabled(country) : false;
-    if (!guard || !range) return { hits: [...hits].sort(compareHits), guard: false };
-    const blocked = (await this.stampHits(hits, country, window)).map((hit) => this.blockPastCardEnd(hit, range));
-    blocked.sort(compareHits);
-    return { hits: blocked, guard: true };
+    const prepared = await this.prepareHits(hits, country, window, range, guard);
+    const multipliers = await this.rankMultipliers(prepared, country);
+    prepared.sort((a, b) => compareHits(a, b, multipliers));
+    return { hits: prepared, guard };
+  }
+
+  private async prepareHits(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    country: string | undefined,
+    window: CardPaymentPolicy,
+    range: SearchDateRange | null,
+    guard: boolean
+  ) {
+    if (!guard || !range) return [...hits];
+    const stamped = await this.stampHits(hits, country, window);
+    return stamped.map((hit) => this.blockPastCardEnd(hit, range));
   }
 
   private async stampPage(listings: RentalSearchHit[], fallback: string | undefined, known: CardPaymentPolicy) {
@@ -279,6 +293,15 @@ export class RentalSearchService {
     return this.flags.numberConfig('rental_inspection_stripe_review_hours', code || null, DEFAULT_STRIPE_REVIEW_HOURS);
   }
 
+  private async rankMultipliers(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    countryCode?: string | null
+  ): Promise<Map<string, number>> {
+    if (!this.ranking) return new Map();
+    const ids = hits.map((hit) => hit.listing.rental_item.business?.id).filter((id): id is string => Boolean(id));
+    return this.ranking.multipliersFor(ids, countryCode);
+  }
+
   async cardGuardEnabled(country?: string | null): Promise<boolean> {
     if (!this.flags?.cardWindowGuardEnabled) return false;
     return this.flags.cardWindowGuardEnabled(country);
@@ -314,7 +337,11 @@ function stripCatalogIndex(hit: RentalSearchHit & { catalogIndex: number }): Ren
   };
 }
 
-function compareHits(a: RentalSearchHit & { catalogIndex: number }, b: RentalSearchHit & { catalogIndex: number }): number {
+function compareHits(
+  a: RentalSearchHit & { catalogIndex: number },
+  b: RentalSearchHit & { catalogIndex: number },
+  multipliers?: Map<string, number>
+): number {
   const rank = (hit: RentalSearchHit) => (hit.available === false ? 1 : 0);
   if (rank(a) !== rank(b)) return rank(a) - rank(b);
   if (a.available === false && b.available === false) {
@@ -322,6 +349,12 @@ function compareHits(a: RentalSearchHit & { catalogIndex: number }, b: RentalSea
     const bn = b.nextAvailableDate ?? '9999-99-99';
     if (an !== bn) return an < bn ? -1 : 1;
   }
+  const score = (hit: RentalSearchHit & { catalogIndex: number }) => {
+    const id = hit.listing.rental_item.business?.id;
+    const penalty = id ? multipliers?.get(id) ?? 1 : 1;
+    return (hit.catalogIndex + 1) / (penalty > 0 ? penalty : 1);
+  };
+  if (score(a) !== score(b)) return score(a) - score(b);
   return a.catalogIndex - b.catalogIndex;
 }
 
