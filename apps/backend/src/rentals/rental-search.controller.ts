@@ -23,7 +23,11 @@ export class RentalSearchController {
 
   @Public()
   @Get('search')
-  @ApiOperation({ summary: 'Search rentals with date availability, available first' })
+  @ApiOperation({
+    summary: 'Search rentals with date availability, available first',
+    description:
+      'sort=recommended uses newest as the catalog order, then available listings, then the decline-ranking multiplier when that flag is on. Ranking never drops a listing. Relevance stays a separate option.',
+  })
   @ApiResponse({ status: 200, description: 'Listings with availability and date totals' })
   async search(@Query() query: RentalSearchQueryDto) {
     const data = await this.searchService.search(query);

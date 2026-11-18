@@ -407,6 +407,16 @@ function rentalPricePerDay(row: PublicRentalListingRow): number {
   return typeof v === 'number' ? v : parseFloat(String(v)) || 0;
 }
 
+function compareRentalPrice(a: PublicRentalListingRow, b: PublicRentalListingRow): number {
+  const hours = rentalPricePerHour(a) - rentalPricePerHour(b);
+  return hours || rentalPricePerDay(a) - rentalPricePerDay(b);
+}
+
+function compareListingId(a: { id: string }, b: { id: string }): number {
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? -1 : 1;
+}
+
 /**
  * Singleton rental orchestration.
  * Request identity comes from nestjs-cls via HasuraUserService (optional explicit RequestContext).
@@ -468,7 +478,7 @@ export class RentalsService {
     const where = this.applyCatalogFilters(this.whereExcludingActiveProposedContracts(baseWhere), query);
     const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings: PublicRentalListingRow[];
-    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, { where, order_by: [{ updated_at: 'desc' }] });
+    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, { where, order_by: [{ updated_at: 'desc' }, { id: 'asc' }] });
     let rows = r.rental_location_listings ?? [];
     rows = await this.filterListingsByPaymentsEnabled(rows);
     rows = await this.enrichRentalListingsWithDistance(rows, query);
@@ -6251,28 +6261,18 @@ export class RentalsService {
   ): PublicRentalListingRow[] {
     const copy = [...rows];
     if (sort === 'fastest') {
-      copy.sort((a, b) => this.compareRentalByDistance(a, b));
+      copy.sort((a, b) => this.compareRentalByDistance(a, b) || compareListingId(a, b));
       return copy;
     }
     if (sort === 'cheapest') {
-      copy.sort((a, b) => {
-        const ah = rentalPricePerHour(a);
-        const bh = rentalPricePerHour(b);
-        if (ah !== bh) return ah - bh;
-        return rentalPricePerDay(a) - rentalPricePerDay(b);
-      });
+      copy.sort((a, b) => compareRentalPrice(a, b) || compareListingId(a, b));
       return copy;
     }
     if (sort === 'expensive') {
-      copy.sort((a, b) => {
-        const ah = rentalPricePerHour(a);
-        const bh = rentalPricePerHour(b);
-        if (ah !== bh) return bh - ah;
-        return rentalPricePerDay(b) - rentalPricePerDay(a);
-      });
+      copy.sort((a, b) => compareRentalPrice(b, a) || compareListingId(a, b));
       return copy;
     }
-    copy.sort((a, b) => rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a));
+    copy.sort((a, b) => rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a) || compareListingId(a, b));
     return copy;
   }
 
@@ -6283,7 +6283,7 @@ export class RentalsService {
     const av = a.distance_value ?? Number.POSITIVE_INFINITY;
     const bv = b.distance_value ?? Number.POSITIVE_INFINITY;
     if (av !== bv) return av - bv;
-    return rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a);
+    return rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a) || compareListingId(a, b);
   }
 
   private formatRentalAddressForGoogle(address: {

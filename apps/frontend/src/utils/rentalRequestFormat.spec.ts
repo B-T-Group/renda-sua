@@ -5,6 +5,8 @@ import {
   bookingPeriodWindows,
   bookingRequestedPeriodLines,
   clientRequestPeriodLines,
+  formatExclusiveStay,
+  formatExclusiveStayRange,
   formatListingDue,
   formatRentalDateRange,
   formatRentalDay,
@@ -43,6 +45,14 @@ describe('formatRentalPeriod', () => {
     expect(formatRentalPeriod(overnight, 'en', days)).toBe('12 Nov · 1 day');
     expect(formatRentalPeriod(overnight, 'fr', jours)).toBe('12 nov. · 1 jour');
     expect(formatRentalPeriod(overnight, 'en', days)).not.toContain('08:00');
+  });
+
+  it('labels an exclusive search range as the booked days', () => {
+    expect(formatExclusiveStay('2026-11-22', '2026-11-25', 'en', days)).toBe('22\u201324 Nov · 3 days');
+    expect(formatExclusiveStay('2026-11-22', '2026-11-25', 'fr', jours)).toBe('22\u201324 nov. · 3 jours');
+    expect(formatExclusiveStayRange('2026-11-22', '2026-11-25', 'en')).toBe('22\u201324 Nov');
+    expect(formatRentalDay('2026-11-28', 'en')).toBe('28 Nov');
+    expect(formatRentalDay('2026-11-28', 'fr')).toBe('28 nov.');
   });
 
   it('counts whole days through the last booked day when the return is the same clock', () => {
