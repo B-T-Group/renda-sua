@@ -65,6 +65,9 @@ describe('formatRequestAmount', () => {
     expect(formatRequestAmount(55000, 'XOF', 'fr')).toBe(joined('55 000 FCFA'));
     expect(formatRequestAmount(260, 'USD', 'en')).not.toMatch(/FCFA/);
     expect(formatRequestAmount(260, 'USD', 'fr')).not.toMatch(/FCFA/);
+    expect(formatRequestAmount(65, 'CAD', 'en')).toBe('$65.00');
+    expect(formatRequestAmount(65, 'CAD', 'fr')).toBe('65,00\u00a0$');
+    expect(formatRequestAmount(45, 'CAD', 'en')).not.toContain('CA$');
   });
 });
 

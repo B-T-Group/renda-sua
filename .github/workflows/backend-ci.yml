@@ -5,6 +5,7 @@ on:
     branches: [main, prod]
     paths:
       - 'apps/backend/**'
+      - 'apps/hasura/migrations/**'
       - 'package.json'
       - 'yarn.lock'
       - 'nx.json'
@@ -14,6 +15,7 @@ on:
     branches: [main, prod]
     paths:
       - 'apps/backend/**'
+      - 'apps/hasura/migrations/**'
       - 'package.json'
       - 'yarn.lock'
       - 'nx.json'
@@ -82,3 +84,40 @@ jobs:
           PGPASSWORD: postgres
           PGDATABASE: postgres
         run: npx nx test backend --testPathPattern=money.qa.pg --skip-nx-cache --verbose
+
+  rentals:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: rental_qa
+          POSTGRES_USER: rental_qa
+          POSTGRES_DB: rental_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rental_qa"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Rentals unit tests
+        env:
+          RENTAL_QA_DATABASE_URL: postgres://rental_qa:rental_qa@localhost:5432/rental_qa
+          RENTAL_QA_ALLOW_DROP: '1'
+        # money.qa.pg asserts its own job env whenever CI=true. The money-pg
+        # job is the only runner for that file; this pattern must not match it.
+        run: npx nx test backend --testPathPattern='src/rentals/(?!pickup-decline/money\.qa\.pg)' --skip-nx-cache

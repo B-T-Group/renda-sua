@@ -18,6 +18,62 @@ export function paymentBlockedUntilPriceSeen(input: {
   return !input.seenAt;
 }
 
+/** The renter sees a changed price only after the business has accepted. */
+export function businessChangedThePrice(status: string, quoted: unknown, accepted: unknown): boolean {
+  return status === 'available' && shouldNotifyPriceChange(quoted, accepted);
+}
+
+export const TOTAL_OVERRIDE_RATIO = 10;
+
+export function totalOverrideTooHigh(
+  quote: number,
+  totalOverride: number,
+  ceiling: number | null = null
+): boolean {
+  if (!(totalOverride > quote)) return false;
+  if (ceiling != null && totalOverride > ceiling) return true;
+  if (!(quote > 0)) return false;
+  return totalOverride > quote * TOTAL_OVERRIDE_RATIO;
+}
+
+export function quoteWithTotalOverride(
+  computed: RentalPricingSnapshotDto,
+  totalOverride: number | null | undefined,
+  enabled: boolean,
+  ceiling: number | null = null
+): RentalPricingSnapshotDto {
+  if (totalOverride == null) return computed;
+  if (!enabled) throw new Error('TOTAL_OVERRIDE_DISABLED');
+  if (!Number.isFinite(totalOverride) || totalOverride <= 0) throw new Error('TOTAL_OVERRIDE_INVALID');
+  if (totalOverrideTooHigh(Number(computed.total), totalOverride, ceiling)) {
+    throw new Error('TOTAL_OVERRIDE_TOO_HIGH');
+  }
+  return scaleSnapshotTotal(computed, Number(totalOverride.toFixed(2)));
+}
+
+function scaleSnapshotTotal(snapshot: RentalPricingSnapshotDto, total: number): RentalPricingSnapshotDto {
+  const lines = snapshot.lines ?? [];
+  const base = Number(snapshot.total);
+  if (!(base > 0) || lines.length === 0) return { ...snapshot, total };
+  return { ...snapshot, total, lines: scaledLines(lines, base, total) };
+}
+
+function scaledLines(
+  lines: NonNullable<RentalPricingSnapshotDto['lines']>,
+  base: number,
+  total: number
+): NonNullable<RentalPricingSnapshotDto['lines']> {
+  let assigned = 0;
+  return lines.map((line, index) => {
+    if (index === lines.length - 1) {
+      return { ...line, subtotal: Number((total - assigned).toFixed(2)) };
+    }
+    const subtotal = Number(((line.subtotal * total) / base).toFixed(2));
+    assigned += subtotal;
+    return { ...line, subtotal };
+  });
+}
+
 export function applyAcceptedPrice(
   computed: RentalPricingSnapshotDto,
   override?: { total?: number; currency?: string } | null

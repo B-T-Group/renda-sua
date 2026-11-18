@@ -313,7 +313,7 @@ export class RentalsController {
   @ApiQuery({
     name: 'limit',
     required: false,
-    description: 'Page size (default 50, max 100)',
+    description: 'Page size (default 50, max 100). Pending requests are uncapped when rentals_dashboard_requests_enabled is on.',
   })
   @ApiQuery({
     name: 'status',
@@ -328,17 +328,20 @@ export class RentalsController {
     ],
     description: 'Filter by request status',
   })
+  @ApiQuery({ name: 'id', required: false, description: 'Load one request by id' })
   @ApiResponse({ status: 200, description: 'Requests returned' })
   @ApiResponse({ status: 403, description: 'Not a business user' })
   async getBusinessRequests(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('id') id?: string
   ) {
     const result = await this.rentalsService.getBusinessRentalRequests({
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
       status,
+      id,
     });
     return {
       success: true,
@@ -347,6 +350,7 @@ export class RentalsController {
         total: result.total,
         page: result.page,
         limit: result.limit,
+        expiryNotices: result.expiryNotices,
       },
     };
   }

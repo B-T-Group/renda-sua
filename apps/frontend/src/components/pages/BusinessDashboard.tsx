@@ -31,6 +31,7 @@ import BusinessStoreReachCard from '../business/BusinessStoreReachCard';
 import { DeclineInsightsStat } from '../rentals/DeclinePickupScreens';
 import BusinessCatalogHealthCard from '../business/BusinessCatalogHealthCard';
 import BusinessQuietHomeNextActionCard from '../business/BusinessQuietHomeNextActionCard';
+import { BusinessDashboardRentalRequests } from '../business/BusinessDashboardRentalRequests';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
 import { MerchantStatusChip } from '../business/MerchantStatusChip';
@@ -383,6 +384,8 @@ const BusinessDashboard: React.FC = () => {
           {hasAdminAccess && <StatusBadge type="admin" />}
         </Box>
       </Box>
+
+      <BusinessDashboardRentalRequests />
 
       {setupMode && verificationStatus ? (
         <BusinessSetupHome

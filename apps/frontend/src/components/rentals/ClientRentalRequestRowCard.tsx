@@ -18,6 +18,7 @@ import { useClientFlags } from '../../hooks/useClientFlags';
 import { listReturnChip } from '../../utils/renterReturnPhase';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import {
+  businessChangedThePrice,
   formatRequestAmount,
   formatRentalRequestLocalDateTime,
   parseRentalSelectionWindows,
@@ -26,6 +27,7 @@ import {
 } from '../../utils/rentalRequestDisplay';
 import { resolveRentalPhase } from '../../utils/rentalPhase';
 import { clientRequestPeriodLines } from '../../utils/rentalRequestFormat';
+import { requestStartIso, respondWindow } from '../../utils/dashboardRentalRequests';
 
 function phaseChipColor(
   phase: string
@@ -81,6 +83,7 @@ export interface ClientRentalRequestRowCardProps {
   onCancel: (id: string) => void;
   onViewListing: (listingId: string) => void;
   onViewBooking: (bookingId: string) => void;
+  onBrowseRentals?: () => void;
 }
 
 export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProps> = ({
@@ -90,6 +93,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   onCancel,
   onViewListing,
   onViewBooking,
+  onBrowseRentals,
 }) => {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -102,7 +106,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
   const quoted = Number(row.quoted_total);
   const accepted = Number(quote?.total);
-  const priceChanged = Number.isFinite(quoted) && Number.isFinite(accepted) && Math.abs(quoted - accepted) >= 0.01;
+  const priceChanged = businessChangedThePrice(row.status, quoted, accepted);
   useEffect(() => {
     if (!priceChanged) return;
     void trackSiteEvent({
@@ -119,10 +123,16 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
     },
     'client'
   );
-  const statusLabel = t(phase.labelKey, row.status);
+  const reasonCode = row.unavailable_reason_code?.trim();
+  const autoDeclined = row.status === 'unavailable' && reasonCode === 'no_response';
+  const statusLabel = autoDeclined
+    ? t('rentals.clientRequests.declinedBadge', 'Declined')
+    : t(phase.labelKey, row.status);
+  const heading = autoDeclined
+    ? t('rentals.clientRequests.declinedTitle', 'Rental request declined')
+    : itemName;
   const deadlineIso = proposedContractDeadlineIso(row);
   const canBookNow = row.status === 'available' && isProposedContractOpen(row);
-  const reasonCode = row.unavailable_reason_code?.trim();
   const bookingId = row.rental_booking?.id;
   const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
   const periodLines = clientRequestPeriodLines(selectionWindows, i18n.language, (count) =>
@@ -152,8 +162,11 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="h6" component="h2" fontWeight={700} sx={{ fontSize: '1.05rem' }}>
-              {itemName}
+              {heading}
             </Typography>
+            {autoDeclined ? (
+              <Typography variant="body2" color="text.secondary">{itemName}</Typography>
+            ) : null}
             {locName ? (
               <Stack direction="row" alignItems="center" gap={0.5} sx={{ mt: 0.25 }}>
                 <LocationOn sx={{ fontSize: 16, color: 'text.secondary' }} />
@@ -268,7 +281,23 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
           </Typography>
         ) : null}
 
-        {row.status === 'unavailable' && reasonCode ? (
+        {row.status === 'unavailable' && reasonCode === 'no_response' ? (
+          <Typography variant="body2">
+            {respondWindow(row.created_at, requestStartIso(row)) === 'start'
+              ? t(
+                  'rentals.clientRequests.noResponseStart',
+                  '{{business}} didn’t respond before the start time. You can send a new request from the listing, or browse other rentals.',
+                  { business: listing?.rental_item?.business?.name || locName || t('rentals.clientRequests.theBusiness', 'The business') }
+                )
+              : t(
+                  'rentals.clientRequests.noResponseSla',
+                  '{{business}} didn’t respond within 24 hours. You can send a new request from the listing, or browse other rentals.',
+                  { business: listing?.rental_item?.business?.name || locName || t('rentals.clientRequests.theBusiness', 'The business') }
+                )}
+          </Typography>
+        ) : null}
+
+        {row.status === 'unavailable' && reasonCode && reasonCode !== 'no_response' ? (
           <Typography variant="body2" color="text.secondary">
             <strong>{t('rentals.clientRequests.unavailableReason', 'Reason')}:</strong>{' '}
             {t(`rentals.unavailableReasons.${reasonCode}`, reasonCode)}
@@ -289,6 +318,11 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               onClick={() => onViewListing(listing.id)}
             >
               {t('rentals.clientRequests.viewListing', 'View listing')}
+            </Button>
+          ) : null}
+          {row.status === 'unavailable' && reasonCode === 'no_response' && onBrowseRentals ? (
+            <Button size="small" variant="text" onClick={onBrowseRentals}>
+              {t('rentals.clientRequests.browseRentals', 'Browse rentals')}
             </Button>
           ) : null}
           {row.status === 'available' ? (

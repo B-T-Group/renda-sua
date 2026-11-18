@@ -1,0 +1,3 @@
+function:
+  name: cancel_client_rental_request
+  schema: public

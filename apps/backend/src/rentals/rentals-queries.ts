@@ -252,6 +252,10 @@ export const GET_RENTAL_REQUEST_FULL = `
       change_summary
       client_request_note
       expires_at
+      created_at
+      requested_start_at
+      requested_end_at
+      respond_by
       rental_location_listing {
         id
         units_available
@@ -310,8 +314,8 @@ export const UPDATE_RENTAL_REQUEST_RESPOND = `
     $respondedAt: timestamptz!
     $userId: uuid!
   ) {
-    update_rental_requests_by_pk(
-      pk_columns: { id: $id }
+    update_rental_requests(
+      where: { id: { _eq: $id }, status: { _eq: pending } }
       _set: {
         status: $status
         rental_pricing_snapshot: $snapshot
@@ -320,10 +324,10 @@ export const UPDATE_RENTAL_REQUEST_RESPOND = `
         expires_at: $requestExpiresAt
         responded_at: $respondedAt
         responded_by_user_id: $userId
+        price_change_seen_at: null
       }
     ) {
-      id
-      status
+      affected_rows
     }
   }
 `;
@@ -350,6 +354,7 @@ export const UPDATE_RENTAL_REQUEST_RESPOND_CAS = `
         expires_at: $requestExpiresAt
         responded_at: $respondedAt
         responded_by_user_id: $userId
+        price_change_seen_at: null
       }
     ) {
       affected_rows
@@ -829,6 +834,178 @@ export const INSERT_RENTAL_STATUS_HISTORY = `
   }
 `;
 
+export const CANCEL_CLIENT_RENTAL_REQUEST = `
+  mutation CancelClientRentalRequest($requestId: uuid!, $clientId: uuid!) {
+    cancel_client_rental_request(args: { p_request_id: $requestId, p_client_id: $clientId }) {
+      id
+      status
+    }
+  }
+`;
+
+export const CANCELLED_BOOKING_FOR_REQUEST = `
+  query CancelledBookingForRequest($requestId: uuid!) {
+    rental_bookings(
+      where: {
+        rental_request_id: { _eq: $requestId }
+        status: { _eq: cancelled }
+        payment_status: { _eq: cancelled }
+      }
+      limit: 1
+    ) {
+      id
+    }
+  }
+`;
+
+export const RESERVE_PROPOSED_RENTAL_BOOKING = `
+  mutation ReserveProposedRentalBooking(
+    $listingId: uuid!
+    $requestId: uuid!
+    $clientId: uuid!
+    $businessId: uuid!
+    $start: timestamptz!
+    $end: timestamptz!
+    $total: numeric!
+    $currency: String!
+    $snapshot: jsonb!
+    $bookingNumber: String!
+    $contractExpiresAt: timestamptz!
+    $units: Int!
+    $deposit: numeric!
+    $windows: jsonb!
+    $now: timestamptz!
+    $policyVersion: Int
+  ) {
+    reserve_proposed_rental_booking(
+      args: {
+        p_listing_id: $listingId
+        p_request_id: $requestId
+        p_client_id: $clientId
+        p_business_id: $businessId
+        p_start: $start
+        p_end: $end
+        p_total: $total
+        p_currency: $currency
+        p_snapshot: $snapshot
+        p_booking_number: $bookingNumber
+        p_contract_expires_at: $contractExpiresAt
+        p_units: $units
+        p_deposit: $deposit
+        p_windows: $windows
+        p_now: $now
+        p_policy_version: $policyVersion
+      }
+    ) {
+      id
+      booking_number
+    }
+  }
+`;
+
+export const ENQUEUE_RENTAL_SIDE_EFFECT = `
+  mutation EnqueueRentalSideEffect($requestId: uuid!, $kind: String!, $payload: jsonb!, $error: String!) {
+    enqueue_rental_side_effect(
+      args: { p_request_id: $requestId, p_kind: $kind, p_payload: $payload, p_error: $error }
+    ) {
+      id
+      attempts
+    }
+  }
+`;
+
+export const LIST_RENTAL_SIDE_EFFECTS = `
+  query ListRentalSideEffects {
+    rental_request_side_effects(where: { attempts: { _lt: 5 } }, order_by: { created_at: asc }, limit: 50) {
+      id
+      rental_request_id
+      kind
+      payload
+      attempts
+    }
+  }
+`;
+
+export const DELETE_RENTAL_SIDE_EFFECT = `
+  mutation DeleteRentalSideEffect($id: uuid!) {
+    delete_rental_request_side_effects_by_pk(id: $id) { id }
+  }
+`;
+
+export const RENTAL_TOTAL_OVERRIDE_MAX = `
+  query RentalTotalOverrideMax($currency: String!, $country: String!) {
+    application_configurations(
+      where: {
+        config_key: { _eq: "rentals_total_override_max" }
+        status: { _eq: active }
+        string_value: { _ilike: $currency }
+        _or: [
+          { country_code: { _eq: $country } }
+          { country_code: { _is_null: true } }
+        ]
+      }
+      order_by: [{ country_code: desc_nulls_last }, { version: desc }]
+      limit: 5
+    ) {
+      number_value
+      country_code
+      string_value
+    }
+  }
+`;
+
+export const DASHBOARD_REQUESTS_EXPIRY_CONFIG = `
+  query DashboardRequestsExpiryConfig {
+    application_configurations(
+      where: {
+        config_key: {
+          _in: [
+            "rentals_dashboard_requests_autodecline_since"
+            "rentals_dashboard_requests_autodecline_batch"
+          ]
+        }
+        status: { _eq: active }
+      }
+    ) {
+      config_key
+      country_code
+      string_value
+      number_value
+    }
+  }
+`;
+
+export const LIST_HELD_WINDOWS_FOR_LISTINGS = `
+  query ListHeldWindowsForListings($listingIds: [uuid!]!, $now: timestamptz!) {
+    rental_booking_windows(
+      where: {
+        rental_booking: {
+          rental_location_listing_id: { _in: $listingIds }
+          _or: [
+            { status: { _in: [reserved, confirmed, active, awaiting_return] } }
+            { _and: [{ status: { _eq: proposed } }, { contract_expires_at: { _gt: $now } }] }
+          ]
+        }
+      }
+    ) {
+      start_at
+      end_at
+      rental_booking { rental_location_listing_id units_booked }
+    }
+  }
+`;
+
+export const CANCEL_RENTAL_REQUEST = `
+  mutation CancelRentalRequest($id: uuid!, $status: rental_request_status_enum!) {
+    update_rental_requests(
+      where: { id: { _eq: $id }, status: { _eq: $status } }
+      _set: { status: cancelled }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
 export const UPDATE_RENTAL_REQUEST_STATUS = `
   mutation UpdateRentalRequestStatus($id: uuid!, $status: rental_request_status_enum!) {
     update_rental_requests_by_pk(pk_columns: { id: $id }, _set: { status: $status }) {
@@ -1141,20 +1318,99 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
   }
 `;
 
-export const GET_BUSINESS_RENTAL_REQUESTS = `
-  query GetBusinessRentalRequests(
-    $where: rental_requests_bool_exp!
-    $limit: Int!
-    $offset: Int!
-  ) {
+export const DASHBOARD_REQUESTS_FLAG = `
+  query DashboardRequestsFlag {
+    application_configurations(
+      where: {
+        config_key: { _eq: "rentals_dashboard_requests_enabled" }
+        status: { _eq: "active" }
+      }
+    ) {
+      boolean_value
+      country_code
+    }
+  }
+`;
+
+export const LIST_RECENT_NO_RESPONSE_REQUESTS = `
+  query ListRecentNoResponseRequests($where: rental_requests_bool_exp!) {
+    rental_requests(where: $where, order_by: { responded_at: desc }, limit: 5) {
+      id
+      created_at
+      requested_start_at
+      responded_at
+      rental_selection_windows
+      client { user { first_name last_name } }
+      rental_location_listing { rental_item { name } }
+    }
+  }
+`;
+
+export const EXPIRE_RENTAL_REQUEST_NO_RESPONSE = `
+  mutation ExpireRentalRequestNoResponse($id: uuid!, $respondedAt: timestamptz!) {
+    update_rental_requests(
+      where: { id: { _eq: $id }, status: { _eq: pending } }
+      _set: {
+        status: unavailable
+        unavailable_reason_code: "no_response"
+        responded_at: $respondedAt
+        business_response_note: null
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+export const LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY = `
+  query ListPendingRentalRequestsForExpiry($where: rental_requests_bool_exp!, $limit: Int!, $offset: Int!) {
     rental_requests(
       where: $where
-      order_by: { created_at: desc }
+      order_by: { respond_by: asc }
       limit: $limit
       offset: $offset
     ) {
       id
       created_at
+      requested_start_at
+      respond_by
+      rental_selection_windows
+      client { user_id user { first_name last_name } }
+      rental_location_listing {
+        id
+        business_location { address { country } }
+        rental_item { name business { name user_id } }
+      }
+    }
+  }
+`;
+
+export const BOOKING_IDS_FOR_RENTAL_REQUEST = `
+  query BookingIdsForRentalRequest($requestId: uuid!) {
+    rental_bookings(where: { rental_request_id: { _eq: $requestId } }, limit: 5) {
+      id
+    }
+  }
+`;
+
+export const GET_BUSINESS_RENTAL_REQUESTS = `
+  query GetBusinessRentalRequests(
+    $where: rental_requests_bool_exp!
+    $limit: Int!
+    $offset: Int!
+    $orderBy: [rental_requests_order_by!]
+  ) {
+    rental_requests(
+      where: $where
+      order_by: $orderBy
+      limit: $limit
+      offset: $offset
+    ) {
+      id
+      created_at
+      requested_start_at
+      requested_end_at
+      respond_by
       status
       rental_selection_windows
       rental_pricing_snapshot
@@ -1193,6 +1449,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       }
       rental_location_listing {
         id
+        units_available
         base_price_per_hour
         base_price_per_day
         security_deposit_amount
@@ -1200,6 +1457,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
           name
           address {
             city
+            country
           }
         }
         weekly_availability(order_by: { weekday: asc }) {

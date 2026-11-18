@@ -4,19 +4,26 @@ import {
   AccordionDetails,
   AccordionSummary,
   Box,
+  Chip,
   Paper,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import AppsIcon from '@mui/icons-material/Apps';
+import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import ReplyIcon from '@mui/icons-material/Reply';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useClientFlags } from '../../hooks/useClientFlags';
+import { compareSoonestRequestStart } from '../../utils/dashboardRentalRequests';
 import {
   useRentalApi,
   type BusinessRentalRequestRow,
 } from '../../hooks/useRentalApi';
+import { BusinessDashboardRentalRequestCard } from '../business/BusinessDashboardRentalRequestCard';
 import { BusinessRentalRespondDialog } from '../rentals/BusinessRentalRespondDialog';
 import { BusinessRentalRequestCard } from '../rentals/BusinessRentalRequestCard';
 import BusinessRentalsStudioShell from '../rentals/BusinessRentalsStudioShell';
@@ -36,14 +43,24 @@ const QUEUE_LABELS: Record<BusinessActionQueue, [string, string]> = {
   all: ['rentals.queue.all', 'All'],
 };
 
+const QUEUE_ICONS: Record<BusinessActionQueue, typeof ReplyIcon> = {
+  respond: ReplyIcon,
+  collect_pay: PaymentsIcon,
+  start: PlayArrowIcon,
+  return: AssignmentReturnIcon,
+  all: AppsIcon,
+};
+
 const BusinessRentalsRequestsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { flags } = useClientFlags();
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
   const { respondRequest, fetchBusinessRentalRequests } = useRentalApi();
   const [requests, setRequests] = useState<BusinessRentalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [queueFilter, setQueueFilter] = useState<BusinessActionQueue>('all');
+  const [queueFilter, setQueueFilter] = useState<BusinessActionQueue>('respond');
+  const [queueTouched, setQueueTouched] = useState(false);
   const [staleBanner, setStaleBanner] = useState(false);
   const [respondTarget, setRespondTarget] = useState<{
     req: BusinessRentalRequestRow;
@@ -68,15 +85,21 @@ const BusinessRentalsRequestsPage: React.FC = () => {
       .finally(() => setLoading(false));
   }, [businessId, loadRequests]);
 
-  const sortedRequests = useMemo(
-    () =>
-      [...requests].sort((a, b) => {
-        const aTime = new Date(a.created_at).getTime();
-        const bTime = new Date(b.created_at).getTime();
-        return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
-      }),
-    [requests]
-  );
+  useEffect(() => {
+    if (queueTouched || loading || requests.length === 0) return;
+    if (!requests.some((row) => row.status === 'pending')) setQueueFilter('all');
+  }, [loading, queueTouched, requests]);
+
+  const sortedRequests = useMemo(() => {
+    if (flags.rentals_dashboard_requests_enabled) {
+      return [...requests].sort(compareSoonestRequestStart);
+    }
+    return [...requests].sort((a, b) => {
+      const aTime = new Date(a.created_at).getTime();
+      const bTime = new Date(b.created_at).getTime();
+      return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
+    });
+  }, [flags.rentals_dashboard_requests_enabled, requests]);
 
   const queuedRequests = useMemo(() => {
     return sortedRequests.filter((r) => {
@@ -124,33 +147,27 @@ const BusinessRentalsRequestsPage: React.FC = () => {
             {t('rentals.modify.staleBanner', 'This request was updated. Review the latest version.')}
           </Alert>
         ) : null}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 1.5,
-            mb: 2,
-            borderRadius: 2,
-            border: 1,
-            borderColor: 'divider',
-          }}
-        >
-          <ToggleButtonGroup
-            exclusive
-            fullWidth
-            size="small"
-            value={queueFilter}
-            onChange={(_e, value: BusinessActionQueue | null) => {
-              if (value) setQueueFilter(value);
-            }}
-            sx={{ flexWrap: 'wrap' }}
-          >
-            {BUSINESS_QUEUE_FILTERS.map((q) => (
-              <ToggleButton key={q} value={q} sx={{ flex: '1 1 auto', minWidth: 72 }}>
-                {t(QUEUE_LABELS[q][0], QUEUE_LABELS[q][1])}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Paper>
+        <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', mb: 2, pb: 0.5 }}>
+          {BUSINESS_QUEUE_FILTERS.map((q) => {
+            const Icon = QUEUE_ICONS[q];
+            const selected = queueFilter === q;
+            return (
+              <Chip
+                key={q}
+                icon={<Icon />}
+                label={t(QUEUE_LABELS[q][0], QUEUE_LABELS[q][1])}
+                clickable
+                color={selected ? 'primary' : 'default'}
+                variant={selected ? 'filled' : 'outlined'}
+                onClick={() => {
+                  setQueueTouched(true);
+                  setQueueFilter(q);
+                }}
+                sx={{ flexShrink: 0 }}
+              />
+            );
+          })}
+        </Box>
 
         {requests.length === 0 && (
           <Paper
@@ -183,14 +200,23 @@ const BusinessRentalsRequestsPage: React.FC = () => {
         ) : null}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {queuedRequests.map((req) => (
-            <BusinessRentalRequestCard
-              key={req.id}
-              request={req}
-              onAccept={(selected) => setRespondTarget({ req: selected, mode: 'available' })}
-              onReject={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
-            />
-          ))}
+          {queuedRequests.map((req) =>
+            flags.rentals_dashboard_requests_enabled && req.status === 'pending' ? (
+              <BusinessDashboardRentalRequestCard
+                key={req.id}
+                request={req}
+                onAccept={(selected) => setRespondTarget({ req: selected, mode: 'available' })}
+                onDecline={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
+              />
+            ) : (
+              <BusinessRentalRequestCard
+                key={req.id}
+                request={req}
+                onAccept={(selected) => setRespondTarget({ req: selected, mode: 'available' })}
+                onReject={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
+              />
+            )
+          )}
         </Box>
 
         {unavailableRequests.length > 0 &&
