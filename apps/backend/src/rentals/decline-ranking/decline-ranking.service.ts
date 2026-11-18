@@ -64,8 +64,8 @@ export class DeclineRankingService {
       if (!(await this.flags.declineRankingEnabled(countryCode))) return new Map();
       return this.scores(await this.hasura.executeQuery<Snapshot>(RANK_SNAPSHOT, { keys: KEYS }));
     } catch (error: any) {
-      void error;
-      return new Map();
+      this.logger.warn(`decline ranking snapshot failed: ${error?.message ?? 'unknown'}`);
+      throw error;
     }
   }
 

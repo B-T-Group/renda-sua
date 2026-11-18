@@ -37,6 +37,7 @@ export function useRentalSearchCatalog(options: {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const runFetch = useCallback(
@@ -50,7 +51,7 @@ export function useRentalSearchCatalog(options: {
       try {
         const { data } = await api.get<{
           success: boolean;
-          data: { listings: RentalSearchCatalogHit[]; total: number };
+          data: { listings: RentalSearchCatalogHit[]; total: number; hasMore?: boolean };
         }>('/rentals/search', {
           signal: controller.signal,
           params: catalogParams(geo, nextPage, sort, q, categoryId, startDate, endDate),
@@ -58,19 +59,29 @@ export function useRentalSearchCatalog(options: {
         if (controller.signal.aborted) return;
         if (!data.success) {
           if (!append) setHits([]);
+          setHasMore(false);
           setLoading(false);
           setLoadingMore(false);
           return;
         }
         const rows = data.data.listings ?? [];
-        setTotal(data.data.total ?? rows.length);
+        const total = data.data.total ?? rows.length;
+        setTotal(total);
         setPage(nextPage);
-        setHits((prev) => (append ? appendCatalogHits(prev, rows) : rows));
+        let more = false;
+        setHits((prev) => {
+          const merged = append ? appendCatalogHits(prev, rows) : rows;
+          const added = merged.length - (append ? prev.length : 0);
+          more = added > 0 && catalogHasMore(data.data, merged.length);
+          return merged;
+        });
+        setHasMore(more);
         setLoading(false);
         setLoadingMore(false);
       } catch {
         if (controller.signal.aborted) return;
         if (!append) setHits([]);
+        setHasMore(false);
         setLoading(false);
         setLoadingMore(false);
       }
@@ -85,11 +96,22 @@ export function useRentalSearchCatalog(options: {
   }, [geo.ready, runFetch]);
 
   const loadMore = useCallback(() => {
-    if (loading || loadingMore || hits.length >= total) return;
+    if (loading || loadingMore || !hasMore) return;
     void runFetch(page + 1, true);
-  }, [hits.length, loading, loadingMore, page, runFetch, total]);
+  }, [hasMore, loading, loadingMore, page, runFetch]);
 
-  return { hits, total, loading: !geo.ready || loading, loadingMore, loadMore, ready: geo.ready };
+  return { hits, total, hasMore, loading: !geo.ready || loading, loadingMore, loadMore, ready: geo.ready };
+}
+
+/** Stop when the page is empty, the API says so, or a stale total would otherwise keep paging. */
+export function catalogHasMore(
+  page: { listings?: readonly unknown[]; hasMore?: boolean; total?: number },
+  loaded: number
+): boolean {
+  if (!page.listings?.length) return false;
+  if (page.hasMore === false) return false;
+  if (page.hasMore === true) return true;
+  return loaded < (page.total ?? 0);
 }
 
 export function appendCatalogHits(

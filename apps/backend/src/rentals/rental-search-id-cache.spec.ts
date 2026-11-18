@@ -1,6 +1,9 @@
 import {
   RentalSearchIdCache,
+  listingStillPublic,
   listingsInIdOrder,
+  marketFromQuery,
+  pickStoredMarket,
   rentalSearchOrderKey,
 } from './rental-search-id-cache';
 
@@ -27,10 +30,11 @@ describe('rentalSearchOrderKey', () => {
     expect(key).not.toBe(rentalSearchOrderKey({ ...base, minPrice: 2000 }));
     expect(key).not.toContain('Bearer');
     expect(key).not.toContain('secret');
-    expect(key.split('|')).toEqual([
-      'v1',
+    expect(JSON.parse(key)).toEqual([
+      'v2',
       'CM',
-      'lt',
+      'LT',
+      'specific',
       'camera',
       'cat-1',
       'recommended',
@@ -39,9 +43,34 @@ describe('rentalSearchOrderKey', () => {
       '2026-11-22',
       '2026-11-25',
       'take_home',
-      '0',
-      '0',
+      0,
+      0,
     ]);
+  });
+
+  it('does not collide when a field contains the old delimiter', () => {
+    const left = rentalSearchOrderKey({ ...base, state: 'L|qa845', q: '' });
+    const right = rentalSearchOrderKey({ ...base, state: 'L', q: 'qa845|' });
+    expect(left).not.toBe(right);
+    expect(JSON.parse(left)[2]).toBe('L|qa845');
+    expect(JSON.parse(right)[4]).toBe('qa845|');
+  });
+
+  it('keeps the stored state spelling and uppercases a two-letter country', () => {
+    expect(marketFromQuery(' cm ', ' centre region province ')).toEqual({
+      country: 'CM',
+      state: 'centre region province',
+      filterMode: 'specific',
+      degraded: false,
+    });
+    expect(marketFromQuery(undefined, undefined).filterMode).toBe('supported_only');
+    expect(
+      pickStoredMarket(
+        [{ country_code: 'CM', state_name: 'Centre Region Province' }],
+        'CM',
+        'centre region province'
+      )
+    ).toEqual({ country: 'CM', state: 'Centre Region Province' });
   });
 });
 
@@ -61,6 +90,35 @@ describe('RentalSearchIdCache', () => {
     expect(cache.get('d')?.ids).toEqual(['d1']);
     now = 2_100;
     expect(cache.get('d')).toBeNull();
+  });
+
+  it('keeps searches from evicting a default list and refuses an empty or oversized query', () => {
+    const cache = new RentalSearchIdCache(2, 60_000, () => 0, 2, 3);
+    cache.set('list', { ids: ['a', 'b', 'c', 'd'], availableCount: 4 }, false);
+    cache.set('q1', { ids: ['q1'], availableCount: 1 }, true);
+    cache.set('q2', { ids: ['q2'], availableCount: 1 }, true);
+    cache.set('q3', { ids: ['q3'], availableCount: 1 }, true);
+    cache.set('empty', { ids: [], availableCount: 0 }, false);
+    cache.set('wide', { ids: ['w1', 'w2', 'w3', 'w4'], availableCount: 4 }, true);
+    expect(cache.get('list', false)?.ids).toEqual(['a', 'b', 'c', 'd']);
+    expect(cache.get('q1', true)).toBeNull();
+    expect(cache.get('q3', true)?.ids).toEqual(['q3']);
+    expect(cache.get('empty', false)).toBeNull();
+    expect(cache.get('wide', true)).toBeNull();
+  });
+
+  it('drops a warm row that left the market, the price band, or the active catalog', () => {
+    const row = {
+      is_active: true,
+      base_price_per_hour: 1000,
+      business_location: { is_active: true, address: { country: 'CM', state: 'Centre Region Province' } },
+      rental_item: { is_active: true },
+    };
+    expect(listingStillPublic(row, { country: 'CM', state: 'centre region province', maxPrice: 2000 })).toBe(true);
+    expect(listingStillPublic(row, { country: 'GA' })).toBe(false);
+    expect(listingStillPublic(row, { country: 'CM', maxPrice: 100 })).toBe(false);
+    expect(listingStillPublic({ ...row, is_active: false }, { country: 'CM' })).toBe(false);
+    expect(listingStillPublic({ ...row, rental_item: { is_active: false } }, { country: 'CM' })).toBe(false);
   });
 
   it('keeps the requested id order and drops a missing row', () => {

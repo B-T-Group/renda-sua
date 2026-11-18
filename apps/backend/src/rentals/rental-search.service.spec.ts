@@ -576,4 +576,147 @@ describe('RentalSearchService', () => {
     await cached.search({ country_code: 'CM', sort: 'newest' });
     expect(catalog.collectPublicRentalListings).toHaveBeenCalledTimes(2);
   });
+
+  it('treats cm and CM as one market and does not keep an empty list', async () => {
+    const catalog = {
+      collectPublicRentalListings: jest.fn(async (query: { country_code?: string }) =>
+        query.country_code === 'CM' ? [listing('a', 'A')] : []
+      ),
+      loadPublicRentalListingsByIds: jest.fn(async (ids: string[]) => ids.map((id) => listing(id, id))),
+    };
+    const cached = new RentalSearchService(catalog as never, hasura as never);
+    const lower = await cached.search({ country_code: 'cm' });
+    const upper = await cached.search({ country_code: 'CM' });
+    expect(lower.listings.map((row) => row.listing.id)).toEqual(['a']);
+    expect(upper.listings.map((row) => row.listing.id)).toEqual(['a']);
+    expect(catalog.collectPublicRentalListings).toHaveBeenCalledTimes(1);
+    expect(catalog.collectPublicRentalListings).toHaveBeenCalledWith(expect.objectContaining({ country_code: 'CM' }));
+    catalog.collectPublicRentalListings.mockResolvedValueOnce([]);
+    await cached.search({ country_code: 'GA' });
+    catalog.collectPublicRentalListings.mockResolvedValueOnce([listing('g', 'G')]);
+    const recovered = await cached.search({ country_code: 'GA' });
+    expect(recovered.listings.map((row) => row.listing.id)).toEqual(['g']);
+  });
+
+  it('does not let a profile market and an anonymous visitor share an entry', async () => {
+    const resolveSearchMarket = jest
+      .fn()
+      .mockResolvedValueOnce({ filterMode: 'supported_only', degraded: false })
+      .mockResolvedValueOnce({ country: 'CM', filterMode: 'specific', degraded: false })
+      .mockResolvedValueOnce({ filterMode: 'supported_only', degraded: false });
+    const catalog = {
+      resolveSearchMarket,
+      collectPublicRentalListings: jest.fn(async (query: { country_code?: string }) =>
+        query.country_code ? [listing('cm-only', 'CM')] : [listing('all', 'All')]
+      ),
+      loadPublicRentalListingsByIds: jest.fn(async (ids: string[]) => ids.map((id) => listing(id, id))),
+    };
+    const cached = new RentalSearchService(catalog as never, hasura as never);
+    const anonymous = await cached.search({});
+    const profile = await cached.search({});
+    const anonymousAgain = await cached.search({});
+    expect(anonymous.listings.map((row) => row.listing.id)).toEqual(['all']);
+    expect(profile.listings.map((row) => row.listing.id)).toEqual(['cm-only']);
+    expect(anonymousAgain.listings.map((row) => row.listing.id)).toEqual(['all']);
+    expect(catalog.collectPublicRentalListings).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the stored state spelling for the query and the next cache hit', async () => {
+    const resolveSearchMarket = jest.fn(async () => ({
+      country: 'CM',
+      state: 'Centre Region Province',
+      filterMode: 'specific' as const,
+      degraded: false,
+    }));
+    const catalog = {
+      resolveSearchMarket,
+      collectPublicRentalListings: jest.fn().mockResolvedValue([listing('a', 'A')]),
+      loadPublicRentalListingsByIds: jest.fn(async (ids: string[]) => ids.map((id) => listing(id, id))),
+    };
+    const cached = new RentalSearchService(catalog as never, hasura as never);
+    await cached.search({ country_code: 'cm', state: 'centre region province' });
+    await cached.search({ country_code: 'CM', state: 'Centre Region Province' });
+    expect(catalog.collectPublicRentalListings).toHaveBeenCalledTimes(1);
+    expect(catalog.collectPublicRentalListings).toHaveBeenCalledWith(
+      expect.objectContaining({ country_code: 'CM', state: 'Centre Region Province' })
+    );
+  });
+
+  it('does not cache a ranking failure or a degraded market', async () => {
+    const rows = [listing('a', 'A'), listing('b', 'B')];
+    rows[0].rental_item.business = { id: 'boosted', name: 'A' };
+    const collect = jest.fn().mockResolvedValue(rows);
+    const catalog = {
+      collectPublicRentalListings: collect,
+      loadPublicRentalListingsByIds: jest.fn(async (ids: string[]) => ids.map((id) => listing(id, id))),
+      resolveSearchMarket: jest.fn().mockResolvedValue({ country: 'CM', filterMode: 'specific', degraded: false }),
+    };
+    const ranking = {
+      multipliersFor: jest
+        .fn()
+        .mockRejectedValueOnce(new Error('snapshot'))
+        .mockResolvedValueOnce(new Map([['boosted', 0]])),
+    };
+    const cached = new RentalSearchService(
+      catalog as never,
+      hasura as never,
+      undefined,
+      undefined,
+      ranking as unknown as DeclineRankingService
+    );
+    const fallen = await cached.search({ country_code: 'CM' });
+    expect(fallen.listings.map((row) => row.listing.id)).toEqual(['a', 'b']);
+    const ranked = await cached.search({ country_code: 'CM' });
+    expect(ranked.listings.map((row) => row.listing.id)).toEqual(['b', 'a']);
+    expect(ranking.multipliersFor).toHaveBeenCalledTimes(2);
+    catalog.resolveSearchMarket.mockResolvedValue({ country: 'CM', filterMode: 'specific', degraded: true });
+    await cached.search({ country_code: 'CM' });
+    await cached.search({ country_code: 'CM' });
+    expect(collect).toHaveBeenCalledTimes(4);
+  });
+
+  it('shares one cold computation and stops a warm page that no longer matches', async () => {
+    let release: (rows: PublicRentalListingRow[]) => void = () => undefined;
+    const collect = jest.fn(
+      () =>
+        new Promise<PublicRentalListingRow[]>((resolve) => {
+          release = resolve;
+        })
+    );
+    const loadByIds = jest.fn(async (ids: string[]) =>
+      ids
+        .filter((id) => id !== 'c')
+        .map((id) => {
+          const row = listing(id, id);
+          if (id === 'b') {
+            row.base_price_per_hour = 9000;
+            row.business_location.address.country = 'GA';
+          }
+          return row;
+        })
+    );
+    const catalog = { collectPublicRentalListings: collect, loadPublicRentalListingsByIds: loadByIds };
+    const cached = new RentalSearchService(catalog as never, hasura as never);
+    const query = { country_code: 'CM', max_price: 2000, limit: 1 };
+    const rows = [listing('a', 'A'), listing('b', 'B'), listing('c', 'C')];
+    const first = cached.search({ ...query, page: 1 });
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    const second = cached.search({ ...query, page: 2 });
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    expect(collect).toHaveBeenCalledTimes(1);
+    release(rows);
+    const [page1, page2] = await Promise.all([first, second]);
+    expect(page1.listings.map((row) => row.listing.id)).toEqual(['a']);
+    expect(page1.hasMore).toBe(true);
+    expect(page2.listings.map((row) => row.listing.id)).toEqual(['b']);
+    expect(page2.hasMore).toBe(true);
+    const warm = await cached.search({ ...query, page: 2 });
+    expect(warm.listings).toEqual([]);
+    expect(warm.hasMore).toBe(false);
+    const again = cached.search({ ...query, page: 1 });
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    release(rows);
+    await again;
+    expect(collect).toHaveBeenCalledTimes(2);
+  });
 });
