@@ -7033,7 +7033,7 @@
       "loadMore": "Charger plus",
       "loadingMore": "Chargement…",
       "emptyMarketTitle": "Aucune location ici pour le moment",
-      "emptyMarketBody": "Aucune annonce n’est encore publiée sur ce marché. Essayez une autre ville, ou gardez la recherche — vous pouvez toujours chercher par nom.",
+      "emptyMarketBody": "Rien n'est encore proposé à {{city}}. Essayez une autre ville ou recherchez par nom.",
       "sort": {
         "recommended": "Recommandé",
         "relevance": "Pertinence",

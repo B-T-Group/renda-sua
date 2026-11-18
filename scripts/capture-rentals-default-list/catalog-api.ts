@@ -61,7 +61,7 @@ export function searchBody(params?: { q?: string; country_code?: string }): {
     success: true,
     data: {
       listings: rows,
-      total: scene === 'empty' ? 0 : query ? rows.length : 12,
+      total: rows.length,
       page: 1,
       limit: 20,
       availableCount: rows.length,

@@ -636,8 +636,21 @@ describe('default rental list', () => {
     expect(view.getByText('Studio Akwa, Douala')).toBeTruthy();
     expect(view.getByTestId('rental-search-inspection-sony')).toBeTruthy();
     expect(view.getByText('12 rentals · add dates to sort by availability')).toBeTruthy();
-    fireEvent.press(view.getByTestId('rental-search-load-more'));
+    expect(view.queryByText('Load more')).toBeNull();
+    fireEvent.scroll(view.getByTestId('rental-search-scroll'), {
+      nativeEvent: {
+        layoutMeasurement: { height: 100 },
+        contentOffset: { y: 500 },
+        contentSize: { height: 600 },
+      },
+    });
     expect(onLoadMore).toHaveBeenCalled();
+  });
+
+  it('shows a loading footer while the next page arrives', async () => {
+    const view = await renderSearch({ defaultList: true, cards: [sony], loadingMore: true, hasMore: true });
+    expect(view.getByTestId('rental-search-loading-more')).toBeTruthy();
+    expect(view.queryByText('Load more')).toBeNull();
   });
 
   it('shows skeletons while the list loads', async () => {
@@ -649,9 +662,10 @@ describe('default rental list', () => {
     const empty = await renderSearch({ defaultList: true, cards: [], loading: false });
     expect(empty.getByTestId('rental-search-empty-market')).toBeTruthy();
     expect(empty.getByText('No rentals here yet')).toBeTruthy();
+    expect(empty.getByText('Nothing is listed in Douala yet. Try another city, or search by name.')).toBeTruthy();
   });
 
-  it('hides categories for a text search and clears back to the list', async () => {
+  it('keeps categories and Recommended above a text search', async () => {
     const onClearQuery = jest.fn();
     const results = await renderSearch({
       defaultList: true,
@@ -660,7 +674,8 @@ describe('default rental list', () => {
       cards: [sony],
       onClearQuery,
     });
-    expect(results.queryByText('CATEGORIES')).toBeNull();
+    expect(results.getByText('CATEGORIES')).toBeTruthy();
+    expect(results.getByTestId('rental-search-sort')).toBeTruthy();
     fireEvent.press(results.getByTestId('rental-search-clear'));
     expect(onClearQuery).toHaveBeenCalled();
   });

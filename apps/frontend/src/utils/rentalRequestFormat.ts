@@ -155,6 +155,30 @@ export function formatRentalPeriod(
   return windows.map((row) => hourlyLine(row, locale)).join(', ');
 }
 
+/** Booked days of an exclusive search range, labeled like a booking (`22–24 Nov · 3 days`). */
+export function formatExclusiveStay(
+  start: string,
+  end: string,
+  locale: string,
+  dayCountLabel: DayCountLabel
+): string {
+  return formatRentalPeriod(exclusiveStayWindows(start, end), locale, dayCountLabel);
+}
+
+/** Same booked days, without the count (`22–24 Nov`). */
+export function formatExclusiveStayRange(start: string, end: string, locale: string): string {
+  return formatRentalDateRange(exclusiveStayWindows(start, end), locale);
+}
+
+function exclusiveStayWindows(start: string, end: string): PeriodWindow[] {
+  return (daysUntil(start, end) ?? []).map((calendar_date) => ({
+    billing: 'all_day',
+    calendar_date,
+    start_at: '',
+    end_at: '',
+  }));
+}
+
 function dailyPeriod(booked: string[], locale: string, dayCountLabel: DayCountLabel): string {
   const asWindows = booked.map((calendar_date) => ({
     calendar_date,

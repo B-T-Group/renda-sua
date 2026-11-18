@@ -4,7 +4,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { rentalCategoryIcon, rentalCategoryLabel } from '../../../utils/rentals/rentalCategoryIcon';
-import { formatRangeDates, type RentalDateRange } from '../../../utils/rentals/rentalSearchDates';
+import { formatRangeDates, formatSearchStay, type RentalDateRange } from '../../../utils/rentals/rentalSearchDates';
 import { MyRentalsHeaderButton } from './MyRentalsHeaderButton';
 import { NextRentalCard } from './NextRentalCard';
 import { RentalSearchDateSheet } from './RentalSearchDateSheet';
@@ -106,7 +106,9 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
           ? t('rentals.searchFirst.search', 'Search')
           : t('rentals.browseTitle', 'Rentals');
   const showDates = props.dates
-    ? `${formatRangeDates(props.dates, i18n.language)} · ${t('rentals.searchFirst.dayCount', '{{count}} days', { count: props.dates.dayCount })}`
+    ? formatSearchStay(props.dates, i18n.language, (count) =>
+        t('rentals.searchFirst.dayCount', '{{count}} days', { count })
+      )
     : null;
   const marketLabel = props.marketLabel.replace(
     /\bCameroon\b/g,
@@ -180,6 +182,7 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
         <DateRow {...props} label={showDates} />
       </View>
       <ScrollView
+        testID="rental-search-scroll"
         contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: props.bottomInset + spacing.lg }}
         keyboardShouldPersistTaps="handled"
         onScroll={props.defaultList ? (event) => onCatalogEnd(event, props) : undefined}
@@ -287,7 +290,7 @@ function CategoryRow({ categories, moreCategories, moreOpen, activeCategoryId, o
             <View style={[styles.iconBubble, { backgroundColor: active ? colors.primary.main : colors.surface, borderColor: colors.divider }]}>
               <MaterialCommunityIcons name={rentalCategoryIcon(category.name)} size={22} color={active ? colors.primary.contrast : colors.text.primary} />
             </View>
-            <Text numberOfLines={1} style={{ color: colors.text.primary, fontSize: 12 }}>
+            <Text numberOfLines={2} style={[styles.iconLabel, { color: colors.text.primary }]}>
               {rentalCategoryLabel(category.name, (key, fallback) => t(key, fallback))}
             </Text>
           </Pressable>
@@ -448,10 +451,9 @@ function onCatalogEnd(event: NativeSyntheticEvent<NativeScrollEvent>, props: Ren
 }
 
 function DefaultCatalog(props: RentalSearchFirstViewProps) {
-  const showChips = props.query.trim().length === 0;
   return (
     <View>
-      {showChips ? <CategoryBlock {...props} /> : null}
+      <CategoryBlock {...props} />
       <CatalogBody {...props} />
     </View>
   );
@@ -474,7 +476,7 @@ function CategoryBlock(props: RentalSearchFirstViewProps) {
 function CatalogBody(props: RentalSearchFirstViewProps) {
   if (props.loading && props.cards.length === 0) return <CardSkeletons />;
   if (!props.loading && props.cards.length === 0 && !props.query.trim() && !props.activeCategoryId) {
-    return <EmptyMarket />;
+    return <EmptyMarket marketLabel={props.marketLabel} />;
   }
   if (!props.loading && props.cards.length === 0) return <NoCatalogMatches />;
   return <CatalogRows {...props} />;
@@ -503,13 +505,13 @@ function CatalogRows(props: RentalSearchFirstViewProps) {
           {t('rentals.searchFirst.loadingMore', 'Loading more…')}
         </Text>
       ) : null}
-      {props.hasMore && !props.loadingMore ? (
-        <Pressable onPress={props.onLoadMore} testID="rental-search-load-more" style={[styles.loadMore, { borderColor: colors.divider }]}>
-          <Text style={{ color: colors.primary.main, fontWeight: '700' }}>{t('rentals.searchFirst.loadMore', 'Load more')}</Text>
-        </Pressable>
-      ) : null}
     </View>
   );
+}
+
+function marketCity(label: string): string {
+  const city = label.split('\u00b7')[0]?.trim();
+  return city || label.trim();
 }
 
 function sortCaption(label: string, t: (key: string, fallback: string) => string): string {
@@ -518,7 +520,7 @@ function sortCaption(label: string, t: (key: string, fallback: string) => string
   return label;
 }
 
-function EmptyMarket() {
+function EmptyMarket({ marketLabel }: { marketLabel: string }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   return (
@@ -532,7 +534,8 @@ function EmptyMarket() {
       <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: 6 }}>
         {t(
           'rentals.searchFirst.emptyMarketBody',
-          'Nothing is listed in this market right now. Try another city, or keep the search handy — you can still look by name.'
+          'Nothing is listed in {{city}} yet. Try another city, or search by name.',
+          { city: marketCity(marketLabel) }
         )}
       </Text>
     </View>
@@ -589,15 +592,15 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16, paddingVertical: 10 },
   dateRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, padding: 12, gap: 10 },
   section: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4, marginTop: 16, marginBottom: 8 },
-  iconRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 4 },
-  iconItem: { width: 56, alignItems: 'center', gap: 4 },
-  iconBubble: { width: 48, height: 48, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  iconRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 4, rowGap: 8, paddingVertical: 4 },
+  iconItem: { alignItems: 'center', gap: 4, flexShrink: 0 },
+  iconLabel: { fontSize: 11, lineHeight: 13, textAlign: 'center' },
+  iconBubble: { width: 44, height: 44, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   browseRow: { marginTop: 12 },
   tip: { marginTop: 16, borderRadius: 12, padding: 12 },
   landingEmpty: { alignItems: 'center', marginTop: 28, paddingHorizontal: 12 },
   emptyBubble: { width: 72, height: 72, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   countRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  loadMore: { borderWidth: 1, borderRadius: 12, alignItems: 'center', paddingVertical: 14, marginTop: 8 },
   skeletonCard: { flexDirection: 'row', gap: 12, borderWidth: 1, borderRadius: 16, padding: 10, marginTop: 12 },
   photoBlock: { width: 88, height: 88, borderRadius: 12 },
   skeletonLine: { height: 12, borderRadius: 6 },

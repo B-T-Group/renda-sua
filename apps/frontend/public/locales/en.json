@@ -7314,7 +7314,7 @@
       "loadMore": "Load more",
       "loadingMore": "Loading more…",
       "emptyMarketTitle": "No rentals here yet",
-      "emptyMarketBody": "Nothing is listed in this market right now. Try another city, or keep the search handy — you can still look by name.",
+      "emptyMarketBody": "Nothing is listed in {{city}} yet. Try another city, or search by name.",
       "sort": {
         "recommended": "Recommended",
         "relevance": "Relevance",

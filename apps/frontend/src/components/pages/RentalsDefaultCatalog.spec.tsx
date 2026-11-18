@@ -128,6 +128,30 @@ describe('RentalsDefaultCatalog', () => {
     );
     expect(screen.getByTestId('rentals-empty-market')).toBeTruthy();
     expect(screen.getByText('No rentals here yet')).toBeTruthy();
+    expect(screen.getByText('Nothing is listed in Douala yet. Try another city, or search by name.')).toBeTruthy();
+  });
+
+  it('hides load more when every rental is already on the page', () => {
+    search.mockReturnValue({
+      hits: [
+        {
+          listing: listing('sony', 'Sony A7 IV kit', 45000, 'XAF'),
+          available: null,
+          nextAvailableDate: null,
+          pricePerDay: 45000,
+          totalForDates: null,
+          dayCount: null,
+          inspection_enabled: false,
+        },
+      ],
+      total: 1,
+      loading: false,
+      loadingMore: false,
+      loadMore: jest.fn(),
+      ready: true,
+    });
+    renderCatalog();
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 
   it('clears a search back to the unfiltered list', () => {

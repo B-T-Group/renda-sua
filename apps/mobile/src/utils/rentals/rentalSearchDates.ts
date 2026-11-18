@@ -1,3 +1,5 @@
+import { formatRentalDateRange, formatRentalPeriod, type PeriodWindow } from './rentalRequestFormat';
+
 export const MAX_RENTAL_SEARCH_DAYS = 30;
 
 export interface RentalDateRange {
@@ -161,16 +163,6 @@ export function formatRangeDates(range: RentalDateRange, locale: string): string
   return `${start.getUTCDate()} ${month.format(start)} – ${end.getUTCDate()} ${month.format(end)}`;
 }
 
-export function formatSingleDate(iso: string, locale: string): string {
-  const ms = utcDayMs(iso);
-  if (ms == null) return iso;
-  return new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(ms));
-}
-
 const MARKET_TIME_ZONES: Record<string, string> = {
   CM: 'Africa/Douala',
   GA: 'Africa/Libreville',
@@ -215,4 +207,27 @@ export function eachDateKey(range: RentalDateRange): string[] {
     keys.push(new Date(start + i * 86_400_000).toISOString().slice(0, 10));
   }
   return keys;
+}
+
+/** The days a booking would charge, labeled with `formatRentalPeriod`. */
+export function formatSearchStay(
+  range: RentalDateRange,
+  locale: string,
+  dayCountLabel: (count: number) => string
+): string {
+  return formatRentalPeriod(bookedStayWindows(range), locale, dayCountLabel);
+}
+
+/** Same booked days, without the count (`22–24 Nov`). */
+export function formatSearchStayRange(range: RentalDateRange, locale: string): string {
+  return formatRentalDateRange(bookedStayWindows(range), locale);
+}
+
+function bookedStayWindows(range: RentalDateRange): PeriodWindow[] {
+  return eachDateKey(range).map((calendar_date) => ({
+    billing: 'all_day',
+    calendar_date,
+    start_at: '',
+    end_at: '',
+  }));
 }

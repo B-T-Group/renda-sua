@@ -29,6 +29,7 @@ import { RentalCardSkeleton } from '../rentals/RentalLocationsStrip';
 import { RentalItemCard } from '../rentals/RentalItemCard';
 import SEOHead from '../seo/SEOHead';
 import { useMarket } from '../../hooks/useMarket';
+import { formatExclusiveStay, formatExclusiveStayRange } from '../../utils/rentalRequestFormat';
 import {
   useRentalSearchCatalog,
   useTopRentalCategories,
@@ -97,7 +98,6 @@ const RentalsDefaultCatalog: React.FC = () => {
           categories={categories}
           loading={categoriesLoading && categories.length === 0}
           activeId={categoryId}
-          hidden={Boolean(query)}
           sort={sort}
           onSort={setSort}
           onPick={(id) => setCategoryId(categoryId === id ? '' : id)}
@@ -108,11 +108,12 @@ const RentalsDefaultCatalog: React.FC = () => {
         <CatalogResults
           loading={catalog.loading}
           emptyMarket={emptyMarket}
+          city={selectedMarket?.name ?? ''}
           hits={catalog.hits}
           stayLabel={stay ? formatStay(stay, i18n.language) : null}
           onOpen={(id) => navigate(`/rentals/${id}`)}
         />
-        {catalog.hits.length < catalog.total ? (
+        {catalog.hits.length > 0 && catalog.hits.length < catalog.total ? (
           <Button fullWidth variant="outlined" sx={{ mt: 2 }} onClick={catalog.loadMore} disabled={catalog.loadingMore}>
             {catalog.loadingMore
               ? t('rentals.catalog.loadingMore', 'Loading more…')
@@ -175,7 +176,11 @@ function SearchField({ value, onChange, onClear, placeholder }: { value: string;
 
 function DatesRow({ stay, locale, onOpen }: { stay: CatalogStay | null; locale: string; onOpen: () => void }) {
   const { t } = useTranslation();
-  const label = stay ? `${formatStay(stay, locale)} · ${t('rentals.catalog.dayCount', '{{count}} days', { count: stay.dayCount })}` : null;
+  const label = stay
+    ? formatExclusiveStay(stay.startDate, stay.endDate, locale, (count) =>
+        t('rentals.catalog.dayCount', '{{count}} days', { count })
+      )
+    : null;
   return (
     <Paper variant="outlined" onClick={onOpen} sx={{ mt: 1.5, p: 1.5, display: 'flex', gap: 1.5, alignItems: 'center', cursor: 'pointer', borderColor: 'primary.main', bgcolor: 'rgba(10, 79, 181, 0.06)' }}>
       <CalendarMonthOutlined color="primary" />
@@ -203,13 +208,11 @@ function CategoryStrip(props: {
   categories: Array<{ id: string; name: string }>;
   loading: boolean;
   activeId: string;
-  hidden: boolean;
   sort: RentalCatalogSort;
   onSort: (sort: RentalCatalogSort) => void;
   onPick: (id: string) => void;
 }) {
   const { t } = useTranslation();
-  if (props.hidden) return null;
   return (
     <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2, overflowX: 'auto' }}>
       {props.loading
@@ -246,25 +249,26 @@ function ResultHeading({ count, dated }: { count: number; dated: boolean }) {
   );
 }
 
-function CatalogResults({ loading, emptyMarket, hits, stayLabel, onOpen }: {
+function CatalogResults({ loading, emptyMarket, city, hits, stayLabel, onOpen }: {
   loading: boolean;
   emptyMarket: boolean;
+  city: string;
   hits: ReturnType<typeof useRentalSearchCatalog>['hits'];
   stayLabel: string | null;
   onOpen: (id: string) => void;
 }) {
   if (loading && hits.length === 0) {
     return (
-      <Box data-testid="rentals-catalog-skeletons" sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' } }}>
+      <Box data-testid="rentals-catalog-skeletons" sx={{ display: 'grid', gap: 2, alignItems: 'stretch', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, minmax(0, 1fr))' } }}>
         {[0, 1, 2, 3, 4, 5].map((id) => <RentalCardSkeleton key={id} />)}
       </Box>
     );
   }
-  if (emptyMarket) return <EmptyMarket />;
+  if (emptyMarket) return <EmptyMarket city={city} />;
   return (
-    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' } }}>
+    <Box sx={{ display: 'grid', gap: 2, alignItems: 'stretch', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, minmax(0, 1fr))' } }}>
       {hits.map((hit) => (
-        <Box key={hit.listing.id}>
+        <Box key={hit.listing.id} sx={{ minWidth: 0, display: 'flex' }}>
           <RentalItemCard
             variant="daily"
             listing={{ ...hit.listing, inspection_enabled: hit.inspection_enabled === true }}
@@ -284,7 +288,7 @@ function CatalogResults({ loading, emptyMarket, hits, stayLabel, onOpen }: {
   );
 }
 
-function EmptyMarket() {
+function EmptyMarket({ city }: { city: string }) {
   const { t } = useTranslation();
   return (
     <Paper variant="outlined" data-testid="rentals-empty-market" sx={{ py: 8, px: 3, textAlign: 'center', borderStyle: 'dashed', borderRadius: 3 }}>
@@ -295,7 +299,8 @@ function EmptyMarket() {
       <Typography color="text.secondary" sx={{ maxWidth: 460, mx: 'auto', mt: 1 }}>
         {t(
           'rentals.catalog.emptyMarketBody',
-          'Nothing is listed in this market right now. Try another city, or keep the search handy — you can still look by name.'
+          'Nothing is listed in {{city}} yet. Try another city, or search by name.',
+          { city }
         )}
       </Typography>
     </Paper>
@@ -341,21 +346,17 @@ function DateDialog({ open, start, end, onClose, onApply, onClear }: { open: boo
   );
 }
 
-type CatalogStay = { startDate: string; endDate: string; dayCount: number };
+type CatalogStay = { startDate: string; endDate: string };
 
 function catalogStay(start: string, end: string): CatalogStay | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return null;
   const dayCount = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000);
   if (dayCount < 1 || dayCount > 30) return null;
-  return { startDate: start, endDate: end, dayCount };
+  return { startDate: start, endDate: end };
 }
 
 function formatStay(stay: CatalogStay, locale: string): string {
-  const start = new Date(`${stay.startDate}T00:00:00Z`);
-  const end = new Date(`${stay.endDate}T00:00:00Z`);
-  const month = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' });
-  if (start.getUTCMonth() === end.getUTCMonth()) return `${start.getUTCDate()}–${end.getUTCDate()} ${month.format(end)}`;
-  return `${start.getUTCDate()} ${month.format(start)} – ${end.getUTCDate()} ${month.format(end)}`;
+  return formatExclusiveStayRange(stay.startDate, stay.endDate, locale);
 }
 
 function marketLabel(market: { name?: string; stateCode?: string | null; stateName?: string | null } | null, all: string): string {

@@ -41,7 +41,8 @@ function Capture() {
             withAuth={false}
             applyTopSafeArea
             initialQuery={searching ? (lang === 'fr' ? 'appareil photo' : 'camera') : ''}
-            initialDates={searching ? { startDate: '2026-11-22', endDate: '2026-11-24', dayCount: 3 } : null}
+            initialCategoryId={searching ? 'cameras' : null}
+            initialDates={searching ? { startDate: '2026-11-22', endDate: '2026-11-25', dayCount: 3 } : null}
           />
         </Boundary>
       </div>

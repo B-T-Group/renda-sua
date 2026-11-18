@@ -97,19 +97,41 @@ export function captureRow(input: RowInput): CaptureListing {
 }
 
 export function landingRows(currency: string, city: string, toronto: boolean): CaptureListing[] {
-  if (toronto) {
-    return [
-      captureRow({ id: 'sony', name: 'Sony A7 IV kit', business: 'Harbour Studio', city, price: 85, currency, category: 'cameras', inspection: true }),
-      captureRow({ id: 'jbl', name: 'JBL PartyBox 310', business: 'Parkdale Sound', city, price: 45, currency, category: 'sound' }),
-      captureRow({ id: 'dewalt', name: 'DeWalt 20V kit', business: 'Queen West Tools', city, price: 28, currency, category: 'tools' }),
-      captureRow({ id: 'dji', name: 'DJI Mini 4 Pro', business: 'North York Aerial', city, price: 120, currency, category: 'cameras', inspection: true }),
-    ];
-  }
+  const rows = toronto ? torontoLanding(city, currency) : doualaLanding(city, currency);
+  return rows;
+}
+
+function doualaLanding(city: string, currency: string): CaptureListing[] {
   return [
     captureRow({ id: 'sony', name: 'Sony A7 IV kit', business: 'Studio Akwa', city, price: 45000, currency, category: 'cameras', inspection: true }),
     captureRow({ id: 'jbl', name: 'JBL PartyBox 310', business: 'Sono Bonanjo', city, price: 18000, currency, category: 'sound' }),
     captureRow({ id: 'makita', name: 'Kit Makita 18V', business: 'Atelier Deido', city, price: 8000, currency, category: 'tools' }),
     captureRow({ id: 'dji', name: 'DJI Mini 4 Pro', business: 'SkyCam Douala', city, price: 32000, currency, category: 'cameras', inspection: true }),
+    captureRow({ id: 'canon', name: 'Canon EOS R6', business: 'Lumière Studio', city, price: 38000, currency, category: 'cameras', inspection: true }),
+    captureRow({ id: 'shure', name: 'Shure SM58', business: 'Sono Bonanjo', city, price: 6000, currency, category: 'sound' }),
+    captureRow({ id: 'bosch', name: 'Perceuse Bosch', business: 'Atelier Deido', city, price: 5000, currency, category: 'tools' }),
+    captureRow({ id: 'tent', name: 'Tente 3x3', business: 'Eventis Akwa', city, price: 15000, currency, category: 'events' }),
+    captureRow({ id: 'prado', name: 'Toyota Prado', business: 'Location Wouri', city, price: 75000, currency, category: 'vehicles', inspection: true }),
+    captureRow({ id: 'godox', name: 'Godox SL60', business: 'Studio Akwa', city, price: 22000, currency, category: 'cameras' }),
+    captureRow({ id: 'yamaha', name: 'Yamaha DXR10', business: 'Sono Bonanjo', city, price: 12000, currency, category: 'sound' }),
+    captureRow({ id: 'scaffold', name: 'Échafaudage', business: 'Atelier Deido', city, price: 9000, currency, category: 'tools' }),
+  ];
+}
+
+function torontoLanding(city: string, currency: string): CaptureListing[] {
+  return [
+    captureRow({ id: 'sony', name: 'Sony A7 IV kit', business: 'Harbour Studio', city, price: 85, currency, category: 'cameras', inspection: true }),
+    captureRow({ id: 'jbl', name: 'JBL PartyBox 310', business: 'Parkdale Sound', city, price: 45, currency, category: 'sound' }),
+    captureRow({ id: 'dewalt', name: 'DeWalt 20V kit', business: 'Queen West Tools', city, price: 28, currency, category: 'tools' }),
+    captureRow({ id: 'dji', name: 'DJI Mini 4 Pro', business: 'North York Aerial', city, price: 120, currency, category: 'cameras', inspection: true }),
+    captureRow({ id: 'canon', name: 'Canon EOS R6', business: 'Lumière Studio', city, price: 70, currency, category: 'cameras', inspection: true }),
+    captureRow({ id: 'shure', name: 'Shure SM58', business: 'Parkdale Sound', city, price: 18, currency, category: 'sound' }),
+    captureRow({ id: 'bosch', name: 'Bosch drill', business: 'Queen West Tools', city, price: 15, currency, category: 'tools' }),
+    captureRow({ id: 'tent', name: 'Tent 3x3', business: 'King West Events', city, price: 40, currency, category: 'events' }),
+    captureRow({ id: 'rav4', name: 'Toyota RAV4', business: 'Midtown Cars', city, price: 95, currency, category: 'vehicles', inspection: true }),
+    captureRow({ id: 'godox', name: 'Godox SL60', business: 'Harbour Studio', city, price: 55, currency, category: 'cameras' }),
+    captureRow({ id: 'yamaha', name: 'Yamaha DXR10', business: 'Parkdale Sound', city, price: 32, currency, category: 'sound' }),
+    captureRow({ id: 'scaffold', name: 'Scaffold tower', business: 'Queen West Tools', city, price: 22, currency, category: 'tools' }),
   ];
 }
 

@@ -30,7 +30,7 @@ import {
 import storage from '../../services/storage/StorageService';
 import { useStore } from '../../stores/RootStore';
 import {
-  formatRangeDates,
+  formatSearchStayRange,
   marketTimeZone,
   MAX_RENTAL_SEARCH_DAYS,
   nearbyRanges,
@@ -55,11 +55,13 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   applyTopSafeArea = true,
   initialQuery = '',
   initialDates = null,
+  initialCategoryId = null,
 }: {
   withAuth?: boolean;
   applyTopSafeArea?: boolean;
   initialQuery?: string;
   initialDates?: RentalDateRange | null;
+  initialCategoryId?: string | null;
 }) {
   const { i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -89,7 +91,7 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   const [recent, setRecent] = useState<string[]>([]);
   const [hits, setHits] = useState<RentalSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(initialCategoryId);
   const [sort, setSort] = useState<SortName>(defaultList ? 'recommended' : 'relevance');
   const promotedSort = useRef(defaultList);
   const [takeHome, setTakeHome] = useState(false);
@@ -395,7 +397,7 @@ function toCard(
     totalIsEstimate: dailyTotalDiffersFromQuote(hit.totalForDates, quote),
     dayCount: hit.dayCount,
     nextAvailableDate: hit.nextAvailableDate,
-    rangeLabel: range ? formatRangeDates(range, locale) : null,
+    rangeLabel: range ? formatSearchStayRange(range, locale) : null,
     business: hit.listing.business_location?.name || hit.listing.rental_item?.business?.name || '',
     city: hit.listing.business_location?.address?.city || '',
     inspection: hit.inspection_enabled === true,

@@ -17,6 +17,7 @@ const start = scene === 'search' ? '2026-11-22' : '';
 const end = scene === 'search' ? '2026-11-25' : '';
 const search = new URLSearchParams();
 if (query) search.set('q', query);
+if (scene === 'search') search.set('category', 'cameras');
 if (start) search.set('start', start);
 if (end) search.set('end', end);
 

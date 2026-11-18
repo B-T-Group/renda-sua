@@ -20,6 +20,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RentalListingRow } from '../../hooks/useRentalListings';
 import { formatCatalogMoney } from '../../utils/rentalRequestDisplay';
+import { formatRentalDay } from '../../utils/rentalRequestFormat';
 
 function formatListingPrice(amount: string | number, currency: string): string {
   const n = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -355,8 +356,8 @@ function DailyRentalCard({
       ? totalLabel(formatCatalogMoney(availability.totalForDates, item.currency, locale), availability.dayCount)
       : null;
   return (
-    <Card sx={{ height: '100%', borderRadius: 3, overflow: 'hidden' }}>
-      <CardActionArea onClick={onOpen} sx={{ height: '100%', alignItems: 'stretch' }}>
+    <Card sx={{ width: '100%', height: '100%', borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <CardActionArea onClick={onOpen} sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start' }}>
         <Box sx={{ position: 'relative' }}>
           <CardMedia
             component="div"
@@ -377,10 +378,10 @@ function DailyRentalCard({
           <Typography variant="subtitle1" fontWeight={700}>{item.name}</Typography>
           {place ? <Typography variant="body2" color="text.secondary">{place}</Typography> : null}
           {availability?.available && availability.rangeLabel ? (
-            <Chip label={freeLabel(availability.rangeLabel)} size="small" color="success" sx={{ mt: 1 }} />
+            <Chip label={freeLabel(availability.rangeLabel)} size="small" sx={freeChipSx} />
           ) : null}
           {availability?.available === false ? (
-            <Chip label={waitLabel(catalogDay(availability.nextAvailableDate ?? '', locale))} size="small" sx={{ mt: 1, bgcolor: '#FEF3C7' }} />
+            <Chip label={waitLabel(formatRentalDay(availability.nextAvailableDate ?? '', locale))} size="small" sx={waitChipSx} />
           ) : null}
           {total ? <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{total}</Typography> : null}
         </CardContent>
@@ -389,13 +390,24 @@ function DailyRentalCard({
   );
 }
 
-function catalogDay(iso: string, locale: string): string {
-  const day = iso.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return iso;
-  const date = new Date(`${day}T00:00:00Z`);
-  const month = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' }).format(date);
-  return `${date.getUTCDate()} ${month}`;
-}
+const freeChipSx = {
+  mt: 1,
+  alignSelf: 'flex-start',
+  height: 'auto',
+  bgcolor: '#DCF5E5',
+  color: '#085C2C',
+  fontWeight: 700,
+  '& .MuiChip-label': { whiteSpace: 'normal', lineHeight: 1.3, py: 0.5 },
+};
+
+const waitChipSx = {
+  mt: 1,
+  alignSelf: 'flex-start',
+  height: 'auto',
+  bgcolor: '#FEF3C7',
+  color: '#92400E',
+  '& .MuiChip-label': { whiteSpace: 'normal', lineHeight: 1.3, py: 0.5 },
+};
 
 function catalogPlace(listing: RentalListingRow): string {
   const business = listing.business_location?.name || listing.rental_item.business?.name || '';

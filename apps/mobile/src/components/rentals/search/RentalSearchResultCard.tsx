@@ -5,7 +5,7 @@ import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { formatSearchMoney } from '../../../utils/rentals';
 import { formatCatalogMoney } from '../../../utils/rentals/rentalRequestFormat';
-import { formatSingleDate } from '../../../utils/rentals/rentalSearchDates';
+import { formatRentalDay } from '../../../utils/rentals/rentalRequestFormat';
 
 export interface RentalSearchCardModel {
   id: string;
@@ -79,7 +79,7 @@ export function RentalSearchResultCard({
         {showAvailability && card.available === false ? (
           <Text style={[styles.badge, { backgroundColor: '#FEF3C7', color: colors.warning.dark }]}>
             {t('rentals.searchFirst.availableFrom', 'Available from {{date}}', {
-              date: formatSingleDate(card.nextAvailableDate ?? '', i18n.language),
+              date: formatRentalDay(card.nextAvailableDate ?? '', i18n.language),
             })}
           </Text>
         ) : null}
