@@ -245,6 +245,7 @@ export const GET_RENTAL_REQUEST_FULL = `
       rental_pricing_snapshot
       rental_location_listing_id
       units_requested
+      inspection_policy_version
       edit_version
       quoted_total
       price_change_seen_at
@@ -1053,6 +1054,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       business_response_note
       client_request_note
       units_requested
+      inspection_policy_version
       edit_version
       quoted_total
       price_change_seen_at
@@ -1153,6 +1155,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       business_response_note
       client_request_note
       units_requested
+      inspection_policy_version
       edit_version
       quoted_total
       change_summary
@@ -1365,6 +1368,7 @@ export const GET_RENTAL_ITEM_BUSINESS_CHECK = `
     rental_items_by_pk(id: $id) {
       id
       business_id
+      currency
       deleted_at
     }
   }

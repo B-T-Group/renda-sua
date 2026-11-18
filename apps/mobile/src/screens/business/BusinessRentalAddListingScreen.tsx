@@ -12,6 +12,7 @@ import {
 import { KeyboardAwareScrollView } from '../../components/layout/KeyboardAwareScrollView';
 import { useBusinessRentalAddListing } from '../../hooks/business/useBusinessRentalAddListing';
 import { useTheme } from '../../contexts/ThemeContext';
+import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 
 export default function BusinessRentalAddListingScreen() {
   const { t } = useTranslation();
@@ -19,6 +20,7 @@ export default function BusinessRentalAddListingScreen() {
   const props = useBusinessRentalAddListing();
   const {
     itemName,
+    itemCurrency,
     availableLocations,
     setLocationId,
     hourly,
@@ -167,27 +169,31 @@ export default function BusinessRentalAddListingScreen() {
         disabled={busy || allLocationsListed}
         style={styles.field}
       />
-      <TextInput
-        label={t(
-          'business.rentals.wizard.location.deposit',
-          'Security deposit (optional)'
-        )}
-        value={deposit}
-        onChangeText={setDeposit}
-        keyboardType="decimal-pad"
-        mode="outlined"
-        disabled={busy || allLocationsListed}
-        style={styles.field}
-      />
-      <Text
-        variant="bodySmall"
-        style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
-      >
-        {t(
-          'business.rentals.wizard.location.depositHelp',
-          'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-        )}
-      </Text>
+      {showsCardDeposit(itemCurrency) ? (
+        <>
+          <TextInput
+            label={t(
+              'business.rentals.wizard.location.deposit',
+              'Security deposit (optional)'
+            )}
+            value={deposit}
+            onChangeText={setDeposit}
+            keyboardType="decimal-pad"
+            mode="outlined"
+            disabled={busy || allLocationsListed}
+            style={styles.field}
+          />
+          <Text
+            variant="bodySmall"
+            style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
+          >
+            {t(
+              'business.rentals.wizard.location.depositHelp',
+              'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+            )}
+          </Text>
+        </>
+      ) : null}
       <TextInput
         label={t('business.rentals.units', 'Units available')}
         value={units}

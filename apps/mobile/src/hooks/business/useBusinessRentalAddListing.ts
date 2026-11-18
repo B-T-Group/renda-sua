@@ -20,6 +20,7 @@ export function useBusinessRentalAddListing() {
   const seededRef = useRef(false);
 
   const [itemName, setItemName] = useState('');
+  const [itemCurrency, setItemCurrency] = useState('');
   const [locations, setLocations] = useState<BusinessLocation[]>([]);
   const [listedIds, setListedIds] = useState<Set<string>>(() => new Set());
   const [locationId, setLocationId] = useState('');
@@ -57,6 +58,7 @@ export function useBusinessRentalAddListing() {
   const applyItem = useCallback(
     (item: BusinessRentalItemDetail | null) => {
       setItemName(item?.name ?? '');
+      setItemCurrency(item?.currency ?? '');
       const listed = new Set(
         (item?.rental_location_listings ?? [])
           .filter((l) => !l.deleted_at)
@@ -156,6 +158,7 @@ export function useBusinessRentalAddListing() {
 
   return {
     itemName,
+    itemCurrency,
     availableLocations,
     locationId,
     setLocationId,

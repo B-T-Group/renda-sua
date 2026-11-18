@@ -31,14 +31,14 @@ import {
   type FormOption,
 } from '../../components/business/item-form/ItemFormOptionDialog';
 import { RentalWeeklyHoursEditor } from '../../components/business/rentals/RentalWeeklyHoursEditor';
+import { InspectionOptInCard } from '../../components/business/rentals/InspectionOptInCard';
 import type { RentalWeeklyAvailabilityRow } from '../../types/rentals';
 import { defaultWeeklyAvailability } from '../../utils/rentals';
+import { depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalItemEdit'>;
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
 
-/** Mirrors the backend listing default of 8x the hourly rate. */
-const DEFAULT_DEPOSIT_HOURLY_MULTIPLIER = 8;
 
 export default function BusinessRentalItemEditScreen() {
   const { t } = useTranslation();
@@ -142,19 +142,12 @@ export default function BusinessRentalItemEditScreen() {
       for (const [listingId, edit] of Object.entries(listingEdits)) {
         const hourly = parseFloat(edit.hourly);
         const daily = parseFloat(edit.daily);
-        const deposit = edit.deposit.trim() ? parseFloat(edit.deposit) : NaN;
-        // A cleared deposit field reverts to the advertised default (8x hourly).
-        const depositToSave =
-          Number.isFinite(deposit) && deposit >= 0
-            ? deposit
-            : Number.isFinite(hourly)
-              ? Number((hourly * DEFAULT_DEPOSIT_HOURLY_MULTIPLIER).toFixed(2))
-              : undefined;
+        const depositToSave = depositOnSave(item?.currency, edit.deposit, hourly);
         const units = Math.floor(Number(edit.units));
         await rentalsApi.updateBusinessListing(listingId, {
           base_price_per_hour: Number.isFinite(hourly) ? hourly : undefined,
           base_price_per_day: Number.isFinite(daily) ? daily : undefined,
-          security_deposit_amount: depositToSave,
+          ...(depositToSave !== undefined ? { security_deposit_amount: depositToSave } : {}),
           units_available: Number.isInteger(units) && units >= 1 ? units : undefined,
           pickup_instructions: edit.pickup.trim() || undefined,
           dropoff_instructions: edit.dropoff.trim() || undefined,
@@ -176,6 +169,7 @@ export default function BusinessRentalItemEditScreen() {
     defaultCurrency,
     description,
     isActive,
+    item?.currency,
     itemId,
     listingEdits,
     name,
@@ -295,6 +289,7 @@ export default function BusinessRentalItemEditScreen() {
         </Text>
         <Switch value={isActive} onValueChange={setIsActive} />
       </View>
+      <InspectionOptInCard itemId={itemId} itemName={name} />
 
       <Text style={{ color: colors.text.primary, fontWeight: '600', marginTop: 16, marginBottom: 8 }}>
         {t('business.rentals.listings', 'Listings')}
@@ -342,31 +337,35 @@ export default function BusinessRentalItemEditScreen() {
               mode="outlined"
               style={styles.field}
             />
-            <TextInput
-              label={t(
-                'business.rentals.wizard.location.deposit',
-                'Security deposit (optional)'
-              )}
-              value={edit.deposit}
-              onChangeText={(v) =>
-                setListingEdits((prev) => ({
-                  ...prev,
-                  [listingId]: { ...prev[listingId], deposit: v },
-                }))
-              }
-              keyboardType="decimal-pad"
-              mode="outlined"
-              style={styles.field}
-            />
-            <Text
-              variant="bodySmall"
-              style={{ color: colors.text.secondary, marginTop: -6, marginBottom: 10 }}
-            >
-              {t(
-                'business.rentals.wizard.location.depositHelp',
-                'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-              )}
-            </Text>
+            {showsCardDeposit(item.currency) ? (
+              <>
+                <TextInput
+                  label={t(
+                    'business.rentals.wizard.location.deposit',
+                    'Security deposit (optional)'
+                  )}
+                  value={edit.deposit}
+                  onChangeText={(v) =>
+                    setListingEdits((prev) => ({
+                      ...prev,
+                      [listingId]: { ...prev[listingId], deposit: v },
+                    }))
+                  }
+                  keyboardType="decimal-pad"
+                  mode="outlined"
+                  style={styles.field}
+                />
+                <Text
+                  variant="bodySmall"
+                  style={{ color: colors.text.secondary, marginTop: -6, marginBottom: 10 }}
+                >
+                  {t(
+                    'business.rentals.wizard.location.depositHelp',
+                    'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                  )}
+                </Text>
+              </>
+            ) : null}
             <TextInput
               label={t('business.rentals.units', 'Units available')}
               value={edit.units}

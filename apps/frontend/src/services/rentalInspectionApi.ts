@@ -4,6 +4,7 @@ import type {
   InspectionUnit,
   InspectionView,
   PhotoRole,
+  PickupPhotoRules,
 } from '../utils/rentalInspection';
 
 function root(bookingId: string): string {
@@ -26,6 +27,7 @@ export function createRentalInspectionApi(api: AxiosInstance) {
         wear: string;
         checklistNote?: string;
         physicalLabel?: string;
+        guideUnconfirmed?: string[];
       }>
     ) => api.put(`${root(bookingId)}/${stage}/items`, { items }).then((res) => res.data),
     submit: (bookingId: string, stage: InspectionStage, claimedDamageAmount?: number) =>
@@ -37,6 +39,14 @@ export function createRentalInspectionApi(api: AxiosInstance) {
     ) => api.post(`${root(bookingId)}/${stage}/acknowledgements`, body).then((res) => res.data),
     handback: (bookingId: string) =>
       api.post(`${root(bookingId)}/return/handback`).then((res) => res.data),
+    photoRules: (bookingId: string) =>
+      api.get<PickupPhotoRules>(`${root(bookingId)}/pickup/photo-rules`).then((res) => res.data),
+    reusePickup: (bookingId: string) =>
+      api.post(`${root(bookingId)}/pickup/reuse`).then((res) => res.data),
+    skipSlot: (bookingId: string, body: { unitId: string; slotKey: string; reason: string }) =>
+      api.post(`${root(bookingId)}/pickup/slot-skips`, body).then((res) => res.data),
+    clearSlot: (bookingId: string, body: { unitId: string; slotKey: string }) =>
+      api.post(`${root(bookingId)}/pickup/slot-skips/clear`, body).then((res) => res.data),
     photoUrl: (bookingId: string, mediaId: string) =>
       api
         .get<{ url: string; expiresAt: string }>(`${root(bookingId)}/evidence/${mediaId}/url`)
@@ -46,6 +56,8 @@ export function createRentalInspectionApi(api: AxiosInstance) {
       unitId: string;
       role: PhotoRole;
       file: File;
+      exifDateTime?: string;
+      captureSource?: 'camera' | 'gallery' | 'web';
     }) => {
       const contentType = input.file.type === 'image/jpg' ? 'image/jpeg' : input.file.type;
       const signed = await api
@@ -56,6 +68,8 @@ export function createRentalInspectionApi(api: AxiosInstance) {
             role: input.role,
             contentType,
             fileSize: input.file.size,
+            exifDateTime: input.exifDateTime,
+            captureSource: input.captureSource ?? 'web',
           }
         )
         .then((res) => res.data);

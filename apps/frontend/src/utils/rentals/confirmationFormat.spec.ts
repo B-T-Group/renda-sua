@@ -7,6 +7,7 @@ import {
   formatBookedSpan,
   formatConfirmationDue,
   formatConfirmationMoney,
+  inspectionExplainerRail,
 } from './confirmationFormat';
 
 describe('confirmation timezone', () => {
@@ -39,6 +40,10 @@ describe('confirmation timezone', () => {
     expect(formatConfirmationMoney(65, 'CAD', 'en')).toBe('$65.00');
     expect(formatConfirmationMoney(65, 'CAD', 'fr')).toBe('65,00\u00a0$');
     expect(formatConfirmationMoney(45, 'CAD', 'en')).not.toContain('CA$');
+    expect(formatConfirmationMoney(45000, 'XAF', 'en')).toBe('45\u00a0000\u00a0FCFA');
+    expect(inspectionExplainerRail('momo', 'CAD')).toBe('card');
+    expect(inspectionExplainerRail('momo', 'XAF')).toBe('momo');
+    expect(inspectionExplainerRail('card', 'XAF')).toBe('card');
   });
 
   it('calls a deposit held only while a Stripe authorization is open', () => {

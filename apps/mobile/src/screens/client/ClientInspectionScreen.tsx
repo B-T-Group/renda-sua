@@ -15,7 +15,8 @@ import { useClientInspection } from '../../hooks/useClientInspection';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { acceptAndStart, getBooking, getPaymentStatus } from '../../services/rentalsApi';
-import { formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
+import { formatListingDue } from '../../utils/rentals/rentalRequestFormat';
+import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
 import {
   confirmationDepositHeld,
   confirmationTimeZone,
@@ -62,7 +63,11 @@ export default function ClientInspectionScreen() {
 
   const preview = model.booking?.accept_start_preview;
   const amountDue = preview?.amount_due_at_pickup ?? 0;
-  const amountLabel = formatRequestAmount(amountDue, model.booking?.currency ?? 'XAF', i18n.language);
+  const amountLabel = formatConfirmationMoney(amountDue, model.booking?.currency ?? 'XAF', i18n.language);
+  const photoZone = confirmationTimeZone(
+    model.booking?.rental_location_listing?.business_location?.address?.country,
+    model.booking?.currency
+  );
   const dueLabel = model.booking?.end_at ? formatListingDue(model.booking.end_at, i18n.language) : '';
   const pickupStart = stage === 'pickup' && !damaged;
 
@@ -267,16 +272,30 @@ export default function ClientInspectionScreen() {
             total: ids.length,
           })}
         </Text>
+        {unit.photos.some((photo) => photo.reused) ? (
+          <Text style={{ color: colors.text.secondary }}>
+            {t('rentalInspection.reuseTransparency', 'Some photos come from an earlier rental. Each photo shows the date it was taken.')}
+          </Text>
+        ) : null}
         <View style={styles.photos}>
           {unit.photos.map((photo) => (
-            <View key={photo.id} style={[styles.photo, { backgroundColor: colors.surfaceInput }]}>
-              {photo.url ? <Image source={{ uri: photo.url }} style={styles.image} /> : null}
-              <Text style={{ color: colors.text.secondary }}>{photoRoleLabel(photo.role, t)}</Text>
-            </View>
+            <ReviewPhoto key={photo.id} photo={photo} zone={photoZone} language={i18n.language} />
           ))}
         </View>
         <Text style={{ color: colors.text.primary }}>{conditionLine(unit.condition, t)}</Text>
         <Text style={{ color: colors.text.primary }}>{wearLine(unit.wear, t)}</Text>
+        {(model.view?.slotSkips ?? [])
+          .filter((row) => row.unitId === unit.unitId)
+          .map((row) => (
+            <Text key={row.slotKey} style={{ color: colors.text.secondary }}>
+              {t('rentalInspection.skippedAngle', 'Skipped {{angle}}: {{reason}}', {
+                angle: row.slotKey.startsWith('extra:')
+                  ? t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: row.slotKey.slice(6) })
+                  : row.slotKey,
+                reason: row.reason,
+              })}
+            </Text>
+          ))}
         {unit.accessories.map((row) => (
           <Text key={row.name} style={{ color: colors.text.primary }}>{row.name} · {row.count}</Text>
         ))}
@@ -350,7 +369,12 @@ export default function ClientInspectionScreen() {
                   ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
                   : t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')}
             </Button>
-            <Button mode="outlined" textColor={colors.error.main} style={styles.action} onPress={() => setPanel(damaged ? 'dispute' : 'correction')}>
+            <Button
+              mode="outlined"
+              textColor={pickupStart && !damaged ? colors.text.primary : colors.error.main}
+              style={[styles.action, pickupStart && !damaged ? { borderColor: colors.border } : null]}
+              onPress={() => setPanel(damaged ? 'dispute' : 'correction')}
+            >
               {damaged
                 ? t('rentalInspection.disputeClaim', 'Dispute this claim')
                 : pickupStart
@@ -407,6 +431,58 @@ export default function ClientInspectionScreen() {
   );
 }
 
+function ReviewPhoto({
+  photo,
+  zone,
+  language,
+}: {
+  photo: { role: string; url?: string | null; reused?: boolean; captureSource?: string | null; capturedAt?: string | null };
+  zone: string;
+  language: string;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const origin = photo.reused ? t('rentalInspection.reusedBadge', 'Reused') : t('rentalInspection.newBadge', 'New');
+  const day = photo.capturedAt ? formatListingDay(photo.capturedAt, zone, language) : '';
+  return (
+    <View style={styles.photo}>
+      <ReviewFrame photo={photo} origin={origin} />
+      <Text numberOfLines={1} style={[styles.role, { color: colors.text.primary }]}>{photoRoleLabel(photo.role, t)}</Text>
+      {photo.captureSource || photo.reused ? <ReviewDate origin={origin} day={day} /> : null}
+    </View>
+  );
+}
+
+function ReviewFrame({
+  photo,
+  origin,
+}: {
+  photo: { url?: string | null; reused?: boolean };
+  origin: string;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.frame, { backgroundColor: colors.surfaceInput }]}>
+      {photo.url ? <Image source={{ uri: photo.url }} style={styles.image} /> : null}
+      {photo.reused ? (
+        <View style={[styles.reused, { backgroundColor: colors.text.primary }]}>
+          <Text style={styles.reusedText}>{origin}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ReviewDate({ origin, day }: { origin: string; day: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.metaRow}>
+      <Text numberOfLines={1} style={[styles.metaWord, { color: colors.text.secondary }]}>{origin}</Text>
+      {day ? <Text style={[styles.metaDate, { color: colors.text.secondary }]}>{` · ${day}`}</Text> : null}
+    </View>
+  );
+}
+
 function photoRoleLabel(role: string, t: (key: string, fallback: string) => string): string {
   if (role === 'overview') return t('rentalInspection.overview', 'Overview');
   if (role === 'other_side') return t('rentalInspection.otherSide', 'Other side');
@@ -436,8 +512,15 @@ function noticeText(notice: string, t: (key: string, fallback: string) => string
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  photo: { width: '31%', minHeight: 96, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  image: { ...StyleSheet.absoluteFillObject },
+  photo: { width: '31%' },
+  frame: { height: 96, borderRadius: 12, overflow: 'hidden' },
+  image: { width: '100%', height: 96 },
+  reused: { position: 'absolute', top: 4, right: 4, borderRadius: 4, paddingHorizontal: 4 },
+  reusedText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  role: { textAlign: 'center', marginTop: 4, fontSize: 12 },
+  metaRow: { flexDirection: 'row', justifyContent: 'center' },
+  metaWord: { flexShrink: 1, fontSize: 11 },
+  metaDate: { flexShrink: 0, fontSize: 11 },
   check: { minHeight: 48, justifyContent: 'center' },
   footer: { paddingHorizontal: 16, paddingTop: 8 },
   action: { minHeight: 48, justifyContent: 'center', width: '100%' },

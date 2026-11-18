@@ -13,6 +13,7 @@ import type { AddRentalLocationForm } from '../../../hooks/business/useBusinessA
 import { useTheme } from '../../../contexts/ThemeContext';
 import { ListingPreviewSheet } from '../ListingPreviewSheet';
 import { RentalWeeklyHoursSummary } from './RentalWeeklyHoursSummary';
+import { showsCardDeposit } from '../../../utils/rentals/cardDeposit';
 
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
 
@@ -230,27 +231,31 @@ export function AddRentalLocationStep({
         disabled={busy}
         style={styles.field}
       />
-      <TextInput
-        label={t(
-          'business.rentals.wizard.location.deposit',
-          'Security deposit (optional)'
-        )}
-        value={deposit}
-        onChangeText={setDeposit}
-        keyboardType="decimal-pad"
-        mode="outlined"
-        disabled={busy}
-        style={styles.field}
-      />
-      <Text
-        variant="bodySmall"
-        style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
-      >
-        {t(
-          'business.rentals.wizard.location.depositHelp',
-          'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-        )}
-      </Text>
+      {showsCardDeposit(item.currency) ? (
+        <>
+          <TextInput
+            label={t(
+              'business.rentals.wizard.location.deposit',
+              'Security deposit (optional)'
+            )}
+            value={deposit}
+            onChangeText={setDeposit}
+            keyboardType="decimal-pad"
+            mode="outlined"
+            disabled={busy}
+            style={styles.field}
+          />
+          <Text
+            variant="bodySmall"
+            style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
+          >
+            {t(
+              'business.rentals.wizard.location.depositHelp',
+              'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+            )}
+          </Text>
+        </>
+      ) : null}
       <TextInput
         label={t('business.rentals.units', 'Units available')}
         value={units}

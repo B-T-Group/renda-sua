@@ -17,6 +17,7 @@ import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { InspectionOptInCard } from '../rentals/InspectionOptInCard';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import {
@@ -32,6 +33,7 @@ import LoadingPage from '../common/LoadingPage';
 import RentalListingModerationStatusChip from '../rentals/RentalListingModerationStatusChip';
 import { RichTextEditor } from '../common/RichTextEditor';
 import SEOHead from '../seo/SEOHead';
+import { depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
 
 function rentalDeleteErrorMessage(error: unknown, fallback: string): string {
   const err = error as { response?: { data?: { message?: string | string[] } } };
@@ -103,9 +105,10 @@ function buildItemUpdateBody(
 }
 
 function buildListingUpdateBody(
-  f: ListingFormState
+  f: ListingFormState,
+  currency: string
 ): UpdateBusinessRentalListingBody | null {
-  const parsed = parsePriceFields(f);
+  const parsed = parsePriceFields(f, currency);
   if (!parsed) return null;
   return {
     ...parsed,
@@ -116,7 +119,7 @@ function buildListingUpdateBody(
   };
 }
 
-function parsePriceFields(f: ListingFormState): {
+function parsePriceFields(f: ListingFormState, currency: string): {
   base_price_per_hour: number;
   base_price_per_day: number;
   security_deposit_amount?: number;
@@ -126,17 +129,14 @@ function parsePriceFields(f: ListingFormState): {
 } | null {
   const base = Number(f.base_price_per_hour);
   const day = Number(f.base_price_per_day);
-  const depositRaw = f.security_deposit_amount.trim();
-  // A cleared deposit field reverts to the advertised default (8x hourly).
-  const deposit =
-    depositRaw === '' ? Number((base * 8).toFixed(2)) : Number(depositRaw);
+  const deposit = depositOnSave(currency, f.security_deposit_amount, base);
   const minD = Number(f.min_rental_hours);
   const maxRaw = f.max_rental_hours.trim();
   const maxD = maxRaw === '' ? null : Number(maxRaw);
   const units = Number(f.units_available);
   if (Number.isNaN(base) || base < 0) return null;
   if (Number.isNaN(day) || day < 0) return null;
-  if (Number.isNaN(deposit) || deposit < 0) return null;
+  if (deposit !== undefined && (Number.isNaN(deposit) || deposit < 0)) return null;
   if (Number.isNaN(minD) || minD < 1) return null;
   if (maxD !== null && (Number.isNaN(maxD) || maxD < 1)) return null;
   if (maxD !== null && maxD < minD) return null;
@@ -144,7 +144,7 @@ function parsePriceFields(f: ListingFormState): {
   return {
     base_price_per_hour: base,
     base_price_per_day: day,
-    security_deposit_amount: deposit,
+    ...(deposit !== undefined ? { security_deposit_amount: deposit } : {}),
     min_rental_hours: minD,
     max_rental_hours: maxD,
     units_available: units,
@@ -268,7 +268,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
     async (listingId: string) => {
       const f = listingForms[listingId];
       if (!f) return;
-      const body = buildListingUpdateBody(f);
+      const body = buildListingUpdateBody(f, item?.currency || lockedCurrency);
       if (!body) {
         enqueueSnackbar(
           t('business.rentals.listingInvalid', 'Check listing numbers and max ≥ min.'),
@@ -292,7 +292,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
         setSavingListingId(null);
       }
     },
-    [enqueueSnackbar, listingForms, reload, t, updateBusinessRentalListing]
+    [enqueueSnackbar, item?.currency, listingForms, lockedCurrency, reload, t, updateBusinessRentalListing]
   );
 
   const publishListing = useCallback(
@@ -535,6 +535,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
               }
               label={t('business.rentals.itemActive', 'Active in catalog')}
             />
+            {itemId ? <InspectionOptInCard itemId={itemId} itemName={name} /> : null}
             <Button
               variant="contained"
               onClick={() => void saveItem()}
@@ -660,21 +661,23 @@ const BusinessRentalItemEditPage: React.FC = () => {
                   type="number"
                   fullWidth
                 />
-                <TextField
-                  label={t('business.rentals.securityDeposit', 'Security deposit')}
-                  value={f.security_deposit_amount}
-                  onChange={(e) =>
-                    patchListingForm(l.id, {
-                      security_deposit_amount: e.target.value,
-                    })
-                  }
-                  type="number"
-                  fullWidth
-                  helperText={t(
-                    'business.rentals.securityDepositHelper',
-                    'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-                  )}
-                />
+                {showsCardDeposit(item?.currency || lockedCurrency) ? (
+                  <TextField
+                    label={t('business.rentals.securityDeposit', 'Security deposit')}
+                    value={f.security_deposit_amount}
+                    onChange={(e) =>
+                      patchListingForm(l.id, {
+                        security_deposit_amount: e.target.value,
+                      })
+                    }
+                    type="number"
+                    fullWidth
+                    helperText={t(
+                      'business.rentals.securityDepositHelper',
+                      'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                    )}
+                  />
+                ) : null}
                 <TextField
                   label={t('rentals.minHours', 'Min hours')}
                   value={f.min_rental_hours}

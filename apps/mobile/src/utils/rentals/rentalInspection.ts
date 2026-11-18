@@ -9,6 +9,10 @@ export interface InspectionPhoto {
   role: string;
   url?: string;
   expiresAt?: string;
+  slotKey?: string | null;
+  capturedAt?: string | null;
+  reused?: boolean;
+  captureSource?: string | null;
 }
 
 export interface InspectionAccessory {
@@ -25,6 +29,8 @@ export interface InspectionUnit {
   accessories: InspectionAccessory[];
   wear: string;
   photos: InspectionPhoto[];
+  checklistNote?: string | null;
+  guideUnconfirmed?: string[];
 }
 
 export interface InspectionView {
@@ -38,6 +44,44 @@ export interface InspectionView {
   minPhotos?: number;
   correctionReason?: string | null;
   claimedDamageAmount?: number | null;
+  slotSkips?: Array<{ unitId: string; slotKey: string; reason: string }>;
+  pickupPhotoRules?: PickupPhotoRules | null;
+}
+
+export interface PickupGuideSlot {
+  slotKey: string;
+  role: PhotoRole;
+  required: boolean;
+  url: string | null;
+  mediaId?: string;
+}
+
+export interface PickupReuseStatus {
+  available: boolean;
+  blocked: boolean;
+  reason?: string | null;
+  source?: 'return' | 'baseline' | null;
+  submittedAt?: string | null;
+  photoCount?: number;
+}
+
+export interface PickupPhotoRules {
+  enabled: boolean;
+  optIn?: boolean;
+  beforeStart?: boolean;
+  webUpload?: boolean;
+  reuse?: PickupReuseStatus | null;
+  pickupDay: boolean;
+  timezone: string;
+  startAt: string | null;
+  guideMode: 'guide' | 'blank' | null;
+  guide: null | {
+    versionId: string;
+    submittedAt: string;
+    photoCount: number;
+    checkCount: number;
+    slots: PickupGuideSlot[];
+  };
 }
 
 export const REQUIRED_PHOTO_ROLES: PhotoRole[] = ['overview', 'other_side', 'accessories'];

@@ -112,6 +112,29 @@ describe('RentalSearchService', () => {
     expect(open.listings[0].latest_card_end_at).toEqual(expect.any(String));
   });
 
+  it('uses the item opt-in for the card window when the flag is on', async () => {
+    const routing = { resolveRailForCountry: jest.fn().mockResolvedValue('stripe') };
+    const flags = {
+      cardWindowGuardEnabled: jest.fn().mockResolvedValue(false),
+      chargeAtPickupEnabled: jest.fn().mockResolvedValue(true),
+      isEnabled: jest.fn().mockResolvedValue(true),
+      optInEnabled: jest.fn().mockResolvedValue(true),
+      numberConfig: jest.fn().mockResolvedValue(72),
+    };
+    const localRentals = {
+      collectPublicRentalListings: jest.fn(),
+      listingInspectionPolicy: jest.fn().mockResolvedValue(null),
+    };
+    const localHasura = { executeQuery: jest.fn().mockResolvedValue({ rental_booking_windows: [] }) };
+    const searched = new RentalSearchService(localRentals as any, localHasura as any, routing as any, flags as any);
+    const row = listing('ca', 'Drill');
+    row.business_location.address.country = 'CA';
+    localRentals.collectPublicRentalListings.mockResolvedValue([row]);
+    const result = await searched.search({ country_code: 'CA' });
+    expect(localRentals.listingInspectionPolicy).toHaveBeenCalledWith('CA', 'ca-item');
+    expect(result.listings[0].mode).toBe('authorize_upfront');
+  });
+
   it('suggests categories and in-market titles', async () => {
     hasura.executeQuery.mockResolvedValue({
       rental_categories: [{ id: 'cat-cam', name: 'Cameras' }],

@@ -7,6 +7,14 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
+import {
+  ChecklistTag,
+  PickupCameraDenied,
+  PickupGuideStart,
+  PickupSubmitBlocked,
+} from '../../components/rentals/inspection/PickupPhotoChrome';
+import { blockedScreenRows, submitLeftCount } from '../../utils/rentals/blockedGuideRows';
+import { formatListingDay, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
 import { ReportSentConfirmation } from '../../components/rentals/inspection/ReportSentConfirmation';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -19,7 +27,7 @@ type Route = RouteProp<BusinessRootStackParamList, 'BusinessInspection'>;
 
 export default function BusinessInspectionScreen() {
   const { t, i18n } = useTranslation();
-  const { colors, spacing, borderRadius, typography } = useTheme();
+  const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
   const route = useRoute<Route>();
@@ -28,10 +36,51 @@ export default function BusinessInspectionScreen() {
   const { flags, loading: flagsLoading } = useClientFlags();
   const confirmationsOn = !flagsLoading && flags.rentals_inspection_confirmations_enabled;
   const [claim, setClaim] = useState('');
+  const [blocked, setBlocked] = useState(false);
+  const [cameraLabel, setCameraLabel] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const unit = model.current;
   const needsClaim = stage === 'return' && model.units.some((row) => row.returnChoice === 'damage' || row.condition === 'damaged');
   const overtime = model.booking ? derivedOvertime(model.booking) : null;
+
+  const rulesOn = stage === 'pickup' && model.rules?.enabled === true;
+  const optIn = rulesOn && model.rules?.optIn === true;
+  const guideDate = model.rules?.guide
+    ? formatListingDay(model.rules.guide.submittedAt, model.rules.timezone, i18n.language)
+    : '';
+
+  if (model.cameraDenied && rulesOn) {
+    return <PickupCameraDenied onClose={model.dismissCameraDenied} />;
+  }
+
+  if (rulesOn && model.rules?.guide && !model.rules.guideMode && !model.loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.pageBackground, padding: spacing.md }}>
+        <PickupGuideStart rules={model.rules} busy={model.busy} onChoose={(mode) => void model.chooseGuide(mode)} />
+      </View>
+    );
+  }
+
+  if (blocked && rulesOn) {
+    const thumbs = model.units.flatMap((row) => row.photos);
+    const slots = thumbs.map((photo) => ({ slotKey: photo.slotKey ?? '', url: photo.ghostUri ?? photo.uri ?? null }));
+    const rows = blockedScreenRows(model.guideGaps, model.view?.slotSkips ?? [], slots).map((row) => ({
+      ...row,
+      label: angleLabel(row.slotKey, t),
+      thumbUri: row.thumbUrl,
+    }));
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
+        <PickupSubmitBlocked
+          rows={rows}
+          date={guideDate}
+          left={submitLeftCount(model.guideGaps)}
+          onRetake={(row) => openRetake(model, row, setBlocked, setCameraLabel, t)}
+          onSkip={(row, reason) => void model.skipAngle(row.slotKey, reason, row.unitId)}
+        />
+      </View>
+    );
+  }
 
   if (model.loading || !unit) {
     return (
@@ -114,12 +163,67 @@ export default function BusinessInspectionScreen() {
             <ComparePhoto label={t('rentalInspection.returnColumn', 'Return')} uri={unit.photos[0]?.uri} />
           </View>
         ) : null}
-        <InspectionPhotoSlots
-          slots={unit.photos}
-          minPhotos={model.minPhotos}
-          onAdd={(role, slot) => void model.addPhoto(role, slot)}
-          onRetry={(slot) => void model.retryPhoto(slot)}
-        />
+        {optIn && model.rules?.reuse ? (
+          <Button
+            mode="outlined"
+            disabled={model.busy || model.rules.reuse.blocked || !model.rules.reuse.available}
+            onPress={() => void model.reuseLast()}
+          >
+            {model.rules.reuse.blocked
+              ? t('rentalInspection.reuseBlocked', 'The last return reported damage.')
+              : t('rentalInspection.reuseAction', 'Reuse photos from last rental')}
+          </Button>
+        ) : null}
+        {rulesOn && !optIn && !model.rules?.pickupDay ? (
+          <InspectionBanner tone="info">
+            {t('rentalInspection.earlyPrepareBody', 'You can prepare the checklist now; photos are taken on pickup day.')}
+          </InspectionBanner>
+        ) : (
+          <>
+            {rulesOn && model.rules?.guideMode === 'guide' ? (
+              <Text style={{ color: colors.text.secondary }}>
+                {t('rentalInspection.retakenProgress', '{{done}} of {{total}} retaken', {
+                  done: unit.photos.filter((photo) => photo.mediaId).length,
+                  total: unit.photos.length,
+                })}
+                {'\n'}
+                {t('rentalInspection.guideRetakeNote', 'Old photos are a guide. Every slot must be retaken.')}
+              </Text>
+            ) : null}
+            <InspectionPhotoSlots
+              slots={unit.photos.map((photo) => ({
+                ...photo,
+                tileLabel: slotTileLabel(photo.slotKey ?? photo.role, i18n.language),
+                fromLabel: photo.ghostUri && guideDate
+                  ? t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })
+                  : undefined,
+                stamp: photo.capturedAt && model.rules?.timezone
+                  ? formatListingDay(photo.capturedAt, model.rules.timezone, i18n.language)
+                  : undefined,
+                reused: optIn && photo.reused === true,
+                origin: optIn && photo.mediaId
+                  ? (photo.reused
+                    ? t('rentalInspection.reusedBadge', 'Reused')
+                    : t('rentalInspection.newBadge', 'New'))
+                  : undefined,
+              }))}
+              minPhotos={rulesOn ? null : model.minPhotos}
+              galleryLabel={optIn ? t('rentalInspection.gallery', 'Gallery') : undefined}
+              onGallery={optIn ? (role, slot) => void model.addPhoto(role, slot, false, 'gallery') : undefined}
+              onAdd={(role, slot) => {
+                const photo = unit.photos[slot];
+                if (rulesOn && !optIn) {
+                  setCameraLabel(angleLabel(photo?.slotKey ?? role, t));
+                  void model.addPhoto(role, slot, true);
+                  return;
+                }
+                void model.addPhoto(role, slot, false, optIn ? 'camera' : undefined);
+              }}
+              onRetry={(slot) => void model.retryPhoto(slot)}
+            />
+            {cameraLabel ? <Text numberOfLines={1} style={{ color: colors.text.primary }}>{cameraLabel}</Text> : null}
+          </>
+        )}
         {stage === 'return' ? (
           <View style={styles.row}>
             <Choice
@@ -135,6 +239,12 @@ export default function BusinessInspectionScreen() {
           </View>
         ) : (
           <View style={styles.row}>
+            {unit.guideUnconfirmed.includes('condition') ? (
+              <ChecklistTag
+                label={t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })}
+                onConfirm={() => model.confirmField('condition')}
+              />
+            ) : null}
             <Choice label={t('rentalInspection.overallGood', 'Overall good')} selected={unit.condition === 'good'} onPress={() => model.update({ condition: 'good' })} />
             <Choice label={t('rentalInspection.overallFair', 'Fair condition')} selected={unit.condition === 'fair'} onPress={() => model.update({ condition: 'fair' })} />
             <Choice label={t('rentalInspection.overallDamaged', 'Damaged')} selected={unit.condition === 'damaged'} onPress={() => model.update({ condition: 'damaged' })} />
@@ -195,6 +305,12 @@ export default function BusinessInspectionScreen() {
           value={unit.physicalLabel}
           onChangeText={(physicalLabel) => model.update({ physicalLabel })}
         />
+        {unit.guideUnconfirmed.includes('notes') ? (
+          <ChecklistTag
+            label={t('rentalInspection.fromDate', 'from {{date}}', { date: guideDate })}
+            onConfirm={() => model.confirmField('notes')}
+          />
+        ) : null}
         <TextInput
           mode="outlined"
           label={t('rentalInspection.notesOptional', 'Notes (optional)')}
@@ -206,10 +322,30 @@ export default function BusinessInspectionScreen() {
         <Button mode="contained" buttonColor={colors.cta.main} style={styles.action} disabled={model.busy} loading={model.busy} onPress={() => void model.saveAndNext()}>
           {t('rentalInspection.saveUnitNext', 'Save unit · next')}
         </Button>
-        <Button mode="contained" buttonColor={colors.cta.dark} style={styles.action} disabled={!model.canSubmit || model.busy || (needsClaim && !(Number(claim) > 0))} onPress={() => void submitReport(model, needsClaim ? Number(claim) : undefined, setEditing)}>
+        <Button
+          mode="contained"
+          buttonColor={colors.cta.dark}
+          style={styles.action}
+          disabled={
+            model.busy
+            || (needsClaim && !(Number(claim) > 0))
+            || (rulesOn && !optIn && !model.rules?.pickupDay)
+            || (optIn && model.rules?.beforeStart === false)
+            || (!model.canSubmit && model.guideGaps.length === 0)
+          }
+          onPress={() => {
+            if (rulesOn && model.rules?.guideMode === 'guide' && model.guideGaps.length) {
+              setBlocked(true);
+              return;
+            }
+            void submitReport(model, needsClaim ? Number(claim) : undefined, setEditing);
+          }}
+        >
           {stage === 'return'
             ? t('rentalInspection.submitReturn', 'Submit return report')
-            : t('rentalInspection.submitReport', 'Submit report')}
+            : rulesOn && submitLeftCount(model.guideGaps) > 0
+              ? t('rentalInspection.submitLeft', 'Submit report · {{count}} left', { count: submitLeftCount(model.guideGaps) })
+              : t('rentalInspection.submitReport', 'Submit report')}
         </Button>
         {stage === 'return' ? (
           <Button mode="outlined" style={styles.action} disabled={!model.canHandback || model.busy} onPress={() => void model.handback()}>
@@ -219,6 +355,37 @@ export default function BusinessInspectionScreen() {
       </View>
     </View>
   );
+}
+
+function angleLabel(slotKey: string, t: (key: string, fallback: string, options?: Record<string, string>) => string): string {
+  if (slotKey.startsWith('extra:')) {
+    return t('rentalInspection.extraAngle', 'Extra angle {{n}}', { n: slotKey.slice(6) });
+  }
+  const known: Record<string, [string, string]> = {
+    overview: ['rentalInspection.overview', 'Overview'],
+    other_side: ['rentalInspection.otherSide', 'Other side'],
+    accessories: ['rentalInspection.accessories', 'Accessories'],
+  };
+  const pair = known[slotKey];
+  return pair ? t(pair[0], pair[1]) : slotKey;
+}
+
+function openRetake(
+  model: ReturnType<typeof useInspectionCapture>,
+  row: { unitId: string; slotKey: string; reason?: string | null },
+  setBlocked: (value: boolean) => void,
+  setCameraLabel: (value: string) => void,
+  t: (key: string, fallback: string, options?: Record<string, string>) => string
+) {
+  const unitIndex = model.units.findIndex((unit) => unit.unitId === row.unitId);
+  if (unitIndex >= 0) model.setIndex(unitIndex);
+  const photos = model.units[unitIndex]?.photos ?? [];
+  const index = Math.max(0, photos.findIndex((photo) => photo.slotKey === row.slotKey));
+  const role = photos[index]?.role ?? 'wear';
+  setCameraLabel(angleLabel(row.slotKey, t));
+  setBlocked(false);
+  if (row.reason) void model.clearSkip(row.slotKey, row.unitId);
+  void model.addPhoto(role, index, true);
 }
 
 async function submitReport(
