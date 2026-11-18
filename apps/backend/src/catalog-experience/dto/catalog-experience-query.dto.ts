@@ -20,4 +20,8 @@ export class CatalogExperienceQueryDto {
   @IsOptional()
   @IsString()
   device?: string;
+
+  @IsOptional()
+  @IsIn(['all', 'food', 'export', 'rentals'])
+  surface?: 'all' | 'food' | 'export' | 'rentals';
 }

@@ -12,7 +12,7 @@ import {
 import { KeyboardAwareScrollView } from '../../components/layout/KeyboardAwareScrollView';
 import { useBusinessRentalAddListing } from '../../hooks/business/useBusinessRentalAddListing';
 import { useTheme } from '../../contexts/ThemeContext';
-import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { showsListingDeposit } from '../../utils/rentals/cardDeposit';
 
 export default function BusinessRentalAddListingScreen() {
   const { t } = useTranslation();
@@ -29,6 +29,7 @@ export default function BusinessRentalAddListingScreen() {
     setDaily,
     deposit,
     setDeposit,
+    depositInvalid,
     units,
     setUnits,
     pickup,
@@ -169,7 +170,7 @@ export default function BusinessRentalAddListingScreen() {
         disabled={busy || allLocationsListed}
         style={styles.field}
       />
-      {showsCardDeposit(itemCurrency) ? (
+      {showsListingDeposit(itemCurrency) ? (
         <>
           <TextInput
             label={t(
@@ -180,17 +181,20 @@ export default function BusinessRentalAddListingScreen() {
             onChangeText={setDeposit}
             keyboardType="decimal-pad"
             mode="outlined"
+            error={depositInvalid}
             disabled={busy || allLocationsListed}
             style={styles.field}
           />
           <Text
             variant="bodySmall"
-            style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
+            style={{ color: depositInvalid ? colors.error.main : colors.text.secondary, marginBottom: spacing.sm }}
           >
-            {t(
-              'business.rentals.wizard.location.depositHelp',
-              'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-            )}
+            {depositInvalid
+              ? t('business.rentals.wizard.location.depositInvalid', 'Enter a valid security deposit.')
+              : t(
+                  'business.rentals.wizard.location.depositHelp',
+                  'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                )}
           </Text>
         </>
       ) : null}

@@ -132,6 +132,7 @@ export function buildCatalogExperienceCacheKey(input: {
   language: string;
   bucket: 'cold' | 'returning';
   userId?: string;
+  surface?: string;
 }): string {
   const who = input.bucket === 'returning' ? input.userId || 'user' : 'shared';
   return [
@@ -141,6 +142,7 @@ export function buildCatalogExperienceCacheKey(input: {
     input.language,
     input.bucket,
     who,
+    input.surface || 'all',
   ].join(':');
 }
 

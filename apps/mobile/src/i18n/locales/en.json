@@ -2710,6 +2710,7 @@
           "saveDraft": "Save as draft",
           "deposit": "Security deposit (optional)",
           "depositHelp": "Held on card rentals to cover extra hours. Default is 8× the hourly rate.",
+          "depositInvalid": "Enter a valid security deposit.",
           "weeklyHours": "Weekly hours",
           "weeklyHoursDefaultHint": "Default hours — customers can book in these windows. You can customize later in the listing editor."
         },
@@ -6512,6 +6513,9 @@
       "primary": "I’ve returned it",
       "sheetTitle": "Did you hand the item to the business?",
       "sheetBody": "The business will check the item and confirm. Your {{amount}} deposit is released only after they confirm. This does not end the rental by itself.",
+      "sheetBodyNoDeposit": "The business will check the item and confirm. This does not end the rental by itself.",
+      "waitingBodyNoDeposit": "You reported the return on {{time}}. The business will check the item.",
+      "escalatedBodyNoDeposit": "You reported the return on {{time}}. The business has not confirmed within 24 hours. Support is following up.",
       "waitingTitle": "Waiting for the business to confirm",
       "waitingBody": "You reported the return on {{time}}. The business will check the item. Your {{amount}} deposit is released only after they confirm.",
       "waitingStepper": "Waiting for confirmation",

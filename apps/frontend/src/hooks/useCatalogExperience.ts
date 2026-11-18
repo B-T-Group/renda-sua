@@ -9,7 +9,12 @@ import {
 import { useApiClient } from './useApiClient';
 import { catalogGeoQueryParams, useCatalogGeoParams } from './useCatalogGeoParams';
 
-export function useCatalogExperience(enabled: boolean) {
+export type CatalogExperienceSurface = 'all' | 'food' | 'export' | 'rentals';
+
+export function useCatalogExperience(
+  enabled: boolean,
+  surface: CatalogExperienceSurface = 'all'
+) {
   const apiClient = useApiClient();
   const catalogGeo = useCatalogGeoParams();
   const { i18n } = useTranslation();
@@ -26,14 +31,18 @@ export function useCatalogExperience(enabled: boolean) {
     let cancelled = false;
     setLoading(true);
     setFailed(false);
-    void loadExperience(apiClient, catalogGeo, i18n.language, () => cancelled).then(
-      (result) => {
-        if (cancelled || !result) return;
-        setModules(result.modules);
-        setFailed(result.failed);
-        setLoading(false);
-      }
-    );
+    void loadExperience(
+      apiClient,
+      catalogGeo,
+      i18n.language,
+      surface,
+      () => cancelled
+    ).then((result) => {
+      if (cancelled || !result) return;
+      setModules(result.modules);
+      setFailed(result.failed);
+      setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
@@ -45,6 +54,7 @@ export function useCatalogExperience(enabled: boolean) {
     catalogGeo.country_code,
     catalogGeo.state,
     i18n.language,
+    surface,
   ]);
 
   return { modules, loading, failed };
@@ -54,12 +64,13 @@ async function loadExperience(
   apiClient: AxiosInstance,
   catalogGeo: { ready: boolean; country_code?: string; state?: string },
   language: string,
+  surface: CatalogExperienceSurface,
   isCancelled: () => boolean
 ): Promise<{ modules: CatalogModule[]; failed: boolean } | null> {
   try {
     const response = await apiClient.get<{ data?: CatalogExperienceResponse }>(
       '/catalog/experience',
-      experienceParams(catalogGeo, language)
+      experienceParams(catalogGeo, language, surface)
     );
     if (isCancelled()) return null;
     const modules = response.data?.data?.modules ?? [];
@@ -72,7 +83,8 @@ async function loadExperience(
 
 function experienceParams(
   catalogGeo: { country_code?: string; state?: string },
-  language: string
+  language: string,
+  surface: CatalogExperienceSurface
 ) {
   return {
     params: {
@@ -80,6 +92,7 @@ function experienceParams(
       language: language.startsWith('fr') ? 'fr' : 'en',
       layout: 'discovery',
       device: 'web',
+      surface,
     },
   };
 }

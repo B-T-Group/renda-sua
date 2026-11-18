@@ -58,6 +58,7 @@ export class CatalogExperienceService {
         language: context.language,
         bucket,
         userId: context.userId,
+        surface: context.surface,
       }),
       () => this.assemble(context),
       { ttlSeconds: ttl }

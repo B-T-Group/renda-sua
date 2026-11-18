@@ -1,3 +1,5 @@
+import { shownSecurityDeposit } from '../rentals/rental-deposit';
+
 export type RentalQuestionTopic =
   | 'price'
   | 'deposit'
@@ -34,7 +36,7 @@ type ListingFacts = {
   dropoff_instructions?: string | null;
   area?: string | null;
   business_location?: { address?: { city?: string | null; state?: string | null } | null } | null;
-  rental_item?: { description?: string | null };
+  rental_item?: { description?: string | null; currency?: string | null };
 };
 
 export function rentalArea(listing: ListingFacts): string | null {
@@ -47,7 +49,7 @@ export function rentalArea(listing: ListingFacts): string | null {
 }
 
 export function rentalAnswerGrounded(listing: ListingFacts, topic: RentalQuestionTopic): boolean {
-  if (topic === 'deposit') return hasAmount(listing.security_deposit_amount);
+  if (topic === 'deposit') return hasDeposit(listing);
   if (topic === 'price') return hasAmount(listing.base_price_per_day) || hasAmount(listing.base_price_per_hour);
   if (topic === 'pickup') return Boolean(rentalArea(listing)) || hasText(listing.pickup_instructions);
   if (topic === 'return') return hasText(listing.dropoff_instructions);
@@ -61,6 +63,10 @@ export function rentalQuestionSay(listing: ListingFacts, topic: RentalQuestionTo
   if (topic === 'pickup') return pickupSay(listing, fr);
   if (topic === 'other' || topic === 'price') return null;
   return rentalAnswerGrounded(listing, topic) ? null : emptyFieldReply(fr);
+}
+
+function hasDeposit(listing: ListingFacts): boolean {
+  return shownSecurityDeposit(listing.rental_item?.currency, listing.security_deposit_amount) > 0;
 }
 
 function pickupSay(listing: ListingFacts, fr: boolean): string | null {

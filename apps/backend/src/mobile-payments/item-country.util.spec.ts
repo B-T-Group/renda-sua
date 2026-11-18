@@ -8,11 +8,14 @@ describe('resolveItemCountry', () => {
     expect(resolveItemCountry('cm', 'GA')).toBe('CM');
     expect(resolveItemCountry('Cameroon', 'GA')).toBe('CM');
     expect(resolveItemCountry('Cameroun', 'CA')).toBe('CM');
+    expect(resolveItemCountry('United States', 'CM')).toBe('US');
+    expect(resolveItemCountry('USA', 'GA')).toBe('US');
   });
 
   it('falls back to the owner country when the location has none', () => {
     expect(resolveItemCountry(null, ' ga ')).toBe('GA');
     expect(resolveItemCountry('', 'CM')).toBe('CM');
+    expect(resolveItemCountry(null, 'United States')).toBe('US');
   });
 
   it('returns null when neither country is present', () => {

@@ -9,11 +9,11 @@ import { availabilityForListing, parseSearchDateRange, type SearchDateRange } fr
 import { type CapacityWindow } from './rental-capacity';
 import {
   latestExclusiveEndDate,
-  listingCountryCode,
   readLatestCardEndAt,
   resolveCardPaymentPolicy,
   type CardPaymentPolicy,
 } from './rental-card-window';
+import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { RentalsService, type PublicRentalListingRow } from './rentals.service';
 
 const DAY_MS = 86_400_000;
@@ -39,23 +39,13 @@ export class RentalSearchService {
 
   async search(query: RentalSearchQueryDto) {
     const range = this.dateRange(query.start_date, query.end_date);
-    const rows = await this.rentals.collectPublicRentalListings({
-      country_code: query.country_code,
-      state: query.state,
-      q: query.q,
-      matchCategoryName: true,
-      category_id: query.category_id,
-      sort: query.sort,
-      operation_mode: query.operation_mode,
-      min_price: query.min_price,
-      max_price: query.max_price,
-    });
+    const rows = await this.rentals.collectPublicRentalListings(this.catalogQuery(query));
     const window = await this.cardWindow(query.country_code);
-    const stamped = await this.stampHits(await this.annotate(rows, range), query.country_code, window);
-    const guard = range ? await this.cardGuardEnabled(query.country_code) : false;
-    const hits = guard && range ? stamped.map((hit) => this.blockPastCardEnd(hit, range)) : stamped;
-    hits.sort((a, b) => compareHits(a, b));
-    return this.page(hits, query, range, window);
+    const ordered = await this.orderedHits(await this.annotate(rows, range), query.country_code, window, range);
+    const paged = this.page(ordered.hits, query, range, window);
+    if (ordered.guard) return paged;
+    const listings = await this.stampPage(paged.listings, query.country_code, window);
+    return { ...paged, listings };
   }
 
   async cardWindow(country?: string | null, latest?: string | null, inspected?: boolean): Promise<CardPaymentPolicy> {
@@ -186,31 +176,90 @@ export class RentalSearchService {
     };
   }
 
+  private catalogQuery(query: RentalSearchQueryDto) {
+    return {
+      country_code: query.country_code,
+      state: query.state,
+      q: query.q,
+      matchCategoryName: true,
+      category_id: query.category_id,
+      sort: query.sort,
+      operation_mode: query.operation_mode,
+      min_price: query.min_price,
+      max_price: query.max_price,
+    };
+  }
+
+  private async orderedHits(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    country: string | undefined,
+    window: CardPaymentPolicy,
+    range: SearchDateRange | null
+  ) {
+    const guard = range ? await this.cardGuardEnabled(country) : false;
+    if (!guard || !range) return { hits: [...hits].sort(compareHits), guard: false };
+    const blocked = (await this.stampHits(hits, country, window)).map((hit) => this.blockPastCardEnd(hit, range));
+    blocked.sort(compareHits);
+    return { hits: blocked, guard: true };
+  }
+
+  private async stampPage(listings: RentalSearchHit[], fallback: string | undefined, known: CardPaymentPolicy) {
+    const hits = listings.map((hit, catalogIndex) => ({ ...hit, catalogIndex }));
+    return (await this.stampHits(hits, fallback, known)).map(stripCatalogIndex);
+  }
+
   private async stampHits(
     hits: Array<RentalSearchHit & { catalogIndex: number }>,
     fallback: string | undefined,
     known: CardPaymentPolicy
   ) {
+    const inspected = await this.inspectBatch(hits, fallback);
     const cache = new Map<string, CardPaymentPolicy>();
-    const key = `${(fallback || '').trim().toUpperCase()}|`;
-    cache.set(key, known);
+    cache.set(`${(fallback || '').trim().toUpperCase()}|`, known);
     const stamped = [];
-    for (const hit of hits) stamped.push(await this.stampHit(hit, fallback, cache));
+    for (const hit of hits) stamped.push(await this.stampHit(hit, fallback, cache, inspected));
     return stamped;
   }
 
   private async stampHit(
     hit: RentalSearchHit & { catalogIndex: number },
     fallback: string | undefined,
-    cache: Map<string, CardPaymentPolicy>
+    cache: Map<string, CardPaymentPolicy>,
+    inspectedMap: Map<string, boolean | undefined> | null
   ) {
-    const code = listingCountryCode(hit.listing, fallback);
+    const code = this.isoCountry(hit.listing, fallback);
     const latest = readLatestCardEndAt(hit.listing);
-    const inspected = await this.itemInspected(code, hit.listing.rental_item?.id);
+    const itemId = hit.listing.rental_item?.id;
+    const inspected = inspectedMap ? inspectedMap.get(itemId ?? '') : await this.itemInspected(code, itemId);
     const key = `${code}|${latest ?? ''}|${String(inspected)}`;
     const fields = cache.get(key) ?? (await this.cardWindow(code, latest, inspected));
     cache.set(key, fields);
     return { ...hit, ...fields };
+  }
+
+  private isoCountry(listing: PublicRentalListingRow, fallback?: string | null): string {
+    const raw = listing.business_location?.address?.country || fallback || '';
+    return resolveItemCountry(raw) ?? raw.trim().toUpperCase();
+  }
+
+  private async inspectBatch(
+    hits: Array<RentalSearchHit & { catalogIndex: number }>,
+    fallback: string | undefined
+  ): Promise<Map<string, boolean | undefined> | null> {
+    const batch = (this.rentals as {
+      listingWindowByItem?: (
+        rows: Array<{ country?: string | null; itemId?: string | null }>
+      ) => Promise<Map<string, boolean | undefined>>;
+    }).listingWindowByItem;
+    if (typeof batch !== 'function') return null;
+    return batch.call(this.rentals, hits.map((hit) => this.batchRow(hit, fallback)));
+  }
+
+  private batchRow(hit: RentalSearchHit, fallback: string | undefined) {
+    return {
+      country: hit.listing.business_location?.address?.country || fallback,
+      itemId: hit.listing.rental_item?.id,
+    };
   }
 
   private async itemInspected(code: string, itemId?: string | null): Promise<boolean | undefined> {

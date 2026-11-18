@@ -50,10 +50,18 @@ export class InspectionOptInService {
 
   async stampsNewBooking(itemId: string | null | undefined): Promise<boolean> {
     if (!itemId) return false;
-    const item = await this.itemRow(itemId);
-    if (!item) return false;
-    const ready = baselineReady(await this.readySlots(itemId));
-    return itemOptInStamps(item.inspection_opt_in === true, ready);
+    const stamped = await this.stampsForItems([itemId]);
+    return stamped.get(itemId) === true;
+  }
+
+  async stampsForItems(itemIds: Array<string | null | undefined>): Promise<Map<string, boolean>> {
+    const ids = [...new Set(itemIds.filter((id): id is string => !!id))];
+    const map = new Map<string, boolean>();
+    if (!ids.length) return map;
+    const items = await this.optInItems(ids);
+    const slots = await this.readySlotsByItem(ids);
+    for (const id of ids) map.set(id, this.itemStamps(items.get(id), slots.get(id) ?? []));
+    return map;
   }
 
   async summary(itemId: string) {
@@ -326,6 +334,30 @@ export class InspectionOptInService {
     const owns = !!booking && isActivePersona(user, 'business') && user.business?.id === booking.businessId;
     if (!owns || !booking) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     return booking;
+  }
+
+  private itemStamps(item: { inspection_opt_in: boolean } | undefined, slots: string[]): boolean {
+    if (!item) return false;
+    return itemOptInStamps(item.inspection_opt_in === true, baselineReady(slots));
+  }
+
+  private async optInItems(ids: string[]) {
+    const result = await this.hasura.executeQuery<{
+      rental_items: Array<{ id: string; inspection_opt_in: boolean }>;
+    }>(
+      `query BatchOptIn($ids: [uuid!]!) {
+        rental_items(where: { id: { _in: $ids } }) { id inspection_opt_in }
+      }`,
+      { ids }
+    );
+    return new Map((result.rental_items ?? []).map((row) => [row.id, row]));
+  }
+
+  private async readySlotsByItem(ids: string[]) {
+    const result = await this.hasura.executeQuery<{
+      rental_item_baseline_photos: Array<{ rental_item_id: string; slot_key: string }>;
+    }>(READY_SLOTS, { ids });
+    return groupSlots(result.rental_item_baseline_photos ?? []);
   }
 
   private async itemRow(itemId: string) {
@@ -672,6 +704,22 @@ interface ReuseCopy extends CaptureColumns {
   contentType: string;
   byteSize: number;
   sha256: string;
+}
+
+const READY_SLOTS = `query ReadySlots($ids: [uuid!]!) {
+  rental_item_baseline_photos(
+    where: { rental_item_id: { _in: $ids }, status: { _eq: "ready" } }
+  ) { rental_item_id slot_key }
+}`;
+
+function groupSlots(rows: Array<{ rental_item_id: string; slot_key: string }>) {
+  const grouped = new Map<string, string[]>();
+  for (const row of rows) {
+    const list = grouped.get(row.rental_item_id) ?? [];
+    list.push(row.slot_key);
+    grouped.set(row.rental_item_id, list);
+  }
+  return grouped;
 }
 
 const LATEST_RETURNS = `query LatestUnitReturns($listingId: uuid!, $bookingId: uuid!) {

@@ -59,6 +59,9 @@ jest.mock('../seo/SEOHead', () => () => null);
 jest.mock('../market/MarketSelector', () => ({
   MarketSelector: () => <div>Market selector</div>,
 }));
+jest.mock('../catalog-experience/RecentlyViewedRail', () => ({
+  RecentlyViewedRail: () => null,
+}));
 
 /**
  * Accesses `item.item` the same way the production card did. Passing

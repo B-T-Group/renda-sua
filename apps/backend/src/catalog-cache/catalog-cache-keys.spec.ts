@@ -206,7 +206,7 @@ describe('buildCatalogExperienceCacheKey', () => {
       bucket: 'cold',
       userId: 'user-2',
     });
-    expect(first).toBe('catalog-experience:CM:all:en:cold:shared');
+    expect(first).toBe('catalog-experience:CM:all:en:cold:shared:all');
     expect(second).toBe(first);
   });
 
@@ -218,6 +218,28 @@ describe('buildCatalogExperienceCacheKey', () => {
       bucket: 'returning',
       userId: 'user-1',
     });
-    expect(key).toBe('catalog-experience:CM:Centre:fr:returning:user-1');
+    expect(key).toBe('catalog-experience:CM:Centre:fr:returning:user-1:all');
+  });
+
+  it('separates food and export surfaces in the cache key', () => {
+    const food = buildCatalogExperienceCacheKey({
+      country: 'CM',
+      language: 'en',
+      bucket: 'returning',
+      userId: 'user-1',
+      surface: 'food',
+    });
+    const exported = buildCatalogExperienceCacheKey({
+      country: 'CM',
+      language: 'en',
+      bucket: 'returning',
+      userId: 'user-1',
+      surface: 'export',
+    });
+    expect(food).toBe('catalog-experience:CM:all:en:returning:user-1:food');
+    expect(exported).toBe(
+      'catalog-experience:CM:all:en:returning:user-1:export'
+    );
+    expect(food).not.toEqual(exported);
   });
 });

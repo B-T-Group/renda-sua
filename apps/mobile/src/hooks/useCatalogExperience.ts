@@ -4,6 +4,8 @@ import { api } from '../services/apiClient';
 import { publicApiGet } from '../services/publicApiClient';
 import type { CatalogInventoryItem } from '../types/inventoryCatalog';
 
+export type CatalogExperienceSurface = 'all' | 'food' | 'export' | 'rentals';
+
 export type ExperienceProductModule = {
   id: string;
   type: 'PRODUCT_CAROUSEL' | 'RECENTLY_VIEWED';
@@ -16,7 +18,12 @@ type ExperienceResponse = {
 };
 
 /** Discovery modules, including recently viewed when the shopper is signed in. */
-export function useCatalogExperience(enabled: boolean, authenticated: boolean, countryCode?: string) {
+export function useCatalogExperience(
+  enabled: boolean,
+  authenticated: boolean,
+  countryCode?: string,
+  surface: CatalogExperienceSurface = 'all'
+) {
   const { i18n } = useTranslation();
   const [modules, setModules] = useState<ExperienceProductModule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -33,6 +40,7 @@ export function useCatalogExperience(enabled: boolean, authenticated: boolean, c
       device: 'mobile',
       language: i18n.language.toLowerCase().startsWith('fr') ? 'fr' : 'en',
       country_code: countryCode,
+      surface,
     };
     const request = authenticated
       ? api.get<ExperienceResponse>(withQuery('/catalog/experience', params))
@@ -51,7 +59,7 @@ export function useCatalogExperience(enabled: boolean, authenticated: boolean, c
     return () => {
       cancelled = true;
     };
-  }, [authenticated, countryCode, enabled, i18n.language]);
+  }, [authenticated, countryCode, enabled, i18n.language, surface]);
 
   return { modules, loading };
 }

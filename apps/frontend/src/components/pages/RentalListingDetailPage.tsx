@@ -34,6 +34,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { RentalListingRow } from '../../hooks/useRentalListings';
 import { useRentalApi } from '../../hooks/useRentalApi';
+import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import LoadingPage from '../common/LoadingPage';
@@ -723,7 +724,7 @@ const RentalListingDetailPage: React.FC = () => {
                       {t('rentals.detail.fullDayRate', 'Full day (daily rate)')}
                     </Typography>
                   </Typography>
-                  {Number(row.security_deposit_amount ?? 0) > 0 ? (
+                  {showsCardDeposit(row.rental_item.currency) && Number(row.security_deposit_amount ?? 0) > 0 ? (
                     <>
                       <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
                         {formatMoney(

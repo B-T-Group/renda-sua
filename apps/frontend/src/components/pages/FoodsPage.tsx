@@ -28,6 +28,7 @@ import {
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
+import { RecentlyViewedRail } from '../catalog-experience/RecentlyViewedRail';
 import FoodsMenuHero from '../foods/FoodsMenuHero';
 import { RestaurantCarousel } from '../foods/RestaurantCarousel';
 import RestaurantCard from '../foods/RestaurantCard';
@@ -238,6 +239,24 @@ const FoodsPage: React.FC = () => {
       />
       <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
         <FoodsMenuHero />
+
+        {!showingAllRestaurants && !hasFilters ? (
+          <RecentlyViewedRail
+            surface="food"
+            actions={{
+              formatCurrency,
+              onOrderClick: handleOrderClick,
+              onAddToCart: handleAddToCart,
+              isPublicView: !isAuthenticated,
+              canOrder: !isAuthenticated || isClientUser,
+              showCartButtons: isAuthenticated && isClientUser,
+              loginButtonText: t('public.items.login', 'Sign In to Order'),
+              orderButtonText: t('common.orderNow', 'Order Now'),
+              addToCartButtonText: t('cart.addToCart', 'Add to Cart'),
+              buyNowButtonText: t('cart.buyNow', 'Buy Now'),
+            }}
+          />
+        ) : null}
 
         <Stack spacing={2} sx={{ mb: 3 }}>
           <MarketSelector catalogContext="inventory" />
