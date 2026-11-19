@@ -433,6 +433,39 @@ export const CLOSE_DECLINE_REFUND = `
   }
 `;
 
+/** 12-argument close. Used only when the deployed function does not know p_guard_open yet. */
+export const CLOSE_DECLINE_REFUND_PLAIN = `
+  mutation CloseDeclineRefundPlain(
+    $id: uuid!
+    $token: uuid!
+    $status: String!
+    $provider: String!
+    $providerRef: String
+    $accountId: uuid
+    $amount: numeric!
+    $memo: String
+    $idempotencyKey: String!
+    $changedBy: uuid!
+    $notes: String!
+    $previousStatus: String!
+  ) {
+    close_decline_refund(args: {
+      p_booking_id: $id
+      p_token: $token
+      p_status: $status
+      p_provider: $provider
+      p_provider_ref: $providerRef
+      p_account_id: $accountId
+      p_amount: $amount
+      p_memo: $memo
+      p_idempotency_key: $idempotencyKey
+      p_changed_by: $changedBy
+      p_notes: $notes
+      p_previous_status: $previousStatus
+    }) { id }
+  }
+`;
+
 export const RELEASE_CLAIM = `
   mutation ReleaseDeclineRefundClaim(
     $id: uuid!

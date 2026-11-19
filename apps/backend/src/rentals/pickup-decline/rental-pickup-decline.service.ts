@@ -1,6 +1,8 @@
-import { HttpException, HttpStatus, Inject, Injectable, Logger, OnModuleInit, forwardRef } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, Logger, OnModuleInit, Optional, forwardRef } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { DatabaseService } from '../../database/database.service';
 import { DeliveryPinService } from '../../delivery-pin/delivery-pin.service';
+import { withDeclineLock } from './decline-booking-lock';
 import { beginFedapayListTick } from '../../mobile-payments/providers/fedapay.service';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { HasuraUserService } from '../../hasura/hasura-user.service';
@@ -175,7 +177,8 @@ export class RentalPickupDeclineService implements OnModuleInit {
     private readonly notifications: NotificationsService,
     private readonly pins: DeliveryPinService,
     @Inject(forwardRef(() => RentalsService)) private readonly rentals: RentalsService,
-    private readonly rbac: RbacService
+    private readonly rbac: RbacService,
+    @Optional() @Inject(DatabaseService) private readonly database?: DatabaseService
   ) {}
 
   onModuleInit(): void {
@@ -184,15 +187,18 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   async decline(bookingId: string, input: DeclineInput): Promise<DeclineResult> {
     const user = await this.users.getUser();
+    return withDeclineLock(bookingId, this.database, () => this.declineHeld(user, bookingId, input));
+  }
+
+  private async declineHeld(user: { id: string; client?: { id?: string } }, bookingId: string, input: DeclineInput): Promise<DeclineResult> {
     const booking = await this.requireBooking(bookingId);
     await this.requireFlag(booking);
     this.requireRenter(user, booking);
-    const reason = this.reason(input);
     const stored = await this.findForBooking(booking.id);
     if (stored) return this.resume(booking, stored);
     this.requireOpen(booking, input.versionId);
     await this.requirePhotos(booking.id, input.photos ?? []);
-    return this.cancelAndRecord(booking, user.id, input, reason);
+    return this.cancelAndRecord(booking, user.id, input, this.reason(input));
   }
 
   async decorateBooking(booking: any): Promise<any> {
@@ -254,7 +260,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     if (booking.refund_status && booking.refund_status !== 'none') return;
     const ledger = await this.lateLedger(booking, extra);
     if (ledger.rail !== 'momo_paid') return;
-    await this.rentals.consumeDeclineHold(booking, ledger.amount);
+    await this.consumeOrBusy(booking, ledger.amount);
     await this.refundCollected(booking, ledger, 'late_collect');
   }
 
@@ -284,6 +290,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     try {
       return await this.insertDecline(booking, userId, input.versionId, reason, ledger);
     } catch (error: any) {
+      if (await this.moneyLanded(booking)) throw this.refundInProgress();
       await this.revertCancel(booking);
       throw error;
     }
@@ -293,10 +300,46 @@ export class RentalPickupDeclineService implements OnModuleInit {
     try {
       await this.moveFunds(booking, ledger);
     } catch (error: any) {
+      if (await this.moneyLanded(booking)) return;
       await this.removeDecline(declineId);
       await this.revertCancel(booking);
       throw error;
     }
+  }
+
+  /** A debit or a payout means the cancel stays, even when this request lost the ledger race. */
+  private async moneyLanded(booking: DeclineBooking): Promise<boolean> {
+    if (await this.payoutStarted(booking)) return true;
+    return this.rentals.declineRefundDebited(booking.id);
+  }
+
+  private async payoutStarted(booking: DeclineBooking): Promise<boolean> {
+    const fresh = await this.requireBooking(booking.id);
+    if (fresh.refund_provider_ref || fresh.refund_sent_at) return true;
+    return Boolean(fresh.refund_status && fresh.refund_status !== 'none');
+  }
+
+  private async consumeOrBusy(booking: DeclineBooking, amount: number): Promise<void> {
+    try {
+      await this.rentals.consumeDeclineHold(booking, amount);
+    } catch (error: any) {
+      if (await this.moneyLanded(booking)) return;
+      if (!this.fundsShort(error)) throw error;
+      throw this.refundInProgress();
+    }
+  }
+
+  private fundsShort(error: any): boolean {
+    const body = typeof error?.getResponse === 'function' ? error.getResponse() : error?.response;
+    const detail = typeof body === 'string' ? body : body?.message ?? body?.error ?? '';
+    return `${error?.message ?? ''} ${detail}`.toLowerCase().includes('insufficient funds');
+  }
+
+  private refundInProgress(): HttpException {
+    return new HttpException(
+      { message: 'refund already in progress', code: 'REFUND_IN_PROGRESS' },
+      HttpStatus.CONFLICT
+    );
   }
 
   private async finishRecorded(
@@ -313,7 +356,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   private async moveFunds(booking: DeclineBooking, ledger: Ledger): Promise<void> {
     if (ledger.rail === 'momo_paid') {
-      await this.rentals.consumeDeclineHold(booking, ledger.amount);
+      await this.consumeOrBusy(booking, ledger.amount);
       return;
     }
     await this.rentals.releaseFreeCancelFunds(booking);
@@ -328,7 +371,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
   /** Debit the capped hold before any provider payout. The key blocks a second debit. */
   private async resumePayout(booking: DeclineBooking, row: DeclineRow): Promise<DeclineResult> {
     const ledger = this.capLedger(await this.ledger(booking), moneyAmount(row.money_amount));
-    await this.rentals.consumeDeclineHold(booking, ledger.amount);
+    await this.consumeOrBusy(booking, ledger.amount);
     const status = await this.refundCollected(booking, ledger);
     await this.afterOnce(booking, booking.client.user_id, row, []);
     return this.toResult(booking, row, ledger, status, true);
@@ -1694,8 +1737,24 @@ export class RentalPickupDeclineService implements OnModuleInit {
   ): Promise<boolean> {
     if (!(await this.keepClaim(booking.id, token))) return false;
     const args = await this.closeArgs(booking, token, status, providerRef, amount, notes, guard);
-    const closed = await this.hasura.executeMutation<{ close_decline_refund?: Array<{ id: string }> }>(Q.CLOSE_DECLINE_REFUND, args);
+    try {
+      return await this.closedRow(Q.CLOSE_DECLINE_REFUND, args);
+    } catch (error: any) {
+      if (!this.guardFieldMissing(error)) throw error;
+      if (args.guardOpen) return false;
+      return this.closedRow(Q.CLOSE_DECLINE_REFUND_PLAIN, args);
+    }
+  }
+
+  private async closedRow(query: string, args: Record<string, unknown>): Promise<boolean> {
+    const closed = await this.hasura.executeMutation<{ close_decline_refund?: Array<{ id: string }> }>(query, args);
     return (closed.close_decline_refund?.length ?? 0) === 1;
+  }
+
+  /** Migration 20261120170000 is not applied yet. An unguarded close still uses the 12-argument call. */
+  private guardFieldMissing(error: any): boolean {
+    const text = `${error?.message ?? ''} ${error?.response?.errors?.[0]?.message ?? ''}`.toLowerCase();
+    return text.includes('p_guard_open') && text.includes('not found');
   }
 
   private async closeArgs(

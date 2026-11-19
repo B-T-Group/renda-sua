@@ -90,6 +90,8 @@ function harness(options: {
   poll?: 'refunded' | 'failed' | 'refund_pending' | 'missing' | 'unknown';
   probeFor?: (ref: string) => 'refunded' | 'failed' | 'refund_pending' | 'missing' | 'unknown';
   noticeRetries?: Array<Record<string, unknown>>;
+  consumeRace?: 'applied' | 'hidden' | 'fail';
+  guardFieldMissing?: boolean;
 } = {}) {
   const state = booking(options.booking);
   const declines = [...(options.declines ?? [])];
@@ -114,6 +116,10 @@ function harness(options: {
     renter: [] as Array<{ landed?: string; amount?: number; currency?: string; bookingId?: string }>,
     cas: 0,
     claimAtSend: null as string | null,
+    debited: 0,
+    removed: 0,
+    plainClose: 0,
+    pins: 0,
   };
   const hasura = {
     executeQuery: jest.fn(async (query: string, vars?: { key?: string }) => {
@@ -167,6 +173,7 @@ function harness(options: {
         return { insert_rental_condition_declines_one: { id: 'decline-1' } };
       }
       if (query.includes('DeleteConditionDecline')) {
+        calls.removed += 1;
         declines.splice(0, declines.length);
         return { delete_rental_condition_declines_by_pk: { id: 'decline-1' } };
       }
@@ -273,6 +280,10 @@ function harness(options: {
         return { update_rental_bookings: { affected_rows: 1 } };
       }
       if (query.includes('close_decline_refund')) {
+        if (options.guardFieldMissing && query.includes('$guardOpen')) {
+          throw new Error("field 'p_guard_open' not found in type: 'close_decline_refund_args'");
+        }
+        if (!query.includes('$guardOpen')) calls.plainClose += 1;
         if (historyFails > 0) {
           historyFails -= 1;
           throw new Error('history fk');
@@ -435,6 +446,7 @@ function harness(options: {
     } as never,
     {
       clearPinForOrder: jest.fn(async () => {
+        calls.pins += 1;
         if (pinFails > 0) {
           pinFails -= 1;
           throw new Error('pin down');
@@ -451,10 +463,20 @@ function harness(options: {
       consumeDeclineHold: jest.fn(async (_booking: unknown, amount: number) => {
         calls.steps.push('consume');
         calls.consume += 1;
+        if (options.consumeRace === 'applied' && calls.consume === 1) {
+          calls.debited = 1;
+          throw new HttpException('Insufficient funds for this transaction', 502);
+        }
+        if (options.consumeRace === 'hidden') {
+          throw new HttpException('Insufficient funds for this transaction', 502);
+        }
+        if (options.consumeRace === 'fail') throw new HttpException('ledger down', 502);
+        calls.debited = 1;
         const next = consumeHoldForPayout(wallet, amount);
         wallet.available = next.available;
         wallet.withheld = next.withheld;
       }),
+      declineRefundDebited: jest.fn(async () => calls.debited > 0),
       restoreDeclinePayout: jest.fn(async (_booking: unknown, amount: number) => {
         calls.restore += 1;
         if (restoreFails > 0) {
@@ -640,6 +662,80 @@ describe('RentalPickupDeclineService', () => {
     expect(wallet.available + (calls.refund[0] as { amount: number }).amount).toBe(100);
     expect(calls.notice).toBe(1);
     expect(calls.history).toBe(1);
+  });
+
+  it('keeps one debit when five declines run together', async () => {
+    const run = harness({ hold: 100, collects: collect() });
+    const results = await Promise.all(Array.from({ length: 5 }, () => run.service.decline(BOOKING, input)));
+    expect(results.filter((row) => row.success)).toHaveLength(5);
+    expect(run.calls.consume).toBe(1);
+    expect(run.calls.refund.length).toBeLessThanOrEqual(1);
+    expect(run.calls.refund).toHaveLength(1);
+    expect(run.state.status).toBe('cancelled');
+    expect(run.calls.removed).toBe(0);
+    expect(run.calls.history).toBe(1);
+    expect(run.calls.pins).toBe(1);
+  });
+
+  it('does not revert the cancel when the debit was already applied', async () => {
+    const run = harness({ hold: 100, collects: collect(), consumeRace: 'applied' });
+    const result = await run.service.decline(BOOKING, input);
+    expect(result.success).toBe(true);
+    expect(run.state.status).toBe('cancelled');
+    expect(run.state.condition_declined_at).toBeTruthy();
+    expect(run.calls.removed).toBe(0);
+    expect(run.calls.consume).toBe(1);
+    expect(run.calls.refund).toHaveLength(1);
+  });
+
+  it('reverts a debit that never landed', async () => {
+    const run = harness({ hold: 100, collects: collect(), consumeRace: 'fail' });
+    await expect(run.service.decline(BOOKING, input)).rejects.toThrow('ledger down');
+    expect(run.state.status).toBe('reserved');
+    expect(run.state.condition_declined_at).toBeNull();
+    expect(run.calls.removed).toBe(1);
+    expect(run.calls.refund).toHaveLength(0);
+  });
+
+  it('returns refund already in progress when a concurrent resume cannot see the debit', async () => {
+    const run = harness({
+      hold: 100,
+      collects: collect(),
+      consumeRace: 'hidden',
+      declines: [{ id: 'decline-1', money_rail: 'momo_paid', money_amount: 100, money_currency: 'XAF', effects_recorded_at: null }],
+      booking: { status: 'cancelled', payment_status: 'cancelled', condition_declined_at: '2026-11-19T00:00:00.000Z', refund_status: 'none' },
+    });
+    await expect(run.service.decline(BOOKING, input)).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'REFUND_IN_PROGRESS', message: 'refund already in progress' },
+    });
+    expect(run.state.status).toBe('cancelled');
+    expect(run.calls.removed).toBe(0);
+    expect(run.calls.refund).toHaveLength(0);
+  });
+
+  it('keeps history, pins, and payouts at zero when five retries find a finished decline', async () => {
+    const run = harness({
+      booking: { status: 'cancelled', condition_declined_at: '2026-11-18T00:00:00.000Z', refund_status: 'refunded' },
+      declines: [{
+        id: 'decline-1',
+        version_id: VERSION,
+        reason: 'damaged',
+        reason_text: null,
+        money_rail: 'momo_paid',
+        money_amount: 100,
+        money_currency: 'XAF',
+        phone_mask: '····· 67 12',
+        effects_recorded_at: '2026-11-18T00:00:00.000Z',
+      }],
+    });
+    const results = await Promise.all(Array.from({ length: 5 }, () => run.service.decline(BOOKING, input)));
+    expect(results.every((row) => row.idempotent)).toBe(true);
+    expect(run.calls.history).toBe(0);
+    expect(run.calls.pins).toBe(0);
+    expect(run.calls.refund).toHaveLength(0);
+    expect(run.calls.consume).toBe(0);
+    expect(run.state.status).toBe('cancelled');
   });
 
   it('credits the wallet back when the payout fails and does not release the hold as well', async () => {
@@ -896,6 +992,40 @@ describe('RentalPickupDeclineService', () => {
     expect(paid.wallet.available).toBe(100);
     expect(row.refund_status).toBe('failed');
     expect(paid.calls.support).toBe(1);
+  });
+
+  it('uses the 12-argument close when p_guard_open is not on the function yet', async () => {
+    const run = harness({
+      booking: {
+        status: 'cancelled',
+        refund_status: 'refund_pending',
+        refund_amount: 100,
+        refund_provider: 'mtn',
+        refund_provider_ref: 'mtn-ref',
+      },
+      poll: 'failed',
+      guardFieldMissing: true,
+    });
+    await expect(run.service.markRefund(BOOKING, { status: 'failed', providerRef: 'mtn-ref' })).resolves.toEqual({
+      refundStatus: 'failed',
+    });
+    expect(run.calls.plainClose).toBe(1);
+    expect(run.state.refund_status).toBe('failed');
+    expect(run.calls.restore).toBe(1);
+  });
+
+  it('does not credit an override when the guard argument is missing', async () => {
+    const run = harness({
+      booking: openOverride(),
+      external: 'missing',
+      guardFieldMissing: true,
+    });
+    await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(run.calls.plainClose).toBe(0);
+    expect(run.calls.restore).toBe(0);
+    expect(run.state.refund_status).toBe('refund_pending');
   });
 
   it('does not send a second payout when the claim is lost or the reference is already stored', async () => {

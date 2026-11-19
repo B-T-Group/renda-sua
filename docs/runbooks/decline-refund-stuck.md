@@ -2,6 +2,8 @@
 
 Use this when a Mobile Money decline refund stays `refund_pending` and the in-app actions return 409. The app credits the wallet only when the provider reports the payout failed, or when an admin override can prove the payout never left us.
 
+Deploy Hasura migrations before the backend. If the backend ships first, an unguarded close uses the 12-argument function until `20261120170000` is applied. A guarded override does not credit on that old function.
+
 ## What the app will not do
 
 - `unpaid` and `failed` return 409 unless the provider lookup for this booking's reference is FAILED.
