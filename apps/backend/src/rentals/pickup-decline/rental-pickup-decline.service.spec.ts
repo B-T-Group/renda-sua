@@ -424,12 +424,11 @@ function harness(options: {
       || Boolean(state.refund_status && state.refund_status !== 'none');
     if (landed) return [];
     const declineId = (params?.[2] as string | null) ?? null;
-    if (declineId) {
-      const index = declines.findIndex((row) => row.id === declineId);
-      if (index >= 0) {
-        declines.splice(index, 1);
-        calls.removed += 1;
-      }
+    const index = declineId ? declines.findIndex((row) => row.id === declineId) : -1;
+    if (declineId && index < 0) return [];
+    if (index >= 0) {
+      declines.splice(index, 1);
+      calls.removed += 1;
     }
     if (declines.length > 0) return [];
     Object.assign(state, {

@@ -1,6 +1,9 @@
 /**
- * One statement. Deletes this decline and restores the booking only when no
- * decline:refund debit and no payout marker exist, and no other decline row remains.
+ * One statement. A data-modifying CTE is not visible to the rest of that
+ * statement, so the booking update ignores the decline id this statement
+ * deletes and runs only when that delete returned a row. A null decline id
+ * still restores when no decline row remains, so a failed insert can be retried.
+ * A debit or a payout blocks both the delete and the restore.
  */
 export const REVERT_UNPAID_DECLINE = `
 WITH blocked AS (
@@ -28,8 +31,11 @@ SET status = $4::public.rental_booking_status_enum,
 WHERE b.id = $2::uuid
   AND b.status = 'cancelled'
   AND NOT EXISTS (SELECT 1 FROM blocked)
+  AND (EXISTS (SELECT 1 FROM removed) OR $3::uuid IS NULL)
   AND NOT EXISTS (
-    SELECT 1 FROM rental_condition_declines d WHERE d.rental_booking_id = b.id
+    SELECT 1 FROM rental_condition_declines d
+    WHERE d.rental_booking_id = b.id
+      AND d.id IS DISTINCT FROM $3::uuid
   )
 RETURNING b.id
 `;

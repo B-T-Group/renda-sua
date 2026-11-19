@@ -15,6 +15,7 @@ import { Client, Pool } from 'pg';
 import { RentalMomoRefundService } from './rental-momo-refund.service';
 import { RentalPickupDeclineService } from './rental-pickup-decline.service';
 import { stableRefundReference } from './pickup-decline.money';
+import { REVERT_UNPAID_DECLINE } from './decline-revert';
 import { noticeMutationShape, CLAIM_NOTICE } from './pickup-decline.queries';
 import * as Q from './pickup-decline.queries';
 
@@ -74,6 +75,22 @@ suite('decline refund claim on real Postgres', () => {
     assertCanDrop(dbName, HOST, OPTED);
     await admin.query(`DROP DATABASE ${quoteIdent(dbName)}`);
     await admin.end();
+  });
+
+  it('restores an unpaid decline and leaves a debited decline in place', async () => {
+    const unpaid = await seedOpen(pool);
+    const declineId = await insertDecline(pool, unpaid);
+    const restored = await revertDecline(pool, unpaid, declineId);
+    expect(restored.rows).toEqual([{ id: unpaid }]);
+    expect(await bookingState(pool, unpaid)).toEqual({ status: 'reserved', payment_status: 'paid', condition_declined_at: null });
+    expect(await declineCount(pool, declineId)).toBe(0);
+    const paid = await seedOpen(pool);
+    const paidDecline = await insertDecline(pool, paid);
+    await pool.query(`INSERT INTO account_transactions (idempotency_key) VALUES ($1)`, [`rental:${paid}:decline:refund`]);
+    const kept = await revertDecline(pool, paid, paidDecline);
+    expect(kept.rows).toHaveLength(0);
+    expect((await bookingState(pool, paid)).status).toBe('cancelled');
+    expect(await declineCount(pool, paidDecline)).toBe(1);
   });
 
   it('claims a pending refund for one worker', async () => {
@@ -437,11 +454,17 @@ async function waitFor(ready: () => boolean | Promise<boolean>): Promise<void> {
 
 const SCHEMA = `
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE TYPE public.rental_booking_status_enum AS ENUM (
+  'proposed', 'reserved', 'confirmed', 'active', 'awaiting_return', 'completed', 'cancelled'
+);
+CREATE TYPE public.rental_booking_payment_status_enum AS ENUM (
+  'pending', 'authorized', 'paid', 'cancelled'
+);
 CREATE TABLE rental_bookings (
   id uuid PRIMARY KEY,
   booking_number text,
-  status text,
-  payment_status text,
+  status public.rental_booking_status_enum,
+  payment_status public.rental_booking_payment_status_enum,
   contract_expires_at timestamptz,
   actual_start_at timestamptz,
   inspection_policy_version int,
@@ -476,6 +499,10 @@ CREATE TABLE rental_status_history (
   notes text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE account_transactions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  idempotency_key text
+);
 CREATE TABLE message_types (
   id text PRIMARY KEY,
   comment text
@@ -488,6 +515,48 @@ CREATE TABLE user_messages (
   notice_idempotency_key text
 );
 `;
+
+async function seedOpen(pool: Pool): Promise<string> {
+  return seed(pool, {
+    status: 'cancelled',
+    payment_status: 'cancelled',
+    refund_status: 'none',
+    refund_provider: null,
+    refund_provider_ref: null,
+    condition_declined_at: new Date().toISOString(),
+  });
+}
+
+async function insertDecline(pool: Pool, bookingId: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await pool.query(`INSERT INTO rental_condition_declines (id, rental_booking_id) VALUES ($1, $2)`, [id, bookingId]);
+  return id;
+}
+
+async function revertDecline(pool: Pool, bookingId: string, declineId: string) {
+  return pool.query(REVERT_UNPAID_DECLINE, [
+    `rental:${bookingId}:decline:refund`,
+    bookingId,
+    declineId,
+    'reserved',
+    'paid',
+    '2026-11-01T00:00:00.000Z',
+  ]);
+}
+
+async function bookingState(pool: Pool, id: string) {
+  const result = await pool.query(
+    `SELECT status::text AS status, payment_status::text AS payment_status, condition_declined_at
+     FROM rental_bookings WHERE id = $1`,
+    [id]
+  );
+  return result.rows[0];
+}
+
+async function declineCount(pool: Pool, id: string): Promise<number> {
+  const result = await pool.query(`SELECT id FROM rental_condition_declines WHERE id = $1`, [id]);
+  return result.rowCount ?? 0;
+}
 
 async function seed(pool: Pool, over: Record<string, unknown> = {}): Promise<string> {
   const id = crypto.randomUUID();
