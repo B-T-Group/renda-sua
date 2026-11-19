@@ -150,6 +150,11 @@ jobs:
           set -euo pipefail
           endpoint=http://127.0.0.1:8080
           secret=myadminsecretkey
+          # A fresh server has no sources. Register Rendasua, then migrate, then load metadata.
+          curl -fsS -X POST "$endpoint/v1/metadata" \
+            -H "x-hasura-admin-secret: $secret" \
+            -H 'content-type: application/json' \
+            -d '{"type":"pg_add_source","args":{"name":"Rendasua","configuration":{"connection_info":{"database_url":{"from_env":"PG_DATABASE_URL"}}}}}'
           hasura migrate apply --database-name Rendasua --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
           hasura metadata apply --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
           hasura metadata reload --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
