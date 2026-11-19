@@ -211,12 +211,15 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return { refundStatus };
   }
 
-  /** A collect that succeeds after the decline uses the same payout path. */
+  /**
+   * A collect that succeeds after the decline. An earlier success stays on the
+   * payout already debited for it. This credit remains in the wallet.
+   */
   async refundLateCollect(bookingId: string, extra?: CollectedPayment): Promise<void> {
     const booking = await this.requireBooking(bookingId);
     if (!booking.condition_declined_at) return;
     if (booking.refund_status && booking.refund_status !== 'none') return;
-    const ledger = this.includeCollect(await this.ledger(booking), extra);
+    const ledger = await this.lateLedger(booking, extra);
     if (ledger.rail !== 'momo_paid') return;
     await this.rentals.consumeDeclineHold(booking, ledger.amount);
     await this.refundCollected(booking, ledger, 'late_collect');
@@ -285,7 +288,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   private async resume(booking: DeclineBooking, row: DeclineRow): Promise<DeclineResult> {
     if (row.money_rail === 'momo_paid' && this.kept(booking) === 'none') {
-      const ledger = await this.ledger(booking);
+      const ledger = this.capLedger(await this.ledger(booking), moneyAmount(row.money_amount));
       const status = await this.refundCollected(booking, ledger);
       await this.afterOnce(booking, booking.client.user_id, row, []);
       return this.toResult(booking, row, ledger, status, true);
@@ -335,7 +338,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
   private refundRequest(booking: DeclineBooking, ledger: Ledger, source: CollectedPayment, referenceId: string) {
     return {
       bookingId: booking.id,
-      amount: ledger.amount,
+      amount: this.payoutAmount(booking, ledger.amount),
       currency: booking.currency,
       provider: source.provider,
       phone: source.phone,
@@ -661,6 +664,33 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   private async removeDecline(declineId: string): Promise<void> {
     await this.hasura.executeMutation(Q.DELETE_DECLINE, { id: declineId });
+  }
+
+  /** A new collect is not added to a payout that already has earlier successes. */
+  private async lateLedger(booking: DeclineBooking, extra?: CollectedPayment): Promise<Ledger> {
+    const base = await this.ledger(booking);
+    if (this.extraStaysInWallet(base, extra)) return base;
+    return this.includeCollect(base, extra);
+  }
+
+  private extraStaysInWallet(ledger: Ledger, extra?: CollectedPayment): boolean {
+    if (!extra || moneyAmount(extra.amount) <= 0) return false;
+    if (ledger.rail !== 'momo_paid') return false;
+    return !this.hasCollect(ledger, extra);
+  }
+
+  /** Do not phone-pay more than the debit recorded when the refund was claimed. */
+  private payoutAmount(booking: DeclineBooking, requested: number): number {
+    const asked = moneyAmount(requested);
+    const claimed = moneyAmount(booking.refund_amount);
+    if (claimed > 0 && asked > claimed) return claimed;
+    return asked;
+  }
+
+  private capLedger(ledger: Ledger, limit: number): Ledger {
+    const cap = moneyAmount(limit);
+    if (cap <= 0 || ledger.amount <= cap) return ledger;
+    return { ...ledger, amount: cap };
   }
 
   private includeCollect(ledger: Ledger, extra?: CollectedPayment): Ledger {

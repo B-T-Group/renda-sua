@@ -578,6 +578,64 @@ describe('RentalPickupDeclineService', () => {
     expect(calls.history).toBe(0);
   });
 
+  it('retries the decline payout at the recorded amount when a later collect is already success', async () => {
+    const { service, calls } = harness({
+      booking: {
+        status: 'cancelled',
+        condition_declined_at: '2026-11-18T00:00:00.000Z',
+        refund_status: 'none',
+      },
+      declines: [{
+        id: 'decline-1',
+        version_id: VERSION,
+        reason: 'damaged',
+        reason_text: null,
+        money_rail: 'momo_paid',
+        money_amount: 100,
+        money_currency: 'XAF',
+        phone_mask: '····· 67 12',
+      }],
+      collects: [
+        ...collect(),
+        { amount: 40, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'late' },
+      ],
+    });
+    await service.decline(BOOKING, input);
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { amount: number }).amount).toBe(100);
+  });
+
+  it('leaves a second collect in the wallet instead of paying it on top of the first debit', async () => {
+    const { service, calls } = harness({
+      booking: { status: 'cancelled', condition_declined_at: '2026-11-18T00:00:00.000Z', refund_status: 'none' },
+      collects: collect(),
+    });
+    await service.refundLateCollect(BOOKING, {
+      amount: 40,
+      currency: 'XAF',
+      provider: 'mtn',
+      phone: '2376700006712',
+      transactionId: 'late',
+    });
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { amount: number }).amount).toBe(100);
+  });
+
+  it('does not let the refund cron pay a collect that arrived after the debit was claimed', async () => {
+    const row = pendingRefund({ refund_provider_ref: null, refund_attempts: 0, refund_amount: 100 });
+    const { service, calls } = harness({
+      pending: [row],
+      collects: [
+        ...collect(),
+        { amount: 40, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'late' },
+      ],
+    });
+    await service.reconcilePending();
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { amount: number }).amount).toBe(100);
+  });
+
   it('queues a payout for a late collect that is not marked success yet', async () => {
     const { service, calls } = harness({
       booking: { status: 'cancelled', condition_declined_at: '2026-11-18T00:00:00.000Z', refund_status: 'none' },
