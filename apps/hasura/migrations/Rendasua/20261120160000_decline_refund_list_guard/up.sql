@@ -1,15 +1,85 @@
 -- Global keys are unique. Postgres UNIQUE does not treat NULL country_code as equal.
--- Keep the oldest row when a global key was inserted twice. The previous values are not restored on down.
-DELETE FROM public.application_configurations extra
-USING public.application_configurations keep
-WHERE extra.country_code IS NULL
-  AND keep.country_code IS NULL
-  AND extra.config_key = keep.config_key
-  AND extra.id <> keep.id
-  AND (
-    extra.created_at > keep.created_at
-    OR (extra.created_at = keep.created_at AND extra.id > keep.id)
-  );
+-- This migration has not run on DEV. The dedupe stays here, before the unique index.
+-- Only the three FedaPay timing keys are deleted. Keep the active row, then the latest updated_at.
+-- A tie, or a duplicate of any other global key, stops the migration instead of deleting.
+DO $$
+DECLARE
+  watched text[] := ARRAY[
+    'rentals_fedapay_list_lag_minutes',
+    'rentals_fedapay_list_confirm_minutes',
+    'rentals_fedapay_unknown_notice_after'
+  ];
+  other_dups text;
+  key text;
+  active_count int;
+  tie_count int;
+  keep_id uuid;
+BEGIN
+  SELECT string_agg(config_key, ', ' ORDER BY config_key)
+    INTO other_dups
+  FROM (
+    SELECT config_key
+    FROM public.application_configurations
+    WHERE country_code IS NULL
+      AND NOT (config_key = ANY (watched))
+    GROUP BY config_key
+    HAVING COUNT(*) > 1
+  ) d;
+
+  IF other_dups IS NOT NULL THEN
+    RAISE EXCEPTION 'Duplicate global configuration keys (%) must be resolved by hand', other_dups;
+  END IF;
+
+  FOREACH key IN ARRAY watched LOOP
+    SELECT COUNT(*) INTO active_count
+    FROM public.application_configurations
+    WHERE country_code IS NULL AND config_key = key AND status = 'active';
+
+    IF active_count > 0 THEN
+      SELECT COUNT(*) INTO tie_count
+      FROM public.application_configurations
+      WHERE country_code IS NULL
+        AND config_key = key
+        AND status = 'active'
+        AND updated_at IS NOT DISTINCT FROM (
+          SELECT MAX(updated_at)
+          FROM public.application_configurations
+          WHERE country_code IS NULL AND config_key = key AND status = 'active'
+        );
+      IF tie_count > 1 THEN
+        RAISE EXCEPTION 'Ambiguous active rows for %; keep one and rerun the migration', key;
+      END IF;
+      SELECT id INTO keep_id
+      FROM public.application_configurations
+      WHERE country_code IS NULL AND config_key = key AND status = 'active'
+      ORDER BY updated_at DESC NULLS LAST
+      LIMIT 1;
+    ELSE
+      SELECT COUNT(*) INTO tie_count
+      FROM public.application_configurations
+      WHERE country_code IS NULL
+        AND config_key = key
+        AND updated_at IS NOT DISTINCT FROM (
+          SELECT MAX(updated_at)
+          FROM public.application_configurations
+          WHERE country_code IS NULL AND config_key = key
+        );
+      IF tie_count > 1 THEN
+        RAISE EXCEPTION 'Ambiguous rows for %; keep one and rerun the migration', key;
+      END IF;
+      SELECT id INTO keep_id
+      FROM public.application_configurations
+      WHERE country_code IS NULL AND config_key = key
+      ORDER BY updated_at DESC NULLS LAST
+      LIMIT 1;
+    END IF;
+
+    IF keep_id IS NOT NULL THEN
+      DELETE FROM public.application_configurations
+      WHERE country_code IS NULL AND config_key = key AND id <> keep_id;
+    END IF;
+  END LOOP;
+END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS application_configurations_global_key_uidx
   ON public.application_configurations (config_key)

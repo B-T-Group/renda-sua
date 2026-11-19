@@ -58,6 +58,29 @@ describe('ConfigurationsService', () => {
     expect(hasura.executeQuery).toHaveBeenCalledTimes(2);
   });
 
+  it('maps a rename onto an existing key to a conflict', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        application_configurations_by_pk: { id: 'cfg-1', config_key: 'fast_delivery', number_value: 1 },
+      })
+      .mockRejectedValueOnce(new Error('Uniqueness violation. duplicate key value violates unique constraint "application_configurations_global_key_uidx"'));
+    await expect(service.updateConfiguration('cfg-1', { config_key: 'taken_key' }, 'user-1')).rejects.toThrow(/already exists/);
+  });
+
+  it('refuses a platform user who deletes a FedaPay timing key', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      application_configurations_by_pk: { id: 'cfg-1', config_key: 'rentals_fedapay_list_lag_minutes' },
+    });
+    rbac.hasRole.mockResolvedValue(false);
+    await expect(service.deleteConfiguration('cfg-1', 'user-1')).rejects.toThrow(/superuser/);
+    expect(hasura.executeQuery).toHaveBeenCalledTimes(1);
+    rbac.hasRole.mockResolvedValue(true);
+    hasura.executeQuery.mockResolvedValueOnce({
+      application_configurations_by_pk: { id: 'cfg-1', config_key: 'rentals_fedapay_list_lag_minutes' },
+    }).mockResolvedValueOnce({ delete_application_configurations_by_pk: { id: 'cfg-1' } });
+    await expect(service.deleteConfiguration('cfg-1', 'user-1')).resolves.toBe(true);
+  });
+
   it('returns null when no active configuration exists', async () => {
     hasura.executeQuery.mockResolvedValue({ application_configurations: [] });
 

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
-import { FedaPayService, resetFedapayListSpend } from './fedapay.service';
+import { FedaPayService, beginFedapayListTick, resetFedapayListSpend } from './fedapay.service';
 
 // Mock the FedaPay SDK to avoid module loading issues
 jest.mock('fedapay', () => ({
@@ -513,7 +513,7 @@ describe('FedaPayService', () => {
       const { Payout } = require('fedapay');
       resetFedapayListSpend();
       FedaPayService.listCallBudget = 20;
-      FedaPayService.listWalkMs = 90_000;
+      FedaPayService.listTickMs = 100_000;
       Payout.all.mockReset();
       Payout.create.mockReset();
       Payout.retrieve.mockReset();
@@ -1075,9 +1075,9 @@ describe('FedaPayService', () => {
       expect(result.ambiguous).toBe(true);
     });
 
-    it('stops the walk when the shared time budget is already spent', async () => {
+    it('stops the walk when the shared tick deadline is already spent', async () => {
       const { Payout } = require('fedapay');
-      FedaPayService.listWalkMs = 0;
+      FedaPayService.listTickMs = 0;
       Payout.all.mockResolvedValue({
         payouts: [{ id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
         meta: { current_page: 1, total_pages: 2, next_page: 2, per_page: 1, total_count: 2 },
@@ -1086,6 +1086,68 @@ describe('FedaPayService', () => {
       expect(Payout.all).not.toHaveBeenCalled();
       expect(Payout.create).not.toHaveBeenCalled();
       expect(result.ambiguous).toBe(true);
+      expect(result.limited).toBe(true);
+    });
+
+    it('does not refresh the lookup budget until the next tick', async () => {
+      const { Payout } = require('fedapay');
+      FedaPayService.listCallBudget = 2;
+      let now = 1_000_000;
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+      Payout.all.mockImplementation(async (query: { page?: number }) => openPage(query.page ?? 1));
+      const first = await service.findPayoutByExternalId('n1-ref');
+      expect(first.limited).toBe(true);
+      expect(Payout.all).toHaveBeenCalledTimes(2);
+      now += 50_000;
+      await service.findPayoutByExternalId('n1-ref');
+      expect(Payout.all).toHaveBeenCalledTimes(2);
+      beginFedapayListTick('n1-ref', now);
+      await service.findPayoutByExternalId('n1-ref');
+      expect(Payout.all).toHaveBeenCalledTimes(4);
+      clock.mockRestore();
+    });
+
+    it('credits an all-dead 10-page list on the resend path', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockImplementation(async (query: { page?: number }) => deadPage(query.page ?? 1, 10));
+      const look = await service.findPayoutByExternalId('n1-ref');
+      expect(look.status).toBe('failed');
+      expect(look.limited).toBeFalsy();
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true, creditAged: true });
+      expect(Payout.all).toHaveBeenCalledTimes(40);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.status).toBe('failed');
+      expect(result.ambiguous).toBeUndefined();
+      expect(result.transactionId).toBe('1');
+    });
+
+    it('sends a pending payout on page 15 of the resend path', async () => {
+      const { Payout } = require('fedapay');
+      const sendNow = jest.fn(async () => undefined);
+      Payout.all.mockImplementation(async (query: { page?: number }) => pendingPage(query.page ?? 1, 15));
+      Payout.retrieve.mockResolvedValue({ id: 77, status: 'pending', sendNow });
+      const look = await service.findPayoutByExternalId('n1-ref');
+      expect(look.id).toBe('77');
+      expect(look.status).toBe('pending');
+      const result = await service.withdraw(withdrawReq);
+      expect(Payout.all).toHaveBeenCalledTimes(30);
+      expect(sendNow).toHaveBeenCalledTimes(1);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.transactionId).toBe('77');
+    });
+
+    it('does not credit an all-dead list inside the lag window', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 1 },
+      });
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true, creditAged: false });
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
+      expect(result.status).toBe('pending');
+      expect(result.transactionId).toBeUndefined();
     });
 
     it('credits only when every match is failed or canceled', async () => {
@@ -1120,6 +1182,33 @@ describe('FedaPayService', () => {
       expect(result.transactionId).toBeUndefined();
       expect(result.reference).toBeUndefined();
     });
+
+    function openPage(page: number) {
+      return {
+        payouts: [{ id: page, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+        meta: { current_page: page, next_page: page + 1, per_page: 1, total_count: 99 },
+      };
+    }
+
+    function deadPage(page: number, pages: number) {
+      const status = page % 2 === 0 ? 'failed' : 'canceled';
+      return {
+        payouts: [{ id: page, status, custom_metadata: { externalId: 'n1-ref' } }],
+        meta: { current_page: page, total_pages: pages, next_page: page < pages ? page + 1 : null, per_page: 1, total_count: pages },
+      };
+    }
+
+    function pendingPage(page: number, pages: number) {
+      const mine = page === pages;
+      return {
+        payouts: [{
+          id: mine ? 77 : page,
+          status: mine ? 'pending' : 'canceled',
+          custom_metadata: { externalId: mine ? 'n1-ref' : 'other' },
+        }],
+        meta: { current_page: page, total_pages: pages, next_page: page < pages ? page + 1 : null, per_page: 1, total_count: pages },
+      };
+    }
   });
 
   describe('N2: collection push failure after Transaction.create', () => {

@@ -205,7 +205,7 @@ export class ConfigurationsController {
   @ApiOperation({
     summary: 'Update configuration',
     description:
-      'Update an existing configuration. The config_key cannot be changed.',
+      'Update an existing configuration. config_key can change. Renaming into a FedaPay timing key, or changing one of those keys, requires a superuser. A rename onto a key that already exists returns 409.',
   })
   @ApiParam({
     name: 'id',
@@ -239,7 +239,11 @@ export class ConfigurationsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid update data or config_key change attempt',
+    description: 'Invalid update data',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Another configuration already uses this key',
   })
   @ApiResponse({
     status: 404,
@@ -262,7 +266,8 @@ export class ConfigurationsController {
   @RequirePermissions(PlatformPermissions.CONFIG_APPLICATION)
   @ApiOperation({
     summary: 'Delete configuration',
-    description: 'Delete a configuration by its ID',
+    description:
+      'Delete a configuration by its ID. Deleting a FedaPay timing key requires a superuser, the same as insert and update.',
   })
   @ApiParam({
     name: 'id',
@@ -284,13 +289,19 @@ export class ConfigurationsController {
     },
   })
   @ApiResponse({
+    status: 403,
+    description: 'Deleting a FedaPay timing key requires a superuser',
+  })
+  @ApiResponse({
     status: 404,
     description: 'Configuration not found',
   })
   async deleteConfiguration(
-    @Param('id') id: string
+    @Param('id') id: string,
+    @Req() request: RequestWithUser
   ): Promise<{ success: boolean; message: string }> {
-    const deleted = await this.configurationsService.deleteConfiguration(id);
+    const userId = request.user?.sub || request.user?.id;
+    const deleted = await this.configurationsService.deleteConfiguration(id, userId);
     return {
       success: deleted,
       message: deleted

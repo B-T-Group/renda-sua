@@ -18,7 +18,7 @@ The `application_configurations` table stores configuration items that can be:
 | Column             | Type                     | Description                                                        |
 | ------------------ | ------------------------ | ------------------------------------------------------------------ |
 | `id`               | UUID                     | Primary key                                                        |
-| `config_key`       | VARCHAR(255)             | Unique configuration key (cannot be changed)                       |
+| `config_key`       | VARCHAR(255)             | Unique configuration key (a superuser can rename a watched key)   |
 | `config_name`      | VARCHAR(255)             | Human-readable name                                                |
 | `description`      | TEXT                     | Configuration description                                          |
 | `data_type`        | VARCHAR(50)              | Type of data: string, number, boolean, json, array, date, currency |
@@ -80,12 +80,12 @@ All endpoints require admin authentication via `AdminAuthGuard`.
 - **Description**: Update an existing configuration
 - **Parameters**: `id` (UUID)
 - **Body**: `UpdateConfigurationDto`
-- **Restrictions**: `config_key` cannot be changed
+- **Restrictions**: `config_key` can change. A FedaPay timing key, including a rename into one, requires a superuser. A duplicate key returns 409.
 - **Response**: Updated configuration object
 
 #### DELETE `/:id`
 
-- **Description**: Delete a configuration
+- **Description**: Delete a configuration. A FedaPay timing key requires a superuser.
 - **Parameters**: `id` (UUID)
 - **Response**: Success/failure message
 

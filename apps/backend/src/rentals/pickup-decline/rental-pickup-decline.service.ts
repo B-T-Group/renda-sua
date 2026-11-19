@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Inject, Injectable, Logger, OnModuleInit, forwardRef } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { DeliveryPinService } from '../../delivery-pin/delivery-pin.service';
+import { beginFedapayListTick } from '../../mobile-payments/providers/fedapay.service';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { HasuraUserService } from '../../hasura/hasura-user.service';
 import { NotificationsService } from '../../notifications/notifications.service';
@@ -51,7 +52,17 @@ const RENTER_NOTICE_TRIES = 3;
 const MTN_RESEND_MIN_MS = 2 * 60 * 1000;
 const MTN_OVERRIDE_LAG_MS = 10 * 60 * 1000;
 import { RentalConditionPhotosService } from './rental-condition-photos.service';
-import { RentalMomoRefundService } from './rental-momo-refund.service';
+import { RentalMomoRefundService, type FedapayExternalLook } from './rental-momo-refund.service';
+
+type ExternalLook = FedapayExternalLook;
+
+type ListFlags = {
+  markedResend: boolean;
+  trustEmptyList: boolean;
+  settled: boolean;
+  creditAged: boolean;
+  limited: boolean;
+};
 
 export interface DeclineInput {
   versionId: string;
@@ -355,7 +366,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     ledger: Ledger,
     source: CollectedPayment,
     referenceId: string,
-    flags: { markedResend: boolean; trustEmptyList: boolean; settled?: boolean }
+    flags: { markedResend: boolean; trustEmptyList: boolean; settled?: boolean; creditAged?: boolean }
   ) {
     return {
       bookingId: booking.id,
@@ -368,6 +379,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
       referenceId,
       markedResend: flags.markedResend,
       trustEmptyList: flags.trustEmptyList,
+      creditAged: flags.creditAged === true,
     };
   }
 
@@ -379,13 +391,16 @@ export class RentalPickupDeclineService implements OnModuleInit {
     token: string
   ): Promise<RefundStatus> {
     try {
+      this.beginListTick(booking);
       const flags = await this.listFlags(booking, token);
+      if (flags.limited) return this.noteLimited(booking, token);
       if (!(await this.markAttempt(booking, token))) return 'refund_pending';
       if (!(await this.markSent(booking, source.provider, token))) return 'refund_pending';
       const request = this.refundRequest(booking, ledger, source, referenceId, flags);
       const result = await this.momo.refund(request);
       if (result.unsent) return this.dropUnsent(booking, token, referenceId, Boolean(result.connectFailure));
       await this.stampMtn(booking, source.provider, token, result.status);
+      if (result.limited) return this.noteHeld(booking, token);
       await this.finishLookup(booking, token, result.blankRef === true, flags.settled);
       return this.settleResult(booking, ledger, result, referenceId, token);
     } catch (error: any) {
@@ -1031,25 +1046,54 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return false;
   }
 
-  private async listFlags(booking: DeclineBooking, token: string): Promise<{ markedResend: boolean; trustEmptyList: boolean; settled: boolean }> {
+  private async listFlags(booking: DeclineBooking, token: string): Promise<ListFlags> {
     const markedResend = Boolean(booking.refund_send_attempted_at);
     if (!markedResend || providerRefundPlan(booking.refund_provider ?? '') !== 'fedapay') {
-      return { markedResend, trustEmptyList: true, settled: false };
+      return { markedResend, trustEmptyList: true, settled: false, creditAged: false, limited: false };
     }
     return this.confirmedEmpty(booking, token);
   }
 
   /** A resend creates only after two aged empty lists, at least the confirm gap apart. */
-  private async confirmedEmpty(booking: DeclineBooking, token: string): Promise<{ markedResend: boolean; trustEmptyList: boolean; settled: boolean }> {
+  private async confirmedEmpty(booking: DeclineBooking, token: string): Promise<ListFlags> {
     const limits = await this.fedapayLimits();
-    const look = await this.momo.lookupFedapayExternal(booking.id);
+    const raw = await this.momo.lookupFedapayExternal(booking.id);
+    if (raw.limited) return this.limitedFlags();
+    const aged = this.markerAged(booking, limits.lagMs);
+    const look = this.holdFreshDead(raw, aged);
     if (look.kind === 'live') await this.clearListEmpty(booking, token);
     const prior = booking.refund_list_empty_at;
-    const aged = this.markerAged(booking, limits.lagMs);
     const settled = look.kind === 'live' || look.provableEmpty;
     if (look.provableEmpty && aged && !prior) await this.stampListEmpty(booking, token);
     const trustEmptyList = this.emptyConfirmed(prior, look.provableEmpty, aged, limits.confirmMs);
-    return { markedResend: true, trustEmptyList, settled };
+    return { markedResend: true, trustEmptyList, settled, creditAged: aged, limited: false };
+  }
+
+  private limitedFlags(): ListFlags {
+    return { markedResend: true, trustEmptyList: false, settled: false, creditAged: false, limited: true };
+  }
+
+  /** An all-dead list younger than the lag window is not a credit. */
+  private holdFreshDead(look: ExternalLook, aged: boolean): ExternalLook {
+    if (look.kind === 'live' && mapRefundPoll(look.status) === 'failed' && !aged) {
+      return { kind: 'unknown', status: null, id: null, provableEmpty: false };
+    }
+    return look;
+  }
+
+  private beginListTick(booking: DeclineBooking): void {
+    beginFedapayListTick(`rental-decline-${booking.id}`);
+  }
+
+  private async noteLimited(booking: DeclineBooking, token: string): Promise<RefundStatus> {
+    if (!(await this.markAttempt(booking, token))) return 'refund_pending';
+    await this.noteBlank(booking, token);
+    return 'refund_pending';
+  }
+
+  private async noteHeld(booking: DeclineBooking, token: string): Promise<RefundStatus> {
+    await this.noteBlank(booking, token);
+    return 'refund_pending';
   }
 
   private markerAged(booking: DeclineBooking, lagMs: number): boolean {
@@ -1106,9 +1150,17 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   private async pollFedapayExternal(booking: DeclineBooking, token: string): Promise<boolean> {
+    this.beginListTick(booking);
     const looked = await this.momo.lookupFedapayExternal(booking.id);
+    if (await this.freshDead(booking, looked)) return this.waitUnknown(booking, token);
     if (looked.kind === 'live' && looked.id) return this.closeFedapayLook(booking, token, looked);
     return this.holdFedapayLook(booking, token, looked);
+  }
+
+  private async freshDead(booking: DeclineBooking, looked: ExternalLook): Promise<boolean> {
+    if (looked.kind !== 'live' || mapRefundPoll(looked.status) !== 'failed') return false;
+    const limits = await this.fedapayLimits();
+    return !this.markerAged(booking, limits.lagMs);
   }
 
   /** One empty answer, a foreign list, or a short page stays unknown. Two aged empties are absence. */

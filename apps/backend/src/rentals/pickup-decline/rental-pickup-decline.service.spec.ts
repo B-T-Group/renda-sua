@@ -64,7 +64,7 @@ function harness(options: {
   superuser?: boolean;
   permissions?: string[];
   external?: 'missing' | 'unknown' | 'refunded' | 'refund_pending' | 'failed';
-  fedapayExternal?: { kind: 'unknown' | 'missing' | 'live'; status: string | null; id: string | null; provableEmpty?: boolean };
+  fedapayExternal?: { kind: 'unknown' | 'missing' | 'live'; status: string | null; id: string | null; provableEmpty?: boolean; limited?: boolean };
   pinFails?: number;
   claimLoses?: boolean;
   stampFails?: boolean;
@@ -1424,6 +1424,89 @@ describe('RentalPickupDeclineService', () => {
     expect(wait).toBeGreaterThan(50 * 60_000);
     expect(wait).toBeLessThan(70 * 60_000);
     expect(run.calls.restore).toBe(0);
+  });
+
+  it('holds a fresh all-dead FedaPay list and credits it once the lag has passed', async () => {
+    const collects = [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }];
+    const fresh = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_unknown_streak: 0,
+      refund_send_attempted_at: new Date().toISOString(),
+      currency: 'XOF',
+    });
+    const held = harness({
+      pending: [fresh],
+      collects,
+      fedapayExternal: { kind: 'live', status: 'failed', id: '11', provableEmpty: false },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await held.service.reconcilePending()).toBe(0);
+    expect(fresh.refund_status).not.toBe('failed');
+    expect(fresh.refund_unknown_streak).toBe(1);
+    expect((held.calls.refund[0] as { creditAged?: boolean }).creditAged).toBe(false);
+    const aged = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const credited = harness({
+      pending: [aged],
+      collects,
+      fedapayExternal: { kind: 'live', status: 'canceled', id: '11', provableEmpty: false },
+      refund: { status: 'failed', provider: 'fedapay', providerRef: '11', unsupported: false },
+    });
+    expect(await credited.service.reconcilePending()).toBe(1);
+    expect(aged.refund_status).toBe('failed');
+    expect((credited.calls.refund[0] as { creditAged?: boolean }).creditAged).toBe(true);
+  });
+
+  it('records an unknown streak when the withdraw hits the tick deadline', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_unknown_streak: 2,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayExternal: { kind: 'live', status: 'failed', id: '11', provableEmpty: false },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true, limited: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_status).not.toBe('failed');
+    expect(row.refund_unknown_streak).toBe(3);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(3 * 60_000);
+  });
+
+  it('counts a budget-capped FedaPay lookup as an unknown streak', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_unknown_streak: 0,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false, limited: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(1);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(50_000);
+    expect(run.calls.refund).toHaveLength(0);
   });
 
   it('backs off unknown FedaPay lookups and notifies support once', async () => {

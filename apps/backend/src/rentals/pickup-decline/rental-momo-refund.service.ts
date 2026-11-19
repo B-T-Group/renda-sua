@@ -19,6 +19,8 @@ export interface MomoRefundRequest {
   markedResend?: boolean;
   /** When false, an empty FedaPay list is not proof of absence. */
   trustEmptyList?: boolean;
+  /** When false, an all-dead FedaPay list stays unknown. */
+  creditAged?: boolean;
 }
 
 export interface MomoRefundResult {
@@ -32,6 +34,8 @@ export interface MomoRefundResult {
   connectFailure?: boolean;
   /** Pending, and the caller must not store a fallback reference. */
   blankRef?: boolean;
+  /** The FedaPay list stopped because the tick ran out of calls or time. */
+  limited?: boolean;
 }
 
 @Injectable()
@@ -68,6 +72,7 @@ export class RentalMomoRefundService {
 
   async lookupFedapayExternal(bookingId: string): Promise<FedapayExternalLook> {
     const found = await this.fedapay.findPayoutByExternalId(this.externalId(bookingId));
+    if (found.limited) return { kind: 'unknown', status: null, id: null, provableEmpty: false, limited: true };
     if (found.found && found.id) return { kind: 'live', status: found.status, id: found.id, provableEmpty: false };
     if (found.provableEmpty) return { kind: 'missing', status: null, id: null, provableEmpty: true };
     return { kind: 'unknown', status: null, id: null, provableEmpty: false };
@@ -139,16 +144,17 @@ export class RentalMomoRefundService {
       markedResend: request.markedResend === true,
       trustEmptyList: request.trustEmptyList !== false,
       strictList: true,
+      creditAged: request.creditAged === true,
     });
     if (!sent.success && !sent.ambiguous) {
       return this.failed('fedapay', sent.transactionId ?? sent.reference ?? null);
     }
-    if (!sent.transactionId) return this.pendingBlank('fedapay');
+    if (!sent.transactionId) return this.pendingBlank('fedapay', sent.limited === true);
     return this.pending('fedapay', sent.transactionId, false);
   }
 
-  private pendingBlank(provider: string): MomoRefundResult {
-    return { ...this.pending(provider, null, false), blankRef: true };
+  private pendingBlank(provider: string, limited = false): MomoRefundResult {
+    return { ...this.pending(provider, null, false), blankRef: true, limited };
   }
 
   private async sendFreemopay(request: MomoRefundRequest, externalId: string): Promise<MomoRefundResult> {
@@ -258,4 +264,5 @@ export type FedapayExternalLook = {
   status: string | null;
   id: string | null;
   provableEmpty: boolean;
+  limited?: boolean;
 };

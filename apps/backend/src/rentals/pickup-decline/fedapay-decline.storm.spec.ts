@@ -312,6 +312,33 @@ describe('FedaPay decline storm', () => {
       expect(line).toContain('orphans=0');
     });
   });
+
+  it('walks 10 to 20 page lists on the resend path without a double pay', async () => {
+    const lines = [
+      await resendPages(service, 'dead', 10),
+      await resendPages(service, 'pending', 15),
+      await resendPages(service, 'pending', 20),
+      await resendPages(service, 'dead', 20),
+    ];
+    const text = lines.join('\n');
+    const dir = '/opt/cursor/artifacts';
+    if (existsSync(dir) || existsSync('/opt/cursor')) {
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(`${dir}/fedapay-storm-resend-pages.txt`, `${text}\n`);
+    }
+    expect(lines[0]).toContain('credited=1');
+    expect(lines[0]).toContain('calls=40');
+    expect(lines[1]).toContain('sent=1');
+    expect(lines[1]).toContain('calls=30');
+    expect(lines[2]).toContain('sent=1');
+    expect(lines[2]).toContain('calls=40');
+    expect(lines[3]).toContain('credited=0');
+    expect(lines[3]).toContain('limited=1');
+    lines.forEach((line) => {
+      expect(line).toContain('doublePaid=0');
+      expect(line).toContain('orphans=0');
+    });
+  });
 });
 
 type PageMode = 'present' | 'absent' | 'understated' | 'shrinking';
@@ -397,4 +424,48 @@ function shrinkingPage(page: number, calls: number, external: string) {
     ? { id: 11, status: 'canceled', custom_metadata: { externalId: external } }
     : { id: 12, status: 'failed', custom_metadata: { externalId: external } };
   return { payouts: [row], meta: pagedMeta(page, 2, 2, page === 1 ? 2 : null) };
+}
+
+async function resendPages(service: FedaPayService, mode: 'dead' | 'pending', pages: number): Promise<string> {
+  resetFedapayListSpend();
+  const external = `rental-decline-storm-${mode}-${pages}`;
+  let sends = 0;
+  const sendNow = jest.fn(async () => { sends += 1; });
+  (Payout.all as jest.Mock).mockImplementation(async (query: { page?: number }) => resendBody(mode, query.page ?? 1, pages, external));
+  (Payout.retrieve as jest.Mock).mockResolvedValue({ id: 77, status: 'pending', sendNow });
+  (Payout.all as jest.Mock).mockClear();
+  (Payout.create as jest.Mock).mockClear();
+  const look = await service.findPayoutByExternalId(external);
+  const result = await service.withdraw({
+    payee: '+22878123456',
+    amount: 5000,
+    externalId: external,
+    description: 'Decline refund',
+    callback: 'https://test.com/callback',
+    channel: 'togocel',
+    markedResend: true,
+    trustEmptyList: true,
+    creditAged: true,
+    strictList: true,
+  });
+  const calls = (Payout.all as jest.Mock).mock.calls.length;
+  const created = (Payout.create as jest.Mock).mock.calls.length;
+  const credited = !result.success && !result.ambiguous ? 1 : 0;
+  const doublePaid = credited && sends > 0 ? 1 : 0;
+  const orphans = created > 0 && sends === 0 ? created : 0;
+  const limited = look.limited ? 1 : 0;
+  return `${mode} pages=${pages} calls=${calls} created=${created} credited=${credited} sent=${sends} limited=${limited} doublePaid=${doublePaid} orphans=${orphans}`;
+}
+
+function resendBody(mode: 'dead' | 'pending', page: number, pages: number, external: string) {
+  const mine = mode === 'pending' && page === pages;
+  const status = mine ? 'pending' : (page % 2 === 0 ? 'failed' : 'canceled');
+  return {
+    payouts: [{
+      id: mine ? 77 : page,
+      status,
+      custom_metadata: { externalId: mode === 'dead' || mine ? external : 'other' },
+    }],
+    meta: pagedMeta(page, pages, pages, page < pages ? page + 1 : null),
+  };
 }

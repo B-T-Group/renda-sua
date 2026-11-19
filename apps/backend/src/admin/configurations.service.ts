@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, Optional } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { PlatformRoles } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
@@ -298,8 +298,15 @@ export class ConfigurationsService {
       return response.update_application_configurations_by_pk;
     } catch (error) {
       this.logger.error(`Failed to update configuration with id: ${id}`, error);
+      if (this.configKeyTaken(error)) throw new ConflictException('A configuration with this key already exists');
       throw error;
     }
+  }
+
+  private configKeyTaken(error: unknown): boolean {
+    const body = error as { response?: { errors?: unknown }; message?: unknown };
+    const text = JSON.stringify(body?.response?.errors ?? body?.message ?? '').toLowerCase();
+    return text.includes('uniqueness violation') || text.includes('duplicate key');
   }
 
   /** The existing key and the key being written are both watched. A rename into a timing key counts. */
@@ -337,7 +344,19 @@ export class ConfigurationsService {
     throw new BadRequestException('FedaPay unknown notice must be between 1 and 100');
   }
 
-  async deleteConfiguration(id: string): Promise<boolean> {
+  async deleteConfiguration(id: string, actor?: string): Promise<boolean> {
+    const existing = await this.getConfigurationById(id);
+    if (!existing) return false;
+    await this.rejectFedapayDelete(existing, actor);
+    return this.removeConfiguration(id);
+  }
+
+  private async rejectFedapayDelete(existing: ApplicationConfiguration, actor?: string): Promise<void> {
+    if (!this.fedapayWatched(existing.config_key)) return;
+    await this.requireFedapaySuperuser(actor);
+  }
+
+  private async removeConfiguration(id: string): Promise<boolean> {
     try {
       const mutation = `
         mutation DeleteConfiguration($id: uuid!) {
@@ -346,7 +365,6 @@ export class ConfigurationsService {
           }
         }
       `;
-
       const response = await this.hasuraService.executeQuery(mutation, { id });
       return !!response.delete_application_configurations_by_pk;
     } catch (error) {
