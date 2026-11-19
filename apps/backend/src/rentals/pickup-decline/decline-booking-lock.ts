@@ -1,8 +1,14 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 import type { DatabaseService } from '../../database/database.service';
 
 const gates = new Map<string, Promise<unknown>>();
 
-/** One decline per booking. The lock is held until the debit and the payout claim finish. */
+/** How long a second tap waits for the booking lock before 409. */
+export const DECLINE_LOCK_TIMEOUT = '4s';
+/** Releases a lock transaction that stops issuing queries. */
+export const DECLINE_IDLE_TX_TIMEOUT = '8s';
+
+/** One decline per booking. The provider call runs after this transaction commits. */
 export function withDeclineLock<T>(
   bookingId: string,
   database: DatabaseService | undefined,
@@ -28,11 +34,12 @@ async function runLocked<T>(
   bookingId: string,
   work: () => Promise<T>
 ): Promise<T> {
-  if (!database) return work();
+  if (!database) throw lockUnavailable();
   try {
     return await database.transaction((query) => holdBooking(query, bookingId, work));
   } catch (error: any) {
-    if (poolMissing(error)) return work();
+    const mapped = mapLockError(error);
+    if (mapped) throw mapped;
     throw error;
   }
 }
@@ -42,12 +49,46 @@ async function holdBooking<T>(
   bookingId: string,
   work: () => Promise<T>
 ): Promise<T> {
+  await query(`SELECT set_config('lock_timeout', $1, true)`, [DECLINE_LOCK_TIMEOUT]);
+  await query(`SELECT set_config('idle_in_transaction_session_timeout', $1, true)`, [DECLINE_IDLE_TX_TIMEOUT]);
   await query(LOCK_SQL, [bookingId]);
   return work();
 }
 
-function poolMissing(error: any): boolean {
-  return String(error?.message ?? '').includes('Postgres pool is not configured');
+function mapLockError(error: any): HttpException | null {
+  if (isHttp(error)) return null;
+  if (poolDown(error)) return lockUnavailable();
+  if (lockWait(error)) return refundBusy();
+  return null;
+}
+
+function poolDown(error: any): boolean {
+  const text = `${error?.message ?? ''} ${error?.code ?? ''}`.toLowerCase();
+  return text.includes('postgres pool is not configured') || text.includes('econnrefused') || text.includes('enotfound');
+}
+
+function lockWait(error: any): boolean {
+  const text = `${error?.message ?? ''} ${error?.code ?? ''}`.toLowerCase();
+  return text.includes('lock timeout') || text.includes('55p03') || text.includes('25p03')
+    || text.includes('idle-in-transaction') || text.includes('timeout exceeded when trying to connect');
+}
+
+function isHttp(error: any): boolean {
+  return typeof error?.getStatus === 'function';
+}
+
+export function lockUnavailable(): HttpException {
+  return new HttpException(
+    { message: 'Decline lock is unavailable', code: 'DECLINE_LOCK_UNAVAILABLE' },
+    HttpStatus.SERVICE_UNAVAILABLE
+  );
+}
+
+function refundBusy(): HttpException {
+  return new HttpException(
+    { message: 'refund already in progress', code: 'REFUND_IN_PROGRESS' },
+    HttpStatus.CONFLICT
+  );
 }
 
 const LOCK_SQL = `SELECT pg_advisory_xact_lock(('x' || substr(md5($1), 1, 16))::bit(64)::bigint)`;
