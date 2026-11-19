@@ -103,6 +103,7 @@ interface DeclineBooking {
   refund_provider_ref: string | null;
   refund_sent_at?: string | null;
   refund_send_attempted_at?: string | null;
+  refund_next_at?: string | null;
   refund_list_empty_at?: string | null;
   refund_unknown_streak?: number | null;
   refund_unknown_notice_at?: string | null;
@@ -122,6 +123,12 @@ interface DeclineBooking {
     business_location?: { address?: { country?: string | null } | null } | null;
     rental_item?: { name?: string | null } | null;
   } | null;
+}
+
+interface OverridePrior {
+  attempts: number;
+  nextAt: string | null;
+  stamp: string | null;
 }
 
 interface DeclineRow {
@@ -240,12 +247,12 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return { refundStatus };
   }
 
-  /** A collect that succeeds after the decline uses the same payout path. */
+  /** A later collect stays in the wallet when an earlier success already has a debit. */
   async refundLateCollect(bookingId: string, extra?: CollectedPayment): Promise<void> {
     const booking = await this.requireBooking(bookingId);
     if (!booking.condition_declined_at) return;
     if (booking.refund_status && booking.refund_status !== 'none') return;
-    const ledger = this.includeCollect(await this.ledger(booking), extra);
+    const ledger = await this.lateLedger(booking, extra);
     if (ledger.rail !== 'momo_paid') return;
     await this.rentals.consumeDeclineHold(booking, ledger.amount);
     await this.refundCollected(booking, ledger, 'late_collect');
@@ -313,14 +320,18 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   private async resume(booking: DeclineBooking, row: DeclineRow): Promise<DeclineResult> {
-    if (row.money_rail === 'momo_paid' && this.kept(booking) === 'none') {
-      const ledger = await this.ledger(booking);
-      const status = await this.refundCollected(booking, ledger);
-      await this.afterOnce(booking, booking.client.user_id, row, []);
-      return this.toResult(booking, row, ledger, status, true);
-    }
+    if (row.money_rail === 'momo_paid' && this.kept(booking) === 'none') return this.resumePayout(booking, row);
     if (row.effects_recorded_at === null) await this.afterOnce(booking, booking.client.user_id, row, []);
     return this.toResult(booking, row, this.storedLedger(booking, row), this.kept(booking), true);
+  }
+
+  /** Debit the capped hold before any provider payout. The key blocks a second debit. */
+  private async resumePayout(booking: DeclineBooking, row: DeclineRow): Promise<DeclineResult> {
+    const ledger = this.capLedger(await this.ledger(booking), moneyAmount(row.money_amount));
+    await this.rentals.consumeDeclineHold(booking, ledger.amount);
+    const status = await this.refundCollected(booking, ledger);
+    await this.afterOnce(booking, booking.client.user_id, row, []);
+    return this.toResult(booking, row, ledger, status, true);
   }
 
   private storedLedger(booking: DeclineBooking, row: DeclineRow): Ledger {
@@ -384,7 +395,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
   ) {
     return {
       bookingId: booking.id,
-      amount: ledger.amount,
+      amount: this.payoutAmount(booking, ledger.amount),
       currency: booking.currency,
       provider: source.provider,
       phone: source.phone,
@@ -761,6 +772,33 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   private async removeDecline(declineId: string): Promise<void> {
     await this.hasura.executeMutation(Q.DELETE_DECLINE, { id: declineId });
+  }
+
+  /** A new collect is not added to a payout that already has earlier successes. */
+  private async lateLedger(booking: DeclineBooking, extra?: CollectedPayment): Promise<Ledger> {
+    const base = await this.ledger(booking);
+    if (this.extraStaysInWallet(base, extra)) return base;
+    return this.includeCollect(base, extra);
+  }
+
+  private extraStaysInWallet(ledger: Ledger, extra?: CollectedPayment): boolean {
+    if (!extra || moneyAmount(extra.amount) <= 0) return false;
+    if (ledger.rail !== 'momo_paid') return false;
+    return !this.hasCollect(ledger, extra);
+  }
+
+  /** Do not phone-pay more than the debit recorded when the refund was claimed. */
+  private payoutAmount(booking: DeclineBooking, requested: number): number {
+    const asked = moneyAmount(requested);
+    const claimed = moneyAmount(booking.refund_amount);
+    if (claimed > 0 && asked > claimed) return claimed;
+    return asked;
+  }
+
+  private capLedger(ledger: Ledger, limit: number): Ledger {
+    const cap = moneyAmount(limit);
+    if (cap <= 0 || ledger.amount <= cap) return ledger;
+    return { ...ledger, amount: cap };
   }
 
   private includeCollect(ledger: Ledger, extra?: CollectedPayment): Ledger {
@@ -1431,13 +1469,20 @@ export class RentalPickupDeclineService implements OnModuleInit {
     body: { providerRef?: string; note?: string }
   ): Promise<{ status: string; note?: string }> {
     this.overrideGate(booking, body);
-    const started = Date.now();
-    const attempts = booking.refund_attempts ?? 0;
+    const prior = this.overridePrior(booking);
     const owned = await this.takeClaim(booking);
-    const fresh = await this.rereadUnsent(booking.id, owned.token, started, attempts + 1);
+    const fresh = await this.rereadUnsent(booking.id, owned.token, prior);
     const absence = await this.overrideAbsence(fresh);
-    if (absence !== 'absent') return this.stopOverride(booking.id, owned.token, this.overrideRefusal(absence));
-    return this.finishOverride(fresh, owned.token, body.note);
+    if (absence !== 'absent') return this.stopOverride(booking.id, owned.token, prior, this.overrideRefusal(absence));
+    return this.finishOverride(fresh, owned.token, body.note ?? '', prior);
+  }
+
+  private overridePrior(booking: DeclineBooking): OverridePrior {
+    return {
+      attempts: booking.refund_attempts ?? 0,
+      nextAt: booking.refund_next_at ?? null,
+      stamp: booking.refund_send_attempted_at ?? null,
+    };
   }
 
   private overrideGate(booking: DeclineBooking, body: { providerRef?: string; note?: string }): void {
@@ -1446,48 +1491,47 @@ export class RentalPickupDeclineService implements OnModuleInit {
     if (!this.neverReached(booking)) throw new HttpException('This refund may already have been sent', HttpStatus.CONFLICT);
   }
 
-  private async rereadUnsent(id: string, token: string, started: number, attempts: number): Promise<DeclineBooking> {
+  private async rereadUnsent(id: string, token: string, prior: OverridePrior): Promise<DeclineBooking> {
     const fresh = await this.requireBooking(id);
-    if (this.stillUnsent(fresh, started, attempts)) return fresh;
-    await this.releaseClaim(id, token);
-    throw new HttpException(this.busyRefund(), HttpStatus.CONFLICT);
+    if (this.stillUnsent(fresh, prior)) return fresh;
+    return this.stopOverride(id, token, prior, this.busyRefund());
   }
 
-  /** `attempts` is the value the claim just wrote. A cron bump makes this false. */
-  private stillUnsent(booking: DeclineBooking, started: number, attempts: number): boolean {
+  /** The stamp must still be the snapshot, which is null. A cron stamp of any age fails. */
+  private stillUnsent(booking: DeclineBooking, prior: OverridePrior): boolean {
     if (this.hasProviderRef(booking) || booking.refund_sent_at) return false;
-    if ((booking.refund_attempts ?? 0) !== attempts) return false;
-    return !this.newerStamp(booking.refund_send_attempted_at, started);
+    if ((booking.refund_attempts ?? 0) !== prior.attempts + 1) return false;
+    return (booking.refund_send_attempted_at ?? null) === prior.stamp;
   }
 
-  private newerStamp(stamp: string | null | undefined, started: number): boolean {
-    if (!stamp) return false;
-    const at = new Date(stamp).getTime();
-    return Number.isFinite(at) && at > started;
-  }
-
-  private async stopOverride(id: string, token: string, message: string): Promise<never> {
-    await this.releaseClaim(id, token);
+  private async stopOverride(id: string, token: string, prior: OverridePrior, message: string): Promise<never> {
+    await this.releaseClaim(id, token, prior);
     throw new HttpException(message, HttpStatus.CONFLICT);
   }
 
-  private async finishOverride(booking: DeclineBooking, token: string, noteText?: string): Promise<{ status: string; note?: string }> {
+  private async finishOverride(
+    booking: DeclineBooking,
+    token: string,
+    noteText: string,
+    prior: OverridePrior
+  ): Promise<{ status: string; note?: string }> {
     const note = [noteText, 'manual_override'].filter(Boolean).join(' · ');
-    const wrote = await this.closeOverride(booking, token, note);
-    if (!wrote) return this.stopOverride(booking.id, token, this.busyRefund());
+    const wrote = await this.closeOverride(booking, token, note, prior.stamp);
+    if (!wrote) return this.stopOverride(booking.id, token, prior, this.busyRefund());
     await this.tellAfterCredit(booking);
     return { status: 'manual_override', note };
   }
 
-  private async closeOverride(booking: DeclineBooking, token: string, note: string): Promise<boolean> {
+  private async closeOverride(booking: DeclineBooking, token: string, note: string, stamp: string | null): Promise<boolean> {
     const notes = this.markedNote('manual_override', undefined, note);
-    const guard = { sendAt: booking.refund_send_attempted_at ?? null };
-    return this.closeMarked(booking, token, 'failed', null, this.refundPay(booking), notes, guard);
+    return this.closeMarked(booking, token, 'failed', null, this.refundPay(booking), notes, { sendAt: stamp });
   }
 
-  private async releaseClaim(id: string, token: string): Promise<void> {
+  private async releaseClaim(id: string, token: string, prior: OverridePrior): Promise<void> {
     try {
-      await this.hasura.executeMutation(Q.RELEASE_CLAIM, { id, token });
+      await this.hasura.executeMutation(Q.RELEASE_CLAIM, {
+        id, token, attempts: prior.attempts, nextAt: prior.nextAt,
+      });
     } catch (error: any) {
       this.logger.warn(`decline claim release: ${error?.message ?? error}`);
     }

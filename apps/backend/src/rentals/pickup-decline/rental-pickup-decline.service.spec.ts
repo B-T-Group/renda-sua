@@ -108,6 +108,7 @@ function harness(options: {
     history: 0,
     notice: 0,
     refund: [] as unknown[],
+    steps: [] as string[],
     support: 0,
     supportPayload: null as { outcome?: string; externalId?: string; walletCredited?: boolean } | null,
     renter: [] as Array<{ landed?: string; amount?: number; currency?: string; bookingId?: string }>,
@@ -176,6 +177,8 @@ function harness(options: {
         }
         row.refund_claim_token = null;
         row.refund_claim_at = null;
+        row.refund_attempts = (vars as { attempts?: number }).attempts;
+        row.refund_next_at = (vars as { nextAt?: string | null }).nextAt ?? null;
         return { update_rental_bookings: { affected_rows: 1 } };
       }
       if (query.includes('ClaimDeclineRefund')) {
@@ -396,6 +399,7 @@ function harness(options: {
   };
   const momo = {
     refund: jest.fn(async (request: unknown) => {
+      calls.steps.push('refund');
       calls.refund.push(request);
       calls.claimAtSend = (state.refund_claim_token as string | null) ?? null;
       if (options.refundThrows) throw new Error('timeout');
@@ -445,6 +449,7 @@ function harness(options: {
         wallet.withheld = 0;
       }),
       consumeDeclineHold: jest.fn(async (_booking: unknown, amount: number) => {
+        calls.steps.push('consume');
         calls.consume += 1;
         const next = consumeHoldForPayout(wallet, amount);
         wallet.available = next.available;
@@ -475,6 +480,23 @@ const input = { versionId: VERSION, reason: 'damaged' };
 
 function collect() {
   return [{ amount: 100, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'tx' }];
+}
+
+async function refusedStamp(behindMs: number): Promise<number> {
+  const run = harness({
+    booking: openOverride(),
+    external: 'missing',
+    duringClaim: (row) => {
+      row.refund_send_attempted_at = new Date(Date.now() - behindMs).toISOString();
+    },
+  });
+  await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+    status: 409,
+  });
+  expect(run.calls.restore).toBe(0);
+  expect(run.state.refund_status).toBe('refund_pending');
+  expect(run.momo.probeByExternalId).not.toHaveBeenCalled();
+  return run.calls.restore === 0 ? 1 : 2;
 }
 
 function openOverride() {
@@ -705,6 +727,95 @@ describe('RentalPickupDeclineService', () => {
     expect(calls.cas).toBe(0);
     expect(calls.notice).toBe(0);
     expect(calls.history).toBe(0);
+  });
+
+  it('consumes the wallet hold on resume before paying the phone', async () => {
+    const { service, calls, wallet } = harness({
+      hold: 100,
+      collects: collect(),
+      declines: [
+        {
+          id: 'decline-1',
+          money_rail: 'momo_paid',
+          money_amount: 100,
+          money_currency: 'XAF',
+          effects_recorded_at: null,
+        },
+      ],
+      booking: {
+        status: 'cancelled',
+        payment_status: 'cancelled',
+        condition_declined_at: '2026-11-19T00:00:00.000Z',
+        refund_status: 'none',
+      },
+    });
+    const result = await service.decline(BOOKING, input);
+    expect(result.refundStatus).toBe('refunded');
+    expect(result.idempotent).toBe(true);
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toHaveLength(1);
+    expect(calls.steps.indexOf('consume')).toBeLessThan(calls.steps.indexOf('refund'));
+    expect(wallet.withheld).toBe(0);
+    expect(wallet.available).toBe(0);
+  });
+
+  it('retries the decline payout at the recorded amount when a later collect is already success', async () => {
+    const { service, calls } = harness({
+      booking: {
+        status: 'cancelled',
+        condition_declined_at: '2026-11-18T00:00:00.000Z',
+        refund_status: 'none',
+      },
+      declines: [{
+        id: 'decline-1',
+        version_id: VERSION,
+        reason: 'damaged',
+        reason_text: null,
+        money_rail: 'momo_paid',
+        money_amount: 100,
+        money_currency: 'XAF',
+        phone_mask: '····· 67 12',
+      }],
+      collects: [
+        ...collect(),
+        { amount: 40, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'late' },
+      ],
+    });
+    await service.decline(BOOKING, input);
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { amount: number }).amount).toBe(100);
+    expect(calls.consume).toBe(1);
+  });
+
+  it('leaves a second collect in the wallet instead of paying it on top of the first debit', async () => {
+    const { service, calls } = harness({
+      booking: { status: 'cancelled', condition_declined_at: '2026-11-18T00:00:00.000Z', refund_status: 'none' },
+      collects: collect(),
+    });
+    await service.refundLateCollect(BOOKING, {
+      amount: 40,
+      currency: 'XAF',
+      provider: 'mtn',
+      phone: '2376700006712',
+      transactionId: 'late',
+    });
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { amount: number }).amount).toBe(100);
+  });
+
+  it('does not let the refund cron pay a collect that arrived after the debit was claimed', async () => {
+    const row = pendingRefund({ refund_provider_ref: null, refund_attempts: 0, refund_amount: 100 });
+    const { service, calls } = harness({
+      pending: [row],
+      collects: [
+        ...collect(),
+        { amount: 40, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'late' },
+      ],
+    });
+    await service.reconcilePending();
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { amount: number }).amount).toBe(100);
   });
 
   it('queues a payout for a late collect that is not marked success yet', async () => {
@@ -1593,6 +1704,34 @@ describe('RentalPickupDeclineService', () => {
     expect(await hidden.service.reconcilePending()).toBe(0);
     expect(row.refund_status).not.toBe('failed');
     expect((hidden.calls.refund[0] as { creditAged?: boolean }).creditAged).toBe(false);
+  });
+
+  it('does not credit a send stamped just before the override clock', async () => {
+    const moneyOut = await refusedStamp(1_000);
+    expect(moneyOut).toBe(1);
+  });
+
+  it('does not credit a send stamped by a clock 10 seconds behind', async () => {
+    const moneyOut = await refusedStamp(10_000);
+    expect(moneyOut).toBe(1);
+  });
+
+  it('leaves the cron attempt and retry time after six refused overrides', async () => {
+    const next = '2026-11-20T00:00:00.000Z';
+    const run = harness({
+      booking: { ...openOverride(), refund_attempts: 1, refund_next_at: next },
+      external: 'unknown',
+    });
+    for (let i = 0; i < 6; i += 1) {
+      await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+        status: 409,
+      });
+    }
+    expect(run.state.refund_attempts).toBe(1);
+    expect(run.state.refund_next_at).toBe(next);
+    expect(run.calls.restore).toBe(0);
+    expect(run.state.refund_status).toBe('refund_pending');
+    expect(run.state.refund_claim_token).toBeNull();
   });
 
   it('does not credit when the attempt count changes under the override claim', async () => {

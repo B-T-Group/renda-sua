@@ -5,7 +5,7 @@ Use this when a Mobile Money decline refund stays `refund_pending` and the in-ap
 ## What the app will not do
 
 - `unpaid` and `failed` return 409 unless the provider lookup for this booking's reference is FAILED.
-- `manual_override` returns 409 when the row has a provider reference, `refund_sent_at`, or `refund_send_attempted_at`, or when the lookup is unknown, still pending, or successful. It claims the row before that lookup. A send stamp newer than the override start, a provider reference, or a changed attempt count returns 409 and releases the claim. The wallet credit is in the same update as the claim token, the send stamp, and the empty provider reference.
+- `manual_override` returns 409 when the row has a provider reference, `refund_sent_at`, or `refund_send_attempted_at`, or when the lookup is unknown, still pending, or successful. It claims the row before that lookup. Any send stamp, including one older than this request, a provider reference, or a changed attempt count returns 409, restores the attempt count and the next retry time, and releases the claim. The wallet credit requires the claim token, a null send stamp, and an empty provider reference.
 - `refunded` returns 409 unless the provider reports SUCCESS for this booking's own reference.
 - FreemoPay is not sent a second time after a 404. A crash after the sent stamp, and a #840 row that already has a stable reference, stay parked.
 

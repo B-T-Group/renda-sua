@@ -1380,7 +1380,7 @@ export class MobilePaymentCallbackProcessor {
       { status: 'processing' }
     );
     if (!claimed) {
-      await this.routeUnclaimedNonOrderSuccess(transaction);
+      await this.routeUnclaimedNonOrderSuccess(transaction, providerTransactionId);
       return;
     }
     const credited = await this.creditWalletIfNeeded(transaction);
@@ -1395,7 +1395,7 @@ export class MobilePaymentCallbackProcessor {
       providerTransactionId
     );
     if (!markedSuccess) {
-      await this.routeUnclaimedNonOrderSuccess(transaction);
+      await this.routeUnclaimedNonOrderSuccess(transaction, providerTransactionId);
       return;
     }
     await this.runHandlerOrRestoreProcessing(transaction);
@@ -1405,11 +1405,13 @@ export class MobilePaymentCallbackProcessor {
   }
 
   private async routeUnclaimedNonOrderSuccess(
-    transaction: MobilePaymentTransaction
+    transaction: MobilePaymentTransaction,
+    providerTransactionId = ''
   ): Promise<void> {
     const fresh = await this.databaseService.getTransactionById(transaction.id);
     if (fresh && this.isRecoverableLateOrderSuccess(fresh)) {
-      await this.handleLateSuccessOnSupersededOrderTx(fresh, fresh.transaction_id || '');
+      const providerId = providerTransactionId || fresh.transaction_id || '';
+      await this.handleLateSuccessOnSupersededOrderTx(fresh, providerId);
       return;
     }
     if (fresh?.status === 'success') {

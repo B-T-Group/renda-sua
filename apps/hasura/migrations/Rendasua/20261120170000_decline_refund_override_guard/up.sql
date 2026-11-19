@@ -22,8 +22,8 @@ CREATE FUNCTION public.close_decline_refund(
   p_changed_by uuid,
   p_notes text,
   p_previous_status text,
-  p_send_attempted_at timestamptz,
-  p_guard_open boolean
+  p_send_attempted_at timestamptz DEFAULT NULL,
+  p_guard_open boolean DEFAULT false
 ) RETURNS SETOF public.rental_bookings
 LANGUAGE plpgsql
 VOLATILE
@@ -140,4 +140,4 @@ $$;
 COMMENT ON FUNCTION public.close_decline_refund(
   uuid, uuid, text, text, text, uuid, numeric, text, text, uuid, text, text, timestamptz, boolean
 ) IS
-  'Credits a decline refund, closes the claim, and writes the audit row in one transaction. An override also requires the same send stamp and a null provider ref. Returns the closed booking, or no row when the claim was lost.';
+  'Credits a decline refund, closes the claim, and writes the audit row in one transaction. An override also requires the same send stamp and a null provider ref. The new arguments default so an older 12-argument call still closes. Returns the closed booking, or no row when the claim was lost.';

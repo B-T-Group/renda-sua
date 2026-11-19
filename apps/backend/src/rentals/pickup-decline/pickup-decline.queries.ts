@@ -434,14 +434,24 @@ export const CLOSE_DECLINE_REFUND = `
 `;
 
 export const RELEASE_CLAIM = `
-  mutation ReleaseDeclineRefundClaim($id: uuid!, $token: uuid!) {
+  mutation ReleaseDeclineRefundClaim(
+    $id: uuid!
+    $token: uuid!
+    $attempts: Int!
+    $nextAt: timestamptz
+  ) {
     update_rental_bookings(
       where: {
         id: { _eq: $id }
         refund_claim_token: { _eq: $token }
         refund_status: { _eq: "refund_pending" }
       }
-      _set: { refund_claim_at: null, refund_claim_token: null }
+      _set: {
+        refund_claim_at: null
+        refund_claim_token: null
+        refund_attempts: $attempts
+        refund_next_at: $nextAt
+      }
     ) { affected_rows }
   }
 `;
