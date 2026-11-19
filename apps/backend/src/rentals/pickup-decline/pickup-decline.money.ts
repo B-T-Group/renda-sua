@@ -128,6 +128,24 @@ export function fedapayChannel(phone: string | null, channel?: string | null): '
 /** Empty FedaPay lists stay untrusted for this long after the send-attempt marker. Same window as MTN. */
 export const FEDAPAY_LIST_LAG_MS = 10 * 60 * 1000;
 
+/** A second provable-empty list must arrive at least this long after the first. */
+export const FEDAPAY_CONFIRM_MS = 10 * 60 * 1000;
+
+/** Consecutive unknown lookups before one manual-check notice. */
+export const FEDAPAY_UNKNOWN_NOTICE_AFTER = 10;
+
+/** An exhausted FedaPay row with no provider ref is polled about hourly. */
+export const FEDAPAY_EXHAUSTED_POLL_MS = 60 * 60 * 1000;
+
+const UNKNOWN_RETRY_CAP_MS = 30 * 60 * 1000;
+
+/** Unknown lookups wait 60s, then double, and never wait more than 30 minutes. */
+export function unknownRetryAt(streak: number, now = Date.now()): string {
+  const shift = Math.min(Math.max(streak - 1, 0), 8);
+  const wait = Math.min(UNKNOWN_RETRY_CAP_MS, 60_000 * 2 ** shift);
+  return new Date(now + wait).toISOString();
+}
+
 export const REFUND_ATTEMPT_LIMIT = 5;
 const REFUND_BACKOFF_MINUTES = [1, 5, 15, 60, 360];
 

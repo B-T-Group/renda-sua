@@ -19,6 +19,9 @@ export const DECLINE_BOOKING = `
       refund_provider_ref
       refund_sent_at
       refund_send_attempted_at
+      refund_list_empty_at
+      refund_unknown_streak
+      refund_unknown_notice_at
       refund_requested_at
       refund_claim_at
       refund_credited_at
@@ -273,15 +276,77 @@ export const CLEAR_STABLE_REF = `
 `;
 
 export const RESTORE_REFUND_ATTEMPT = `
-  mutation RestoreDeclineRefundAttempt($id: uuid!, $token: uuid!, $attempts: Int!, $next: timestamptz!) {
+  mutation RestoreDeclineRefundAttempt($id: uuid!, $token: uuid!, $attempts: Int!, $next: timestamptz!, $streak: Int!) {
     update_rental_bookings(
       where: {
         id: { _eq: $id }
         refund_claim_token: { _eq: $token }
         refund_status: { _eq: "refund_pending" }
       }
-      _set: { refund_attempts: $attempts, refund_next_at: $next }
+      _set: { refund_attempts: $attempts, refund_next_at: $next, refund_unknown_streak: $streak }
     ) { affected_rows }
+  }
+`;
+
+export const STAMP_LIST_EMPTY = `
+  mutation StampDeclineListEmpty($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+        refund_list_empty_at: { _is_null: true }
+      }
+      _set: { refund_list_empty_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+export const CLEAR_LIST_EMPTY = `
+  mutation ClearDeclineListEmpty($id: uuid!, $token: uuid!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_list_empty_at: null }
+    ) { affected_rows }
+  }
+`;
+
+export const STAMP_UNKNOWN_NOTICE = `
+  mutation StampDeclineUnknownNotice($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_unknown_notice_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+export const SCHEDULE_REFUND_POLL = `
+  mutation ScheduleDeclineRefundPoll($id: uuid!, $token: uuid!, $next: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_next_at: $next, refund_unknown_streak: 0 }
+    ) { affected_rows }
+  }
+`;
+
+export const FEDAPAY_REFUND_CONFIG = `
+  query FedapayRefundConfig($key: String!) {
+    application_configurations(
+      where: { config_key: { _eq: $key }, status: { _eq: "active" }, country_code: { _is_null: true } }
+      limit: 1
+    ) { number_value }
   }
 `;
 
@@ -524,6 +589,9 @@ export const PENDING_REFUNDS = `
       refund_provider_ref
       refund_sent_at
       refund_send_attempted_at
+      refund_list_empty_at
+      refund_unknown_streak
+      refund_unknown_notice_at
       refund_claim_at
       client { user_id }
       business { user_id }

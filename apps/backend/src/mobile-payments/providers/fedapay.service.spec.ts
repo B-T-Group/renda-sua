@@ -796,6 +796,54 @@ describe('FedaPayService', () => {
       expect(result.reference).toBeUndefined();
     });
 
+    it('does not treat missing fields, foreign rows, or a short page as an absent payout', async () => {
+      const { Payout } = require('fedapay');
+      const bodies = [
+        { payouts: [{ id: 1, status: 'sent' }] },
+        { payouts: [{ id: 2, status: 'sent', custom_metadata: { externalId: 'someone-else' } }] },
+        { payouts: [], meta: { total_pages: 3, current_page: 1 } },
+      ];
+      for (const body of bodies) {
+        Payout.create.mockClear();
+        Payout.all.mockResolvedValue(body);
+        const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true });
+        expect(Payout.create).not.toHaveBeenCalled();
+        expect(result.ambiguous).toBe(true);
+        expect(result.transactionId).toBeUndefined();
+      }
+    });
+
+    it('keeps a sent payout when another match for the same external id is canceled', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({
+        payouts: [
+          { id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } },
+          { id: 12, status: 'sent', custom_metadata: { externalId: 'n1-ref' } },
+        ],
+      });
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true });
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.status).toBe('sent');
+      expect(result.transactionId).toBe('12');
+    });
+
+    it('credits only when every match is failed or canceled', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({
+        payouts: [
+          { id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } },
+          { id: 12, status: 'failed', custom_metadata: { externalId: 'n1-ref' } },
+        ],
+      });
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true });
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.ambiguous).toBeUndefined();
+      expect(result.status).toBe('failed');
+      expect(result.transactionId).toBe('11');
+    });
+
     it('returns no reference when a 502 create cannot be looked up', async () => {
       const { Payout } = require('fedapay');
       Payout.all.mockResolvedValueOnce({ payouts: [] }).mockRejectedValueOnce(new Error('lookup down'));

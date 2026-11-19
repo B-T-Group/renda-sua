@@ -27,12 +27,23 @@ Those rows need this procedure. Do not clear `refund_send_attempted_at`, `refund
 
 A row with a send-attempt marker and no provider reference is resent by the refund cron. Wait one cron cycle before escalating that row.
 
-FedaPay shows a pending payout for the booking (created, never sent): send that payout from the dashboard only while the booking row is still `refund_pending`. Do not create another payout and do not credit the wallet. The next poll closes the row when that payout is sent, including a row that has a send-attempt marker, no provider reference, and no send attempts left. The poll looks up `rental-decline-<booking id>`. If the row is already closed (`failed` and the wallet credited, or `refunded`), cancel that payout in FedaPay and escalate. Do not send it. If another payout for the same external id is already sent, cancel the extra pending payout. Do not send it.
+FedaPay shows a pending payout for the booking (created, never sent): send that payout from the dashboard only while the booking row is still `refund_pending`. Do not create another payout and do not credit the wallet. An exhausted FedaPay row with no provider reference is checked about once an hour, so that dashboard send closes the row within about an hour, including a row that has a send-attempt marker and no send attempts left. The poll looks up `rental-decline-<booking id>`. If the row is already closed (`failed` and the wallet credited, or `refunded`), cancel that payout in FedaPay and escalate. Do not send it. If another payout for the same external id is already sent or approved, cancel the extra pending payout. Do not send it.
 
-A FedaPay row with a send-attempt marker and no provider reference stays pending through a lookup outage. An unknown lookup does not use up the five send attempts. After finance sends the payout from the dashboard, the next poll closes the row as refunded. Do not credit the wallet for that row.
+A FedaPay row with a send-attempt marker and no provider reference stays pending through a lookup outage. An unknown lookup does not use up the five send attempts. Retries wait 60 seconds and then double, up to 30 minutes. After 10 unknown lookups in a row (or the configured threshold), support gets one manual-check notice, and not another for that row for 24 hours. After finance sends the payout from the dashboard, the hourly poll closes the row as refunded. Do not credit the wallet for that row.
 
 ## Then
 
 - Dashboard says the payout **failed**: an admin with `platform.financial.refunds` uses `failed` (or `unpaid`). The app probes again and credits the wallet only when that probe is FAILED. The audit row is written in the same transaction as the credit.
 - Dashboard shows **no payout**, and the row has **no** reference, **no** sent stamp, and **no** send-attempt marker: an admin with `platform.financial.refunds.manual_override` uses `manual_override` and a note that quotes the dashboard. FedaPay must confirm external id `rental-decline-<booking id>` is absent. MTN accepts a 404 on the stable X-Reference-Id only when the attempt is at least 10 minutes old.
 - Anything else (reference present, attempt marker present, FreemoPay crash after the stamp, #840 legacy row, pending, unknown, or a 404 that the app will not treat as absent): do not credit in the app. Escalate with the booking number, the provider screenshot, and whether the renter was already paid outside the app. A database update is a finance action after that evidence, not a support shortcut.
+
+## Before turning on decline refunds in prod
+
+Do not enable the decline-refund flags in production until each of these is done.
+
+- FedaPay sandbox: confirm whether listing payouts filters `custom_metadata.externalId` on the server, what a further page looks like, how long a payout takes to appear after create and after send, and the status strings for failed and canceled.
+- MTN sandbox: confirm an X-Reference-Id resend, the 409 on a duplicate reference, and a forced timeout after the provider has accepted the request.
+- FreemoPay sandbox: confirm lookup by the stable external id, and a forced timeout after the provider has accepted the request.
+- DEV soak with the flags on: payouts in the provider dashboards match the `refund_pending` rows, and no `refund_pending` row is older than its retry window.
+- Alerts: age of `refund_pending` rows, unknown-lookup streaks, manual-check and exhausted counts, and more than one payout for the same external id.
+- Finance and support have walked this runbook: a duplicate payout is canceled and not sent, an exhausted row with no payout stays a 409 for the app to act on, and a dashboard send on an exhausted FedaPay row closes within about an hour.

@@ -1,12 +1,19 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { capRefund, cardReleaseNeedsRefund, claimStaleAt, consumeHoldForPayout, creditFailedPayout, declineRail, fedapayChannel, mapRefundPoll, maskMomoPhone, moneyAmount, nextRefundAt, providerRefundPlan, REFUND_ATTEMPT_LIMIT, refundFromLedger, refundSource, stableRefundReference, sumCollected } from './pickup-decline.money';
+import { capRefund, cardReleaseNeedsRefund, claimStaleAt, consumeHoldForPayout, creditFailedPayout, declineRail, fedapayChannel, mapRefundPoll, maskMomoPhone, moneyAmount, nextRefundAt, providerRefundPlan, REFUND_ATTEMPT_LIMIT, refundFromLedger, refundSource, stableRefundReference, sumCollected, unknownRetryAt } from './pickup-decline.money';
 import { DECLINE_FLAG_THRESHOLD, declineGuard, isDeclineReason, otherReasonText, refundMarkAllowed, refundMarkEvidence, refundOverrideAllowed, renterPartyName } from './pickup-decline.policy';
 import { isDeclineEvidenceKey, isPublicBaselineKey } from './pickup-decline.keys';
 import { BASELINE_PHOTOS } from './pickup-decline.queries';
 
 describe('pickup decline money', () => {
   const paid = [{ amount: 100, currency: 'XAF', provider: 'mtn', phone: '2376700006712', transactionId: 't' }];
+
+  it('doubles unknown-lookup waits and caps them at 30 minutes', () => {
+    const now = Date.parse('2026-11-19T00:00:00.000Z');
+    expect(Date.parse(unknownRetryAt(1, now)) - now).toBe(60_000);
+    expect(Date.parse(unknownRetryAt(2, now)) - now).toBe(120_000);
+    expect(Date.parse(unknownRetryAt(10, now)) - now).toBe(30 * 60_000);
+  });
 
   it('never refunds more than the ledger collected', () => {
     expect(sumCollected(paid, 'XAF')).toBe(100);

@@ -118,6 +118,76 @@ function readFedaPayMerchantRef(data: {
     || '';
 }
 
+export interface FedaPayExternalMatch {
+  found: boolean;
+  status: string | null;
+  id: string | null;
+  unknown: boolean;
+  provableEmpty: boolean;
+  matches: Array<{ id: string; status: string }>;
+}
+
+type PayoutRow = { id?: number | string; status?: string; custom_metadata?: { externalId?: string } };
+
+const PAID_PAYOUT = new Set(['sent', 'approved', 'successful', 'success', 'transferred']);
+const OPEN_PAYOUT = new Set(['pending', 'started', 'processing', 'scheduled']);
+const DEAD_PAYOUT = new Set(['failed', 'failure', 'declined', 'canceled', 'cancelled', 'rejected']);
+
+function unknownLook(): FedaPayExternalMatch {
+  return { found: false, status: null, id: null, unknown: true, provableEmpty: false, matches: [] };
+}
+
+function emptyLook(): FedaPayExternalMatch {
+  return { found: false, status: null, id: null, unknown: false, provableEmpty: true, matches: [] };
+}
+
+/** A list is absent only when every row is readable and none is ours, with no further pages. */
+export function classifyFedapayPayouts(existing: unknown, externalId: string): FedaPayExternalMatch {
+  const rows = payoutRows(existing);
+  if (!rows) return unknownLook();
+  const matches = matchedPayouts(rows, externalId);
+  if (matches.length) return aggregatePayouts(matches);
+  if (rows.some((row) => externalOf(row) == null)) return unknownLook();
+  if (hasMorePages(existing, rows.length) || rows.length > 0) return unknownLook();
+  return emptyLook();
+}
+
+function payoutRows(existing: unknown): PayoutRow[] | null {
+  const payouts = (existing as { payouts?: unknown } | null)?.payouts;
+  return Array.isArray(payouts) ? (payouts as PayoutRow[]) : null;
+}
+
+function externalOf(row: PayoutRow): string | null {
+  const value = row.custom_metadata?.externalId;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function matchedPayouts(rows: PayoutRow[], externalId: string): Array<{ id: string; status: string }> {
+  return rows.flatMap((row) => {
+    if (externalOf(row) !== externalId || row.id == null) return [];
+    return [{ id: String(row.id), status: String(row.status || 'pending') }];
+  });
+}
+
+/** Sent or approved wins. A pending or started payout waits. Credit only when every match is dead. */
+export function aggregatePayouts(matches: Array<{ id: string; status: string }>): FedaPayExternalMatch {
+  const paid = matches.find((row) => PAID_PAYOUT.has(row.status));
+  const open = matches.find((row) => OPEN_PAYOUT.has(row.status) || !DEAD_PAYOUT.has(row.status));
+  const chosen = paid ?? open ?? matches[0];
+  const status = paid?.status ?? open?.status ?? 'failed';
+  return { found: true, status, id: chosen.id, unknown: false, provableEmpty: false, matches };
+}
+
+function hasMorePages(existing: unknown, count: number): boolean {
+  const meta = (existing as { meta?: Record<string, unknown> } | null)?.meta;
+  if (!meta) return false;
+  const pages = Number(meta.total_pages ?? meta.totalPages ?? 0);
+  const current = Number(meta.current_page ?? meta.currentPage ?? 1);
+  if (pages > 1 && current < pages) return true;
+  const total = Number(meta.total ?? meta.total_count ?? Number.NaN);
+  return Number.isFinite(total) && total > count;
+}
+
 @Injectable()
 export class FedaPayService implements OnModuleInit {
   private readonly logger = new Logger(FedaPayService.name);
@@ -494,27 +564,15 @@ export class FedaPayService implements OnModuleInit {
   }
 
   /** Read-only. Does not create a payout. `unknown` means the lookup did not answer. */
-  async findPayoutByExternalId(externalId: string): Promise<{ found: boolean; status: string | null; id: string | null; unknown: boolean }> {
-    if (this.mockEnabled) return { found: false, status: null, id: null, unknown: false };
+  async findPayoutByExternalId(externalId: string): Promise<FedaPayExternalMatch> {
+    if (this.mockEnabled) return emptyLook();
     try {
       const existing = await this.liveLookup('payout', () => Payout.all({ 'custom_metadata.externalId': externalId }));
-      const payouts = this.payoutRows(existing);
-      if (!payouts) return { found: false, status: null, id: null, unknown: true };
-      const match = payouts.find((row) => row.custom_metadata?.externalId === externalId);
-      if (!match) return { found: false, status: null, id: null, unknown: false };
-      const id = match.id == null ? null : String(match.id);
-      return { found: true, status: String(match.status || 'pending'), id, unknown: false };
+      return classifyFedapayPayouts(existing, externalId);
     } catch (error: any) {
       void error;
-      return { found: false, status: null, id: null, unknown: true };
+      return unknownLook();
     }
-  }
-
-  /** A body without a payouts array did not answer. An empty array did. */
-  private payoutRows(existing: unknown): Array<{ id?: number | string; status?: string; custom_metadata?: { externalId?: string } }> | null {
-    const payouts = (existing as { payouts?: unknown } | null)?.payouts;
-    if (!Array.isArray(payouts)) return null;
-    return payouts as Array<{ id?: number | string; status?: string; custom_metadata?: { externalId?: string } }>;
   }
 
   /** A 4xx means FedaPay refused the create. A timeout or 5xx may have created it. */
@@ -532,13 +590,12 @@ export class FedaPayService implements OnModuleInit {
     return this.unknownWithdraw();
   }
 
-  /** Reuse a listed payout. An unanswered or untrusted empty list does not create another. */
+  /** Reuse any match. Create only when the caller already confirmed an empty list. */
   private async reuseByExternalId(externalId: string, trustEmpty: boolean): Promise<FedaPayWithdrawalResponse | null> {
     const looked = await this.findPayoutByExternalId(externalId);
-    if (looked.unknown) return this.unknownWithdraw();
     if (looked.found && looked.id) return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId);
-    if (!trustEmpty) return this.unknownWithdraw();
-    return null;
+    if (looked.provableEmpty && trustEmpty) return null;
+    return this.unknownWithdraw();
   }
 
   /** The create may have landed, but the lookup did not answer. Store no reference. */

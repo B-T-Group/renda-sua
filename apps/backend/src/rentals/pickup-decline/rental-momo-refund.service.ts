@@ -61,16 +61,16 @@ export class RentalMomoRefundService {
   async probeByExternalId(provider: string, externalId: string): Promise<RefundStatus | 'missing' | 'unknown'> {
     if (providerRefundPlan(provider) !== 'fedapay') return 'unknown';
     const found = await this.fedapay.findPayoutByExternalId(externalId);
-    if (found.unknown) return 'unknown';
+    if (found.unknown || (!found.provableEmpty && !found.found)) return 'unknown';
     if (!found.found) return 'missing';
     return mapRefundPoll(found.status);
   }
 
   async lookupFedapayExternal(bookingId: string): Promise<FedapayExternalLook> {
     const found = await this.fedapay.findPayoutByExternalId(this.externalId(bookingId));
-    if (found.unknown) return { kind: 'unknown', status: null, id: null };
-    if (!found.found || !found.id) return { kind: 'missing', status: null, id: null };
-    return { kind: 'live', status: found.status, id: found.id };
+    if (found.found && found.id) return { kind: 'live', status: found.status, id: found.id, provableEmpty: false };
+    if (found.provableEmpty) return { kind: 'missing', status: null, id: null, provableEmpty: true };
+    return { kind: 'unknown', status: null, id: null, provableEmpty: false };
   }
 
   externalRefundId(bookingId: string): string {
@@ -256,4 +256,5 @@ export type FedapayExternalLook = {
   kind: 'unknown' | 'missing' | 'live';
   status: string | null;
   id: string | null;
+  provableEmpty: boolean;
 };

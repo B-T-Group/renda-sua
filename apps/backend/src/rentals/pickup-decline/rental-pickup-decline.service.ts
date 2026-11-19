@@ -18,7 +18,10 @@ import {
   claimStaleAt,
   declineRail,
   fedapayChannel,
+  FEDAPAY_CONFIRM_MS,
+  FEDAPAY_EXHAUSTED_POLL_MS,
   FEDAPAY_LIST_LAG_MS,
+  FEDAPAY_UNKNOWN_NOTICE_AFTER,
   mapRefundPoll,
   providerRefundPlan,
   maskMomoPhone,
@@ -28,6 +31,7 @@ import {
   refundSource,
   stableRefundReference,
   sumCollected,
+  unknownRetryAt,
   type CollectedPayment,
   type DeclineRail,
   type RefundStatus,
@@ -88,6 +92,9 @@ interface DeclineBooking {
   refund_provider_ref: string | null;
   refund_sent_at?: string | null;
   refund_send_attempted_at?: string | null;
+  refund_list_empty_at?: string | null;
+  refund_unknown_streak?: number | null;
+  refund_unknown_notice_at?: string | null;
   refund_requested_at?: string | null;
   refund_claim_at?: string | null;
   refund_credited_at?: string | null;
@@ -132,6 +139,10 @@ interface Ledger {
 export class RentalPickupDeclineService implements OnModuleInit {
   /** Empty FedaPay lists are untrusted until the send-attempt marker is this old. */
   static fedapayListLagMs = FEDAPAY_LIST_LAG_MS;
+  /** Two provable-empty lists must be at least this far apart before a resend creates. */
+  static fedapayConfirmMs = FEDAPAY_CONFIRM_MS;
+  /** Unknown lookups before one manual-check notice. */
+  static unknownNoticeAfter = FEDAPAY_UNKNOWN_NOTICE_AFTER;
   private static readonly DECLINE_NOTE = 'Renter declined the pickup condition';
   private readonly logger = new Logger(RentalPickupDeclineService.name);
 
@@ -365,15 +376,14 @@ export class RentalPickupDeclineService implements OnModuleInit {
     token: string
   ): Promise<RefundStatus> {
     try {
-      const markedResend = Boolean(booking.refund_send_attempted_at);
-      const trustEmptyList = this.fedapayListAged(booking);
+      const flags = await this.listFlags(booking, token);
       if (!(await this.markAttempt(booking, token))) return 'refund_pending';
       if (!(await this.markSent(booking, source.provider, token))) return 'refund_pending';
-      const request = this.refundRequest(booking, ledger, source, referenceId, { markedResend, trustEmptyList });
+      const request = this.refundRequest(booking, ledger, source, referenceId, flags);
       const result = await this.momo.refund(request);
       if (result.unsent) return this.dropUnsent(booking, token, referenceId, Boolean(result.connectFailure));
       await this.stampMtn(booking, source.provider, token, result.status);
-      if (result.blankRef) await this.undoUnknownAttempt(booking, token);
+      if (result.blankRef) await this.noteBlank(booking, token);
       return this.settleResult(booking, ledger, result, referenceId, token);
     } catch (error: any) {
       this.logger.warn(`decline payout: ${error?.message ?? error}`);
@@ -1012,24 +1022,49 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return false;
   }
 
-  private fedapayListAged(booking: DeclineBooking): boolean {
-    const at = booking.refund_send_attempted_at;
-    if (!at) return true;
-    const age = Date.now() - new Date(at).getTime();
-    return Number.isFinite(age) && age >= RentalPickupDeclineService.fedapayListLagMs;
+  private async listFlags(booking: DeclineBooking, token: string): Promise<{ markedResend: boolean; trustEmptyList: boolean }> {
+    const markedResend = Boolean(booking.refund_send_attempted_at);
+    if (!markedResend || providerRefundPlan(booking.refund_provider ?? '') !== 'fedapay') return { markedResend, trustEmptyList: true };
+    return this.confirmedEmpty(booking, token);
   }
 
-  private async undoUnknownAttempt(booking: DeclineBooking, token: string): Promise<void> {
+  /** A resend creates only after two aged empty lists, at least the confirm gap apart. */
+  private async confirmedEmpty(booking: DeclineBooking, token: string): Promise<{ markedResend: boolean; trustEmptyList: boolean }> {
+    const lag = await this.configMs('rentals_fedapay_list_lag_minutes', RentalPickupDeclineService.fedapayListLagMs);
+    const gap = await this.configMs('rentals_fedapay_list_confirm_minutes', RentalPickupDeclineService.fedapayConfirmMs);
+    const look = await this.momo.lookupFedapayExternal(booking.id);
+    if (look.kind === 'live') await this.clearListEmpty(booking, token);
+    const prior = booking.refund_list_empty_at;
+    const aged = this.markerAged(booking, lag);
+    if (look.provableEmpty && aged && !prior) await this.stampListEmpty(booking, token);
+    return { markedResend: true, trustEmptyList: this.emptyConfirmed(prior, look.provableEmpty, aged, gap) };
+  }
+
+  private markerAged(booking: DeclineBooking, lagMs: number): boolean {
+    const at = booking.refund_send_attempted_at;
+    if (!at) return false;
+    const age = Date.now() - new Date(at).getTime();
+    return Number.isFinite(age) && age >= lagMs;
+  }
+
+  private emptyConfirmed(prior: string | null | undefined, empty: boolean, aged: boolean, gapMs: number): boolean {
+    if (!empty || !aged || !prior) return false;
+    const gap = Date.now() - new Date(prior).getTime();
+    return Number.isFinite(gap) && gap >= gapMs;
+  }
+
+  private async noteBlank(booking: DeclineBooking, token: string): Promise<void> {
+    const streak = (booking.refund_unknown_streak ?? 0) + 1;
+    await this.restoreAttempt(booking, token, streak, unknownRetryAt(streak));
+    await this.maybeNotify(booking, token, streak, false);
+  }
+
+  private async restoreAttempt(booking: DeclineBooking, token: string, streak: number, next: string): Promise<void> {
     const kept = Math.max(0, (booking.refund_attempts ?? 1) - 1);
-    const capped = Math.min(Math.max(kept, 1), REFUND_ATTEMPT_LIMIT - 1);
     try {
-      await this.hasura.executeMutation(Q.RESTORE_REFUND_ATTEMPT, {
-        id: booking.id,
-        token,
-        attempts: kept,
-        next: nextRefundAt(capped),
-      });
+      await this.hasura.executeMutation(Q.RESTORE_REFUND_ATTEMPT, { id: booking.id, token, attempts: kept, next, streak });
       booking.refund_attempts = kept;
+      booking.refund_unknown_streak = streak;
     } catch (error: any) {
       this.logger.warn(`decline attempt restore: ${error?.message ?? error}`);
     }
@@ -1037,15 +1072,31 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   private async pollFedapayExternal(booking: DeclineBooking, token: string): Promise<boolean> {
     const looked = await this.momo.lookupFedapayExternal(booking.id);
-    if (looked.kind === 'unknown' || (looked.kind === 'missing' && !this.fedapayListAged(booking))) {
-      return this.waitFedapayLook(booking, token, looked.kind === 'unknown');
-    }
-    return this.closeFedapayLook(booking, token, looked);
+    if (looked.kind === 'live' && looked.id) return this.closeFedapayLook(booking, token, looked);
+    return this.holdFedapayLook(booking, token, looked);
   }
 
-  private async waitFedapayLook(booking: DeclineBooking, token: string, tell: boolean): Promise<boolean> {
-    await this.undoUnknownAttempt(booking, token);
-    if (tell) await this.tellSupport(booking, 'manual_check');
+  /** One empty answer, a foreign list, or a short page stays unknown. Two aged empties are absence. */
+  private async holdFedapayLook(booking: DeclineBooking, token: string, looked: { provableEmpty: boolean }): Promise<boolean> {
+    const lag = await this.configMs('rentals_fedapay_list_lag_minutes', RentalPickupDeclineService.fedapayListLagMs);
+    const gap = await this.configMs('rentals_fedapay_list_confirm_minutes', RentalPickupDeclineService.fedapayConfirmMs);
+    const prior = booking.refund_list_empty_at;
+    const aged = this.markerAged(booking, lag);
+    if (looked.provableEmpty && aged && !prior) await this.stampListEmpty(booking, token);
+    if (this.emptyConfirmed(prior, looked.provableEmpty, aged, gap)) return this.noteAbsent(booking, token);
+    return this.waitUnknown(booking, token);
+  }
+
+  private async waitUnknown(booking: DeclineBooking, token: string): Promise<boolean> {
+    const streak = (booking.refund_unknown_streak ?? 0) + 1;
+    await this.restoreAttempt(booking, token, streak, unknownRetryAt(streak));
+    await this.maybeNotify(booking, token, streak, false);
+    return false;
+  }
+
+  private async noteAbsent(booking: DeclineBooking, token: string): Promise<boolean> {
+    await this.maybeNotify(booking, token, booking.refund_unknown_streak ?? 0, true);
+    await this.scheduleHourly(booking, token);
     return false;
   }
 
@@ -1054,15 +1105,87 @@ export class RentalPickupDeclineService implements OnModuleInit {
     token: string,
     looked: { kind: string; status: string | null; id: string | null }
   ): Promise<boolean> {
-    if (looked.kind !== 'live' || !looked.id) {
-      await this.tellSupport(booking, 'manual_check');
-      await this.tellIfExhausted(booking);
-      return false;
-    }
+    await this.clearListEmpty(booking, token);
     const status = mapRefundPoll(looked.status);
-    if (status === 'refunded') return this.markOwned(booking, token, 'refunded', looked.id);
-    if (status === 'failed') return (await this.failOwned(booking, this.refundPay(booking), looked.id, token)) === 'failed';
+    if (status === 'refunded' && looked.id) return this.markOwned(booking, token, 'refunded', looked.id);
+    if (status === 'failed' && looked.id) return (await this.failOwned(booking, this.refundPay(booking), looked.id, token)) === 'failed';
+    await this.scheduleHourly(booking, token);
     return false;
+  }
+
+  private async maybeNotify(booking: DeclineBooking, token: string, streak: number, force: boolean): Promise<void> {
+    const after = await this.noticeAfter();
+    if (!force && streak < after) return;
+    if (!this.noticeDue(booking.refund_unknown_notice_at)) return;
+    if (booking.refund_unknown_notice_at) await this.releaseNotice(booking.id, 'manual_check');
+    await this.tellSupport(booking, 'manual_check');
+    await this.stampNotice(booking, token);
+  }
+
+  private noticeDue(at: string | null | undefined): boolean {
+    if (!at) return true;
+    const age = Date.now() - new Date(at).getTime();
+    return Number.isFinite(age) && age >= 24 * 60 * 60_000;
+  }
+
+  private async noticeAfter(): Promise<number> {
+    const value = await this.configNumber('rentals_fedapay_unknown_notice_after');
+    return value == null ? RentalPickupDeclineService.unknownNoticeAfter : value;
+  }
+
+  private async configMs(key: string, fallbackMs: number): Promise<number> {
+    const value = await this.configNumber(key);
+    return value == null ? fallbackMs : value * 60_000;
+  }
+
+  private async configNumber(key: string): Promise<number | null> {
+    try {
+      const result = await this.hasura.executeQuery<{ application_configurations?: Array<{ number_value?: number | null }> }>(Q.FEDAPAY_REFUND_CONFIG, { key });
+      const value = Number(result.application_configurations?.[0]?.number_value);
+      return Number.isFinite(value) && value > 0 ? value : null;
+    } catch (error: any) {
+      this.logger.warn(`fedapay config ${key}: ${error?.message ?? error}`);
+      return null;
+    }
+  }
+
+  private async stampListEmpty(booking: DeclineBooking, token: string): Promise<void> {
+    const at = new Date().toISOString();
+    try {
+      await this.hasura.executeMutation(Q.STAMP_LIST_EMPTY, { id: booking.id, token, at });
+      booking.refund_list_empty_at = at;
+    } catch (error: any) {
+      this.logger.warn(`decline empty stamp: ${error?.message ?? error}`);
+    }
+  }
+
+  private async clearListEmpty(booking: DeclineBooking, token: string): Promise<void> {
+    try {
+      await this.hasura.executeMutation(Q.CLEAR_LIST_EMPTY, { id: booking.id, token });
+      booking.refund_list_empty_at = null;
+    } catch (error: any) {
+      this.logger.warn(`decline empty clear: ${error?.message ?? error}`);
+    }
+  }
+
+  private async stampNotice(booking: DeclineBooking, token: string): Promise<void> {
+    const at = new Date().toISOString();
+    try {
+      await this.hasura.executeMutation(Q.STAMP_UNKNOWN_NOTICE, { id: booking.id, token, at });
+      booking.refund_unknown_notice_at = at;
+    } catch (error: any) {
+      this.logger.warn(`decline unknown notice: ${error?.message ?? error}`);
+    }
+  }
+
+  private async scheduleHourly(booking: DeclineBooking, token: string): Promise<void> {
+    const next = new Date(Date.now() + FEDAPAY_EXHAUSTED_POLL_MS).toISOString();
+    try {
+      await this.hasura.executeMutation(Q.SCHEDULE_REFUND_POLL, { id: booking.id, token, next });
+      booking.refund_unknown_streak = 0;
+    } catch (error: any) {
+      this.logger.warn(`decline poll schedule: ${error?.message ?? error}`);
+    }
   }
 
   private async markOwned(booking: DeclineBooking, token: string, status: RefundStatus, ref: string): Promise<boolean> {
