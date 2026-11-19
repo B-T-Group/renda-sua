@@ -103,6 +103,28 @@ jobs:
       - name: Decline refund and ranking unit specs
         run: npx nx test backend --testPathPattern='rentals/(pickup-decline|decline-ranking)|notifications/rental-push.messages.spec' --testPathIgnorePatterns=money.qa.pg --testPathIgnorePatterns=pickup-decline.live-schema --skip-nx-cache
 
+  backend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Type-check backend
+        run: npx tsc -p apps/backend/tsconfig.app.json --noEmit
+
+      - name: Build backend
+        run: npx nx build backend
+
   hasura-metadata:
     runs-on: ubuntu-latest
     timeout-minutes: 40

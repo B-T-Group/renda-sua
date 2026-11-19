@@ -35,6 +35,7 @@ describe('MobilePaymentCallbackProcessor late success on superseded order tx', (
       logCallback: jest.fn().mockResolvedValue(undefined),
       updateTransaction: jest.fn().mockResolvedValue(undefined),
       updateTransactionIfStatus: jest.fn().mockResolvedValue(true),
+      getTransactionById: jest.fn().mockResolvedValue(tx),
     };
     const accountsService = {
       registerDepositIfNotExists: jest
@@ -297,5 +298,42 @@ describe('MobilePaymentCallbackProcessor late success on superseded order tx', (
       'cancelled',
       expect.objectContaining({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' })
     );
+  });
+
+  it('keeps the FedaPay webhook id when a rental collect is declined during finalize', async () => {
+    const pending = {
+      ...supersededTx,
+      provider: 'fedapay',
+      payment_entity: 'rental_booking',
+      status: 'pending',
+      error_code: null,
+      transaction_id: '',
+      entity_id: 'RB-25496310',
+    };
+    const declined = {
+      ...pending,
+      status: 'cancelled',
+      error_code: 'SUPERSEDED_BY_DECLINE',
+    };
+    const { processor, databaseService, accountsService, mobilePaymentsService } = build(
+      pending as MobilePaymentTransaction,
+      'applied'
+    );
+    databaseService.getTransactionById.mockResolvedValue(declined);
+    databaseService.updateTransactionIfStatus.mockImplementation(async (_id: string, from: string) => from !== 'pending');
+    await processor.processFedaPayCallback({
+      name: 'transaction.approved',
+      entity: {
+        id: 4242,
+        status: 'approved',
+        reference: pending.reference,
+        custom_metadata: { externalId: pending.reference },
+      },
+    } as any);
+    const rechecked = mobilePaymentsService.assertProviderConfirmsCallback.mock.calls.map(
+      (call: [{ transaction_id?: string }]) => call[0].transaction_id
+    );
+    expect(rechecked).toEqual(['4242', '4242']);
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
   });
 });

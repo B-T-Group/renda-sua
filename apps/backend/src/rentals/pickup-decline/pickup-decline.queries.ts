@@ -19,6 +19,9 @@ export const DECLINE_BOOKING = `
       refund_provider_ref
       refund_sent_at
       refund_send_attempted_at
+      refund_list_empty_at
+      refund_unknown_streak
+      refund_unknown_notice_at
       refund_requested_at
       refund_claim_at
       refund_credited_at
@@ -272,6 +275,95 @@ export const CLEAR_STABLE_REF = `
   }
 `;
 
+export const RESTORE_REFUND_ATTEMPT = `
+  mutation RestoreDeclineRefundAttempt($id: uuid!, $token: uuid!, $attempts: Int!, $next: timestamptz!, $streak: Int!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_attempts: $attempts, refund_next_at: $next, refund_unknown_streak: $streak }
+    ) { affected_rows }
+  }
+`;
+
+export const STAMP_LIST_EMPTY = `
+  mutation StampDeclineListEmpty($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+        refund_list_empty_at: { _is_null: true }
+      }
+      _set: { refund_list_empty_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+export const CLEAR_LIST_EMPTY = `
+  mutation ClearDeclineListEmpty($id: uuid!, $token: uuid!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_list_empty_at: null }
+    ) { affected_rows }
+  }
+`;
+
+export const STAMP_UNKNOWN_NOTICE = `
+  mutation StampDeclineUnknownNotice($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_unknown_notice_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+export const SCHEDULE_REFUND_POLL = `
+  mutation ScheduleDeclineRefundPoll($id: uuid!, $token: uuid!, $next: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_next_at: $next, refund_unknown_streak: 0 }
+    ) { affected_rows }
+  }
+`;
+
+export const FEDAPAY_REFUND_CONFIG = `
+  query FedapayRefundConfig($key: String!) {
+    application_configurations(
+      where: { config_key: { _eq: $key }, status: { _eq: "active" }, country_code: { _is_null: true } }
+      order_by: [{ updated_at: desc_nulls_last }, { created_at: desc }, { id: desc }]
+      limit: 1
+    ) { number_value }
+  }
+`;
+
+export const BUMP_SEND_ATTEMPT = `
+  mutation BumpDeclineSendAttempt($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_claim_token: { _eq: $token }
+      }
+      _set: { refund_send_attempted_at: $at }
+    ) { affected_rows }
+  }
+`;
+
 export const STAMP_ATTEMPT = `
   mutation StampDeclineSendAttempt($id: uuid!, $token: uuid!, $at: timestamptz!) {
     update_rental_bookings(
@@ -319,6 +411,43 @@ export const CLOSE_DECLINE_REFUND = `
     $changedBy: uuid!
     $notes: String!
     $previousStatus: String!
+    $sendAttemptedAt: timestamptz
+    $guardOpen: Boolean!
+  ) {
+    close_decline_refund(args: {
+      p_booking_id: $id
+      p_token: $token
+      p_status: $status
+      p_provider: $provider
+      p_provider_ref: $providerRef
+      p_account_id: $accountId
+      p_amount: $amount
+      p_memo: $memo
+      p_idempotency_key: $idempotencyKey
+      p_changed_by: $changedBy
+      p_notes: $notes
+      p_previous_status: $previousStatus
+      p_send_attempted_at: $sendAttemptedAt
+      p_guard_open: $guardOpen
+    }) { id }
+  }
+`;
+
+/** 12-argument close. Used only when the deployed function does not know p_guard_open yet. */
+export const CLOSE_DECLINE_REFUND_PLAIN = `
+  mutation CloseDeclineRefundPlain(
+    $id: uuid!
+    $token: uuid!
+    $status: String!
+    $provider: String!
+    $providerRef: String
+    $accountId: uuid
+    $amount: numeric!
+    $memo: String
+    $idempotencyKey: String!
+    $changedBy: uuid!
+    $notes: String!
+    $previousStatus: String!
   ) {
     close_decline_refund(args: {
       p_booking_id: $id
@@ -334,6 +463,29 @@ export const CLOSE_DECLINE_REFUND = `
       p_notes: $notes
       p_previous_status: $previousStatus
     }) { id }
+  }
+`;
+
+export const RELEASE_CLAIM = `
+  mutation ReleaseDeclineRefundClaim(
+    $id: uuid!
+    $token: uuid!
+    $attempts: Int!
+    $nextAt: timestamptz
+  ) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: {
+        refund_claim_at: null
+        refund_claim_token: null
+        refund_attempts: $attempts
+        refund_next_at: $nextAt
+      }
+    ) { affected_rows }
   }
 `;
 
@@ -511,6 +663,9 @@ export const PENDING_REFUNDS = `
       refund_provider_ref
       refund_sent_at
       refund_send_attempted_at
+      refund_list_empty_at
+      refund_unknown_streak
+      refund_unknown_notice_at
       refund_claim_at
       client { user_id }
       business { user_id }

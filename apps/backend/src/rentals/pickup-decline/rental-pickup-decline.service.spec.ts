@@ -1,3 +1,4 @@
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { HttpException } from '@nestjs/common';
 import { consumeHoldForPayout, creditFailedPayout, stableRefundReference, type DeclineWallet } from './pickup-decline.money';
 import { PENDING_REFUNDS, RENTER_NOTICE_RETRIES } from './pickup-decline.queries';
@@ -21,6 +22,9 @@ function booking(over: Record<string, unknown> = {}) {
     refund_status: 'none',
     refund_provider: null,
     refund_provider_ref: null,
+    refund_list_empty_at: null as string | null,
+    refund_unknown_streak: 0,
+    refund_unknown_notice_at: null as string | null,
     authorized_amount: 0,
     total_amount: 250,
     currency: 'XAF',
@@ -51,6 +55,16 @@ function harness(options: {
     provider: string;
     unsent?: boolean;
     connectFailure?: boolean;
+    blankRef?: boolean;
+    limited?: boolean;
+  };
+  refundFor?: (request: { creditAged?: boolean; beforeProviderSend?: () => Promise<boolean> }) => {
+    status: string;
+    providerRef: string | null;
+    unsupported: boolean;
+    provider: string;
+    blankRef?: boolean;
+    limited?: boolean;
   };
   refundThrows?: boolean;
   declines?: Array<Record<string, unknown>>;
@@ -61,16 +75,23 @@ function harness(options: {
   superuser?: boolean;
   permissions?: string[];
   external?: 'missing' | 'unknown' | 'refunded' | 'refund_pending' | 'failed';
+  fedapayExternal?: { kind: 'unknown' | 'missing' | 'live'; status: string | null; id: string | null; provableEmpty?: boolean; limited?: boolean };
   pinFails?: number;
   claimLoses?: boolean;
+  duringClaim?: (row: Record<string, unknown>) => void;
+  afterClaim?: (row: Record<string, unknown>) => void;
   stampFails?: boolean;
   stealClaim?: boolean;
   dropOwnedWrite?: boolean;
   noticeFails?: boolean;
+  noticeOk?: boolean;
+  fedapayMinutes?: Record<string, number>;
   renterFails?: boolean;
   poll?: 'refunded' | 'failed' | 'refund_pending' | 'missing' | 'unknown';
   probeFor?: (ref: string) => 'refunded' | 'failed' | 'refund_pending' | 'missing' | 'unknown';
   noticeRetries?: Array<Record<string, unknown>>;
+  consumeRace?: 'applied' | 'hidden' | 'fail';
+  guardFieldMissing?: boolean;
 } = {}) {
   const state = booking(options.booking);
   const declines = [...(options.declines ?? [])];
@@ -89,14 +110,23 @@ function harness(options: {
     history: 0,
     notice: 0,
     refund: [] as unknown[],
+    steps: [] as string[],
     support: 0,
     supportPayload: null as { outcome?: string; externalId?: string; walletCredited?: boolean } | null,
     renter: [] as Array<{ landed?: string; amount?: number; currency?: string; bookingId?: string }>,
     cas: 0,
     claimAtSend: null as string | null,
+    debited: 0,
+    removed: 0,
+    plainClose: 0,
+    pins: 0,
   };
   const hasura = {
-    executeQuery: jest.fn(async (query: string) => {
+    executeQuery: jest.fn(async (query: string, vars?: { key?: string }) => {
+      if (query.includes('FedapayRefundConfig')) {
+        const value = options.fedapayMinutes?.[vars?.key ?? ''];
+        return { application_configurations: value == null ? [] : [{ number_value: value }] };
+      }
       if (query.includes('DeclineRefundAccount')) return { accounts: [{ id: 'account-1' }] };
       if (query.includes('DeclineBooking')) return { rental_bookings_by_pk: { ...state, client: state.client, business: state.business } };
       if (query.includes('FindConditionDecline') || query.includes('FindDeclineForBooking')) {
@@ -143,17 +173,31 @@ function harness(options: {
         return { insert_rental_condition_declines_one: { id: 'decline-1' } };
       }
       if (query.includes('DeleteConditionDecline')) {
+        calls.removed += 1;
         declines.splice(0, declines.length);
         return { delete_rental_condition_declines_by_pk: { id: 'decline-1' } };
       }
+      if (query.includes('ReleaseDeclineRefundClaim')) {
+        const row = refundRow((vars as { id?: string }).id);
+        if (row.refund_claim_token !== (vars as { token?: string }).token) {
+          return { update_rental_bookings: { affected_rows: 0 } };
+        }
+        row.refund_claim_token = null;
+        row.refund_claim_at = null;
+        row.refund_attempts = (vars as { attempts?: number }).attempts;
+        row.refund_next_at = (vars as { nextAt?: string | null }).nextAt ?? null;
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
       if (query.includes('ClaimDeclineRefund')) {
         const row = refundRow((vars as { id?: string }).id);
+        options.duringClaim?.(row);
         const attempts = Number(row.refund_attempts ?? 0);
         const same = attempts === (vars as { attempts?: number }).attempts;
         if (options.claimLoses || row.refund_status !== 'refund_pending' || !same) {
           return { update_rental_bookings: { affected_rows: 0 } };
         }
         Object.assign(row, vars.set);
+        options.afterClaim?.(row);
         return { update_rental_bookings: { affected_rows: 1 } };
       }
       if (query.includes('KeepDeclineRefundClaim')) {
@@ -171,6 +215,51 @@ function harness(options: {
           return { update_rental_bookings: { affected_rows: 0 } };
         }
         Object.assign(row, vars.set);
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query.includes('RestoreDeclineRefundAttempt')) {
+        const row = refundRow((vars as { id?: string }).id);
+        if (row.refund_claim_token !== (vars as { token?: string }).token) {
+          return { update_rental_bookings: { affected_rows: 0 } };
+        }
+        row.refund_attempts = (vars as { attempts?: number }).attempts;
+        row.refund_next_at = (vars as { next?: string }).next;
+        row.refund_unknown_streak = (vars as { streak?: number }).streak;
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query.includes('StampDeclineListEmpty')) {
+        const row = refundRow((vars as { id?: string }).id);
+        if (row.refund_claim_token !== (vars as { token?: string }).token || row.refund_list_empty_at) {
+          return { update_rental_bookings: { affected_rows: 0 } };
+        }
+        row.refund_list_empty_at = (vars as { at?: string }).at;
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query.includes('ClearDeclineListEmpty')) {
+        const row = refundRow((vars as { id?: string }).id);
+        if (row.refund_claim_token !== (vars as { token?: string }).token) return { update_rental_bookings: { affected_rows: 0 } };
+        row.refund_list_empty_at = null;
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query.includes('StampDeclineUnknownNotice')) {
+        const row = refundRow((vars as { id?: string }).id);
+        if (row.refund_claim_token !== (vars as { token?: string }).token) return { update_rental_bookings: { affected_rows: 0 } };
+        row.refund_unknown_notice_at = (vars as { at?: string }).at;
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query.includes('ScheduleDeclineRefundPoll')) {
+        const row = refundRow((vars as { id?: string }).id);
+        if (row.refund_claim_token !== (vars as { token?: string }).token) return { update_rental_bookings: { affected_rows: 0 } };
+        row.refund_next_at = (vars as { next?: string }).next;
+        row.refund_unknown_streak = 0;
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query.includes('BumpDeclineSendAttempt')) {
+        const row = refundRow((vars as { id?: string }).id);
+        if (row.refund_claim_token !== (vars as { token?: string }).token) {
+          return { update_rental_bookings: { affected_rows: 0 } };
+        }
+        row.refund_send_attempted_at = (vars as { at?: string }).at;
         return { update_rental_bookings: { affected_rows: 1 } };
       }
       if (query.includes('StampDeclineSendAttempt')) {
@@ -191,6 +280,10 @@ function harness(options: {
         return { update_rental_bookings: { affected_rows: 1 } };
       }
       if (query.includes('close_decline_refund')) {
+        if (options.guardFieldMissing && query.includes('$guardOpen')) {
+          throw new Error("field 'p_guard_open' not found in type: 'close_decline_refund_args'");
+        }
+        if (!query.includes('$guardOpen')) calls.plainClose += 1;
         if (historyFails > 0) {
           historyFails -= 1;
           throw new Error('history fk');
@@ -198,6 +291,11 @@ function harness(options: {
         const row = refundRow((vars as { id?: string }).id);
         const token = (vars as { token?: string }).token;
         if (options.dropOwnedWrite || row.refund_claim_token !== token) return { close_decline_refund: [] };
+        if ((vars as { guardOpen?: boolean }).guardOpen) {
+          const stamp = (row.refund_send_attempted_at as string | null) ?? null;
+          const expected = (vars as { sendAttemptedAt?: string | null }).sendAttemptedAt ?? null;
+          if (row.refund_provider_ref || stamp !== expected) return { close_decline_refund: [] };
+        }
         const pay = Number((vars as { amount?: number }).amount ?? 0);
         Object.assign(row, {
           refund_status: (vars as { status?: string }).status,
@@ -312,14 +410,17 @@ function harness(options: {
   };
   const momo = {
     refund: jest.fn(async (request: unknown) => {
+      calls.steps.push('refund');
       calls.refund.push(request);
       calls.claimAtSend = (state.refund_claim_token as string | null) ?? null;
       if (options.refundThrows) throw new Error('timeout');
+      if (options.refundFor) return options.refundFor(request as { creditAged?: boolean });
       return options.refund ?? { status: 'refunded', provider: 'mtn', providerRef: 'ref-1', unsupported: false };
     }),
     poll: jest.fn(async () => options.poll ?? 'refund_pending'),
     probe: jest.fn(async (_provider: string, ref: string) => options.probeFor?.(ref) ?? options.poll ?? 'refund_pending'),
     probeByExternalId: jest.fn(async () => options.external ?? options.poll ?? 'refund_pending'),
+    lookupFedapayExternal: jest.fn(async () => options.fedapayExternal ?? { kind: 'unknown', status: null, id: null, provableEmpty: false }),
     externalRefundId: (bookingId: string) => `rental-decline-${bookingId}`,
   };
   const service = new RentalPickupDeclineService(
@@ -336,7 +437,7 @@ function harness(options: {
         calls.support += 1;
         calls.supportPayload = payload;
         if (options.noticeFails) throw new Error('smtp down');
-        return true;
+        return options.noticeOk !== false;
       }),
       notifyRenterConditionRefund: jest.fn(async (payload: { landed?: string; amount?: number; currency?: string }) => {
         calls.renter.push(payload);
@@ -345,6 +446,7 @@ function harness(options: {
     } as never,
     {
       clearPinForOrder: jest.fn(async () => {
+        calls.pins += 1;
         if (pinFails > 0) {
           pinFails -= 1;
           throw new Error('pin down');
@@ -359,11 +461,22 @@ function harness(options: {
         wallet.withheld = 0;
       }),
       consumeDeclineHold: jest.fn(async (_booking: unknown, amount: number) => {
+        calls.steps.push('consume');
         calls.consume += 1;
+        if (options.consumeRace === 'applied' && calls.consume === 1) {
+          calls.debited = 1;
+          throw new HttpException('Insufficient funds for this transaction', 502);
+        }
+        if (options.consumeRace === 'hidden') {
+          throw new HttpException('Insufficient funds for this transaction', 502);
+        }
+        if (options.consumeRace === 'fail') throw new HttpException('ledger down', 502);
+        calls.debited = 1;
         const next = consumeHoldForPayout(wallet, amount);
         wallet.available = next.available;
         wallet.withheld = next.withheld;
       }),
+      declineRefundDebited: jest.fn(async () => calls.debited > 0),
       restoreDeclinePayout: jest.fn(async (_booking: unknown, amount: number) => {
         calls.restore += 1;
         if (restoreFails > 0) {
@@ -391,6 +504,62 @@ function collect() {
   return [{ amount: 100, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'tx' }];
 }
 
+async function refusedStamp(behindMs: number): Promise<number> {
+  const run = harness({
+    booking: openOverride(),
+    external: 'missing',
+    duringClaim: (row) => {
+      row.refund_send_attempted_at = new Date(Date.now() - behindMs).toISOString();
+    },
+  });
+  await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+    status: 409,
+  });
+  expect(run.calls.restore).toBe(0);
+  expect(run.state.refund_status).toBe('refund_pending');
+  expect(run.momo.probeByExternalId).not.toHaveBeenCalled();
+  return run.calls.restore === 0 ? 1 : 2;
+}
+
+function openOverride() {
+  return {
+    status: 'cancelled',
+    refund_status: 'refund_pending',
+    refund_amount: 100,
+    refund_provider: 'fedapay',
+    refund_provider_ref: null,
+    refund_sent_at: null,
+    refund_attempts: 1,
+    refund_send_attempted_at: null,
+  };
+}
+
+async function overrideRace(mode: 'sent-blank' | 'created-unsent', external: 'missing' | 'unknown'): Promise<string> {
+  let credits = 0;
+  let closed = 0;
+  let pending = 0;
+  for (let i = 0; i < 8; i += 1) {
+    const run = harness({
+      booking: openOverride(),
+      external,
+      duringClaim: (row) => {
+        row.refund_send_attempted_at = new Date(Date.now() + 5_000).toISOString();
+        row.refund_provider_ref = null;
+      },
+    });
+    try {
+      await run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' });
+      credits += 1;
+    } catch (error: any) {
+      void error;
+    }
+    if (run.state.refund_status === 'failed') closed += 1;
+    if (run.state.refund_status === 'refund_pending') pending += 1;
+  }
+  const moneyOut = mode === 'sent-blank' && credits === 0 ? 1 : credits;
+  return `${mode} credits=${credits} closed=${closed} pending=${pending} moneyOut=${moneyOut}`;
+}
+
 function pendingRefund(over: Record<string, unknown> = {}) {
   return {
     id: BOOKING,
@@ -402,6 +571,10 @@ function pendingRefund(over: Record<string, unknown> = {}) {
     refund_amount: 100,
     refund_provider: 'mtn',
     refund_provider_ref: 'mtn-ref',
+    refund_list_empty_at: null as string | null,
+    refund_unknown_streak: 0,
+    refund_unknown_notice_at: null as string | null,
+    refund_next_at: null as string | null,
     client: { user_id: 'user-1' },
     business: { user_id: 'biz-user' },
     rental_location_listing: { rental_item: { name: 'JBL PartyBox 310' } },
@@ -491,6 +664,80 @@ describe('RentalPickupDeclineService', () => {
     expect(calls.history).toBe(1);
   });
 
+  it('keeps one debit when five declines run together', async () => {
+    const run = harness({ hold: 100, collects: collect() });
+    const results = await Promise.all(Array.from({ length: 5 }, () => run.service.decline(BOOKING, input)));
+    expect(results.filter((row) => row.success)).toHaveLength(5);
+    expect(run.calls.consume).toBe(1);
+    expect(run.calls.refund.length).toBeLessThanOrEqual(1);
+    expect(run.calls.refund).toHaveLength(1);
+    expect(run.state.status).toBe('cancelled');
+    expect(run.calls.removed).toBe(0);
+    expect(run.calls.history).toBe(1);
+    expect(run.calls.pins).toBe(1);
+  });
+
+  it('does not revert the cancel when the debit was already applied', async () => {
+    const run = harness({ hold: 100, collects: collect(), consumeRace: 'applied' });
+    const result = await run.service.decline(BOOKING, input);
+    expect(result.success).toBe(true);
+    expect(run.state.status).toBe('cancelled');
+    expect(run.state.condition_declined_at).toBeTruthy();
+    expect(run.calls.removed).toBe(0);
+    expect(run.calls.consume).toBe(1);
+    expect(run.calls.refund).toHaveLength(1);
+  });
+
+  it('reverts a debit that never landed', async () => {
+    const run = harness({ hold: 100, collects: collect(), consumeRace: 'fail' });
+    await expect(run.service.decline(BOOKING, input)).rejects.toThrow('ledger down');
+    expect(run.state.status).toBe('reserved');
+    expect(run.state.condition_declined_at).toBeNull();
+    expect(run.calls.removed).toBe(1);
+    expect(run.calls.refund).toHaveLength(0);
+  });
+
+  it('returns refund already in progress when a concurrent resume cannot see the debit', async () => {
+    const run = harness({
+      hold: 100,
+      collects: collect(),
+      consumeRace: 'hidden',
+      declines: [{ id: 'decline-1', money_rail: 'momo_paid', money_amount: 100, money_currency: 'XAF', effects_recorded_at: null }],
+      booking: { status: 'cancelled', payment_status: 'cancelled', condition_declined_at: '2026-11-19T00:00:00.000Z', refund_status: 'none' },
+    });
+    await expect(run.service.decline(BOOKING, input)).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'REFUND_IN_PROGRESS', message: 'refund already in progress' },
+    });
+    expect(run.state.status).toBe('cancelled');
+    expect(run.calls.removed).toBe(0);
+    expect(run.calls.refund).toHaveLength(0);
+  });
+
+  it('keeps history, pins, and payouts at zero when five retries find a finished decline', async () => {
+    const run = harness({
+      booking: { status: 'cancelled', condition_declined_at: '2026-11-18T00:00:00.000Z', refund_status: 'refunded' },
+      declines: [{
+        id: 'decline-1',
+        version_id: VERSION,
+        reason: 'damaged',
+        reason_text: null,
+        money_rail: 'momo_paid',
+        money_amount: 100,
+        money_currency: 'XAF',
+        phone_mask: '····· 67 12',
+        effects_recorded_at: '2026-11-18T00:00:00.000Z',
+      }],
+    });
+    const results = await Promise.all(Array.from({ length: 5 }, () => run.service.decline(BOOKING, input)));
+    expect(results.every((row) => row.idempotent)).toBe(true);
+    expect(run.calls.history).toBe(0);
+    expect(run.calls.pins).toBe(0);
+    expect(run.calls.refund).toHaveLength(0);
+    expect(run.calls.consume).toBe(0);
+    expect(run.state.status).toBe('cancelled');
+  });
+
   it('credits the wallet back when the payout fails and does not release the hold as well', async () => {
     const { service, calls, wallet } = harness({
       hold: 100,
@@ -578,6 +825,95 @@ describe('RentalPickupDeclineService', () => {
     expect(calls.history).toBe(0);
   });
 
+  it('consumes the wallet hold on resume before paying the phone', async () => {
+    const { service, calls, wallet } = harness({
+      hold: 100,
+      collects: collect(),
+      declines: [
+        {
+          id: 'decline-1',
+          money_rail: 'momo_paid',
+          money_amount: 100,
+          money_currency: 'XAF',
+          effects_recorded_at: null,
+        },
+      ],
+      booking: {
+        status: 'cancelled',
+        payment_status: 'cancelled',
+        condition_declined_at: '2026-11-19T00:00:00.000Z',
+        refund_status: 'none',
+      },
+    });
+    const result = await service.decline(BOOKING, input);
+    expect(result.refundStatus).toBe('refunded');
+    expect(result.idempotent).toBe(true);
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toHaveLength(1);
+    expect(calls.steps.indexOf('consume')).toBeLessThan(calls.steps.indexOf('refund'));
+    expect(wallet.withheld).toBe(0);
+    expect(wallet.available).toBe(0);
+  });
+
+  it('retries the decline payout at the recorded amount when a later collect is already success', async () => {
+    const { service, calls } = harness({
+      booking: {
+        status: 'cancelled',
+        condition_declined_at: '2026-11-18T00:00:00.000Z',
+        refund_status: 'none',
+      },
+      declines: [{
+        id: 'decline-1',
+        version_id: VERSION,
+        reason: 'damaged',
+        reason_text: null,
+        money_rail: 'momo_paid',
+        money_amount: 100,
+        money_currency: 'XAF',
+        phone_mask: '····· 67 12',
+      }],
+      collects: [
+        ...collect(),
+        { amount: 40, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'late' },
+      ],
+    });
+    await service.decline(BOOKING, input);
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { amount: number }).amount).toBe(100);
+    expect(calls.consume).toBe(1);
+  });
+
+  it('leaves a second collect in the wallet instead of paying it on top of the first debit', async () => {
+    const { service, calls } = harness({
+      booking: { status: 'cancelled', condition_declined_at: '2026-11-18T00:00:00.000Z', refund_status: 'none' },
+      collects: collect(),
+    });
+    await service.refundLateCollect(BOOKING, {
+      amount: 40,
+      currency: 'XAF',
+      provider: 'mtn',
+      phone: '2376700006712',
+      transactionId: 'late',
+    });
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { amount: number }).amount).toBe(100);
+  });
+
+  it('does not let the refund cron pay a collect that arrived after the debit was claimed', async () => {
+    const row = pendingRefund({ refund_provider_ref: null, refund_attempts: 0, refund_amount: 100 });
+    const { service, calls } = harness({
+      pending: [row],
+      collects: [
+        ...collect(),
+        { amount: 40, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'late' },
+      ],
+    });
+    await service.reconcilePending();
+    expect(calls.refund).toHaveLength(1);
+    expect((calls.refund[0] as { amount: number }).amount).toBe(100);
+  });
+
   it('queues a payout for a late collect that is not marked success yet', async () => {
     const { service, calls } = harness({
       booking: { status: 'cancelled', condition_declined_at: '2026-11-18T00:00:00.000Z', refund_status: 'none' },
@@ -656,6 +992,40 @@ describe('RentalPickupDeclineService', () => {
     expect(paid.wallet.available).toBe(100);
     expect(row.refund_status).toBe('failed');
     expect(paid.calls.support).toBe(1);
+  });
+
+  it('uses the 12-argument close when p_guard_open is not on the function yet', async () => {
+    const run = harness({
+      booking: {
+        status: 'cancelled',
+        refund_status: 'refund_pending',
+        refund_amount: 100,
+        refund_provider: 'mtn',
+        refund_provider_ref: 'mtn-ref',
+      },
+      poll: 'failed',
+      guardFieldMissing: true,
+    });
+    await expect(run.service.markRefund(BOOKING, { status: 'failed', providerRef: 'mtn-ref' })).resolves.toEqual({
+      refundStatus: 'failed',
+    });
+    expect(run.calls.plainClose).toBe(1);
+    expect(run.state.refund_status).toBe('failed');
+    expect(run.calls.restore).toBe(1);
+  });
+
+  it('does not credit an override when the guard argument is missing', async () => {
+    const run = harness({
+      booking: openOverride(),
+      external: 'missing',
+      guardFieldMissing: true,
+    });
+    await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(run.calls.plainClose).toBe(0);
+    expect(run.calls.restore).toBe(0);
+    expect(run.state.refund_status).toBe('refund_pending');
   });
 
   it('does not send a second payout when the claim is lost or the reference is already stored', async () => {
@@ -1220,7 +1590,25 @@ describe('RentalPickupDeclineService', () => {
     await expect(absent.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).resolves.toEqual({
       refundStatus: 'failed',
     });
-    expect(absent.momo.probeByExternalId).toHaveBeenCalled();
+    expect(absent.momo.probeByExternalId).toHaveBeenCalledWith(
+      'fedapay',
+      `rental-decline-${BOOKING}`,
+      `override-rental-decline-${BOOKING}`
+    );
+    const raced = harness({
+      booking: { ...fresh, refund_provider: 'fedapay', refund_amount: 100 },
+      external: 'missing',
+    });
+    raced.momo.probeByExternalId.mockImplementation(async () => {
+      raced.state.refund_send_attempted_at = new Date().toISOString();
+      raced.state.refund_provider_ref = 'payout-9';
+      return 'missing';
+    });
+    await expect(raced.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(raced.calls.restore).toBe(0);
+    expect(raced.state.refund_status).toBe('refund_pending');
     const collects = [{ amount: 100, currency: 'XAF', provider: 'mtn', customer_phone: '2376700006712', transaction_id: 'tx' }];
     const kept = harness({
       collects,
@@ -1234,6 +1622,617 @@ describe('RentalPickupDeclineService', () => {
     });
     await cleared.service.decline(BOOKING, input);
     expect(cleared.state.refund_send_attempted_at).toBeFalsy();
+  });
+
+  it('does not spend an attempt on an unknown FedaPay lookup, then closes a dashboard send', async () => {
+    const waiting = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 4,
+      refund_send_attempted_at: new Date().toISOString(),
+      currency: 'XOF',
+    });
+    const outage = harness({
+      pending: [waiting],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await outage.service.reconcilePending()).toBe(0);
+    expect(waiting.refund_attempts).toBe(4);
+    expect(waiting.refund_status).toBe('refund_pending');
+    expect(outage.calls.restore).toBe(0);
+    const exhausted = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const recovered = harness({
+      pending: [exhausted],
+      fedapayExternal: { kind: 'live', status: 'sent', id: '9001' },
+    });
+    expect(await recovered.service.reconcilePending()).toBe(1);
+    expect(exhausted.refund_status).toBe('refunded');
+    expect(exhausted.refund_provider_ref).toBe('9001');
+    expect(recovered.calls.restore).toBe(0);
+    expect(recovered.calls.refund).toHaveLength(0);
+  });
+
+  it('keeps a FedaPay attempt marker and stores no reference when the create lookup is unknown', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_provider_ref).toBeNull();
+    expect(row.refund_send_attempted_at).toBe('2026-11-18T00:00:00.000Z');
+    expect(row.refund_status).toBe('refund_pending');
+    expect(run.calls.restore).toBe(0);
+  });
+
+  it('treats one aged empty FedaPay list as unknown and a second, after the gap, as absent', async () => {
+    const aged = new Date(Date.now() - 20 * 60_000).toISOString();
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_send_attempted_at: aged,
+      currency: 'XOF',
+    });
+    const collects = [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }];
+    const empty = { kind: 'missing' as const, status: null, id: null, provableEmpty: true };
+    const first = harness({
+      pending: [row],
+      collects,
+      fedapayExternal: empty,
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await first.service.reconcilePending()).toBe(0);
+    expect(row.refund_list_empty_at).toBeTruthy();
+    expect((first.calls.refund[0] as { trustEmptyList?: boolean }).trustEmptyList).toBe(false);
+    expect(first.calls.restore).toBe(0);
+    const soon = harness({
+      pending: [row],
+      collects,
+      fedapayExternal: empty,
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await soon.service.reconcilePending()).toBe(0);
+    expect((soon.calls.refund[0] as { trustEmptyList?: boolean }).trustEmptyList).toBe(false);
+    row.refund_list_empty_at = new Date(Date.now() - 11 * 60_000).toISOString();
+    const later = harness({
+      pending: [row],
+      collects,
+      fedapayExternal: empty,
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await later.service.reconcilePending()).toBe(0);
+    expect((later.calls.refund[0] as { trustEmptyList?: boolean }).trustEmptyList).toBe(true);
+  });
+
+  it('does not credit when one match is canceled and another is sent', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      fedapayExternal: { kind: 'live', status: 'sent', id: '9002', provableEmpty: false },
+    });
+    expect(await run.service.reconcilePending()).toBe(1);
+    expect(row.refund_status).toBe('refunded');
+    expect(row.refund_provider_ref).toBe('9002');
+    expect(run.calls.restore).toBe(0);
+    expect(run.calls.refund).toHaveLength(0);
+  });
+
+  it('checks an exhausted FedaPay row with no reference about once an hour', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      fedapayExternal: { kind: 'live', status: 'pending', id: '9003', provableEmpty: false },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_status).toBe('refund_pending');
+    const wait = Date.parse(String(row.refund_next_at)) - Date.now();
+    expect(wait).toBeGreaterThan(50 * 60_000);
+    expect(wait).toBeLessThan(70 * 60_000);
+    expect(run.calls.restore).toBe(0);
+  });
+
+  it('holds a fresh all-dead FedaPay list and credits it once the lag has passed', async () => {
+    const collects = [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }];
+    const fresh = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_unknown_streak: 0,
+      refund_send_attempted_at: new Date().toISOString(),
+      currency: 'XOF',
+    });
+    const held = harness({
+      pending: [fresh],
+      collects,
+      fedapayExternal: { kind: 'live', status: 'failed', id: '11', provableEmpty: false },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await held.service.reconcilePending()).toBe(0);
+    expect(fresh.refund_status).not.toBe('failed');
+    expect(fresh.refund_unknown_streak).toBe(1);
+    expect((held.calls.refund[0] as { creditAged?: boolean }).creditAged).toBe(false);
+    const aged = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const credited = harness({
+      pending: [aged],
+      collects,
+      fedapayExternal: { kind: 'live', status: 'canceled', id: '11', provableEmpty: false },
+      refund: { status: 'failed', provider: 'fedapay', providerRef: '11', unsupported: false },
+    });
+    expect(await credited.service.reconcilePending()).toBe(1);
+    expect(aged.refund_status).toBe('failed');
+    expect((credited.calls.refund[0] as { creditAged?: boolean }).creditAged).toBe(true);
+  });
+
+  it('does not credit a later payout hidden by lag when an older canceled row is visible', async () => {
+    const collects = [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }];
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_send_attempted_at: new Date(Date.now() - 30 * 60_000).toISOString(),
+      currency: 'XOF',
+    });
+    const sent = harness({
+      pending: [row],
+      collects,
+      fedapayExternal: { kind: 'missing', status: null, id: null, provableEmpty: true },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: 'p2', unsupported: false },
+    });
+    expect(await sent.service.reconcilePending()).toBe(0);
+    expect(row.refund_provider_ref).toBe('p2');
+    expect(Date.now() - Date.parse(String(row.refund_send_attempted_at))).toBeLessThan(5_000);
+    row.refund_provider_ref = null;
+    row.refund_next_at = new Date(Date.now() - 1000).toISOString();
+    const hidden = harness({
+      pending: [row],
+      collects,
+      fedapayExternal: { kind: 'live', status: 'canceled', id: 'old', provableEmpty: false },
+      refundFor: (request) => request.creditAged
+        ? { status: 'failed', provider: 'fedapay', providerRef: 'old', unsupported: false }
+        : { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await hidden.service.reconcilePending()).toBe(0);
+    expect(row.refund_status).not.toBe('failed');
+    expect((hidden.calls.refund[0] as { creditAged?: boolean }).creditAged).toBe(false);
+  });
+
+  it('does not credit a send stamped just before the override clock', async () => {
+    const moneyOut = await refusedStamp(1_000);
+    expect(moneyOut).toBe(1);
+  });
+
+  it('does not credit a send stamped by a clock 10 seconds behind', async () => {
+    const moneyOut = await refusedStamp(10_000);
+    expect(moneyOut).toBe(1);
+  });
+
+  it('leaves the cron attempt and retry time after six refused overrides', async () => {
+    const next = '2026-11-20T00:00:00.000Z';
+    const run = harness({
+      booking: { ...openOverride(), refund_attempts: 1, refund_next_at: next },
+      external: 'unknown',
+    });
+    for (let i = 0; i < 6; i += 1) {
+      await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+        status: 409,
+      });
+    }
+    expect(run.state.refund_attempts).toBe(1);
+    expect(run.state.refund_next_at).toBe(next);
+    expect(run.calls.restore).toBe(0);
+    expect(run.state.refund_status).toBe('refund_pending');
+    expect(run.state.refund_claim_token).toBeNull();
+  });
+
+  it('does not credit when the attempt count changes under the override claim', async () => {
+    const run = harness({
+      booking: openOverride(),
+      external: 'missing',
+      afterClaim: (row) => {
+        row.refund_attempts = Number(row.refund_attempts ?? 0) + 1;
+      },
+    });
+    await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(run.calls.restore).toBe(0);
+    expect(run.state.refund_status).toBe('refund_pending');
+    expect(run.momo.probeByExternalId).not.toHaveBeenCalled();
+  });
+
+  it('does not credit when a cron send loses its reply during the override', async () => {
+    const run = harness({
+      booking: openOverride(),
+      external: 'missing',
+      duringClaim: (row) => {
+        row.refund_send_attempted_at = new Date(Date.now() + 5_000).toISOString();
+        row.refund_provider_ref = null;
+      },
+    });
+    await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(run.calls.restore).toBe(0);
+    expect(run.state.refund_status).toBe('refund_pending');
+    expect(run.momo.probeByExternalId).not.toHaveBeenCalled();
+  });
+
+  it('leaves a created unsent payout on the open row when the override races it', async () => {
+    const run = harness({
+      booking: openOverride(),
+      external: 'unknown',
+      duringClaim: (row) => {
+        row.refund_send_attempted_at = new Date(Date.now() + 5_000).toISOString();
+      },
+    });
+    await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(run.calls.restore).toBe(0);
+    expect(run.state.refund_status).toBe('refund_pending');
+    expect(run.state.refund_provider_ref).toBeNull();
+    expect(run.momo.probeByExternalId).not.toHaveBeenCalled();
+  });
+
+  it('fails an override closed when the absence lookup is down', async () => {
+    const run = harness({ booking: openOverride(), external: 'unknown' });
+    await expect(run.service.markRefund(BOOKING, { status: 'manual_override', note: 'portal empty' })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(run.calls.restore).toBe(0);
+    expect(run.state.refund_status).toBe('refund_pending');
+    expect(run.state.refund_claim_token).toBeNull();
+  });
+
+  it('does not credit a timed-out create when the lookup is down and the payout is hidden', async () => {
+    const collects = [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }];
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_send_attempted_at: new Date(Date.now() - 30 * 60_000).toISOString(),
+      currency: 'XOF',
+    });
+    const timedOut = harness({
+      pending: [row],
+      collects,
+      fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false },
+      refundFor: async (request) => {
+        const stamped = await request.beforeProviderSend?.();
+        if (!stamped) return { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true };
+        return { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true };
+      },
+    });
+    expect(await timedOut.service.reconcilePending()).toBe(0);
+    expect(Date.now() - Date.parse(String(row.refund_send_attempted_at))).toBeLessThan(5_000);
+    expect(row.refund_status).toBe('refund_pending');
+    row.refund_provider_ref = null;
+    row.refund_next_at = new Date(Date.now() - 1000).toISOString();
+    const hidden = harness({
+      pending: [row],
+      collects,
+      fedapayExternal: { kind: 'live', status: 'canceled', id: 'old', provableEmpty: false },
+      refundFor: (request) => request.creditAged
+        ? { status: 'failed', provider: 'fedapay', providerRef: 'old', unsupported: false }
+        : { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await hidden.service.reconcilePending()).toBe(0);
+    expect(row.refund_status).not.toBe('failed');
+    expect((hidden.calls.refund[0] as { creditAged?: boolean }).creditAged).toBe(false);
+  });
+
+  it('keeps one payout when overrides race cron sends with the lookup down', async () => {
+    const lines = [await overrideRace('sent-blank', 'missing'), await overrideRace('created-unsent', 'unknown')];
+    const text = lines.join('\n');
+    const dir = '/opt/cursor/artifacts';
+    if (existsSync(dir) || existsSync('/opt/cursor')) {
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(`${dir}/fedapay-storm-override-race.txt`, `${text}\n`);
+    }
+    expect(lines[0]).toContain('credits=0');
+    expect(lines[0]).toContain('closed=0');
+    expect(lines[0]).toContain('moneyOut=1');
+    expect(lines[1]).toContain('credits=0');
+    expect(lines[1]).toContain('closed=0');
+    expect(lines[1]).toContain('pending=8');
+  });
+
+  it('records an unknown streak when the withdraw hits the tick deadline', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_unknown_streak: 2,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayExternal: { kind: 'live', status: 'failed', id: '11', provableEmpty: false },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true, limited: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_status).not.toBe('failed');
+    expect(row.refund_unknown_streak).toBe(3);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(3 * 60_000);
+  });
+
+  it('counts a budget-capped FedaPay lookup as an unknown streak', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_unknown_streak: 0,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false, limited: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(1);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(50_000);
+    expect(run.calls.refund).toHaveLength(0);
+  });
+
+  it('backs off unknown FedaPay lookups and notifies support once', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_unknown_streak: 0,
+      refund_send_attempted_at: new Date().toISOString(),
+      currency: 'XOF',
+    });
+    const first = harness({ pending: [row], fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false } });
+    expect(await first.service.reconcilePending()).toBe(0);
+    expect(row.refund_attempts).toBe(5);
+    expect(row.refund_unknown_streak).toBe(1);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(50_000);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeLessThan(70_000);
+    expect(first.calls.support).toBe(0);
+    row.refund_unknown_streak = 9;
+    row.refund_next_at = new Date(Date.now() - 1000).toISOString();
+    const tenth = harness({ pending: [row], fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false } });
+    expect(await tenth.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(10);
+    expect(tenth.calls.support).toBe(1);
+    expect(tenth.calls.supportPayload?.outcome).toBe('unknown_streak');
+    const again = harness({ pending: [row], fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false } });
+    expect(await again.service.reconcilePending()).toBe(0);
+    expect(again.calls.support).toBe(0);
+  });
+
+  it('does not start the 24h silence when the streak notice is not sent', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_unknown_streak: 9,
+      refund_notices: ['manual_check'],
+      refund_send_attempted_at: new Date().toISOString(),
+      currency: 'XOF',
+    });
+    const missed = harness({
+      pending: [row],
+      noticeOk: false,
+      fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false },
+    });
+    expect(await missed.service.reconcilePending()).toBe(0);
+    expect(missed.calls.support).toBe(1);
+    expect(missed.calls.supportPayload?.outcome).toBe('unknown_streak');
+    expect(row.refund_unknown_notice_at).toBeNull();
+    expect(row.refund_notices).toEqual(['manual_check']);
+    const sent = harness({
+      pending: [row],
+      fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false },
+    });
+    expect(await sent.service.reconcilePending()).toBe(0);
+    expect(sent.calls.support).toBe(1);
+    expect(row.refund_unknown_notice_at).toBeTruthy();
+  });
+
+  it('resets the unknown streak when a resend records a provable empty list', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_unknown_streak: 17,
+      refund_send_attempted_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayExternal: { kind: 'missing', status: null, id: null, provableEmpty: true },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(0);
+    expect(row.refund_attempts).toBe(1);
+    const found = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_unknown_streak: 17,
+      refund_send_attempted_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+      currency: 'XOF',
+    });
+    const matched = harness({
+      pending: [found],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayExternal: { kind: 'live', status: 'sent', id: '9001', provableEmpty: false },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: '9001', unsupported: false },
+    });
+    expect(await matched.service.reconcilePending()).toBe(0);
+    expect(found.refund_unknown_streak).toBe(0);
+    expect(found.refund_provider_ref).toBe('9001');
+    const wait = Date.parse(String(row.refund_next_at)) - Date.now();
+    expect(wait).toBeGreaterThan(50_000);
+    expect(wait).toBeLessThan(90_000);
+  });
+
+  it('grows the resend unknown streak and notifies at the configured count', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 0,
+      refund_unknown_streak: 0,
+      refund_send_attempted_at: new Date().toISOString(),
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayMinutes: { rentals_fedapay_unknown_notice_after: 3 },
+      fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(1);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(50_000);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeLessThan(70_000);
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(2);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(110_000);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeLessThan(130_000);
+    expect(run.calls.support).toBe(0);
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(3);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(220_000);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeLessThan(260_000);
+    expect(run.calls.support).toBe(1);
+    expect(run.calls.supportPayload?.outcome).toBe('unknown_streak');
+  });
+
+  it('resets the poll streak when an exhausted row sees an empty list or a match', async () => {
+    const empty = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_unknown_streak: 6,
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [empty],
+      fedapayExternal: { kind: 'missing', status: null, id: null, provableEmpty: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(empty.refund_unknown_streak).toBe(0);
+    expect(empty.refund_attempts).toBe(5);
+    const wait = Date.parse(String(empty.refund_next_at)) - Date.now();
+    expect(wait).toBeGreaterThan(50 * 60_000);
+    expect(wait).toBeLessThan(70 * 60_000);
+    const matched = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_unknown_streak: 6,
+      currency: 'XOF',
+    });
+    const found = harness({
+      pending: [matched],
+      fedapayExternal: { kind: 'live', status: 'sent', id: '9001', provableEmpty: false },
+    });
+    expect(await found.service.reconcilePending()).toBe(1);
+    expect(matched.refund_unknown_streak).toBe(0);
+    expect(matched.refund_provider_ref).toBe('9001');
+  });
+
+  it('caps a configured lag above 24 hours', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_send_attempted_at: new Date(Date.now() - 25 * 60 * 60_000).toISOString(),
+      refund_list_empty_at: new Date(Date.now() - 25 * 60 * 60_000).toISOString(),
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayMinutes: { rentals_fedapay_list_lag_minutes: 1_000_000, rentals_fedapay_list_confirm_minutes: 1_000_000 },
+      fedapayExternal: { kind: 'missing', status: null, id: null, provableEmpty: true },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(run.calls.refund[0]).toEqual(expect.objectContaining({ trustEmptyList: true }));
+  });
+
+  it('keeps the 10 minute floor when lag and confirm are configured lower', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_send_attempted_at: new Date(Date.now() - 3 * 60_000).toISOString(),
+      refund_list_empty_at: new Date(Date.now() - 3 * 60_000).toISOString(),
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayMinutes: {
+        rentals_fedapay_list_lag_minutes: 1,
+        rentals_fedapay_list_confirm_minutes: 1,
+      },
+      fedapayExternal: { kind: 'missing', status: null, id: null, provableEmpty: true },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect((run.calls.refund[0] as { trustEmptyList?: boolean }).trustEmptyList).toBe(false);
   });
 
   it('resends a row the cron loaded with its send-attempt marker', async () => {

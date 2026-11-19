@@ -6,7 +6,7 @@ scalar timestamptz
 scalar numeric
 scalar currency_enum
 
-enum order_by { asc desc }
+enum order_by { asc desc desc_nulls_last }
 enum rental_booking_status_enum { cancelled active reserved }
 enum payment_entity_enum { rental_booking }
 
@@ -31,6 +31,7 @@ input rental_bookings_bool_exp {
   refund_provider_ref: string_comparison_exp
   refund_sent_at: timestamptz_comparison_exp
   refund_send_attempted_at: timestamptz_comparison_exp
+  refund_list_empty_at: timestamptz_comparison_exp
   refund_credited_at: timestamptz_comparison_exp
   refund_notices: jsonb_comparison_exp
   condition_declined_at: timestamptz_comparison_exp
@@ -55,6 +56,9 @@ input rental_bookings_set_input {
   refund_next_at: timestamptz
   refund_sent_at: timestamptz
   refund_send_attempted_at: timestamptz
+  refund_list_empty_at: timestamptz
+  refund_unknown_streak: Int
+  refund_unknown_notice_at: timestamptz
   refund_credited_at: timestamptz
   refunded_at: timestamptz
   status: rental_booking_status_enum
@@ -141,6 +145,8 @@ input close_decline_refund_args {
   p_changed_by: uuid!
   p_notes: String!
   p_previous_status: String!
+  p_send_attempted_at: timestamptz
+  p_guard_open: Boolean
 }
 type clients { id: uuid user_id: uuid user: users }
 type businesses { id: uuid user_id: uuid name: String }
@@ -168,6 +174,9 @@ type rental_bookings {
   refund_provider_ref: String
   refund_sent_at: timestamptz
   refund_send_attempted_at: timestamptz
+  refund_list_empty_at: timestamptz
+  refund_unknown_streak: Int
+  refund_unknown_notice_at: timestamptz
   refund_requested_at: timestamptz
   refund_credited_at: timestamptz
   refund_claim_at: timestamptz
@@ -236,8 +245,25 @@ type rental_item_baseline_photos {
   status: String
 }
 
+input application_configurations_bool_exp {
+  config_key: string_comparison_exp
+  status: string_comparison_exp
+  country_code: string_comparison_exp
+}
+type application_configurations { number_value: numeric }
+input application_configurations_order_by {
+  updated_at: order_by
+  created_at: order_by
+  id: order_by
+}
+
 type query_root {
   rental_bookings_by_pk(id: uuid!): rental_bookings
+  application_configurations(
+    where: application_configurations_bool_exp
+    order_by: [application_configurations_order_by!]
+    limit: Int
+  ): [application_configurations!]!
   rental_bookings(
     where: rental_bookings_bool_exp
     order_by: rental_bookings_order_by

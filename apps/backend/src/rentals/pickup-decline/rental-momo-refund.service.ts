@@ -15,6 +15,14 @@ export interface MomoRefundRequest {
   channel?: 'moov_tg' | 'togocel' | null;
   /** Stable provider reference. A retry sends this same id. */
   referenceId?: string | null;
+  /** The send-attempt marker was already set before this call. */
+  markedResend?: boolean;
+  /** When false, an empty FedaPay list is not proof of absence. */
+  trustEmptyList?: boolean;
+  /** When false, an all-dead FedaPay list stays unknown. */
+  creditAged?: boolean;
+  /** Runs immediately before a FedaPay create or sendNow. */
+  beforeProviderSend?: () => Promise<boolean>;
 }
 
 export interface MomoRefundResult {
@@ -26,6 +34,10 @@ export interface MomoRefundResult {
   unsent?: boolean;
   /** True only for a connect failure. A read timeout stays false. */
   connectFailure?: boolean;
+  /** Pending, and the caller must not store a fallback reference. */
+  blankRef?: boolean;
+  /** The FedaPay list stopped because the tick ran out of calls or time. */
+  limited?: boolean;
 }
 
 @Injectable()
@@ -52,12 +64,24 @@ export class RentalMomoRefundService {
   }
 
   /** `missing` is a 404. `unknown` is a lookup that did not prove the payout is absent. */
-  async probeByExternalId(provider: string, externalId: string): Promise<RefundStatus | 'missing' | 'unknown'> {
+  async probeByExternalId(
+    provider: string,
+    externalId: string,
+    spendKey = externalId
+  ): Promise<RefundStatus | 'missing' | 'unknown'> {
     if (providerRefundPlan(provider) !== 'fedapay') return 'unknown';
-    const found = await this.fedapay.findPayoutByExternalId(externalId);
-    if (found.unknown) return 'unknown';
+    const found = await this.fedapay.findPayoutByExternalId(externalId, 'lookup', spendKey);
+    if (found.unknown || (!found.provableEmpty && !found.found)) return 'unknown';
     if (!found.found) return 'missing';
     return mapRefundPoll(found.status);
+  }
+
+  async lookupFedapayExternal(bookingId: string): Promise<FedapayExternalLook> {
+    const found = await this.fedapay.findPayoutByExternalId(this.externalId(bookingId));
+    if (found.limited) return { kind: 'unknown', status: null, id: null, provableEmpty: false, limited: true };
+    if (found.found && found.id) return { kind: 'live', status: found.status, id: found.id, provableEmpty: false };
+    if (found.provableEmpty) return { kind: 'missing', status: null, id: null, provableEmpty: true };
+    return { kind: 'unknown', status: null, id: null, provableEmpty: false };
   }
 
   externalRefundId(bookingId: string): string {
@@ -123,10 +147,21 @@ export class RentalMomoRefundService {
       description: 'Rental condition decline refund',
       callback: this.callbackUrl('fedapay'),
       channel: request.channel === 'moov_tg' ? 'moov_tg' : 'togocel',
+      markedResend: request.markedResend === true,
+      trustEmptyList: request.trustEmptyList !== false,
+      strictList: true,
+      creditAged: request.creditAged === true,
+      beforeProviderSend: request.beforeProviderSend,
     });
-    const ref = sent.transactionId ?? sent.reference ?? null;
-    if (!sent.success && !sent.ambiguous) return this.failed('fedapay', ref);
-    return this.pending('fedapay', ref, false);
+    if (!sent.success && !sent.ambiguous) {
+      return this.failed('fedapay', sent.transactionId ?? sent.reference ?? null);
+    }
+    if (!sent.transactionId) return this.pendingBlank('fedapay', sent.limited === true);
+    return this.pending('fedapay', sent.transactionId, false);
+  }
+
+  private pendingBlank(provider: string, limited = false): MomoRefundResult {
+    return { ...this.pending(provider, null, false), blankRef: true, limited };
   }
 
   private async sendFreemopay(request: MomoRefundRequest, externalId: string): Promise<MomoRefundResult> {
@@ -230,3 +265,11 @@ export class RentalMomoRefundService {
 }
 
 type PollLook = { kind: 'code'; code: string } | { kind: 'missing' } | { kind: 'unknown' };
+
+export type FedapayExternalLook = {
+  kind: 'unknown' | 'missing' | 'live';
+  status: string | null;
+  id: string | null;
+  provableEmpty: boolean;
+  limited?: boolean;
+};
