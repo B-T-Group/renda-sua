@@ -126,6 +126,43 @@ describe('RentalSearchIdCache', () => {
     expect(listingStillPublic(row, { country: 'CM', maxPrice: 100 })).toBe(false);
     expect(listingStillPublic({ ...row, is_active: false }, { country: 'CM' })).toBe(false);
     expect(listingStillPublic({ ...row, rental_item: { is_active: false } }, { country: 'CM' })).toBe(false);
+    expect(listingStillPublic({ ...row, deleted_at: '2026-11-18T00:00:00.000Z' }, { country: 'CM' })).toBe(false);
+    expect(
+      listingStillPublic({ ...row, rental_item: { is_active: true, deleted_at: '2026-11-18' } }, { country: 'CM' })
+    ).toBe(false);
+    expect(
+      listingStillPublic(
+        { ...row, business_location: { is_active: false, address: { country: 'CM', state: 'Centre Region Province' } } },
+        { country: 'CM' }
+      )
+    ).toBe(false);
+    expect(listingStillPublic(row, { country: 'cm' })).toBe(true);
+    expect(listingStillPublic(row, { country: 'CM', state: 'Littoral' })).toBe(false);
+    expect(listingStillPublic(row, { country: 'CM', minPrice: 1000, maxPrice: 1000 })).toBe(true);
+    expect(listingStillPublic(row, { country: 'CM', minPrice: 1000.01 })).toBe(false);
+    expect(listingStillPublic(row, { country: 'CM', maxPrice: 999.99 })).toBe(false);
+    expect(listingStillPublic({ ...row, base_price_per_hour: 'nope' }, { country: 'CM', minPrice: 1 })).toBe(false);
+    expect(listingStillPublic({ ...row, base_price_per_hour: 'nope' }, { country: 'CM' })).toBe(true);
+    expect(listingStillPublic(row, { country: 'CM', minPrice: Number.NaN, maxPrice: Number.NaN })).toBe(true);
+  });
+
+  it('does not reuse a state that belongs to another country', () => {
+    expect(
+      pickStoredMarket(
+        [
+          { country_code: 'GA', state_name: 'Estuaire' },
+          { country_code: 'CM', state_name: 'Centre Region Province' },
+        ],
+        'CM',
+        'Estuaire'
+      )
+    ).toEqual({ country: 'CM', state: undefined });
+    expect(marketFromQuery('Cameroon', '  centre  ')).toEqual({
+      country: 'Cameroon',
+      state: 'centre',
+      filterMode: 'specific',
+      degraded: false,
+    });
   });
 
   it('keeps the requested id order and drops a missing row', () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { capRefund, consumeHoldForPayout, creditFailedPayout, declineRail, fedapayChannel, mapRefundPoll, maskMomoPhone, nextRefundAt, providerRefundPlan, REFUND_ATTEMPT_LIMIT, refundFromLedger, sumCollected } from './pickup-decline.money';
-import { DECLINE_FLAG_THRESHOLD, declineGuard, refundMarkAllowed, refundMarkEvidence, refundOverrideAllowed, renterPartyName } from './pickup-decline.policy';
+import { capRefund, cardReleaseNeedsRefund, claimStaleAt, consumeHoldForPayout, creditFailedPayout, declineRail, fedapayChannel, mapRefundPoll, maskMomoPhone, moneyAmount, nextRefundAt, providerRefundPlan, REFUND_ATTEMPT_LIMIT, refundFromLedger, refundSource, stableRefundReference, sumCollected } from './pickup-decline.money';
+import { DECLINE_FLAG_THRESHOLD, declineGuard, isDeclineReason, otherReasonText, refundMarkAllowed, refundMarkEvidence, refundOverrideAllowed, renterPartyName } from './pickup-decline.policy';
 import { isDeclineEvidenceKey, isPublicBaselineKey } from './pickup-decline.keys';
 import { BASELINE_PHOTOS } from './pickup-decline.queries';
 
@@ -52,6 +52,72 @@ describe('pickup decline money', () => {
     expect(nextRefundAt(1, 0)).toBe(new Date(60_000).toISOString());
     expect(nextRefundAt(REFUND_ATTEMPT_LIMIT, 0)).toBe(new Date(24 * 60 * 60_000).toISOString());
   });
+
+  it('ignores a sub-cent collect and refunds the last positive row in that currency', () => {
+    const rows = [
+      { amount: 0, currency: 'XAF', provider: 'mtn', phone: null, transactionId: 'zero' },
+      { amount: 10.005, currency: ' xaf ', provider: 'mtn', phone: '1', transactionId: 'first' },
+      { amount: -4, currency: 'XAF', provider: 'mtn', phone: null, transactionId: 'neg' },
+      { amount: 20, currency: 'CAD', provider: 'stripe', phone: null, transactionId: 'cad' },
+      { amount: 5, currency: 'XAF', provider: 'freemopay', phone: '2', transactionId: 'last' },
+    ];
+    expect(moneyAmount(0.004)).toBe(0);
+    expect(moneyAmount(0.005)).toBe(0.01);
+    expect(moneyAmount('abc')).toBe(0);
+    expect(moneyAmount(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(sumCollected(rows, 'xaf')).toBe(15.01);
+    expect(refundSource(rows, ' XAF ')?.transactionId).toBe('last');
+    expect(refundSource(rows, 'USD')).toBeNull();
+    expect(refundFromLedger(10.126, 1)).toBe(10.13);
+    expect(refundFromLedger(-5, 100)).toBe(0);
+    expect(capRefund(0, 10)).toBe(0);
+    expect(declineRail({ collected: 0.004, authorizedAmount: 50, walletHold: 10 })).toBe('card');
+    expect(declineRail({ collected: 0.005, authorizedAmount: 50, walletHold: 10 })).toBe('momo_paid');
+    expect(declineRail({ collected: 0, authorizedAmount: 0.004, walletHold: 0.004 })).toBe('momo_unpaid');
+  });
+
+  it('debits a payout past the hold and does not credit a failed zero', () => {
+    expect(consumeHoldForPayout({ available: 0, withheld: 50 }, 100)).toEqual({ available: -50, withheld: 0 });
+    expect(consumeHoldForPayout({ available: 10, withheld: -20 }, 5)).toEqual({ available: 5, withheld: 0 });
+    expect(creditFailedPayout({ available: 10, withheld: -20 }, 0)).toEqual({ available: 10, withheld: -20 });
+    expect(creditFailedPayout({ available: 10, withheld: 3 }, Number.NaN)).toEqual({ available: 10, withheld: 3 });
+    expect(creditFailedPayout({ available: 10.1, withheld: 3 }, 0.005)).toEqual({ available: 10.11, withheld: 3 });
+  });
+
+  it('polls once a day after five tries and keeps one provider reference', () => {
+    const minute = 60_000;
+    expect(nextRefundAt(0, 0)).toBe(new Date(minute).toISOString());
+    expect(nextRefundAt(2, 0)).toBe(new Date(5 * minute).toISOString());
+    expect(nextRefundAt(3, 0)).toBe(new Date(15 * minute).toISOString());
+    expect(nextRefundAt(4, 0)).toBe(new Date(60 * minute).toISOString());
+    expect(nextRefundAt(4, 0)).not.toBe(new Date(360 * minute).toISOString());
+    expect(nextRefundAt(6, 0)).toBe(new Date(24 * 60 * minute).toISOString());
+    expect(providerRefundPlan(' MTN_MOMO ')).toBe('mtn');
+    expect(providerRefundPlan('Freemo')).toBe('freemopay');
+    expect(providerRefundPlan('FedaPay')).toBe('fedapay');
+    expect(providerRefundPlan('orange money')).toBe('unsupported');
+    expect(mapRefundPoll('Canceled')).toBe('failed');
+    expect(mapRefundPoll('cancelled')).toBe('failed');
+    expect(mapRefundPoll('Transferred')).toBe('refunded');
+    expect(mapRefundPoll('sent')).toBe('refunded');
+    expect(mapRefundPoll('rejected')).toBe('failed');
+    expect(mapRefundPoll('  ')).toBe('refund_pending');
+    expect(fedapayChannel('+228 97 00 00 00', null)).toBe('moov_tg');
+    expect(fedapayChannel('+228 99 00 00 00', 'mixx')).toBe('togocel');
+    expect(fedapayChannel('', null)).toBe('togocel');
+    expect(maskMomoPhone(null)).toBe('·····');
+    expect(maskMomoPhone('671')).toBe('·····');
+    expect(cardReleaseNeedsRefund('Please use refund')).toBe(true);
+    expect(cardReleaseNeedsRefund('USE REFUND')).toBe(true);
+    expect(cardReleaseNeedsRefund('released')).toBe(false);
+    expect(cardReleaseNeedsRefund(null)).toBe(false);
+    const ref = stableRefundReference('booking-1');
+    expect(ref).toBe(stableRefundReference('booking-1'));
+    expect(ref).not.toBe(stableRefundReference('booking-2'));
+    expect(ref).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(ref).not.toContain('booking-1');
+    expect(claimStaleAt(120_000)).toBe(new Date(0).toISOString());
+  });
 });
 
 describe('pickup decline guards', () => {
@@ -70,6 +136,21 @@ describe('pickup decline guards', () => {
     expect(declineGuard({ ...open, actual_start_at: '2026-01-01' }, 'version')).toBe('closed');
     expect(declineGuard(open, 'other')).toBe('version');
     expect(declineGuard({ ...open, pickup_accepted_version_id: 'version' }, 'version')).toBe('accepted');
+    expect(declineGuard({ ...open, actual_start_at: '' }, 'version')).toBe('ok');
+    expect(declineGuard({ ...open, pickup_current_version_id: null }, 'version')).toBe('version');
+    expect(declineGuard({ ...open, pickup_accepted_version_id: 'older' }, 'version')).toBe('ok');
+    expect(declineGuard({ ...open, status: 'cancelled' }, 'version')).toBe('closed');
+  });
+
+  it('keeps a free-text note only for other, and only the known reasons', () => {
+    expect(otherReasonText('other', '  scratched  ')).toBe('scratched');
+    expect(otherReasonText('other', '   ')).toBeNull();
+    expect(otherReasonText('other', undefined)).toBeNull();
+    expect(otherReasonText('damaged', 'note')).toBeNull();
+    expect(isDeclineReason('not_the_item')).toBe(true);
+    expect(isDeclineReason('late')).toBe(false);
+    expect(refundMarkAllowed({})).toBe(false);
+    expect(refundOverrideAllowed({})).toBe(false);
   });
 
   it('requires financial refunds and a reference or a note', () => {
