@@ -37,7 +37,7 @@ import {
 import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
 import { RenterReturnPanel } from '../rentals/RenterReturnPanel';
 import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
-import { BusinessDeclineBanner, DeclineOutcomeCard } from '../rentals/DeclinePickupScreens';
+import { BusinessDeclineBanner, DeclineOutcomeCard, declineCardView } from '../rentals/DeclinePickupScreens';
 import { ReportSentConfirmation } from '../rentals/ReportSentConfirmation';
 import { RentalStartedConfirmation } from '../rentals/RentalStartedConfirmation';
 import SEOHead from '../seo/SEOHead';
@@ -788,19 +788,16 @@ const RentalBookingDetailPage: React.FC = () => {
           {isClient && booking.condition_declined_at ? (
             <DeclineOutcomeCard
               money={{
-                rail: booking.currency === 'XAF' || booking.currency === 'XOF' ? 'momo_paid' : 'card',
-                amount: Number(booking.refund_amount) || Number(booking.authorized_amount) || 0,
-                currency: booking.refund_currency || booking.currency,
-                timeZone: booking.currency === 'XAF' ? 'Africa/Douala' : 'America/Toronto',
+                ...declineCardView(booking),
+                timeZone: booking.currency === 'XAF' || booking.currency === 'XOF' ? 'Africa/Douala' : 'America/Toronto',
                 place: '',
                 item: booking.rental_location_listing?.rental_item?.name ?? '',
                 bookingNumber: booking.booking_number ?? '',
               }}
-              refundStatus={
-                booking.refund_status === 'refund_pending' || booking.refund_status === 'refunded'
-                  ? booking.refund_status
-                  : 'none'
-              }
+              refundStatus={declineCardView(booking).refundStatus}
+              onViewWallet={() => navigate('/accounts')}
+              onBrowse={() => navigate('/rentals')}
+              onContactSupport={() => navigate(`/support?booking=${encodeURIComponent(booking.booking_number ?? '')}`)}
             />
           ) : null}
           {bookingId && inspection.enrolled ? (

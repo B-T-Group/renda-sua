@@ -262,7 +262,7 @@ export type ClientRootStackParamList = {
   AssistantChat: { context?: AssistantContext; prefill?: string } | undefined;
   Messages: undefined;
   ThreadDetail: { threadId: string };
-  SupportTickets: undefined;
+  SupportTickets: { bookingNumber?: string } | undefined;
   ClientAccounts: undefined;
   UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
@@ -424,7 +424,7 @@ export type BusinessRootStackParamList = {
   AssistantChat: { context?: AssistantContext; prefill?: string } | undefined;
   Messages: undefined;
   ThreadDetail: { threadId: string };
-  SupportTickets: undefined;
+  SupportTickets: { bookingNumber?: string } | undefined;
   NotificationPermission: undefined;
   EnrollPersonaExplain: EnrollPersonaParams;
   EnrollPersonaSetup: EnrollPersonaParams;

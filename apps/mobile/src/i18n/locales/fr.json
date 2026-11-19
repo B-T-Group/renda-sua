@@ -5512,6 +5512,7 @@
     "sectionHelp": "Aide & Légal"
   },
   "support": {
+    "bookingContext": "Ceci concerne la réservation {{booking}}.",
     "noTickets": "Aucun ticket de support",
     "noTicketsHint": "Vous pouvez en créer depuis le détail d'une commande.",
     "status": {
@@ -8768,11 +8769,18 @@
     "walletMoney": "Le blocage sur votre portefeuille est levé. Vous ne serez pas facturé.",
     "momoUnpaid": "Vous n’avez rien payé.",
     "momoPaid": "Nous rembourserons {{amount}} au {{phone}}.",
+    "momoPaidNoPhone": "Nous rembourserons {{amount}}.",
+    "refundedNoPhone": "{{amount}} a été remboursé.",
+    "neutralMoney": "Cette réservation est annulée.",
     "cancelledTitle": "Réservation annulée",
     "refundProgress": "Remboursement en cours",
     "refunded": "Remboursé",
     "refundProgressBody": "{{amount}} est en route vers {{phone}}.",
+    "refundChecking": "Nous vérifions votre remboursement de {{amount}}. Nous vous préviendrons dès qu'il sera dans votre portefeuille ou sur votre numéro Mobile Money.",
+    "contactSupport": "Contacter le support",
     "refundedBody": "{{amount}} a été envoyé au {{phone}}.",
+    "walletReturned": "Nous n'avons pas pu renvoyer {{amount}} sur votre numéro Mobile Money. Le montant est donc dans votre portefeuille Rendasua. Vous pouvez le retirer ou l'utiliser pour votre prochaine réservation.",
+    "viewWallet": "Voir le portefeuille",
     "browse": "Parcourir les locations",
     "businessTitle": "Le locataire a refusé l’état des lieux",
     "businessBody": "La réservation est annulée et l’article est libre. Aucun frais.",

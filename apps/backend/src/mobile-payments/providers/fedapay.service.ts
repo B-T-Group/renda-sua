@@ -489,6 +489,59 @@ export class FedaPayService implements OnModuleInit {
     }
   }
 
+  /** Read-only. Does not create a payout. `unknown` means the lookup did not answer. */
+  async findPayoutByExternalId(externalId: string): Promise<{ found: boolean; status: string | null; id: string | null; unknown: boolean }> {
+    if (this.mockEnabled) return { found: false, status: null, id: null, unknown: false };
+    try {
+      const existing = await this.liveLookup('payout', () => Payout.all({ 'custom_metadata.externalId': externalId }));
+      const payouts = (existing as { payouts?: Array<{ id?: number | string; status?: string; custom_metadata?: { externalId?: string } }> })?.payouts ?? [];
+      const match = payouts.find((row) => row.custom_metadata?.externalId === externalId);
+      if (!match) return { found: false, status: null, id: null, unknown: false };
+      const id = match.id == null ? null : String(match.id);
+      return { found: true, status: String(match.status || 'pending'), id, unknown: false };
+    } catch (error: any) {
+      void error;
+      return { found: false, status: null, id: null, unknown: true };
+    }
+  }
+
+  /** A 4xx means FedaPay refused the create. A timeout or 5xx may have created it. */
+  private clientStatus(error: any): boolean {
+    const direct = Number(error?.status ?? error?.statusCode ?? error?.response?.status ?? 0);
+    if (direct >= 400 && direct < 500) return true;
+    return /\b4\d{2}\b/.test(String(error?.message ?? ''));
+  }
+
+  private async afterCreateError(error: any, externalId?: string): Promise<FedaPayWithdrawalResponse> {
+    if (this.clientStatus(error) || !externalId) return this.failedWithdraw(error);
+    const looked = await this.findPayoutByExternalId(externalId);
+    if (looked.found || looked.unknown) return this.pendingWithdraw(externalId, looked);
+    return this.failedWithdraw(error);
+  }
+
+  private pendingWithdraw(externalId: string, looked: { status: string | null; id: string | null; unknown: boolean }): FedaPayWithdrawalResponse {
+    const status = !looked.unknown && looked.status && looked.status !== 'failed' ? looked.status : 'pending';
+    return {
+      success: !looked.unknown,
+      ambiguous: true,
+      transactionId: looked.id ?? undefined,
+      reference: externalId,
+      status,
+      message: normalizeProviderMessage(null, 'Payout created; awaiting confirmation'),
+    };
+  }
+
+  private failedWithdraw(error: any): FedaPayWithdrawalResponse {
+    const sanitized = sanitizeProviderError(error);
+    this.logger.error(`Failed to initiate FedaPay payout: ${sanitized.message}`);
+    return {
+      success: false,
+      message: normalizeProviderMessage(sanitized.message, 'Failed to initiate payout'),
+      errorCode: error?.code || 'WITHDRAWAL_FAILED',
+      status: 'failed',
+    };
+  }
+
   async withdraw(
     withdrawalRequest: FedaPayWithdrawalRequest,
     reference?: string
@@ -536,21 +589,26 @@ export class FedaPayService implements OnModuleInit {
         throw new Error(`Failed to check existing payout: ${sanitized.message}`);
       }
 
-      const payout = await Payout.create({
-        amount: withdrawalRequest.amount,
-        currency: { iso: 'XOF' },
-        mode: withdrawalRequest.channel,
-        description: withdrawalRequest.description || 'Payout',
-        customer: {
-          phone_number: {
-            number: withdrawalRequest.payee,
-            country: 'TG',
+      let payout: { id?: number | string; status?: string; sendNow?: () => Promise<unknown> };
+      try {
+        payout = await Payout.create({
+          amount: withdrawalRequest.amount,
+          currency: { iso: 'XOF' },
+          mode: withdrawalRequest.channel,
+          description: withdrawalRequest.description || 'Payout',
+          customer: {
+            phone_number: {
+              number: withdrawalRequest.payee,
+              country: 'TG',
+            },
           },
-        },
-        custom_metadata: {
-          externalId,
-        },
-      });
+          custom_metadata: {
+            externalId,
+          },
+        });
+      } catch (error: any) {
+        return this.afterCreateError(error, externalId);
+      }
 
       if (payout && payout.id) {
         // N1: from here on a FedaPay payout exists. Nothing below may report a

@@ -4,7 +4,7 @@ import { Button, Text, TextInput } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
-import { declineAmount, declineDay, momoRail } from './declinePickup.format';
+import { declineAmount, declineDay } from './declinePickup.format';
 
 const { colors, spacing } = theme;
 
@@ -18,11 +18,12 @@ export interface DeclinePhoto {
 }
 
 export interface DeclineMoney {
-  rail: 'card' | 'wallet' | 'momo_unpaid' | 'momo_paid';
+  rail: 'card' | 'wallet' | 'momo_unpaid' | 'momo_paid' | 'unknown';
   amount: number;
   currency: string;
   timeZone: string;
   phoneMask?: string | null;
+  refundSent?: boolean;
   place: string;
   item: string;
   bookingNumber: string;
@@ -126,23 +127,68 @@ export function DeclineConditionSheet({
   );
 }
 
-export function DeclineOutcomeCard({ money, refundStatus }: { money: DeclineMoney; refundStatus: 'none' | 'refund_pending' | 'refunded' }) {
+export type DeclineRefundView = 'none' | 'refund_pending' | 'refunded' | 'failed' | 'manual';
+
+export function declineRefundView(status?: string | null): DeclineRefundView {
+  if (status === 'refund_pending' || status === 'refunded' || status === 'failed' || status === 'manual') return status;
+  return 'none';
+}
+
+export function declineCardView(booking: {
+  currency: string;
+  refund_status?: string | null;
+  refund_amount?: number | string | null;
+  refund_currency?: string | null;
+  authorized_amount?: number | string | null;
+  condition_decline?: {
+    rail?: DeclineMoney['rail'];
+    amount?: number;
+    currency?: string | null;
+    phoneMask?: string | null;
+    walletCredited?: boolean;
+    refundSent?: boolean;
+  } | null;
+}) {
+  const decline = booking.condition_decline;
+  const credited = Boolean(decline?.walletCredited) && declineRefundView(booking.refund_status) !== 'refunded';
+  return {
+    rail: decline?.rail ?? 'unknown',
+    amount: Number(decline?.amount) || Number(booking.refund_amount) || Number(booking.authorized_amount) || 0,
+    currency: decline?.currency || booking.refund_currency || booking.currency,
+    phoneMask: decline?.phoneMask ?? null,
+    refundSent: decline?.refundSent,
+    refundStatus: credited ? 'manual' as const : declineRefundView(booking.refund_status),
+  };
+}
+
+type OutcomeCardProps = {
+  money: DeclineMoney;
+  refundStatus: DeclineRefundView;
+  onViewWallet?: () => void;
+  onBrowse?: () => void;
+  onContactSupport?: () => void;
+};
+
+export function DeclineOutcomeCard({ money, refundStatus, onViewWallet, onBrowse, onContactSupport }: OutcomeCardProps) {
   const { t, i18n } = useTranslation();
   const amount = declineAmount(money.amount, money.currency, i18n.language);
-  const title = refundStatus === 'refund_pending'
-    ? t('pickupDecline.refundProgress', 'Refund in progress')
-    : refundStatus === 'refunded'
-      ? t('pickupDecline.refunded', 'Refunded')
-      : t('pickupDecline.cancelledTitle', 'Booking cancelled');
+  const wallet = refundStatus === 'failed' || refundStatus === 'manual';
+  const checking = refundStatus === 'refund_pending' && money.refundSent === false;
   return (
     <View style={styles.pad}>
-      <MaterialCommunityIcons name="cash-refund" size={36} color={colors.primary.main} />
-      <Text variant="headlineSmall">{title}</Text>
+      {outcomeMark(wallet, checking)}
+      <Text variant="headlineSmall">{outcomeTitle(refundStatus, t)}</Text>
       <Text>{money.place} · {money.bookingNumber}</Text>
       <Text>{outcomeBody(money, amount, refundStatus, t)}</Text>
-      <Button mode="contained" buttonColor={colors.primary.main}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
+      <OutcomeActions wallet={wallet} support={refundStatus === 'refund_pending'} onViewWallet={onViewWallet} onBrowse={onBrowse} onSupport={onContactSupport} />
     </View>
   );
+}
+
+function outcomeMark(wallet: boolean, checking: boolean) {
+  if (wallet) return <WalletMark />;
+  if (checking) return <CheckingMark />;
+  return <MaterialCommunityIcons name="cash-refund" size={36} color={colors.primary.main} />;
 }
 
 export function BusinessDeclineBanner({
@@ -353,28 +399,115 @@ function PhotoGroup({
 }
 
 function moneyLine(money: DeclineMoney, amount: string, t: any): string {
-  if (money.rail === 'momo_paid' && momoRail(money.currency, money.rail)) {
-    return t('pickupDecline.momoPaid', "We'll refund {{amount}} to {{phone}}.", { amount, phone: money.phoneMask ?? '' });
-  }
-  if (money.rail === 'momo_unpaid' && momoRail(money.currency, money.rail)) {
-    return t('pickupDecline.momoUnpaid', "You haven't paid anything.");
-  }
+  if (money.rail === 'unknown') return t('pickupDecline.neutralMoney', 'This booking is cancelled.');
+  if (money.rail === 'momo_paid') return paidLine(money, amount, t);
+  if (money.rail === 'momo_unpaid') return t('pickupDecline.momoUnpaid', "You haven't paid anything.");
   if (money.rail === 'wallet') return t('pickupDecline.walletMoney', 'The hold on your wallet is released. You will not be charged.');
   return t('pickupDecline.cardMoney', 'Your card hold of {{amount}} is released. You will not be charged.', { amount });
 }
 
-function outcomeBody(money: DeclineMoney, amount: string, refundStatus: string, t: any): string {
-  if (refundStatus === 'refund_pending') {
-    return t('pickupDecline.refundProgressBody', '{{amount}} is on its way to {{phone}}.', { amount, phone: money.phoneMask ?? '' });
+function paidLine(money: DeclineMoney, amount: string, t: any): string {
+  const phone = (money.phoneMask ?? '').trim();
+  if (!phone) return t('pickupDecline.momoPaidNoPhone', "We'll refund {{amount}}.", { amount });
+  return t('pickupDecline.momoPaid', "We'll refund {{amount}} to {{phone}}.", { amount, phone });
+}
+
+function checkingCopy(amount: string, t: any): string {
+  return t(
+    'pickupDecline.refundChecking',
+    "We're checking your refund of {{amount}}. We'll let you know as soon as it's in your wallet or on your Mobile Money number.",
+    { amount }
+  );
+}
+
+function sentLine(status: string, money: DeclineMoney, amount: string, t: any): string {
+  if (status === 'refund_pending' && money.refundSent === false) return checkingCopy(amount, t);
+  const phone = (money.phoneMask ?? '').trim();
+  if (money.rail === 'momo_paid' && phone && status === 'refund_pending') {
+    return t('pickupDecline.refundProgressBody', '{{amount}} is on its way to {{phone}}.', { amount, phone });
   }
-  if (refundStatus === 'refunded') {
-    return t('pickupDecline.refundedBody', '{{amount}} was sent to {{phone}}.', { amount, phone: money.phoneMask ?? '' });
+  if (money.rail === 'momo_paid' && phone && status === 'refunded') {
+    return t('pickupDecline.refundedBody', '{{amount}} was sent to {{phone}}.', { amount, phone });
+  }
+  if (status === 'refunded' && money.rail === 'momo_paid') {
+    return t('pickupDecline.refundedNoPhone', '{{amount}} was refunded.', { amount });
+  }
+  if (money.rail === 'unknown') return t('pickupDecline.neutralMoney', 'This booking is cancelled.');
+  return moneyLine(money, amount, t);
+}
+
+function outcomeBody(money: DeclineMoney, amount: string, refundStatus: string, t: any): string {
+  if (refundStatus === 'refund_pending' || refundStatus === 'refunded') {
+    return sentLine(refundStatus, money, amount, t);
+  }
+  if (refundStatus === 'failed' || refundStatus === 'manual') {
+    return t(
+      'pickupDecline.walletReturned',
+      "We couldn't send {{amount}} back to your Mobile Money number, so it's in your Rendasua wallet. You can withdraw it or use it on your next booking.",
+      { amount }
+    );
   }
   return moneyLine(money, amount, t);
 }
 
+function outcomeTitle(refundStatus: string, t: any): string {
+  if (refundStatus === 'refund_pending') return t('pickupDecline.refundProgress', 'Refund in progress');
+  if (refundStatus === 'refunded') return t('pickupDecline.refunded', 'Refunded');
+  return t('pickupDecline.cancelledTitle', 'Booking cancelled');
+}
+
+function OutcomeActions(props: { wallet: boolean; support: boolean; onViewWallet?: () => void; onBrowse?: () => void; onSupport?: () => void }) {
+  const { t } = useTranslation();
+  if (props.wallet) return <WalletActions onViewWallet={props.onViewWallet} onBrowse={props.onBrowse} />;
+  return (
+    <>
+      <Button mode="contained" buttonColor={colors.primary.main} onPress={props.onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
+      {props.support ? <SupportLink onSupport={props.onSupport} /> : null}
+    </>
+  );
+}
+
+function WalletActions({ onViewWallet, onBrowse }: { onViewWallet?: () => void; onBrowse?: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Button mode="contained" buttonColor={colors.primary.main} onPress={onViewWallet}>{t('pickupDecline.viewWallet', 'View wallet')}</Button>
+      <Button mode="text" textColor={colors.primary.main} onPress={onBrowse}>{t('pickupDecline.browse', 'Browse rentals')}</Button>
+    </>
+  );
+}
+
+function SupportLink({ onSupport }: { onSupport?: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Button mode="text" textColor={colors.primary.main} onPress={onSupport}>
+      {t('pickupDecline.contactSupport', 'Contact support')}
+    </Button>
+  );
+}
+
+function WalletMark() {
+  return (
+    <View style={styles.mark}>
+      <MaterialCommunityIcons name="wallet-outline" size={36} color={colors.primary.main} />
+      <MaterialCommunityIcons name="check-circle" size={16} color="#0B7A3B" style={styles.badge} />
+    </View>
+  );
+}
+
+function CheckingMark() {
+  return (
+    <View style={styles.mark}>
+      <MaterialCommunityIcons name="wallet-outline" size={36} color={colors.primary.main} />
+      <MaterialCommunityIcons name="clock-outline" size={16} color={colors.warning.main} style={styles.badge} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   pad: { padding: 16, gap: 12, backgroundColor: colors.background.default },
+  mark: { width: 40, height: 40 },
+  badge: { position: 'absolute', right: -4, bottom: -2, backgroundColor: colors.background.default, borderRadius: 8 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1, borderColor: colors.divider, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
   chipOn: { borderColor: colors.error.main },

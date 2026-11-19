@@ -77,12 +77,21 @@ const WEB = [
   ['decline-photos', '02f-web-decline-photos'],
   ['cancelled-card', '03-web-cancelled-card'],
   ['cancelled-momo-refund', '03c-web-cancelled-momo-refund'],
+  ['xaf-wallet', '03d-web-xaf-wallet'],
+  ['xaf-card', '03e-web-xaf-card'],
+  ['xaf-unpaid', '03f-web-xaf-unpaid'],
+  ['refund-nophone', '03g-web-refund-nophone'],
+  ['refunded-nophone', '03h-web-refunded-nophone'],
+  ['neutral', '03i-web-neutral'],
+  ['refund-checking', '03j-web-refund-checking'],
   ['business', '04-web-business-detail'],
   ['push', '04-web-push-copy'],
   ['listing', '05-web-listing'],
   ['lightbox', '05b-web-lightbox'],
   ['refund-progress', '06-web-refund-progress'],
   ['refunded', '06-web-refunded'],
+  ['refund-failed', '06b-web-refund-failed'],
+  ['refund-manual', '06c-web-refund-manual'],
   ['insights', '07-web-insights'],
   ['admin', '07-web-admin'],
 ];
@@ -98,11 +107,20 @@ const MOBILE = [
   ['cancelled-card', '03-cancelled-card'],
   ['cancelled-momo', '03b-cancelled-momo'],
   ['cancelled-momo-refund', '03c-cancelled-momo-refund'],
+  ['xaf-wallet', '03d-xaf-wallet'],
+  ['xaf-card', '03e-xaf-card'],
+  ['xaf-unpaid', '03f-xaf-unpaid'],
+  ['refund-nophone', '03g-refund-nophone'],
+  ['refunded-nophone', '03h-refunded-nophone'],
+  ['neutral', '03i-neutral'],
+  ['refund-checking', '03j-refund-checking'],
   ['business', '04-business-detail'],
   ['listing', '05-listing'],
   ['lightbox', '05b-lightbox'],
   ['refund-progress', '06-refund-progress'],
   ['refunded', '06-refunded'],
+  ['refund-failed', '06b-refund-failed'],
+  ['refund-manual', '06c-refund-manual'],
   ['insights', '07-insights'],
 ];
 
@@ -285,6 +303,58 @@ async function assertScene(page, scene, lang, mobile) {
     if (!loaded) throw new Error(`${scene} icon font did not load`);
   }
   if (scene === 'admin' && !text.includes('5')) throw new Error('admin threshold copy missing 5');
+  if (scene === 'refund-failed' || scene === 'refund-manual') {
+    const body = lang === 'fr' ? 'portefeuille Rendasua' : 'Rendasua wallet';
+    const primary = lang === 'fr' ? 'Voir le portefeuille' : 'View wallet';
+    const secondary = lang === 'fr' ? 'Parcourir les locations' : 'Browse rentals';
+    for (const bit of [body, primary, secondary]) {
+      if (!text.includes(bit)) throw new Error(`${scene} ${lang} missing ${bit}`);
+    }
+    if (text.includes('670') || text.toLowerCase().includes('phone')) {
+      throw new Error(`${scene} ${lang} still names the phone`);
+    }
+  }
+  if (scene === 'xaf-wallet' || scene === 'xaf-card' || scene === 'xaf-unpaid' || scene === 'refund-nophone') {
+    if (text.includes('to .') || text.includes('au .')) throw new Error(`${scene} ${lang} shows an empty phone`);
+  }
+  if (scene === 'xaf-wallet' && !text.toLowerCase().includes(lang === 'fr' ? 'portefeuille' : 'wallet')) {
+    throw new Error(`${scene} ${lang} is not the wallet copy`);
+  }
+  if (scene === 'xaf-unpaid' && !text.toLowerCase().includes(lang === 'fr' ? 'rien payé' : "haven't paid")) {
+    throw new Error(`${scene} ${lang} is not the unpaid copy`);
+  }
+  if (scene === 'xaf-card' && !text.toLowerCase().includes(lang === 'fr' ? 'carte' : 'card')) {
+    throw new Error(`${scene} ${lang} is not the card copy`);
+  }
+  if (scene === 'refund-nophone' && (text.includes('67') || text.includes('to .') || text.includes('au .'))) {
+    throw new Error(`${scene} ${lang} still names a phone`);
+  }
+  if (scene === 'refunded-nophone') {
+    const past = lang === 'fr' ? 'a été remboursé' : 'was refunded';
+    if (!text.includes(past)) throw new Error(`${scene} ${lang} is not past tense`);
+    if (text.toLowerCase().includes(lang === 'fr' ? 'rembourserons' : "we'll refund")) {
+      throw new Error(`${scene} ${lang} is still future tense`);
+    }
+  }
+  if (scene === 'refund-checking') {
+    const line = lang === 'fr' ? 'Nous vous préviendrons dès qu' : "We'll let you know as soon as";
+    const support = lang === 'fr' ? 'Contacter le support' : 'Contact support';
+    const raw = await page.evaluate(() => document.body.textContent || '');
+    const where = lang === 'fr' ? 'numéro Mobile Money' : 'Mobile Money number';
+    if (!text.includes(line) || !text.includes(where)) throw new Error(`${scene} ${lang} is not the checking copy`);
+    if (!text.includes(support)) throw new Error(`${scene} ${lang} is missing contact support`);
+    if (!raw.includes('45\u00a0000\u00a0FCFA')) throw new Error(`${scene} ${lang} lost the non-breaking space`);
+    if (text.toLowerCase().includes(lang === 'fr' ? 'en route' : 'on its way')) {
+      throw new Error(`${scene} ${lang} still says the money is on its way`);
+    }
+  }
+  if (scene === 'neutral') {
+    const line = lang === 'fr' ? 'Cette réservation est annulée' : 'This booking is cancelled';
+    if (!text.includes(line)) throw new Error(`${scene} ${lang} is not neutral`);
+    if (text.toLowerCase().includes(lang === 'fr' ? 'carte' : 'card hold')) {
+      throw new Error(`${scene} ${lang} fell back to card copy`);
+    }
+  }
 }
 
 async function writeCompressed(file, png) {

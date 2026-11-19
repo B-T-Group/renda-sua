@@ -17,6 +17,11 @@ export const DECLINE_BOOKING = `
       refund_amount
       refund_provider
       refund_provider_ref
+      refund_sent_at
+      refund_send_attempted_at
+      refund_requested_at
+      refund_claim_at
+      refund_credited_at
       authorized_amount
       total_amount
       currency
@@ -172,19 +177,6 @@ export const CLAIM_REFUND = `
   }
 `;
 
-export const REMEMBER_REFUND_REF = `
-  mutation RememberDeclineRefundRef($id: uuid!, $provider: String!, $ref: String!) {
-    update_rental_bookings(
-      where: {
-        id: { _eq: $id }
-        refund_status: { _eq: "refund_pending" }
-        refund_provider_ref: { _is_null: true }
-      }
-      _set: { refund_provider: $provider, refund_provider_ref: $ref }
-    ) { affected_rows }
-  }
-`;
-
 export const DELETE_DECLINE = `
   mutation DeleteConditionDecline($id: uuid!) {
     delete_rental_condition_declines_by_pk(id: $id) { id }
@@ -217,6 +209,165 @@ export const DECLINE_HISTORY = `
     ) { id }
   }
 `;
+
+export const STAMP_SENT = `
+  mutation StampDeclineRefundSent($id: uuid!, $token: uuid!, $provider: String!, $ref: String!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_claim_token: { _eq: $token }
+        refund_sent_at: { _is_null: true }
+        _or: [
+          { refund_provider_ref: { _is_null: true } }
+          { refund_provider_ref: { _eq: $ref } }
+        ]
+      }
+      _set: { refund_sent_at: $at, refund_provider: $provider, refund_provider_ref: $ref }
+    ) { affected_rows }
+  }
+`;
+
+export const KEEP_PROVIDER_REF = `
+  mutation KeepDeclineProviderRef($id: uuid!, $stableRef: String!, $ref: String!) {
+    update_rental_bookings(
+      where: { id: { _eq: $id }, refund_provider_ref: { _eq: $stableRef } }
+      _set: { refund_provider_ref: $ref }
+    ) { affected_rows }
+  }
+`;
+
+export const CLAIM_NOTICE = `
+  mutation NoteDeclineRefundOnce($id: uuid!, $outcome: jsonb!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        _not: { refund_notices: { _contains: $outcome } }
+      }
+      _append: { refund_notices: $outcome }
+    ) { affected_rows }
+  }
+`;
+
+export const RELEASE_NOTICE = `
+  mutation ReleaseDeclineRefundNotice($id: uuid!, $outcome: String!) {
+    update_rental_bookings(
+      where: { id: { _eq: $id } }
+      _delete_key: { refund_notices: $outcome }
+    ) { affected_rows }
+  }
+`;
+
+export const CLEAR_STABLE_REF = `
+  mutation ClearDeclineStableRef($id: uuid!, $token: uuid!, $stableRef: String!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_provider_ref: { _eq: $stableRef }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_provider_ref: null }
+    ) { affected_rows }
+  }
+`;
+
+export const STAMP_ATTEMPT = `
+  mutation StampDeclineSendAttempt($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_claim_token: { _eq: $token }
+        refund_send_attempted_at: { _is_null: true }
+      }
+      _set: { refund_send_attempted_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+export const CLEAR_ATTEMPT = `
+  mutation ClearDeclineSendAttempt($id: uuid!, $token: uuid!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_send_attempted_at: null }
+    ) { affected_rows }
+  }
+`;
+
+export const REFUND_ACCOUNT = `
+  query DeclineRefundAccount($userId: uuid!, $currency: currency_enum!) {
+    accounts(where: { user_id: { _eq: $userId }, currency: { _eq: $currency } }, limit: 1) { id }
+  }
+`;
+
+export const CLOSE_DECLINE_REFUND = `
+  mutation CloseDeclineRefund(
+    $id: uuid!
+    $token: uuid!
+    $status: String!
+    $provider: String!
+    $providerRef: String
+    $accountId: uuid
+    $amount: numeric!
+    $memo: String
+    $idempotencyKey: String!
+    $changedBy: uuid!
+    $notes: String!
+    $previousStatus: String!
+  ) {
+    close_decline_refund(args: {
+      p_booking_id: $id
+      p_token: $token
+      p_status: $status
+      p_provider: $provider
+      p_provider_ref: $providerRef
+      p_account_id: $accountId
+      p_amount: $amount
+      p_memo: $memo
+      p_idempotency_key: $idempotencyKey
+      p_changed_by: $changedBy
+      p_notes: $notes
+      p_previous_status: $previousStatus
+    }) { id }
+  }
+`;
+
+export const CLEAR_SENT = `
+  mutation ClearDeclineRefundSent($id: uuid!, $token: uuid!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_sent_at: null }
+    ) { affected_rows }
+  }
+`;
+
+export const MARK_CREDITED = `
+  mutation MarkDeclineWalletCredit($id: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: { id: { _eq: $id }, refund_credited_at: { _is_null: true } }
+      _set: { refund_credited_at: $at }
+    ) { affected_rows }
+  }
+`;
+
+/** Hasura _append exists only on jsonb. A text[] document is the error CI used to miss. */
+export function noticeMutationShape(document: string): void {
+  const jsonb = document.includes('$outcome: jsonb!');
+  const contains = document.includes('_contains: $outcome');
+  const append = document.includes('_append: { refund_notices: $outcome }');
+  if (!jsonb || !contains || !append) {
+    throw new Error("field 'refund_notices' not found in type: 'rental_bookings_append_input'");
+  }
+}
 
 export const KEEP_REFUND_CLAIM = `
   mutation KeepDeclineRefundClaim($id: uuid!, $token: uuid!, $at: timestamptz!) {
@@ -293,13 +444,48 @@ export const DECLINE_PHOTO_ROWS = `
   }
 `;
 
+export const RENTER_NOTICE_RETRIES = `
+  query DeclineRenterNoticeRetries($landed: jsonb!, $try1: jsonb!, $try2: jsonb!, $try3: jsonb!) {
+    rental_bookings(
+      where: {
+        _and: [
+          { refund_status: { _in: ["failed", "manual", "refunded"] } }
+          { _not: { refund_notices: { _contains: $landed } } }
+          { _not: { refund_notices: { _contains: $try3 } } }
+          {
+            _or: [
+              { refund_notices: { _contains: $try1 } }
+              { refund_notices: { _contains: $try2 } }
+            ]
+          }
+        ]
+      }
+      order_by: { refund_status_at: asc }
+      limit: 20
+    ) {
+      id
+      booking_number
+      status
+      currency
+      refund_status
+      refund_amount
+      refund_provider
+      refund_provider_ref
+      refund_credited_at
+      refund_notices
+      client { user_id }
+      business { user_id }
+      rental_location_listing { rental_item { name } }
+    }
+  }
+`;
+
 export const PENDING_REFUNDS = `
   query PendingDeclineRefunds($now: timestamptz!, $stale: timestamptz!) {
     rental_bookings(
       where: {
         refund_status: { _eq: "refund_pending" }
         condition_declined_at: { _is_null: false }
-        refund_attempts: { _lt: 5 }
         _and: [
           { _or: [
             { refund_next_at: { _is_null: true } }
@@ -323,6 +509,8 @@ export const PENDING_REFUNDS = `
       refund_amount
       refund_provider
       refund_provider_ref
+      refund_sent_at
+      refund_send_attempted_at
       refund_claim_at
       client { user_id }
       business { user_id }

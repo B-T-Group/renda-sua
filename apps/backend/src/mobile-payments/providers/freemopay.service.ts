@@ -39,6 +39,15 @@ export interface FreemopayPaymentResponse {
   status?: string;
 }
 
+const CONNECT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT', 'ERR_SOCKET_CONNECTION_TIMEOUT']);
+
+/** True only for a connect failure with no HTTP response. Timeouts stay ambiguous: axios always sets request. */
+export function freemopayRequestUnsent(error: any): boolean {
+  if (error?.response || Number(error?.response?.status) > 0) return false;
+  const code = String(error?.code ?? error?.cause?.code ?? '');
+  return CONNECT_CODES.has(code);
+}
+
 export interface FreemopayWithdrawalResponse {
   success: boolean;
   transactionId?: string;
@@ -48,6 +57,8 @@ export interface FreemopayWithdrawalResponse {
   status?: string;
   /** True when a timeout, network error, or 5xx may have created the payout. */
   ambiguous?: boolean;
+  /** The request never reached FreemoPay, so the same external id can be sent again. */
+  unsent?: boolean;
 }
 
 export interface FreemopayTransactionStatus {
@@ -444,25 +455,26 @@ export class FreemopayService implements OnModuleInit {
         status: data?.status,
       };
     } catch (error: any) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to initiate Freemopay withdrawal: ${sanitized.message}`);
-      const http = Number(sanitized.status ?? error.response?.status);
-      const definite = http >= 400 && http < 500;
-      return {
-        success: false,
-        ambiguous: !definite,
-        message: normalizeProviderMessage(
-          error.response?.data?.message,
-          'Failed to initiate withdrawal'
-        ),
-        errorCode:
-          error.response?.data?.statusCode?.toString() ||
-          error.response?.status?.toString() ||
-          'WITHDRAWAL_FAILED',
-        status: definite ? 'FAILED' : 'UNKNOWN',
-      };
+      return this.withdrawalFailure(error);
     }
   }
+
+  private withdrawalFailure(error: any): FreemopayWithdrawalResponse {
+    const sanitized = sanitizeProviderError(error);
+    this.logger.error(`Failed to initiate Freemopay withdrawal: ${sanitized.message}`);
+    const http = Number(sanitized.status ?? error?.response?.status ?? 0);
+    const unsent = freemopayRequestUnsent(error);
+    const definite = !unsent && http >= 400 && http < 500;
+    return {
+      success: false,
+      ambiguous: !unsent && !definite,
+      unsent,
+      message: normalizeProviderMessage(error?.response?.data?.message, 'Failed to initiate withdrawal'),
+      errorCode: error?.response?.data?.statusCode?.toString() || String(http || 'WITHDRAWAL_FAILED'),
+      status: definite || unsent ? 'FAILED' : 'UNKNOWN',
+    };
+  }
+
 
   /**
    * Check transaction status (GET /api/v2/payment/:reference)
@@ -486,7 +498,7 @@ export class FreemopayService implements OnModuleInit {
 
       return {
         transactionId: data.reference || reference,
-        status: data.status || 'PENDING',
+        status: typeof data.status === 'string' && data.status.trim() ? data.status : 'UNKNOWN',
         amount: data.amount,
         reference: data.reference,
         merchantRef,

@@ -646,7 +646,36 @@ describe('FedaPayService', () => {
       const result = await service.withdraw(withdrawReq);
 
       expect(result.success).toBe(false);
+      expect(result.status).toBe('failed');
+      expect(result.ambiguous).toBeUndefined();
       expect(result.transactionId).toBeUndefined();
+    });
+
+    it('keeps a created payout pending when create times out after the payout exists', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all
+        .mockResolvedValueOnce({ payouts: [] })
+        .mockResolvedValueOnce({ payouts: [{ id: 91, status: 'pending', custom_metadata: { externalId: 'n1-ref' } }] });
+      Payout.create.mockRejectedValue(Object.assign(new Error('socket timeout'), { code: 'ETIMEDOUT' }));
+
+      const result = await service.withdraw(withdrawReq);
+
+      expect(result.success).toBe(true);
+      expect(result.ambiguous).toBe(true);
+      expect(result.status).toBe('pending');
+      expect(result.transactionId).toBe('91');
+    });
+
+    it('stays pending when a 502 create cannot be looked up', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValueOnce({ payouts: [] }).mockRejectedValueOnce(new Error('lookup down'));
+      Payout.create.mockRejectedValue(Object.assign(new Error('bad gateway'), { status: 502 }));
+
+      const result = await service.withdraw(withdrawReq);
+
+      expect(result.success).toBe(false);
+      expect(result.ambiguous).toBe(true);
+      expect(result.status).toBe('pending');
     });
   });
 

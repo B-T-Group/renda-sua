@@ -4,7 +4,7 @@ ALTER TABLE public.application_configurations
   DROP CONSTRAINT IF EXISTS rentals_decline_rank_min_sample_range,
   DROP CONSTRAINT IF EXISTS rentals_decline_rank_weight_range;
 
--- Deactivate every ranking config row, including country rows, and mark them so up can restore only these.
+-- Tag only rows that are still active. An admin-inactive row stays untagged, so up does not turn it back on.
 UPDATE public.application_configurations
 SET boolean_value = false,
     status = 'inactive',
@@ -13,7 +13,8 @@ SET boolean_value = false,
       WHEN 'ranking_migration_off' = ANY(tags) THEN tags
       ELSE tags || ARRAY['ranking_migration_off']::text[]
     END
-WHERE config_key IN (
+WHERE status = 'active'
+  AND config_key IN (
   'rentals_decline_ranking_enabled',
   'rentals_decline_rank_weight',
   'rentals_decline_rank_min_sample',

@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { capRefund, consumeHoldForPayout, creditFailedPayout, declineRail, fedapayChannel, mapRefundPoll, maskMomoPhone, nextRefundAt, providerRefundPlan, REFUND_ATTEMPT_LIMIT, refundFromLedger, sumCollected } from './pickup-decline.money';
-import { DECLINE_FLAG_THRESHOLD, declineGuard, refundMarkAllowed, refundMarkEvidence, renterPartyName } from './pickup-decline.policy';
+import { DECLINE_FLAG_THRESHOLD, declineGuard, refundMarkAllowed, refundMarkEvidence, refundOverrideAllowed, renterPartyName } from './pickup-decline.policy';
 import { isDeclineEvidenceKey, isPublicBaselineKey } from './pickup-decline.keys';
 import { BASELINE_PHOTOS } from './pickup-decline.queries';
 
@@ -50,7 +50,7 @@ describe('pickup decline money', () => {
     expect(fedapayChannel('22890000000', 'togocel')).toBe('togocel');
     expect(fedapayChannel('22890000000', null)).toBe('togocel');
     expect(nextRefundAt(1, 0)).toBe(new Date(60_000).toISOString());
-    expect(nextRefundAt(REFUND_ATTEMPT_LIMIT, 0)).toBeNull();
+    expect(nextRefundAt(REFUND_ATTEMPT_LIMIT, 0)).toBe(new Date(24 * 60 * 60_000).toISOString());
   });
 });
 
@@ -79,6 +79,9 @@ describe('pickup decline guards', () => {
     expect(refundMarkEvidence(null, '  ')).toBe(false);
     expect(refundMarkEvidence('ref-1', null)).toBe(true);
     expect(refundMarkEvidence(null, 'paid by hand')).toBe(true);
+    expect(refundOverrideAllowed({ isSuperuser: true })).toBe(true);
+    expect(refundOverrideAllowed({ permissions: ['platform.financial.refunds'] })).toBe(false);
+    expect(refundOverrideAllowed({ permissions: ['platform.financial.refunds.manual_override'] })).toBe(true);
   });
 
   it('flags a party at 5 declines, not 4', () => {

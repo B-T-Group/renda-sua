@@ -128,9 +128,11 @@ export function fedapayChannel(phone: string | null, channel?: string | null): '
 export const REFUND_ATTEMPT_LIMIT = 5;
 const REFUND_BACKOFF_MINUTES = [1, 5, 15, 60, 360];
 
-/** Null once support should take the refund. Earlier attempts wait. */
-export function nextRefundAt(attempts: number, now = Date.now()): string | null {
-  if (attempts >= REFUND_ATTEMPT_LIMIT) return null;
+const SLOW_POLL_MS = 24 * 60 * 60_000;
+
+/** Past the send limit the cron still polls, once a day. Earlier attempts wait. */
+export function nextRefundAt(attempts: number, now = Date.now()): string {
+  if (attempts >= REFUND_ATTEMPT_LIMIT) return new Date(now + SLOW_POLL_MS).toISOString();
   const minutes = REFUND_BACKOFF_MINUTES[Math.max(0, attempts - 1)] ?? 360;
   return new Date(now + minutes * 60_000).toISOString();
 }
