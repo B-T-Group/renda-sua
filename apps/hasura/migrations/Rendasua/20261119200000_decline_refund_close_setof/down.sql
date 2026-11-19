@@ -1,7 +1,11 @@
--- Restores the integer function from 20261119190000.
+-- Restores the integer function from 20261119190000, including its comment.
 -- CREATE OR REPLACE cannot change the return type, so this drops first.
 -- A one-step rollback of 20261119200000 leaves that integer function in place.
--- The metadata that tracks the SETOF mutation has to roll back with it.
+-- The integer return cannot stay tracked. After this down, untrack
+-- close_decline_refund: remove
+-- metadata/databases/Rendasua/functions/public_close_decline_refund.yaml
+-- and its functions.yaml include, then apply metadata. Metadata that still
+-- tracks the function is inconsistent with the integer return.
 DROP FUNCTION IF EXISTS public.close_decline_refund(
   uuid, uuid, text, text, text, uuid, numeric, text, text, uuid, text, text
 );
@@ -114,3 +118,8 @@ BEGIN
   RETURN 1;
 END;
 $$;
+
+COMMENT ON FUNCTION public.close_decline_refund(
+  uuid, uuid, text, text, text, uuid, numeric, text, text, uuid, text, text
+) IS
+  'Credits a decline refund, closes the claim, and writes the audit row in one transaction.';

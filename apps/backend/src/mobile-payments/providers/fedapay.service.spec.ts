@@ -416,6 +416,7 @@ describe('FedaPayService', () => {
       const { Payout } = require('fedapay');
       // Real SDK shape: Payout.all returns { payouts: [...], meta: {...} }
       // See node_modules/fedapay/test/PayoutTest.ts:68-126
+      const sendNow = jest.fn().mockResolvedValue(undefined);
       Payout.all.mockResolvedValue({
         payouts: [
           {
@@ -426,6 +427,7 @@ describe('FedaPayService', () => {
           }
         ]
       });
+      Payout.retrieve.mockResolvedValue({ id: 'existing-payout-id', status: 'pending', sendNow });
 
       const result = await service.withdraw({
         payee: '+22878123456',
@@ -440,6 +442,7 @@ describe('FedaPayService', () => {
         'custom_metadata.externalId': 'duplicate-ref-test'
       });
       expect(Payout.create).not.toHaveBeenCalled();
+      expect(sendNow).toHaveBeenCalledTimes(1);
       expect(result.success).toBe(true);
       expect(result.transactionId).toBe('existing-payout-id');
     });
@@ -471,7 +474,7 @@ describe('FedaPayService', () => {
       expect(result.transactionId).toBe('new-payout-123');
     });
 
-    it('should fail closed when payout lookup errors', async () => {
+    it('stays ambiguous when payout lookup errors and does not create', async () => {
       const { Payout } = require('fedapay');
       Payout.all.mockRejectedValue(new Error('Network error'));
 
@@ -485,7 +488,10 @@ describe('FedaPayService', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.message).toContain('Failed to check existing payout');
+      expect(result.ambiguous).toBe(true);
+      expect(result.status).toBe('pending');
+      expect(result.transactionId).toBeUndefined();
+      expect(result.reference).toBeUndefined();
       expect(Payout.create).not.toHaveBeenCalled();
     });
   });
@@ -667,6 +673,82 @@ describe('FedaPayService', () => {
       expect(result.success).toBe(true);
       expect(result.transactionId).toBe('91');
       expect(result.status).toBe('pending');
+    });
+
+    it('stores no reference when a pending payout cannot be retrieved', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 93, status: 'pending', custom_metadata: { externalId: 'n1-ref' } }],
+      });
+      Payout.retrieve.mockRejectedValue(new Error('retrieve down'));
+
+      const result = await service.withdraw(withdrawReq);
+
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.ambiguous).toBe(true);
+      expect(result.transactionId).toBeUndefined();
+      expect(result.reference).toBeUndefined();
+    });
+
+    it('does not send a payout whose retrieved status is no longer pending', async () => {
+      const { Payout } = require('fedapay');
+      const sendNow = jest.fn().mockResolvedValue(undefined);
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 91, status: 'pending', custom_metadata: { externalId: 'n1-ref' } }],
+      });
+      Payout.retrieve.mockResolvedValue({ id: 91, status: 'started', sendNow });
+
+      const result = await service.withdraw(withdrawReq);
+
+      expect(sendNow).not.toHaveBeenCalled();
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.status).toBe('started');
+      expect(result.transactionId).toBe('91');
+    });
+
+    it('treats a canceled payout as a confirmed failure', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 92, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+      });
+
+      const result = await service.withdraw(withdrawReq);
+
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.ambiguous).toBeUndefined();
+      expect(result.status).toBe('failed');
+      expect(result.transactionId).toBe('92');
+    });
+
+    it('stays ambiguous when a timeout create lookup finds nothing', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({ payouts: [] });
+      Payout.create.mockRejectedValue(Object.assign(new Error('socket timeout'), { code: 'ETIMEDOUT' }));
+
+      const result = await service.withdraw(withdrawReq);
+
+      expect(result.success).toBe(false);
+      expect(result.ambiguous).toBe(true);
+      expect(result.status).toBe('pending');
+      expect(result.transactionId).toBeUndefined();
+      expect(result.reference).toBeUndefined();
+    });
+
+    it('stays ambiguous when a 4xx create cannot be looked up', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValueOnce({ payouts: [] }).mockRejectedValueOnce(new Error('lookup down'));
+      Payout.create.mockRejectedValue(Object.assign(new Error('422 invalid payee'), { status: 422 }));
+
+      const result = await service.withdraw(withdrawReq);
+
+      expect(Payout.create).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(false);
+      expect(result.ambiguous).toBe(true);
+      expect(result.transactionId).toBeUndefined();
+      expect(result.reference).toBeUndefined();
     });
 
     it('returns no reference when a 502 create cannot be looked up', async () => {

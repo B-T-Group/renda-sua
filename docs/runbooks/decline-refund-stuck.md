@@ -27,7 +27,7 @@ Those rows need this procedure. Do not clear `refund_send_attempted_at`, `refund
 
 A row with a send-attempt marker and no provider reference is resent by the refund cron. Wait one cron cycle before escalating that row.
 
-FedaPay shows a pending payout for the booking (created, never sent): finance sends that existing payout from the dashboard. Do not create another payout and do not credit the wallet. The next poll closes the row when that payout is sent.
+FedaPay shows a pending payout for the booking (created, never sent): send that payout from the dashboard only while the booking row is still `refund_pending`. Do not create another payout and do not credit the wallet. The next poll closes the row when that payout is sent. If the row is already closed (`failed` and the wallet credited, or `refunded`), cancel that payout in FedaPay and escalate. Do not send it. If another payout for the same external id is already sent, cancel the extra pending payout. Do not send it.
 
 ## Then
 

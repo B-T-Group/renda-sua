@@ -376,7 +376,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     if (result.status === 'failed') return this.failOwned(booking, ledger.amount, result.providerRef ?? referenceId, token);
     const ref = result.blankRef ? null : (result.providerRef ?? referenceId);
     const wrote = await this.writeOwned(booking.id, token, result.status, result.provider, ref);
-    if (!wrote) await this.keepProviderRef(booking.id, referenceId, ref);
+    if (!wrote && ref) await this.keepProviderRef(booking.id, referenceId, ref);
     if (wrote && result.status === 'refunded') await this.tellRenter(booking, 'sent');
     return wrote ? result.status : 'refund_pending';
   }

@@ -513,13 +513,19 @@ export class FedaPayService implements OnModuleInit {
   }
 
   private async afterCreateError(error: any, externalId?: string): Promise<FedaPayWithdrawalResponse> {
-    if (this.clientStatus(error) || !externalId) return this.failedWithdraw(error);
+    if (!externalId) return this.unknownWithdraw();
+    const reused = await this.reuseByExternalId(externalId);
+    if (reused) return reused;
+    if (this.clientStatus(error)) return this.failedWithdraw(error);
+    return this.unknownWithdraw();
+  }
+
+  /** Reuse a listed payout. An unanswered lookup waits and does not create another. */
+  private async reuseByExternalId(externalId: string): Promise<FedaPayWithdrawalResponse | null> {
     const looked = await this.findPayoutByExternalId(externalId);
     if (looked.unknown) return this.unknownWithdraw();
-    if (looked.found && looked.id) {
-      return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId);
-    }
-    return this.failedWithdraw(error);
+    if (!looked.found || !looked.id) return null;
+    return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId);
   }
 
   /** The create may have landed, but the lookup did not answer. Store no reference. */
@@ -568,27 +574,8 @@ export class FedaPayService implements OnModuleInit {
         `Initiating FedaPay payout: channel=${withdrawalRequest.channel}, externalId=${externalId}`
       );
 
-      // Check for existing payout with same externalId (B6 idempotency)
-      // Note: FedaPay API may not filter by custom_metadata server-side,
-      // so we fetch all and filter client-side
-      try {
-        const existingPayouts = await Payout.all({
-          'custom_metadata.externalId': externalId,
-        });
-        const payouts = (existingPayouts as any)?.payouts || [];
-        const matching = payouts.find((p: any) => p.custom_metadata?.externalId === externalId);
-        if (matching) {
-          this.logger.log(
-            `Found existing FedaPay payout for ${externalId}: ${matching.id} (status=${matching.status})`
-          );
-          return this.resumeExistingPayout(matching, externalId);
-        }
-      } catch (lookupError: any) {
-        // Fail closed: don't create if lookup fails, let it retry
-        const sanitized = sanitizeProviderError(lookupError);
-        this.logger.error(`Payout lookup failed for ${externalId}: ${sanitized.message}`);
-        throw new Error(`Failed to check existing payout: ${sanitized.message}`);
-      }
+      const reused = await this.reuseByExternalId(externalId);
+      if (reused) return reused;
 
       let payout: { id?: number | string; status?: string; sendNow?: () => Promise<unknown> };
       try {
@@ -685,15 +672,8 @@ export class FedaPayService implements OnModuleInit {
         `FedaPay payout ${payoutId} retrieve after failed send also failed: ${sanitized.message}`
       );
     }
-    if (liveStatus === 'failed') {
-      return {
-        success: false,
-        transactionId: payoutId,
-        reference: externalId,
-        status: 'failed',
-        errorCode: 'PAYOUT_FAILED',
-        message: normalizeProviderMessage(null, 'Payout failed'),
-      };
+    if (liveStatus && this.terminalPayout(liveStatus)) {
+      return this.failedExisting(payoutId, externalId);
     }
     return {
       success: true,
@@ -712,49 +692,22 @@ export class FedaPayService implements OnModuleInit {
    * Dedupe hit: an existing payout for this externalId. Pass through terminal
    * states; (re)send one that was created but never sent.
    */
-  private async resumeExistingPayout(
-    matching: any,
-    externalId: string | undefined
-  ): Promise<FedaPayWithdrawalResponse> {
-    const payoutId = String(matching.id);
-    const status = String(matching.status || 'pending');
-    if (status === 'failed') {
-      return {
-        success: false,
-        transactionId: payoutId,
-        reference: externalId,
-        status: 'failed',
-        errorCode: 'PAYOUT_FAILED',
-        message: normalizeProviderMessage(null, 'Existing payout failed'),
-      };
-    }
-    if (status === 'pending') {
-      // Created but never sent (e.g. an earlier sendNow failed): resend it.
-      let existing: any;
-      try {
-        existing = await this.liveLookup('payout', () => Payout.retrieve(parseInt(payoutId, 10)));
-      } catch (retrieveError: any) {
-        const sanitized = sanitizeProviderError(retrieveError);
-        this.logger.warn(
-          `FedaPay payout ${payoutId} retrieve for resend failed: ${sanitized.message}`
-        );
-      }
-      if (existing && typeof existing.sendNow === 'function') {
-        return this.sendCreatedPayout(existing, externalId);
-      }
-      return {
-        success: true,
-        ambiguous: true,
-        transactionId: payoutId,
-        reference: externalId,
-        status: 'pending',
-        message: normalizeProviderMessage(
-          null,
-          'Payout exists; awaiting confirmation'
-        ),
-      };
-    }
-    // sent / started / processing / scheduled: already on its way.
+  private terminalPayout(status: string): boolean {
+    return status === 'failed' || status === 'canceled' || status === 'cancelled';
+  }
+
+  private failedExisting(payoutId: string, externalId: string | undefined): FedaPayWithdrawalResponse {
+    return {
+      success: false,
+      transactionId: payoutId,
+      reference: externalId,
+      status: 'failed',
+      errorCode: 'PAYOUT_FAILED',
+      message: normalizeProviderMessage(null, 'Existing payout failed'),
+    };
+  }
+
+  private passedPayout(payoutId: string, externalId: string | undefined, status: string): FedaPayWithdrawalResponse {
     return {
       success: true,
       transactionId: payoutId,
@@ -762,6 +715,34 @@ export class FedaPayService implements OnModuleInit {
       status,
       message: normalizeProviderMessage(null, 'Payout already exists'),
     };
+  }
+
+  private async resumeExistingPayout(matching: any, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> {
+    const payoutId = String(matching.id);
+    const status = String(matching.status || 'pending');
+    if (this.terminalPayout(status)) return this.failedExisting(payoutId, externalId);
+    if (status !== 'pending') return this.passedPayout(payoutId, externalId, status);
+    return this.resendIfStillPending(payoutId, externalId);
+  }
+
+  /** Send only while the retrieved payout is still pending. A missed read stores no ref. */
+  private async resendIfStillPending(payoutId: string, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> {
+    const existing = await this.retrieveForResend(payoutId);
+    const live = String(existing?.status || '');
+    if (this.terminalPayout(live)) return this.failedExisting(payoutId, externalId);
+    if (live === 'pending' && typeof existing?.sendNow === 'function') return this.sendCreatedPayout(existing, externalId);
+    if (live) return this.passedPayout(payoutId, externalId, live);
+    return this.unknownWithdraw();
+  }
+
+  private async retrieveForResend(payoutId: string): Promise<any> {
+    try {
+      return await this.liveLookup('payout', () => Payout.retrieve(parseInt(payoutId, 10)));
+    } catch (retrieveError: any) {
+      const sanitized = sanitizeProviderError(retrieveError);
+      this.logger.warn(`FedaPay payout ${payoutId} retrieve for resend failed: ${sanitized.message}`);
+      return null;
+    }
   }
 
   /**
