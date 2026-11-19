@@ -101,4 +101,72 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Decline refund and ranking unit specs
-        run: npx nx test backend --testPathPattern='rentals/(pickup-decline|decline-ranking)|notifications/rental-push.messages.spec' --testPathIgnorePatterns=money.qa.pg --skip-nx-cache
+        run: npx nx test backend --testPathPattern='rentals/(pickup-decline|decline-ranking)|notifications/rental-push.messages.spec' --testPathIgnorePatterns=money.qa.pg --testPathIgnorePatterns=pickup-decline.live-schema --skip-nx-cache
+
+  hasura-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Hasura v2.36
+        run: |
+          docker run -d --name hasura --network host \
+            -e HASURA_GRAPHQL_METADATA_DATABASE_URL=postgres://postgres:postgrespassword@127.0.0.1:5432/postgres \
+            -e PG_DATABASE_URL=postgres://postgres:postgrespassword@127.0.0.1:5432/postgres \
+            -e HASURA_GRAPHQL_ADMIN_SECRET=myadminsecretkey \
+            -e HASURA_GRAPHQL_ENABLE_CONSOLE=false \
+            hasura/graphql-engine:v2.36.0
+          for _ in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8080/healthz && exit 0
+            sleep 2
+          done
+          docker logs hasura
+          exit 1
+
+      - name: Install Hasura CLI v2.36.0
+        run: |
+          curl -L https://github.com/hasura/graphql-engine/raw/stable/cli/get.sh | VERSION=v2.36.0 bash
+          hasura version
+
+      - name: Apply migrations and metadata
+        working-directory: apps/hasura
+        run: |
+          set -euo pipefail
+          endpoint=http://127.0.0.1:8080
+          secret=myadminsecretkey
+          hasura migrate apply --database-name Rendasua --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
+          hasura metadata apply --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
+          hasura metadata reload --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
+          hasura metadata inconsistency status --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
+          hasura metadata inconsistency list --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Validate pickup-decline documents against Hasura
+        env:
+          HASURA_GRAPHQL_URL: http://127.0.0.1:8080/v1/graphql
+          HASURA_GRAPHQL_ADMIN_SECRET: myadminsecretkey
+        run: npx nx test backend --testPathPattern=pickup-decline.live-schema --skip-nx-cache

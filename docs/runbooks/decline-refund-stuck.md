@@ -14,11 +14,16 @@ Those rows need this procedure. Do not clear `refund_send_attempted_at`, `refund
 ## Check the provider
 
 1. Open the booking in admin and copy `refund_provider`, `refund_provider_ref`, `refund_sent_at`, and `refund_send_attempted_at`.
-2. In the provider dashboard, search the payout by the stored reference and by the stable id (`refund_provider_ref` when it is set, otherwise the decline external id).
+2. Search the provider dashboard with that provider's key:
+   - FedaPay: custom metadata external id `rental-decline-<booking id>`.
+   - MTN: X-Reference-Id. That is the stable refund UUID, not the booking id. Copy it from `refund_provider_ref` when the reference is that UUID.
+   - FreemoPay: the stored `FP-` reference. When none is stored, search the same stable refund UUID.
 3. Record what the dashboard shows: success, failed, pending, or no payout. Keep a screenshot with the booking number.
+
+A row with a send-attempt marker and no provider reference is resent by the refund cron. Wait one cron cycle before escalating that row.
 
 ## Then
 
 - Dashboard says the payout **failed**: an admin with `platform.financial.refunds` uses `failed` (or `unpaid`). The app probes again and credits the wallet only when that probe is FAILED. The audit row is written in the same transaction as the credit.
-- Dashboard shows **no payout**, and the row has **no** reference, **no** sent stamp, and **no** send-attempt marker: an admin with `platform.financial.refunds.manual_override` uses `manual_override` and a note that quotes the dashboard. FedaPay must confirm the external id is absent. MTN accepts a 404 only when the attempt is at least 10 minutes old.
+- Dashboard shows **no payout**, and the row has **no** reference, **no** sent stamp, and **no** send-attempt marker: an admin with `platform.financial.refunds.manual_override` uses `manual_override` and a note that quotes the dashboard. FedaPay must confirm external id `rental-decline-<booking id>` is absent. MTN accepts a 404 on the stable X-Reference-Id only when the attempt is at least 10 minutes old.
 - Anything else (reference present, attempt marker present, FreemoPay crash after the stamp, #840 legacy row, pending, unknown, or a 404 that the app will not treat as absent): do not credit in the app. Escalate with the booking number, the provider screenshot, and whether the renter was already paid outside the app. A database update is a finance action after that evidence, not a support shortcut.

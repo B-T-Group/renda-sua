@@ -1,6 +1,6 @@
 import { HttpException } from '@nestjs/common';
 import { consumeHoldForPayout, creditFailedPayout, stableRefundReference, type DeclineWallet } from './pickup-decline.money';
-import { RENTER_NOTICE_RETRIES } from './pickup-decline.queries';
+import { PENDING_REFUNDS, RENTER_NOTICE_RETRIES } from './pickup-decline.queries';
 import { RentalPickupDeclineService } from './rental-pickup-decline.service';
 
 const BOOKING = '11111111-1111-4111-8111-111111111111';
@@ -178,7 +178,8 @@ function harness(options: {
         if (row.refund_claim_token !== (vars as { token?: string }).token) {
           return { update_rental_bookings: { affected_rows: 0 } };
         }
-        if (!row.refund_send_attempted_at) row.refund_send_attempted_at = (vars as { at?: string }).at;
+        if (row.refund_send_attempted_at) return { update_rental_bookings: { affected_rows: 0 } };
+        row.refund_send_attempted_at = (vars as { at?: string }).at;
         return { update_rental_bookings: { affected_rows: 1 } };
       }
       if (query.includes('ClearDeclineSendAttempt')) {
@@ -196,7 +197,7 @@ function harness(options: {
         }
         const row = refundRow((vars as { id?: string }).id);
         const token = (vars as { token?: string }).token;
-        if (options.dropOwnedWrite || row.refund_claim_token !== token) return { close_decline_refund: 0 };
+        if (options.dropOwnedWrite || row.refund_claim_token !== token) return { close_decline_refund: [] };
         const pay = Number((vars as { amount?: number }).amount ?? 0);
         Object.assign(row, {
           refund_status: (vars as { status?: string }).status,
@@ -213,7 +214,7 @@ function harness(options: {
           wallet.available = next.available;
           wallet.withheld = next.withheld;
         }
-        return { close_decline_refund: 1 };
+        return { close_decline_refund: [{ id: row.id }] };
       }
       if (query.includes('StampDeclineRefundSent')) {
         if (options.stampFails) return { update_rental_bookings: { affected_rows: 0 } };
@@ -1233,6 +1234,28 @@ describe('RentalPickupDeclineService', () => {
     });
     await cleared.service.decline(BOOKING, input);
     expect(cleared.state.refund_send_attempted_at).toBeFalsy();
+  });
+
+  it('resends a row the cron loaded with its send-attempt marker', async () => {
+    expect(PENDING_REFUNDS).toContain('refund_send_attempted_at');
+    for (const provider of ['mtn', 'freemopay', 'fedapay']) {
+      const currency = provider === 'fedapay' ? 'XOF' : 'XAF';
+      const row = pendingRefund({
+        refund_provider: provider,
+        refund_provider_ref: null,
+        refund_sent_at: null,
+        refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+        currency,
+      });
+      const sent = { status: 'refund_pending', provider, providerRef: 'again', unsupported: false };
+      const run = harness({
+        pending: [row],
+        collects: [{ amount: 100, currency, provider, customer_phone: '2376700006712', transaction_id: 'tx' }],
+        refund: sent,
+      });
+      await run.service.reconcilePending();
+      expect(run.calls.refund).toHaveLength(1);
+    }
   });
 
   it('does not credit an MTN miss, and waits before resending a fresh accept', async () => {

@@ -300,7 +300,7 @@ export const CLEAR_ATTEMPT = `
 `;
 
 export const REFUND_ACCOUNT = `
-  query DeclineRefundAccount($userId: uuid!, $currency: String!) {
+  query DeclineRefundAccount($userId: uuid!, $currency: currency_enum!) {
     accounts(where: { user_id: { _eq: $userId }, currency: { _eq: $currency } }, limit: 1) { id }
   }
 `;
@@ -333,7 +333,7 @@ export const CLOSE_DECLINE_REFUND = `
       p_changed_by: $changedBy
       p_notes: $notes
       p_previous_status: $previousStatus
-    })
+    }) { id }
   }
 `;
 
@@ -510,6 +510,7 @@ export const PENDING_REFUNDS = `
       refund_provider
       refund_provider_ref
       refund_sent_at
+      refund_send_attempted_at
       refund_claim_at
       client { user_id }
       business { user_id }

@@ -4,6 +4,7 @@ scalar uuid
 scalar jsonb
 scalar timestamptz
 scalar numeric
+scalar currency_enum
 
 enum order_by { asc desc }
 enum rental_booking_status_enum { cancelled active reserved }
@@ -11,7 +12,8 @@ enum payment_entity_enum { rental_booking }
 
 input uuid_comparison_exp { _eq: uuid _in: [uuid!] _is_null: Boolean }
 input string_comparison_exp { _eq: String _in: [String!] _is_null: Boolean }
-input accounts_bool_exp { user_id: uuid_comparison_exp currency: string_comparison_exp }
+input currency_enum_comparison_exp { _eq: currency_enum }
+input accounts_bool_exp { user_id: uuid_comparison_exp currency: currency_enum_comparison_exp }
 input int_comparison_exp { _eq: Int _lt: Int _lte: Int _is_null: Boolean }
 input timestamptz_comparison_exp { _eq: timestamptz _lt: timestamptz _lte: timestamptz _is_null: Boolean }
 input jsonb_comparison_exp { _contains: jsonb _is_null: Boolean }
@@ -309,5 +311,5 @@ type mutation_root {
     _set: mobile_payment_transactions_set_input
   ): mobile_payment_transactions_mutation_response
   insert_rental_status_history_one(object: rental_status_history_insert_input!): rental_status_history
-  close_decline_refund(args: close_decline_refund_args!): Int
+  close_decline_refund(args: close_decline_refund_args!): [rental_bookings!]!
 }

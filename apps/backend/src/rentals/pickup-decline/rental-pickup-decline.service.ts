@@ -1221,8 +1221,8 @@ export class RentalPickupDeclineService implements OnModuleInit {
   ): Promise<boolean> {
     if (!(await this.keepClaim(booking.id, token))) return false;
     const args = await this.closeArgs(booking, token, status, providerRef, amount, notes);
-    const closed = await this.hasura.executeMutation<{ close_decline_refund?: number }>(Q.CLOSE_DECLINE_REFUND, args);
-    return closed.close_decline_refund === 1;
+    const closed = await this.hasura.executeMutation<{ close_decline_refund?: Array<{ id: string }> }>(Q.CLOSE_DECLINE_REFUND, args);
+    return (closed.close_decline_refund?.length ?? 0) === 1;
   }
 
   private async closeArgs(booking: DeclineBooking, token: string, status: RefundStatus, providerRef: string | null, amount: number, notes: string) {

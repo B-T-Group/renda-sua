@@ -26,8 +26,9 @@ const PREDEDUPE = join(__dirname, '../../../../hasura/migrations/Rendasua/202611
 const CLAIM_MIGRATION = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql');
 const NOTICE_TYPES = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119180000_condition_refund_message_types/up.sql');
 const SEND_ATTEMPT = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119190000_decline_refund_send_attempt/up.sql');
+const CLOSE_SETOF = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119200000_decline_refund_close_setof/up.sql');
 const NOTICE_TYPES_DOWN = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119180000_condition_refund_message_types/down.sql');
-const MIGRATIONS = [PREDEDUPE, CLAIM_MIGRATION, HARDENING, NOTICE_TYPES, SEND_ATTEMPT];
+const MIGRATIONS = [PREDEDUPE, CLAIM_MIGRATION, HARDENING, NOTICE_TYPES, SEND_ATTEMPT, CLOSE_SETOF];
 
 describe('decline refund postgres job', () => {
   it('is configured when CI runs this workflow', () => {
