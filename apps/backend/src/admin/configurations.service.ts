@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { UpdateConfigurationDto } from './dto/update-configuration.dto';
 
@@ -239,6 +239,7 @@ export class ConfigurationsService {
       if (!existingConfig) {
         throw new Error('Configuration not found');
       }
+      this.rejectFedapayFloor(existingConfig, updateDto);
 
       // Prepare update object with only provided fields
       const updateObject: any = {
@@ -294,6 +295,14 @@ export class ConfigurationsService {
       this.logger.error(`Failed to update configuration with id: ${id}`, error);
       throw error;
     }
+  }
+
+  /** Lag and confirm cannot be set below the 10 minute floor. */
+  private rejectFedapayFloor(existing: ApplicationConfiguration, update: UpdateConfigurationDto): void {
+    const watched = existing.config_key === 'rentals_fedapay_list_lag_minutes'
+      || existing.config_key === 'rentals_fedapay_list_confirm_minutes';
+    if (!watched || update.number_value == null || update.number_value >= 10) return;
+    throw new BadRequestException('FedaPay list lag and confirm gap must be at least 10 minutes');
   }
 
   async deleteConfiguration(id: string): Promise<boolean> {

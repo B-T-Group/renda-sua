@@ -486,6 +486,7 @@ describe('FedaPayService', () => {
         description: 'Error test',
         callback: 'https://test.com/callback',
         channel: 'togocel',
+        strictList: true,
       });
 
       expect(result.success).toBe(false);
@@ -504,7 +505,8 @@ describe('FedaPayService', () => {
       externalId: 'n1-ref',
       description: 'N1 payout',
       callback: 'https://test.com/callback',
-      channel: 'togocel',
+      channel: 'togocel' as const,
+      strictList: true,
     };
 
     beforeEach(() => {
@@ -826,6 +828,48 @@ describe('FedaPayService', () => {
       expect(result.success).toBe(true);
       expect(result.status).toBe('sent');
       expect(result.transactionId).toBe('12');
+    });
+
+    it('does not credit a canceled match while later pages are unread', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+        meta: { total_pages: 2, current_page: 1 },
+      });
+      const result = await service.withdraw(withdrawReq);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
+      expect(result.status).toBe('pending');
+      expect(result.transactionId).toBeUndefined();
+    });
+
+    it('keeps a visible sent payout when the list has more pages', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({
+        payouts: [
+          { id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } },
+          { id: 12, status: 'sent', custom_metadata: { externalId: 'n1-ref' } },
+        ],
+        meta: { total_pages: 3, current_page: 1 },
+      });
+      const result = await service.withdraw(withdrawReq);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.status).toBe('sent');
+      expect(result.transactionId).toBe('12');
+    });
+
+    it('creates a wallet withdrawal when the payout list is not filtered', async () => {
+      const { Payout } = require('fedapay');
+      const sendNow = jest.fn(async () => undefined);
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 9, status: 'sent', custom_metadata: { externalId: 'someone-else' } }],
+      });
+      Payout.create.mockResolvedValue({ id: 44, status: 'pending', sendNow });
+      const result = await service.withdraw({ ...withdrawReq, strictList: false });
+      expect(Payout.create).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(true);
+      expect(result.transactionId).toBe('44');
     });
 
     it('credits only when every match is failed or canceled', async () => {

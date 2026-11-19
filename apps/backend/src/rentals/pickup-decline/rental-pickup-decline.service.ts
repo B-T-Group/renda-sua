@@ -143,6 +143,8 @@ export class RentalPickupDeclineService implements OnModuleInit {
   static fedapayConfirmMs = FEDAPAY_CONFIRM_MS;
   /** Unknown lookups before one manual-check notice. */
   static unknownNoticeAfter = FEDAPAY_UNKNOWN_NOTICE_AFTER;
+  /** One cron pass shares the three FedaPay config reads. */
+  private passConfig: { lagMs: number; confirmMs: number; noticeAfter: number } | null = null;
   private static readonly DECLINE_NOTE = 'Renter declined the pickup condition';
   private readonly logger = new Logger(RentalPickupDeclineService.name);
 
@@ -191,6 +193,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   private async reconcileDue(): Promise<number> {
+    this.passConfig = null;
     const now = new Date();
     const result = await this.hasura.executeQuery<{ rental_bookings: DeclineBooking[] }>(Q.PENDING_REFUNDS, {
       now: now.toISOString(),
@@ -352,7 +355,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     ledger: Ledger,
     source: CollectedPayment,
     referenceId: string,
-    flags: { markedResend: boolean; trustEmptyList: boolean }
+    flags: { markedResend: boolean; trustEmptyList: boolean; settled?: boolean }
   ) {
     return {
       bookingId: booking.id,
@@ -383,7 +386,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
       const result = await this.momo.refund(request);
       if (result.unsent) return this.dropUnsent(booking, token, referenceId, Boolean(result.connectFailure));
       await this.stampMtn(booking, source.provider, token, result.status);
-      if (result.blankRef) await this.noteBlank(booking, token);
+      await this.finishLookup(booking, token, result.blankRef === true, flags.settled);
       return this.settleResult(booking, ledger, result, referenceId, token);
     } catch (error: any) {
       this.logger.warn(`decline payout: ${error?.message ?? error}`);
@@ -1022,22 +1025,25 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return false;
   }
 
-  private async listFlags(booking: DeclineBooking, token: string): Promise<{ markedResend: boolean; trustEmptyList: boolean }> {
+  private async listFlags(booking: DeclineBooking, token: string): Promise<{ markedResend: boolean; trustEmptyList: boolean; settled: boolean }> {
     const markedResend = Boolean(booking.refund_send_attempted_at);
-    if (!markedResend || providerRefundPlan(booking.refund_provider ?? '') !== 'fedapay') return { markedResend, trustEmptyList: true };
+    if (!markedResend || providerRefundPlan(booking.refund_provider ?? '') !== 'fedapay') {
+      return { markedResend, trustEmptyList: true, settled: false };
+    }
     return this.confirmedEmpty(booking, token);
   }
 
   /** A resend creates only after two aged empty lists, at least the confirm gap apart. */
-  private async confirmedEmpty(booking: DeclineBooking, token: string): Promise<{ markedResend: boolean; trustEmptyList: boolean }> {
-    const lag = await this.configMs('rentals_fedapay_list_lag_minutes', RentalPickupDeclineService.fedapayListLagMs);
-    const gap = await this.configMs('rentals_fedapay_list_confirm_minutes', RentalPickupDeclineService.fedapayConfirmMs);
+  private async confirmedEmpty(booking: DeclineBooking, token: string): Promise<{ markedResend: boolean; trustEmptyList: boolean; settled: boolean }> {
+    const limits = await this.fedapayLimits();
     const look = await this.momo.lookupFedapayExternal(booking.id);
     if (look.kind === 'live') await this.clearListEmpty(booking, token);
     const prior = booking.refund_list_empty_at;
-    const aged = this.markerAged(booking, lag);
+    const aged = this.markerAged(booking, limits.lagMs);
+    const settled = look.kind === 'live' || look.provableEmpty;
     if (look.provableEmpty && aged && !prior) await this.stampListEmpty(booking, token);
-    return { markedResend: true, trustEmptyList: this.emptyConfirmed(prior, look.provableEmpty, aged, gap) };
+    const trustEmptyList = this.emptyConfirmed(prior, look.provableEmpty, aged, limits.confirmMs);
+    return { markedResend: true, trustEmptyList, settled };
   }
 
   private markerAged(booking: DeclineBooking, lagMs: number): boolean {
@@ -1053,17 +1059,40 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return Number.isFinite(gap) && gap >= gapMs;
   }
 
+  private async finishLookup(booking: DeclineBooking, token: string, blank: boolean, settled: boolean): Promise<void> {
+    if (blank) await this.noteLookup(booking, token, settled);
+    else if (settled) await this.clearStreak(booking, token);
+  }
+
+  private async noteLookup(booking: DeclineBooking, token: string, settled: boolean): Promise<void> {
+    if (settled) {
+      const kept = Math.max(0, (booking.refund_attempts ?? 1) - 1);
+      await this.restoreAttempt(booking, token, 0, nextRefundAt(Math.max(kept, 1)));
+      return;
+    }
+    await this.noteBlank(booking, token);
+  }
+
   private async noteBlank(booking: DeclineBooking, token: string): Promise<void> {
     const streak = (booking.refund_unknown_streak ?? 0) + 1;
     await this.restoreAttempt(booking, token, streak, unknownRetryAt(streak));
     await this.maybeNotify(booking, token, streak, false);
   }
 
+  private async clearStreak(booking: DeclineBooking, token: string): Promise<void> {
+    const attempts = booking.refund_attempts ?? 0;
+    await this.writeStreak(booking, token, attempts, 0, nextRefundAt(Math.max(attempts, 1)));
+  }
+
   private async restoreAttempt(booking: DeclineBooking, token: string, streak: number, next: string): Promise<void> {
     const kept = Math.max(0, (booking.refund_attempts ?? 1) - 1);
+    await this.writeStreak(booking, token, kept, streak, next);
+  }
+
+  private async writeStreak(booking: DeclineBooking, token: string, attempts: number, streak: number, next: string): Promise<void> {
     try {
-      await this.hasura.executeMutation(Q.RESTORE_REFUND_ATTEMPT, { id: booking.id, token, attempts: kept, next, streak });
-      booking.refund_attempts = kept;
+      await this.hasura.executeMutation(Q.RESTORE_REFUND_ATTEMPT, { id: booking.id, token, attempts, next, streak });
+      booking.refund_attempts = attempts;
       booking.refund_unknown_streak = streak;
     } catch (error: any) {
       this.logger.warn(`decline attempt restore: ${error?.message ?? error}`);
@@ -1078,8 +1107,9 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   /** One empty answer, a foreign list, or a short page stays unknown. Two aged empties are absence. */
   private async holdFedapayLook(booking: DeclineBooking, token: string, looked: { provableEmpty: boolean }): Promise<boolean> {
-    const lag = await this.configMs('rentals_fedapay_list_lag_minutes', RentalPickupDeclineService.fedapayListLagMs);
-    const gap = await this.configMs('rentals_fedapay_list_confirm_minutes', RentalPickupDeclineService.fedapayConfirmMs);
+    const limits = await this.fedapayLimits();
+    const lag = limits.lagMs;
+    const gap = limits.confirmMs;
     const prior = booking.refund_list_empty_at;
     const aged = this.markerAged(booking, lag);
     if (looked.provableEmpty && aged && !prior) await this.stampListEmpty(booking, token);
@@ -1114,12 +1144,26 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   private async maybeNotify(booking: DeclineBooking, token: string, streak: number, force: boolean): Promise<void> {
-    const after = await this.noticeAfter();
+    const after = (await this.fedapayLimits()).noticeAfter;
     if (!force && streak < after) return;
     if (!this.noticeDue(booking.refund_unknown_notice_at)) return;
-    if (booking.refund_unknown_notice_at) await this.releaseNotice(booking.id, 'manual_check');
-    await this.tellSupport(booking, 'manual_check');
-    await this.stampNotice(booking, token);
+    if (booking.refund_unknown_notice_at) await this.releaseNotice(booking.id, 'unknown_streak');
+    if (await this.sendStreakNotice(booking)) await this.stampNotice(booking, token);
+  }
+
+  /** The claim key is separate from manual_check. A failed send does not start the 24h silence. */
+  private async sendStreakNotice(booking: DeclineBooking): Promise<boolean> {
+    if (!(await this.claimNotice(booking.id, 'unknown_streak'))) return false;
+    try {
+      const sent = await this.notifications.notifySupportConditionRefund(this.noticeBody(booking, 'unknown_streak'));
+      if (!sent) await this.releaseNotice(booking.id, 'unknown_streak');
+      if (sent) this.rememberNotice(booking, 'unknown_streak');
+      return sent;
+    } catch (error: any) {
+      this.logger.warn(`decline unknown notice: ${error?.message ?? error}`);
+      await this.releaseNotice(booking.id, 'unknown_streak');
+      return false;
+    }
   }
 
   private noticeDue(at: string | null | undefined): boolean {
@@ -1128,14 +1172,23 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return Number.isFinite(age) && age >= 24 * 60 * 60_000;
   }
 
-  private async noticeAfter(): Promise<number> {
-    const value = await this.configNumber('rentals_fedapay_unknown_notice_after');
-    return value == null ? RentalPickupDeclineService.unknownNoticeAfter : value;
+  private async fedapayLimits(): Promise<{ lagMs: number; confirmMs: number; noticeAfter: number }> {
+    if (this.passConfig) return this.passConfig;
+    const lag = await this.configNumber('rentals_fedapay_list_lag_minutes');
+    const gap = await this.configNumber('rentals_fedapay_list_confirm_minutes');
+    const notice = await this.configNumber('rentals_fedapay_unknown_notice_after');
+    this.passConfig = {
+      lagMs: this.minutesFloor(lag, RentalPickupDeclineService.fedapayListLagMs),
+      confirmMs: this.minutesFloor(gap, RentalPickupDeclineService.fedapayConfirmMs),
+      noticeAfter: notice == null ? RentalPickupDeclineService.unknownNoticeAfter : notice,
+    };
+    return this.passConfig;
   }
 
-  private async configMs(key: string, fallbackMs: number): Promise<number> {
-    const value = await this.configNumber(key);
-    return value == null ? fallbackMs : value * 60_000;
+  /** A stored window below 10 minutes is ignored. A missing row uses the code default. */
+  private minutesFloor(value: number | null, fallbackMs: number): number {
+    if (value == null) return fallbackMs;
+    return Math.max(value, 10) * 60_000;
   }
 
   private async configNumber(key: string): Promise<number | null> {

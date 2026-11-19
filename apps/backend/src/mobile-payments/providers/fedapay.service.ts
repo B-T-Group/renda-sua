@@ -51,6 +51,8 @@ export interface FedaPayWithdrawalRequest {
   markedResend?: boolean;
   /** When false, an empty list is not proof the payout is absent. */
   trustEmptyList?: boolean;
+  /** Decline refunds only. Wallet withdrawals keep the unfiltered create. */
+  strictList?: boolean;
 }
 
 export interface FedaPayPaymentResponse {
@@ -141,14 +143,15 @@ function emptyLook(): FedaPayExternalMatch {
   return { found: false, status: null, id: null, unknown: false, provableEmpty: true, matches: [] };
 }
 
-/** A list is absent only when every row is readable and none is ours, with no further pages. */
+/** A short page is unknown unless a sent or approved payout is already visible. */
 export function classifyFedapayPayouts(existing: unknown, externalId: string): FedaPayExternalMatch {
   const rows = payoutRows(existing);
   if (!rows) return unknownLook();
   const matches = matchedPayouts(rows, externalId);
+  if (paidMatch(matches)) return aggregatePayouts(matches);
+  if (hasMorePages(existing, rows.length)) return unknownLook();
   if (matches.length) return aggregatePayouts(matches);
-  if (rows.some((row) => externalOf(row) == null)) return unknownLook();
-  if (hasMorePages(existing, rows.length) || rows.length > 0) return unknownLook();
+  if (rows.some((row) => externalOf(row) == null) || rows.length > 0) return unknownLook();
   return emptyLook();
 }
 
@@ -165,8 +168,12 @@ function externalOf(row: PayoutRow): string | null {
 function matchedPayouts(rows: PayoutRow[], externalId: string): Array<{ id: string; status: string }> {
   return rows.flatMap((row) => {
     if (externalOf(row) !== externalId || row.id == null) return [];
-    return [{ id: String(row.id), status: String(row.status || 'pending') }];
+    return [{ id: String(row.id), status: String(row.status || 'pending').toLowerCase() }];
   });
+}
+
+function paidMatch(matches: Array<{ status: string }>): boolean {
+  return matches.some((row) => PAID_PAYOUT.has(row.status));
 }
 
 /** Sent or approved wins. A pending or started payout waits. Credit only when every match is dead. */
@@ -590,6 +597,54 @@ export class FedaPayService implements OnModuleInit {
     return this.unknownWithdraw();
   }
 
+  /** Wallet withdrawals create when no row has this external id, even if the page is foreign. */
+  private async reuseOpenList(externalId: string): Promise<FedaPayWithdrawalResponse | null> {
+    const looked = await this.openLook(externalId);
+    if (!looked.found || !looked.id) return null;
+    return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId);
+  }
+
+  /** Same client-side filter as before the decline list rule. A thrown lookup is unknown. */
+  private async openLook(externalId: string): Promise<FedaPayExternalMatch> {
+    try {
+      const existing = await this.liveLookup('payout', () => Payout.all({ 'custom_metadata.externalId': externalId }));
+      const payouts = ((existing as { payouts?: PayoutRow[] } | null)?.payouts) || [];
+      const matching = payouts.find((row) => row.custom_metadata?.externalId === externalId);
+      if (!matching?.id) return emptyLook();
+      const status = String(matching.status || 'pending').toLowerCase();
+      return { found: true, status, id: String(matching.id), unknown: false, provableEmpty: false, matches: [{ id: String(matching.id), status }] };
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Payout lookup failed for ${externalId}: ${sanitized.message}`);
+      throw new Error(`Failed to check existing payout: ${sanitized.message}`);
+    }
+  }
+
+  /** A 4xx is a refusal. A lookup that finds nothing after a 5xx is a refusal too. */
+  private async openCreateError(error: any, externalId: string): Promise<FedaPayWithdrawalResponse> {
+    if (this.clientStatus(error)) return this.failedWithdraw(error);
+    try {
+      const looked = await this.openLook(externalId);
+      if (looked.found) return this.pendingWithdraw(externalId, looked);
+    } catch (lookupError: any) {
+      void lookupError;
+      return this.pendingWithdraw(externalId, unknownLook());
+    }
+    return this.failedWithdraw(error);
+  }
+
+  private pendingWithdraw(externalId: string, looked: FedaPayExternalMatch): FedaPayWithdrawalResponse {
+    const status = !looked.unknown && looked.status && looked.status !== 'failed' ? looked.status : 'pending';
+    return {
+      success: !looked.unknown,
+      ambiguous: true,
+      transactionId: looked.id ?? undefined,
+      reference: externalId,
+      status,
+      message: normalizeProviderMessage(null, 'Payout created; awaiting confirmation'),
+    };
+  }
+
   /** Reuse any match. Create only when the caller already confirmed an empty list. */
   private async reuseByExternalId(externalId: string, trustEmpty: boolean): Promise<FedaPayWithdrawalResponse | null> {
     const looked = await this.findPayoutByExternalId(externalId);
@@ -644,8 +699,11 @@ export class FedaPayService implements OnModuleInit {
         `Initiating FedaPay payout: channel=${withdrawalRequest.channel}, externalId=${externalId}`
       );
 
+      const strict = withdrawalRequest.strictList === true;
       const trustEmpty = withdrawalRequest.trustEmptyList !== false;
-      const reused = await this.reuseByExternalId(externalId, trustEmpty);
+      const reused = strict
+        ? await this.reuseByExternalId(externalId, trustEmpty)
+        : await this.reuseOpenList(externalId);
       if (reused) return reused;
 
       let payout: { id?: number | string; status?: string; sendNow?: () => Promise<unknown> };
@@ -666,6 +724,7 @@ export class FedaPayService implements OnModuleInit {
           },
         });
       } catch (error: any) {
+        if (!strict) return this.openCreateError(error, externalId);
         return this.afterCreateError(error, externalId, withdrawalRequest.markedResend === true);
       }
 

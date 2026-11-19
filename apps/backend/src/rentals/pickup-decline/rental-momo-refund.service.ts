@@ -138,6 +138,7 @@ export class RentalMomoRefundService {
       channel: request.channel === 'moov_tg' ? 'moov_tg' : 'togocel',
       markedResend: request.markedResend === true,
       trustEmptyList: request.trustEmptyList !== false,
+      strictList: true,
     });
     if (!sent.success && !sent.ambiguous) {
       return this.failed('fedapay', sent.transactionId ?? sent.reference ?? null);

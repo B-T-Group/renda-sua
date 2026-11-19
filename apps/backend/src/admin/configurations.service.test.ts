@@ -25,6 +25,18 @@ describe('ConfigurationsService', () => {
     );
   });
 
+  it('rejects a FedaPay lag or confirm gap below 10 minutes', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      application_configurations_by_pk: {
+        id: 'cfg-1',
+        config_key: 'rentals_fedapay_list_lag_minutes',
+        number_value: 10,
+      },
+    });
+    await expect(service.updateConfiguration('cfg-1', { number_value: 1 })).rejects.toThrow(/10 minutes/);
+    expect(hasura.executeQuery).toHaveBeenCalledTimes(1);
+  });
+
   it('returns null when no active configuration exists', async () => {
     hasura.executeQuery.mockResolvedValue({ application_configurations: [] });
 

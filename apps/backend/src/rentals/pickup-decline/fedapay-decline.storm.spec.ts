@@ -201,6 +201,7 @@ async function worker(service: FedaPayService, booking: Booking): Promise<void> 
       channel: booking.channel,
       markedResend: step.marked,
       trustEmptyList: step.trustEmpty,
+      strictList: true,
     });
     applyResult(booking, result, step.kill);
   } finally {
@@ -261,6 +262,7 @@ describe('FedaPay decline storm', () => {
       description: 'Decline refund',
       callback: 'https://test.com/callback',
       channel: booking.channel,
+      strictList: true,
     });
     applyResult(booking, result, false);
     expect(result.ambiguous).toBe(true);
