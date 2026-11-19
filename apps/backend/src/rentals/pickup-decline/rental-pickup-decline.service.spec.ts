@@ -678,6 +678,35 @@ describe('RentalPickupDeclineService', () => {
     expect((won.calls.refund[0] as { referenceId: string }).referenceId).toBe(stableRefundReference(BOOKING));
   });
 
+  it('consumes the wallet hold on resume before paying the phone', async () => {
+    const { service, calls, wallet } = harness({
+      hold: 100,
+      collects: collect(),
+      declines: [
+        {
+          id: 'decline-1',
+          money_rail: 'momo_paid',
+          money_amount: 100,
+          money_currency: 'XAF',
+          effects_recorded_at: null,
+        },
+      ],
+      booking: {
+        status: 'cancelled',
+        payment_status: 'cancelled',
+        condition_declined_at: '2026-11-19T00:00:00.000Z',
+        refund_status: 'none',
+      },
+    });
+    const result = await service.decline(BOOKING, input);
+    expect(result.refundStatus).toBe('refunded');
+    expect(result.idempotent).toBe(true);
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toHaveLength(1);
+    expect(wallet.withheld).toBe(0);
+    expect(wallet.available).toBe(0);
+  });
+
   it('records the decline before moving money, so a failed insert can be retried', async () => {
     const { service, calls, state, wallet } = harness({
       insertFails: 1,

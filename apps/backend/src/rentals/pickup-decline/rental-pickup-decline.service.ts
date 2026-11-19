@@ -286,6 +286,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
   private async resume(booking: DeclineBooking, row: DeclineRow): Promise<DeclineResult> {
     if (row.money_rail === 'momo_paid' && this.kept(booking) === 'none') {
       const ledger = await this.ledger(booking);
+      await this.rentals.consumeDeclineHold(booking, ledger.amount);
       const status = await this.refundCollected(booking, ledger);
       await this.afterOnce(booking, booking.client.user_id, row, []);
       return this.toResult(booking, row, ledger, status, true);
