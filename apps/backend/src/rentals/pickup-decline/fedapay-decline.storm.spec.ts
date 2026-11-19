@@ -23,6 +23,8 @@ interface Step {
   kill: boolean;
   reveal: boolean;
   retrieve: 'ok' | 'down';
+  marked: boolean;
+  trustEmpty: boolean;
 }
 
 interface Row {
@@ -58,12 +60,21 @@ function externalId(booking: Booking): string {
 }
 
 function stepFor(kind: Kind, attempt: number): Step {
-  const ok = { lists: ['ok'] as ListOp[], create: 'ok' as CreateOp, kill: false, reveal: false, retrieve: 'ok' as const };
+  const ok = {
+    lists: ['ok'] as ListOp[],
+    create: 'ok' as CreateOp,
+    kill: false,
+    reveal: false,
+    retrieve: 'ok' as const,
+    marked: attempt > 0,
+    trustEmpty: true,
+  };
   if (kind === 'outage' && attempt === 0) return { ...ok, lists: ['down'] };
   if (kind === 'kill' && attempt === 0) return { ...ok, kill: true };
   if (kind === 'http502' && attempt === 0) return { ...ok, lists: ['ok', 'down'], create: '502' };
   if (kind === 'lag' && attempt === 0) return { ...ok, lists: ['ok', 'ok'], create: 'lag' };
-  if (kind === 'lag' && attempt > 0) return { ...ok, reveal: true };
+  if (kind === 'lag' && attempt === 1) return { ...ok, trustEmpty: false };
+  if (kind === 'lag' && attempt > 1) return { ...ok, reveal: true };
   if (kind === 'fourxx') return { ...ok, lists: ['ok', 'ok'], create: '4xx' };
   if (kind === 'killOutage' && attempt === 0) return { ...ok, kill: true };
   if (kind === 'killOutage' && attempt === 1) return { ...ok, lists: ['down'] };
@@ -114,6 +125,16 @@ function throwCreate(step: Step): never {
   throw Object.assign(new Error('socket timeout'), { code: 'ETIMEDOUT' });
 }
 
+const blankStep: Step = {
+  lists: [],
+  create: '4xx',
+  kill: false,
+  reveal: false,
+  retrieve: 'ok',
+  marked: false,
+  trustEmpty: true,
+};
+
 function wirePayouts(): void {
   (Payout.all as jest.Mock).mockImplementation(async (query: { 'custom_metadata.externalId': string }) => {
     const step = store.plans.get(query['custom_metadata.externalId']);
@@ -129,7 +150,7 @@ function wirePayouts(): void {
   (Payout.create as jest.Mock).mockImplementation(async (body: { custom_metadata: { externalId: string } }) => {
     const external = body.custom_metadata.externalId;
     const step = store.plans.get(external);
-    if (!step || step.create === '4xx') throwCreate(step ?? { lists: [], create: '4xx', kill: false, reveal: false, retrieve: 'ok' });
+    if (!step || step.create === '4xx') throwCreate(step ?? blankStep);
     const row = createRow(external, step);
     if (step.create !== 'ok') throwCreate(step);
     return { id: row.id, status: row.status, sendNow: () => sendRow(row) };
@@ -178,6 +199,8 @@ async function worker(service: FedaPayService, booking: Booking): Promise<void> 
       description: 'Decline refund',
       callback: 'https://test.com/callback',
       channel: booking.channel,
+      markedResend: step.marked,
+      trustEmptyList: step.trustEmpty,
     });
     applyResult(booking, result, step.kill);
   } finally {

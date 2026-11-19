@@ -333,6 +333,7 @@ describe('FedaPayService', () => {
         status: 'pending',
         sendNow: jest.fn().mockResolvedValue(undefined),
       };
+      Payout.all.mockResolvedValue({ payouts: [] });
       Payout.create.mockResolvedValue(mockPayout);
 
       const result = await service.withdraw({
@@ -747,6 +748,50 @@ describe('FedaPayService', () => {
       expect(Payout.create).toHaveBeenCalledTimes(1);
       expect(result.success).toBe(false);
       expect(result.ambiguous).toBe(true);
+      expect(result.transactionId).toBeUndefined();
+      expect(result.reference).toBeUndefined();
+    });
+
+    it('treats a lookup body without a payouts array as unknown', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValueOnce('<html>bad gateway</html>');
+      const html = await service.withdraw(withdrawReq);
+      expect(html.ambiguous).toBe(true);
+      expect(html.transactionId).toBeUndefined();
+      expect(Payout.create).not.toHaveBeenCalled();
+
+      Payout.create.mockClear();
+      Payout.all.mockResolvedValueOnce({ payouts: null });
+      const empty = await service.withdraw(withdrawReq);
+      expect(empty.ambiguous).toBe(true);
+      expect(empty.transactionId).toBeUndefined();
+      expect(Payout.create).not.toHaveBeenCalled();
+    });
+
+    it('does not create when a marked resend gets an empty list inside the lag window', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({ payouts: [] });
+      Payout.create.mockRejectedValue(Object.assign(new Error('422 invalid payee'), { status: 422 }));
+
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: false });
+
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
+      expect(result.status).toBe('pending');
+      expect(result.transactionId).toBeUndefined();
+      expect(result.reference).toBeUndefined();
+    });
+
+    it('does not fail a marked resend when a 422 follows an empty list', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({ payouts: [] });
+      Payout.create.mockRejectedValue(Object.assign(new Error('422 invalid payee'), { status: 422 }));
+
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true });
+
+      expect(Payout.create).toHaveBeenCalledTimes(1);
+      expect(result.ambiguous).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.transactionId).toBeUndefined();
       expect(result.reference).toBeUndefined();
     });

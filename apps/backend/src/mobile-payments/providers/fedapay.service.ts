@@ -47,6 +47,10 @@ export interface FedaPayWithdrawalRequest {
   callback: string;
   /** Channel code: moov_tg or togocel (Mixx by Yas). Only Mixx documented for payouts. */
   channel: 'moov_tg' | 'togocel';
+  /** A cron resend of a row that already has a send-attempt marker. */
+  markedResend?: boolean;
+  /** When false, an empty list is not proof the payout is absent. */
+  trustEmptyList?: boolean;
 }
 
 export interface FedaPayPaymentResponse {
@@ -494,7 +498,8 @@ export class FedaPayService implements OnModuleInit {
     if (this.mockEnabled) return { found: false, status: null, id: null, unknown: false };
     try {
       const existing = await this.liveLookup('payout', () => Payout.all({ 'custom_metadata.externalId': externalId }));
-      const payouts = (existing as { payouts?: Array<{ id?: number | string; status?: string; custom_metadata?: { externalId?: string } }> })?.payouts ?? [];
+      const payouts = this.payoutRows(existing);
+      if (!payouts) return { found: false, status: null, id: null, unknown: true };
       const match = payouts.find((row) => row.custom_metadata?.externalId === externalId);
       if (!match) return { found: false, status: null, id: null, unknown: false };
       const id = match.id == null ? null : String(match.id);
@@ -505,6 +510,13 @@ export class FedaPayService implements OnModuleInit {
     }
   }
 
+  /** A body without a payouts array did not answer. An empty array did. */
+  private payoutRows(existing: unknown): Array<{ id?: number | string; status?: string; custom_metadata?: { externalId?: string } }> | null {
+    const payouts = (existing as { payouts?: unknown } | null)?.payouts;
+    if (!Array.isArray(payouts)) return null;
+    return payouts as Array<{ id?: number | string; status?: string; custom_metadata?: { externalId?: string } }>;
+  }
+
   /** A 4xx means FedaPay refused the create. A timeout or 5xx may have created it. */
   private clientStatus(error: any): boolean {
     const direct = Number(error?.status ?? error?.statusCode ?? error?.response?.status ?? 0);
@@ -512,20 +524,21 @@ export class FedaPayService implements OnModuleInit {
     return /\b4\d{2}\b/.test(String(error?.message ?? ''));
   }
 
-  private async afterCreateError(error: any, externalId?: string): Promise<FedaPayWithdrawalResponse> {
+  private async afterCreateError(error: any, externalId: string | undefined, markedResend: boolean): Promise<FedaPayWithdrawalResponse> {
     if (!externalId) return this.unknownWithdraw();
-    const reused = await this.reuseByExternalId(externalId);
+    const reused = await this.reuseByExternalId(externalId, true);
     if (reused) return reused;
-    if (this.clientStatus(error)) return this.failedWithdraw(error);
+    if (this.clientStatus(error) && !markedResend) return this.failedWithdraw(error);
     return this.unknownWithdraw();
   }
 
-  /** Reuse a listed payout. An unanswered lookup waits and does not create another. */
-  private async reuseByExternalId(externalId: string): Promise<FedaPayWithdrawalResponse | null> {
+  /** Reuse a listed payout. An unanswered or untrusted empty list does not create another. */
+  private async reuseByExternalId(externalId: string, trustEmpty: boolean): Promise<FedaPayWithdrawalResponse | null> {
     const looked = await this.findPayoutByExternalId(externalId);
     if (looked.unknown) return this.unknownWithdraw();
-    if (!looked.found || !looked.id) return null;
-    return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId);
+    if (looked.found && looked.id) return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId);
+    if (!trustEmpty) return this.unknownWithdraw();
+    return null;
   }
 
   /** The create may have landed, but the lookup did not answer. Store no reference. */
@@ -574,7 +587,8 @@ export class FedaPayService implements OnModuleInit {
         `Initiating FedaPay payout: channel=${withdrawalRequest.channel}, externalId=${externalId}`
       );
 
-      const reused = await this.reuseByExternalId(externalId);
+      const trustEmpty = withdrawalRequest.trustEmptyList !== false;
+      const reused = await this.reuseByExternalId(externalId, trustEmpty);
       if (reused) return reused;
 
       let payout: { id?: number | string; status?: string; sendNow?: () => Promise<unknown> };
@@ -595,7 +609,7 @@ export class FedaPayService implements OnModuleInit {
           },
         });
       } catch (error: any) {
-        return this.afterCreateError(error, externalId);
+        return this.afterCreateError(error, externalId, withdrawalRequest.markedResend === true);
       }
 
       if (payout && payout.id) {

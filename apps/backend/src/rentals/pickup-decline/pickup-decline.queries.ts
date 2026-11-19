@@ -272,6 +272,19 @@ export const CLEAR_STABLE_REF = `
   }
 `;
 
+export const RESTORE_REFUND_ATTEMPT = `
+  mutation RestoreDeclineRefundAttempt($id: uuid!, $token: uuid!, $attempts: Int!, $next: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_attempts: $attempts, refund_next_at: $next }
+    ) { affected_rows }
+  }
+`;
+
 export const STAMP_ATTEMPT = `
   mutation StampDeclineSendAttempt($id: uuid!, $token: uuid!, $at: timestamptz!) {
     update_rental_bookings(

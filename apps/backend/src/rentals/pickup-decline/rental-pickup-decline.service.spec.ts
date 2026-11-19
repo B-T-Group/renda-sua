@@ -61,6 +61,7 @@ function harness(options: {
   superuser?: boolean;
   permissions?: string[];
   external?: 'missing' | 'unknown' | 'refunded' | 'refund_pending' | 'failed';
+  fedapayExternal?: { kind: 'unknown' | 'missing' | 'live'; status: string | null; id: string | null };
   pinFails?: number;
   claimLoses?: boolean;
   stampFails?: boolean;
@@ -171,6 +172,15 @@ function harness(options: {
           return { update_rental_bookings: { affected_rows: 0 } };
         }
         Object.assign(row, vars.set);
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query.includes('RestoreDeclineRefundAttempt')) {
+        const row = refundRow((vars as { id?: string }).id);
+        if (row.refund_claim_token !== (vars as { token?: string }).token) {
+          return { update_rental_bookings: { affected_rows: 0 } };
+        }
+        row.refund_attempts = (vars as { attempts?: number }).attempts;
+        row.refund_next_at = (vars as { next?: string }).next;
         return { update_rental_bookings: { affected_rows: 1 } };
       }
       if (query.includes('StampDeclineSendAttempt')) {
@@ -320,6 +330,7 @@ function harness(options: {
     poll: jest.fn(async () => options.poll ?? 'refund_pending'),
     probe: jest.fn(async (_provider: string, ref: string) => options.probeFor?.(ref) ?? options.poll ?? 'refund_pending'),
     probeByExternalId: jest.fn(async () => options.external ?? options.poll ?? 'refund_pending'),
+    lookupFedapayExternal: jest.fn(async () => options.fedapayExternal ?? { kind: 'unknown', status: null, id: null }),
     externalRefundId: (bookingId: string) => `rental-decline-${bookingId}`,
   };
   const service = new RentalPickupDeclineService(
@@ -1234,6 +1245,43 @@ describe('RentalPickupDeclineService', () => {
     });
     await cleared.service.decline(BOOKING, input);
     expect(cleared.state.refund_send_attempted_at).toBeFalsy();
+  });
+
+  it('does not spend an attempt on an unknown FedaPay lookup, then closes a dashboard send', async () => {
+    const waiting = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 4,
+      refund_send_attempted_at: new Date().toISOString(),
+      currency: 'XOF',
+    });
+    const outage = harness({
+      pending: [waiting],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await outage.service.reconcilePending()).toBe(0);
+    expect(waiting.refund_attempts).toBe(4);
+    expect(waiting.refund_status).toBe('refund_pending');
+    expect(outage.calls.restore).toBe(0);
+    const exhausted = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const recovered = harness({
+      pending: [exhausted],
+      fedapayExternal: { kind: 'live', status: 'sent', id: '9001' },
+    });
+    expect(await recovered.service.reconcilePending()).toBe(1);
+    expect(exhausted.refund_status).toBe('refunded');
+    expect(exhausted.refund_provider_ref).toBe('9001');
+    expect(recovered.calls.restore).toBe(0);
+    expect(recovered.calls.refund).toHaveLength(0);
   });
 
   it('keeps a FedaPay attempt marker and stores no reference when the create lookup is unknown', async () => {

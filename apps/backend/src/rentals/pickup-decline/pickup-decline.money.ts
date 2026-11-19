@@ -125,6 +125,9 @@ export function fedapayChannel(phone: string | null, channel?: string | null): '
   return MOOV_PREFIXES.some((prefix) => national.startsWith(prefix)) ? 'moov_tg' : 'togocel';
 }
 
+/** Empty FedaPay lists stay untrusted for this long after the send-attempt marker. Same window as MTN. */
+export const FEDAPAY_LIST_LAG_MS = 10 * 60 * 1000;
+
 export const REFUND_ATTEMPT_LIMIT = 5;
 const REFUND_BACKOFF_MINUTES = [1, 5, 15, 60, 360];
 

@@ -15,6 +15,10 @@ export interface MomoRefundRequest {
   channel?: 'moov_tg' | 'togocel' | null;
   /** Stable provider reference. A retry sends this same id. */
   referenceId?: string | null;
+  /** The send-attempt marker was already set before this call. */
+  markedResend?: boolean;
+  /** When false, an empty FedaPay list is not proof of absence. */
+  trustEmptyList?: boolean;
 }
 
 export interface MomoRefundResult {
@@ -60,6 +64,13 @@ export class RentalMomoRefundService {
     if (found.unknown) return 'unknown';
     if (!found.found) return 'missing';
     return mapRefundPoll(found.status);
+  }
+
+  async lookupFedapayExternal(bookingId: string): Promise<FedapayExternalLook> {
+    const found = await this.fedapay.findPayoutByExternalId(this.externalId(bookingId));
+    if (found.unknown) return { kind: 'unknown', status: null, id: null };
+    if (!found.found || !found.id) return { kind: 'missing', status: null, id: null };
+    return { kind: 'live', status: found.status, id: found.id };
   }
 
   externalRefundId(bookingId: string): string {
@@ -125,6 +136,8 @@ export class RentalMomoRefundService {
       description: 'Rental condition decline refund',
       callback: this.callbackUrl('fedapay'),
       channel: request.channel === 'moov_tg' ? 'moov_tg' : 'togocel',
+      markedResend: request.markedResend === true,
+      trustEmptyList: request.trustEmptyList !== false,
     });
     if (!sent.success && !sent.ambiguous) {
       return this.failed('fedapay', sent.transactionId ?? sent.reference ?? null);
@@ -238,3 +251,9 @@ export class RentalMomoRefundService {
 }
 
 type PollLook = { kind: 'code'; code: string } | { kind: 'missing' } | { kind: 'unknown' };
+
+export type FedapayExternalLook = {
+  kind: 'unknown' | 'missing' | 'live';
+  status: string | null;
+  id: string | null;
+};
