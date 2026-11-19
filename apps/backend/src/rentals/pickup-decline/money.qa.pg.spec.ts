@@ -450,6 +450,7 @@ CREATE TABLE rental_bookings (
   condition_declined_at timestamptz,
   refund_status text NOT NULL DEFAULT 'none',
   refund_attempts int NOT NULL DEFAULT 0,
+  refund_unknown_streak integer NOT NULL DEFAULT 0,
   refund_next_at timestamptz,
   refund_requested_at timestamptz,
   refund_status_at timestamptz,
