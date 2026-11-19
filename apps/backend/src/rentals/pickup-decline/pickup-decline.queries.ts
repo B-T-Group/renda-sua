@@ -345,9 +345,22 @@ export const FEDAPAY_REFUND_CONFIG = `
   query FedapayRefundConfig($key: String!) {
     application_configurations(
       where: { config_key: { _eq: $key }, status: { _eq: "active" }, country_code: { _is_null: true } }
-      order_by: { created_at: asc }
+      order_by: [{ updated_at: desc }, { created_at: desc }, { id: desc }]
       limit: 1
     ) { number_value }
+  }
+`;
+
+export const BUMP_SEND_ATTEMPT = `
+  mutation BumpDeclineSendAttempt($id: uuid!, $token: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_status: { _eq: "refund_pending" }
+        refund_claim_token: { _eq: $token }
+      }
+      _set: { refund_send_attempted_at: $at }
+    ) { affected_rows }
   }
 `;
 

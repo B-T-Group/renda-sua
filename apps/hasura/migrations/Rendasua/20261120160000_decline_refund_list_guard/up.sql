@@ -1,6 +1,7 @@
 -- Global keys are unique. Postgres UNIQUE does not treat NULL country_code as equal.
 -- This migration has not run on DEV. The dedupe stays here, before the unique index.
--- Only the three FedaPay timing keys are deleted. Keep the active row, then the latest updated_at.
+-- Only the three FedaPay timing keys are deleted, and only when exactly one active row exists.
+-- More than one active row fails the migration. With no active row, keep the latest updated_at.
 -- A tie, or a duplicate of any other global key, stops the migration instead of deleting.
 DO $$
 DECLARE
@@ -35,25 +36,12 @@ BEGIN
     FROM public.application_configurations
     WHERE country_code IS NULL AND config_key = key AND status = 'active';
 
-    IF active_count > 0 THEN
-      SELECT COUNT(*) INTO tie_count
-      FROM public.application_configurations
-      WHERE country_code IS NULL
-        AND config_key = key
-        AND status = 'active'
-        AND updated_at IS NOT DISTINCT FROM (
-          SELECT MAX(updated_at)
-          FROM public.application_configurations
-          WHERE country_code IS NULL AND config_key = key AND status = 'active'
-        );
-      IF tie_count > 1 THEN
-        RAISE EXCEPTION 'Ambiguous active rows for %; keep one and rerun the migration', key;
-      END IF;
+    IF active_count > 1 THEN
+      RAISE EXCEPTION 'More than one active row for %; keep one and rerun the migration', key;
+    ELSIF active_count = 1 THEN
       SELECT id INTO keep_id
       FROM public.application_configurations
-      WHERE country_code IS NULL AND config_key = key AND status = 'active'
-      ORDER BY updated_at DESC NULLS LAST
-      LIMIT 1;
+      WHERE country_code IS NULL AND config_key = key AND status = 'active';
     ELSE
       SELECT COUNT(*) INTO tie_count
       FROM public.application_configurations

@@ -54,6 +54,16 @@ function harness(options: {
     provider: string;
     unsent?: boolean;
     connectFailure?: boolean;
+    blankRef?: boolean;
+    limited?: boolean;
+  };
+  refundFor?: (request: { creditAged?: boolean }) => {
+    status: string;
+    providerRef: string | null;
+    unsupported: boolean;
+    provider: string;
+    blankRef?: boolean;
+    limited?: boolean;
   };
   refundThrows?: boolean;
   declines?: Array<Record<string, unknown>>;
@@ -220,6 +230,14 @@ function harness(options: {
         row.refund_unknown_streak = 0;
         return { update_rental_bookings: { affected_rows: 1 } };
       }
+      if (query.includes('BumpDeclineSendAttempt')) {
+        const row = refundRow((vars as { id?: string }).id);
+        if (row.refund_claim_token !== (vars as { token?: string }).token) {
+          return { update_rental_bookings: { affected_rows: 0 } };
+        }
+        row.refund_send_attempted_at = (vars as { at?: string }).at;
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
       if (query.includes('StampDeclineSendAttempt')) {
         const row = refundRow((vars as { id?: string }).id);
         if (row.refund_claim_token !== (vars as { token?: string }).token) {
@@ -362,6 +380,7 @@ function harness(options: {
       calls.refund.push(request);
       calls.claimAtSend = (state.refund_claim_token as string | null) ?? null;
       if (options.refundThrows) throw new Error('timeout');
+      if (options.refundFor) return options.refundFor(request as { creditAged?: boolean });
       return options.refund ?? { status: 'refunded', provider: 'mtn', providerRef: 'ref-1', unsupported: false };
     }),
     poll: jest.fn(async () => options.poll ?? 'refund_pending'),
@@ -1464,6 +1483,40 @@ describe('RentalPickupDeclineService', () => {
     expect(await credited.service.reconcilePending()).toBe(1);
     expect(aged.refund_status).toBe('failed');
     expect((credited.calls.refund[0] as { creditAged?: boolean }).creditAged).toBe(true);
+  });
+
+  it('does not credit a later payout hidden by lag when an older canceled row is visible', async () => {
+    const collects = [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }];
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 1,
+      refund_send_attempted_at: new Date(Date.now() - 30 * 60_000).toISOString(),
+      currency: 'XOF',
+    });
+    const sent = harness({
+      pending: [row],
+      collects,
+      fedapayExternal: { kind: 'missing', status: null, id: null, provableEmpty: true },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: 'p2', unsupported: false },
+    });
+    expect(await sent.service.reconcilePending()).toBe(0);
+    expect(row.refund_provider_ref).toBe('p2');
+    expect(Date.now() - Date.parse(String(row.refund_send_attempted_at))).toBeLessThan(5_000);
+    row.refund_provider_ref = null;
+    row.refund_next_at = new Date(Date.now() - 1000).toISOString();
+    const hidden = harness({
+      pending: [row],
+      collects,
+      fedapayExternal: { kind: 'live', status: 'canceled', id: 'old', provableEmpty: false },
+      refundFor: (request) => request.creditAged
+        ? { status: 'failed', provider: 'fedapay', providerRef: 'old', unsupported: false }
+        : { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await hidden.service.reconcilePending()).toBe(0);
+    expect(row.refund_status).not.toBe('failed');
+    expect((hidden.calls.refund[0] as { creditAged?: boolean }).creditAged).toBe(false);
   });
 
   it('records an unknown streak when the withdraw hits the tick deadline', async () => {

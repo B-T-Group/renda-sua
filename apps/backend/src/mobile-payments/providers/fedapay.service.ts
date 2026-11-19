@@ -146,7 +146,7 @@ type StrictWalk = {
   limited: boolean;
 };
 
-type ListPhase = 'lookup' | 'withdraw';
+type ListPhase = 'lookup' | 'lookupConfirm' | 'withdraw' | 'withdrawConfirm';
 
 type WalkState = { page: number; seen: number; pages: number; total: number | null };
 
@@ -164,12 +164,22 @@ function emptyLook(): FedaPayExternalMatch {
 
 /** Hard stop so a missing page cursor cannot walk the payout list forever. */
 export const FEDAPAY_LIST_PAGE_CAP = 20;
-/** Each of the lookup and the withdraw may list this many pages in one tick. */
+/** Each walk, on the lookup and on the withdraw, may list this many pages. */
 export const FEDAPAY_LIST_CALL_BUDGET = 20;
 /** One deadline for the whole tick. Stays under the two-minute claim. */
 export const FEDAPAY_LIST_TICK_MS = 100_000;
+/** Leave this much of the two-minute claim before a retrieve or sendNow. */
+export const FEDAPAY_SEND_MARGIN_MS = 25_000;
+/** Same window as the decline claim. A send that starts later can outlive it. */
+export const FEDAPAY_CLAIM_WINDOW_MS = 120_000;
 
-type ListSpend = { start: number; lookup: number; withdraw: number };
+type ListSpend = {
+  start: number;
+  lookup: number;
+  lookupConfirm: number;
+  withdraw: number;
+  withdrawConfirm: number;
+};
 const listSpend = new Map<string, ListSpend>();
 
 /** Tests start a tick with a fresh list budget. */
@@ -177,17 +187,34 @@ export function resetFedapayListSpend(): void {
   listSpend.clear();
 }
 
-/** A claimed retry starts here. The counters do not reset until the next tick. */
+/** A claimed retry or an override starts here. A live tick is not reset. */
 export function beginFedapayListTick(externalId: string, now = Date.now()): void {
-  listSpend.set(externalId, { start: now, lookup: 0, withdraw: 0 });
+  listSpend.set(externalId, blankSpend(now));
+}
+
+function blankSpend(start: number): ListSpend {
+  return { start, lookup: 0, lookupConfirm: 0, withdraw: 0, withdrawConfirm: 0 };
+}
+
+/** A stored tick past its deadline is replaced. A live tick is kept. */
+function openListTick(externalId: string, now: number): void {
+  const row = listSpend.get(externalId);
+  if (row && now - row.start < FedaPayService.listTickMs) return;
+  beginFedapayListTick(externalId, now);
 }
 
 function tickRow(externalId: string, now: number): ListSpend {
   const row = listSpend.get(externalId);
   if (row) return row;
-  const fresh = { start: now, lookup: 0, withdraw: 0 };
+  const fresh = blankSpend(now);
   listSpend.set(externalId, fresh);
   return fresh;
+}
+
+function confirmPhase(phase: ListPhase): ListPhase {
+  if (phase === 'lookup') return 'lookupConfirm';
+  if (phase === 'withdraw') return 'withdrawConfirm';
+  return phase;
 }
 
 /** A page is complete only when meta says there is no next page. A paid match still wins. */
@@ -685,6 +712,7 @@ export class FedaPayService implements OnModuleInit {
   /** Read-only. Does not create a payout. `unknown` means the lookup did not answer. */
   async findPayoutByExternalId(externalId: string, phase: ListPhase = 'lookup'): Promise<FedaPayExternalMatch> {
     if (this.mockEnabled) return emptyLook();
+    openListTick(externalId, Date.now());
     try {
       return await this.strictListLook(externalId, phase);
     } catch (error: any) {
@@ -697,7 +725,7 @@ export class FedaPayService implements OnModuleInit {
   private async strictListLook(externalId: string, phase: ListPhase): Promise<FedaPayExternalMatch> {
     const first = await this.collectStrict(externalId, phase);
     if (!this.needsSecondWalk(first)) return this.withLimit(first);
-    const second = await this.collectStrict(externalId, phase);
+    const second = await this.collectStrict(externalId, confirmPhase(phase));
     return this.confirmedCredit(first, second);
   }
 
@@ -776,7 +804,7 @@ export class FedaPayService implements OnModuleInit {
     return state.total != null && total != null && state.total !== total;
   }
 
-  /** The deadline is shared. The lookup and the withdraw each have their own call count. */
+  /** The deadline is shared. Each walk has its own call count. */
   private allowListCall(externalId: string, phase: ListPhase): boolean {
     const now = Date.now();
     const row = tickRow(externalId, now);
@@ -975,6 +1003,7 @@ export class FedaPayService implements OnModuleInit {
     externalId: string | undefined,
     strict = false
   ): Promise<FedaPayWithdrawalResponse> {
+    if (strict && !this.roomToSend(externalId)) return this.unknownWithdraw(true);
     const payoutId = String(payout.id);
     try {
       await payout.sendNow();
@@ -1112,12 +1141,31 @@ export class FedaPayService implements OnModuleInit {
 
   /** Send only while the retrieved payout is still pending. A missed read stores no ref. */
   private async resendIfStillPending(payoutId: string, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> {
+    if (!this.roomToSend(externalId)) return this.unknownWithdraw(true);
     const existing = await this.retrieveForResend(payoutId);
+    return this.sendRetrieved(existing, payoutId, externalId);
+  }
+
+  private sendRetrieved(existing: any, payoutId: string, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> | FedaPayWithdrawalResponse {
     const live = String(existing?.status || '');
     if (this.terminalPayout(live)) return this.failedExisting(payoutId, externalId);
-    if (live === 'pending' && typeof existing?.sendNow === 'function') return this.sendCreatedPayout(existing, externalId, true);
+    if (live === 'pending' && typeof existing?.sendNow === 'function') return this.sendIfRoom(existing, externalId);
     if (live) return this.passedPayout(payoutId, externalId, live);
     return this.unknownWithdraw();
+  }
+
+  private sendIfRoom(existing: any, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> {
+    if (!this.roomToSend(externalId)) return Promise.resolve(this.unknownWithdraw(true));
+    return this.sendCreatedPayout(existing, externalId, true);
+  }
+
+  /** Skip retrieve and sendNow when the claim would expire inside the margin. */
+  private roomToSend(externalId: string | undefined): boolean {
+    if (!externalId) return true;
+    const row = listSpend.get(externalId);
+    if (!row) return true;
+    const left = FedaPayService.claimWindowMs - (Date.now() - row.start);
+    return left >= FedaPayService.sendMarginMs;
   }
 
   private async retrieveForResend(payoutId: string): Promise<any> {
@@ -1140,6 +1188,8 @@ export class FedaPayService implements OnModuleInit {
   static liveLookupTimeoutMs = FEDAPAY_LIVE_LOOKUP_TIMEOUT_MS;
   static listCallBudget = FEDAPAY_LIST_CALL_BUDGET;
   static listTickMs = FEDAPAY_LIST_TICK_MS;
+  static sendMarginMs = FEDAPAY_SEND_MARGIN_MS;
+  static claimWindowMs = FEDAPAY_CLAIM_WINDOW_MS;
 
   private async liveLookup<T>(kind: 'transaction' | 'payout', lookup: () => Promise<T>): Promise<T> {
     const ms = FedaPayService.liveLookupTimeoutMs;

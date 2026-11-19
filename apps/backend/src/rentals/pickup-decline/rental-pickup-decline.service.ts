@@ -401,6 +401,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
       if (result.unsent) return this.dropUnsent(booking, token, referenceId, Boolean(result.connectFailure));
       await this.stampMtn(booking, source.provider, token, result.status);
       if (result.limited) return this.noteHeld(booking, token);
+      await this.noteLastSend(booking, token, result);
       await this.finishLookup(booking, token, result.blankRef === true, flags.settled);
       return this.settleResult(booking, ledger, result, referenceId, token);
     } catch (error: any) {
@@ -621,6 +622,35 @@ export class RentalPickupDeclineService implements OnModuleInit {
       void error;
       return false;
     }
+  }
+
+  /** A create or sendNow moves the lag stamp. The first write stays the one-time marker. */
+  private async noteLastSend(
+    booking: DeclineBooking,
+    token: string,
+    result: { status: string; providerRef: string | null; unsupported: boolean; unsent?: boolean; blankRef?: boolean; limited?: boolean }
+  ): Promise<void> {
+    if (!this.openedPayout(result)) return;
+    const at = new Date().toISOString();
+    try {
+      if (!(await this.bumpAttempt(booking.id, token, at))) return;
+      booking.refund_send_attempted_at = at;
+    } catch (error: any) {
+      this.logger.warn(`decline send stamp: ${error?.message ?? error}`);
+    }
+  }
+
+  private openedPayout(result: { status: string; providerRef: string | null; unsupported: boolean; unsent?: boolean; blankRef?: boolean; limited?: boolean }): boolean {
+    if (result.unsent || result.blankRef || result.unsupported || result.limited) return false;
+    return Boolean(result.providerRef) && result.status !== 'failed';
+  }
+
+  private async bumpAttempt(id: string, token: string, at: string): Promise<boolean> {
+    const result = await this.hasura.executeMutation<{ update_rental_bookings?: { affected_rows: number } }>(
+      Q.BUMP_SEND_ATTEMPT,
+      { id, token, at }
+    );
+    return (result.update_rental_bookings?.affected_rows ?? 0) === 1;
   }
 
   private async writeAttempt(id: string, token: string, at: string): Promise<boolean> {
@@ -1407,6 +1437,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
   }
 
   private async fedapayAbsence(booking: DeclineBooking): Promise<OverrideLook> {
+    this.beginListTick(booking);
     const externalId = this.momo.externalRefundId(booking.id);
     const looked = await this.momo.probeByExternalId(booking.refund_provider ?? '', externalId);
     if (looked === 'unknown') return 'unknown';

@@ -1107,6 +1107,99 @@ describe('FedaPayService', () => {
       clock.mockRestore();
     });
 
+    it('lists an absent payout 101s and 3600s after a spent tick', async () => {
+      const { Payout } = require('fedapay');
+      let now = 5_000_000;
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+      const empty = {
+        payouts: [],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 0 },
+      };
+      Payout.all.mockImplementation(async () => openPage(1));
+      FedaPayService.listCallBudget = 1;
+      beginFedapayListTick('override-ref', now);
+      const blocked = await service.findPayoutByExternalId('override-ref');
+      expect(blocked.limited).toBe(true);
+      expect(Payout.all).toHaveBeenCalledTimes(1);
+      now += 101_000;
+      FedaPayService.listCallBudget = 20;
+      Payout.all.mockResolvedValue(empty);
+      const later = await service.findPayoutByExternalId('override-ref');
+      expect(later.provableEmpty).toBe(true);
+      expect(Payout.all).toHaveBeenCalledTimes(2);
+      Payout.all.mockImplementation(async () => openPage(1));
+      FedaPayService.listCallBudget = 1;
+      beginFedapayListTick('override-ref', now);
+      await service.findPayoutByExternalId('override-ref');
+      const spent = Payout.all.mock.calls.length;
+      now += 3_600_000;
+      FedaPayService.listCallBudget = 20;
+      Payout.all.mockResolvedValue(empty);
+      const hour = await service.findPayoutByExternalId('override-ref');
+      expect(hour.provableEmpty).toBe(true);
+      expect(Payout.all).toHaveBeenCalledTimes(spent + 1);
+      clock.mockRestore();
+    });
+
+    it('starts a fresh tick when an override begins one inside the window', async () => {
+      const { Payout } = require('fedapay');
+      let now = 8_000_000;
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+      const empty = {
+        payouts: [],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 0 },
+      };
+      Payout.all.mockImplementation(async () => openPage(1));
+      FedaPayService.listCallBudget = 1;
+      beginFedapayListTick('override-ref', now);
+      await service.findPayoutByExternalId('override-ref');
+      expect(Payout.all).toHaveBeenCalledTimes(1);
+      now += 30_000;
+      await service.findPayoutByExternalId('override-ref');
+      expect(Payout.all).toHaveBeenCalledTimes(1);
+      beginFedapayListTick('override-ref', now);
+      FedaPayService.listCallBudget = 20;
+      Payout.all.mockResolvedValue(empty);
+      const opened = await service.findPayoutByExternalId('override-ref');
+      expect(opened.provableEmpty).toBe(true);
+      expect(Payout.all).toHaveBeenCalledTimes(2);
+      clock.mockRestore();
+    });
+
+    it('skips retrieve and sendNow when fewer than 25s remain in the claim', async () => {
+      const { Payout } = require('fedapay');
+      let now = 9_000_000;
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+      const sendNow = jest.fn(async () => undefined);
+      beginFedapayListTick('n1-ref', now);
+      now += 96_000;
+      Payout.all.mockImplementation(async (query: { page?: number }) => pendingPage(query.page ?? 1, 1));
+      Payout.retrieve.mockResolvedValue({ id: 77, status: 'pending', sendNow });
+      const result = await service.withdraw(withdrawReq);
+      expect(Payout.retrieve).not.toHaveBeenCalled();
+      expect(sendNow).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
+      expect(result.limited).toBe(true);
+      expect(result.status).toBe('pending');
+      clock.mockRestore();
+    });
+
+    it('sends once when 25s or more remain before the claim window', async () => {
+      const { Payout } = require('fedapay');
+      let now = 9_000_000;
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+      const sendNow = jest.fn(async () => undefined);
+      beginFedapayListTick('n1-ref', now);
+      now += 90_000;
+      Payout.all.mockImplementation(async (query: { page?: number }) => pendingPage(query.page ?? 1, 1));
+      Payout.retrieve.mockResolvedValue({ id: 77, status: 'pending', sendNow });
+      const result = await service.withdraw(withdrawReq);
+      expect(sendNow).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(true);
+      expect(result.transactionId).toBe('77');
+      clock.mockRestore();
+    });
+
     it('credits an all-dead 10-page list on the resend path', async () => {
       const { Payout } = require('fedapay');
       Payout.all.mockImplementation(async (query: { page?: number }) => deadPage(query.page ?? 1, 10));
@@ -1115,6 +1208,20 @@ describe('FedaPayService', () => {
       expect(look.limited).toBeFalsy();
       const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true, creditAged: true });
       expect(Payout.all).toHaveBeenCalledTimes(40);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.status).toBe('failed');
+      expect(result.ambiguous).toBeUndefined();
+      expect(result.transactionId).toBe('1');
+    });
+
+    it('credits an all-dead 15-page list once both walks finish', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockImplementation(async (query: { page?: number }) => deadPage(query.page ?? 1, 15));
+      const look = await service.findPayoutByExternalId('n1-ref');
+      expect(look.status).toBe('failed');
+      expect(look.limited).toBeFalsy();
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true, creditAged: true });
+      expect(Payout.all).toHaveBeenCalledTimes(60);
       expect(Payout.create).not.toHaveBeenCalled();
       expect(result.status).toBe('failed');
       expect(result.ambiguous).toBeUndefined();

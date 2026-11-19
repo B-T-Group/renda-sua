@@ -318,6 +318,7 @@ describe('FedaPay decline storm', () => {
       await resendPages(service, 'dead', 10),
       await resendPages(service, 'pending', 15),
       await resendPages(service, 'pending', 20),
+      await resendPages(service, 'dead', 15),
       await resendPages(service, 'dead', 20),
     ];
     const text = lines.join('\n');
@@ -332,8 +333,10 @@ describe('FedaPay decline storm', () => {
     expect(lines[1]).toContain('calls=30');
     expect(lines[2]).toContain('sent=1');
     expect(lines[2]).toContain('calls=40');
-    expect(lines[3]).toContain('credited=0');
-    expect(lines[3]).toContain('limited=1');
+    expect(lines[3]).toContain('credited=1');
+    expect(lines[3]).toContain('calls=60');
+    expect(lines[4]).toContain('credited=1');
+    expect(lines[4]).toContain('calls=80');
     lines.forEach((line) => {
       expect(line).toContain('doublePaid=0');
       expect(line).toContain('orphans=0');
