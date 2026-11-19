@@ -2,7 +2,7 @@
 
 Use this when a Mobile Money decline refund stays `refund_pending` and the in-app actions return 409. The app credits the wallet only when the provider reports the payout failed, or when an admin override can prove the payout never left us.
 
-Deploy Hasura migrations before the backend. If the backend ships first, an unguarded close uses the 12-argument function until `20261120170000` is applied. A guarded override does not credit on that old function.
+Deploy Hasura migrations before the backend. If the backend ships first, an unguarded close uses the 12-argument function until `20261120170000` is applied. A guarded override does not credit on that old function. `DATABASE_URL` must reach the Rendasua database. Without it, decline returns 503 and changes nothing. The booking lock does not stay open during the provider call.
 
 ## What the app will not do
 

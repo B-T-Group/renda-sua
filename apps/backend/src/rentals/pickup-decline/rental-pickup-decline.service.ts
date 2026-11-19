@@ -3,13 +3,13 @@ import { randomUUID } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 import { DeliveryPinService } from '../../delivery-pin/delivery-pin.service';
 import { withDeclineLock } from './decline-booking-lock';
+import { REVERT_UNPAID_DECLINE } from './decline-revert';
 import { beginFedapayListTick } from '../../mobile-payments/providers/fedapay.service';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { HasuraUserService } from '../../hasura/hasura-user.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { RbacService } from '../../rbac/rbac.service';
 import { isActivePersona } from '../../users/persona.util';
-import { casUpdateRentalBooking } from '../rental-booking-cas';
 import { INSERT_RENTAL_STATUS_HISTORY } from '../rentals-queries';
 import { RentalInspectionFlags } from '../inspection/rental-inspection-flags.service';
 import { rentalLedgerKey } from '../rental-ledger';
@@ -155,6 +155,18 @@ interface Ledger {
   collects: CollectedPayment[];
 }
 
+interface HeldPayout {
+  booking: DeclineBooking;
+  ledger: Ledger;
+  source: CollectedPayment;
+  token: string;
+}
+
+interface HeldDecline {
+  result: DeclineResult;
+  payout?: HeldPayout;
+}
+
 @Injectable()
 export class RentalPickupDeclineService implements OnModuleInit {
   /** Empty FedaPay lists are untrusted until the send-attempt marker is this old. */
@@ -187,10 +199,18 @@ export class RentalPickupDeclineService implements OnModuleInit {
 
   async decline(bookingId: string, input: DeclineInput): Promise<DeclineResult> {
     const user = await this.users.getUser();
-    return withDeclineLock(bookingId, this.database, () => this.declineHeld(user, bookingId, input));
+    const held = await withDeclineLock(bookingId, this.database, () => this.declineHeld(user, bookingId, input));
+    return this.payOutside(held);
   }
 
-  private async declineHeld(user: { id: string; client?: { id?: string } }, bookingId: string, input: DeclineInput): Promise<DeclineResult> {
+  /** Provider HTTP runs after the lock transaction commits. */
+  private async payOutside(held: HeldDecline): Promise<DeclineResult> {
+    if (!held.payout) return held.result;
+    const refundStatus = await this.callProvider(held.payout.booking, held.payout.ledger, held.payout.source, held.payout.token);
+    return { ...held.result, refundStatus };
+  }
+
+  private async declineHeld(user: { id: string; client?: { id?: string } }, bookingId: string, input: DeclineInput): Promise<HeldDecline> {
     const booking = await this.requireBooking(bookingId);
     await this.requireFlag(booking);
     this.requireRenter(user, booking);
@@ -269,7 +289,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     userId: string,
     input: DeclineInput,
     reason: { reason: DeclineReason; text: string | null }
-  ): Promise<DeclineResult> {
+  ): Promise<HeldDecline> {
     const ledger = await this.ledger(booking);
     const won = await this.claimCancel(booking, input.versionId);
     if (!won) return this.lost(booking, input.versionId);
@@ -290,9 +310,8 @@ export class RentalPickupDeclineService implements OnModuleInit {
     try {
       return await this.insertDecline(booking, userId, input.versionId, reason, ledger);
     } catch (error: any) {
-      if (await this.moneyLanded(booking)) throw this.refundInProgress();
-      await this.revertCancel(booking);
-      throw error;
+      if (await this.revertIfUnpaid(booking, null)) throw error;
+      throw this.refundInProgress();
     }
   }
 
@@ -300,11 +319,22 @@ export class RentalPickupDeclineService implements OnModuleInit {
     try {
       await this.moveFunds(booking, ledger);
     } catch (error: any) {
-      if (await this.moneyLanded(booking)) return;
-      await this.removeDecline(declineId);
-      await this.revertCancel(booking);
-      throw error;
+      if (await this.revertIfUnpaid(booking, declineId)) throw error;
     }
+  }
+
+  /** True when the booking was restored. A debit or a payout leaves the cancel in place. */
+  private async revertIfUnpaid(booking: DeclineBooking, declineId: string | null): Promise<boolean> {
+    if (!this.database) throw this.refundInProgress();
+    const rows = await this.database.query<{ id: string }>(REVERT_UNPAID_DECLINE, [
+      rentalLedgerKey(booking.id, 'decline:refund'),
+      booking.id,
+      declineId,
+      booking.status,
+      booking.payment_status,
+      booking.contract_expires_at,
+    ]);
+    return rows.length > 0;
   }
 
   /** A debit or a payout means the cancel stays, even when this request lost the ledger race. */
@@ -348,10 +378,10 @@ export class RentalPickupDeclineService implements OnModuleInit {
     row: DeclineRow,
     photos: string[],
     ledger: Ledger
-  ): Promise<DeclineResult> {
-    const refundStatus = await this.maybeRefund(booking, ledger);
+  ): Promise<HeldDecline> {
+    const opened = await this.openRefund(booking, ledger);
     await this.afterOnce(booking, userId, row, photos);
-    return this.toResult(booking, row, ledger, refundStatus, false);
+    return { result: this.toResult(booking, row, ledger, opened.status, false), payout: opened.payout };
   }
 
   private async moveFunds(booking: DeclineBooking, ledger: Ledger): Promise<void> {
@@ -362,19 +392,20 @@ export class RentalPickupDeclineService implements OnModuleInit {
     await this.rentals.releaseFreeCancelFunds(booking);
   }
 
-  private async resume(booking: DeclineBooking, row: DeclineRow): Promise<DeclineResult> {
+  private async resume(booking: DeclineBooking, row: DeclineRow): Promise<HeldDecline> {
     if (row.money_rail === 'momo_paid' && this.kept(booking) === 'none') return this.resumePayout(booking, row);
     if (row.effects_recorded_at === null) await this.afterOnce(booking, booking.client.user_id, row, []);
-    return this.toResult(booking, row, this.storedLedger(booking, row), this.kept(booking), true);
+    const result = this.toResult(booking, row, this.storedLedger(booking, row), this.kept(booking), true);
+    return { result };
   }
 
-  /** Debit the capped hold before any provider payout. The key blocks a second debit. */
-  private async resumePayout(booking: DeclineBooking, row: DeclineRow): Promise<DeclineResult> {
+  /** Debit and claim under the lock. The provider call happens after the lock commits. */
+  private async resumePayout(booking: DeclineBooking, row: DeclineRow): Promise<HeldDecline> {
     const ledger = this.capLedger(await this.ledger(booking), moneyAmount(row.money_amount));
     await this.consumeOrBusy(booking, ledger.amount);
-    const status = await this.refundCollected(booking, ledger);
+    const opened = await this.claimPayout(booking, ledger);
     await this.afterOnce(booking, booking.client.user_id, row, []);
-    return this.toResult(booking, row, ledger, status, true);
+    return { result: this.toResult(booking, row, ledger, opened.status, true), payout: opened.payout };
   }
 
   private storedLedger(booking: DeclineBooking, row: DeclineRow): Ledger {
@@ -389,19 +420,29 @@ export class RentalPickupDeclineService implements OnModuleInit {
     };
   }
 
-  private async maybeRefund(booking: DeclineBooking, ledger: Ledger): Promise<RefundStatus> {
-    if (ledger.rail !== 'momo_paid') return 'none';
-    if (booking.refund_status && booking.refund_status !== 'none') return booking.refund_status;
-    return this.refundCollected(booking, ledger);
+  private async openRefund(booking: DeclineBooking, ledger: Ledger): Promise<{ status: RefundStatus; payout?: HeldPayout }> {
+    if (ledger.rail !== 'momo_paid') return { status: 'none' };
+    if (booking.refund_status && booking.refund_status !== 'none') return { status: booking.refund_status };
+    return this.claimPayout(booking, ledger);
   }
 
   private async refundCollected(booking: DeclineBooking, ledger: Ledger, notice?: string): Promise<RefundStatus> {
+    const opened = await this.claimPayout(booking, ledger, notice);
+    if (!opened.payout) return opened.status;
+    return this.callProvider(opened.payout.booking, opened.payout.ledger, opened.payout.source, opened.payout.token);
+  }
+
+  private async claimPayout(
+    booking: DeclineBooking,
+    ledger: Ledger,
+    notice?: string
+  ): Promise<{ status: RefundStatus; payout?: HeldPayout }> {
     const source = refundSource(ledger.collects, booking.currency);
-    if (!source) return this.unsupported(booking, ledger);
+    if (!source) return { status: await this.unsupported(booking, ledger) };
     const token = await this.claimRefund(booking.id, ledger, source.provider);
-    if (!token) return this.currentRefund(booking.id);
+    if (!token) return { status: await this.currentRefund(booking.id) };
     if (notice) await this.tellSupport(booking, notice);
-    return this.callProvider(booking, ledger, source, token);
+    return { status: 'refund_pending', payout: { booking, ledger, source, token } };
   }
 
   private async callProvider(
@@ -526,16 +567,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
     await this.hasura.executeMutation(Q.CANCEL_PENDING_COLLECTS, { bookingNumber });
   }
 
-  private async revertCancel(booking: DeclineBooking): Promise<void> {
-    await casUpdateRentalBooking(this.hasura, booking.id, ['cancelled'], {
-      status: booking.status,
-      payment_status: booking.payment_status,
-      contract_expires_at: booking.contract_expires_at,
-      condition_declined_at: null,
-    });
-  }
-
-  private async lost(booking: DeclineBooking, versionId: string): Promise<DeclineResult> {
+  private async lost(booking: DeclineBooking, versionId: string): Promise<HeldDecline> {
     const fresh = await this.requireBooking(booking.id);
     const row = await this.find(booking.id, versionId);
     if (fresh.condition_declined_at && row) return this.resume(fresh, row);
@@ -811,10 +843,6 @@ export class RentalPickupDeclineService implements OnModuleInit {
   private async keepProviderRef(bookingId: string, stableRef: string, providerRef: string): Promise<void> {
     if (!providerRef || providerRef === stableRef) return;
     await this.hasura.executeMutation(Q.KEEP_PROVIDER_REF, { id: bookingId, stableRef, ref: providerRef });
-  }
-
-  private async removeDecline(declineId: string): Promise<void> {
-    await this.hasura.executeMutation(Q.DELETE_DECLINE, { id: declineId });
   }
 
   /** A new collect is not added to a payout that already has earlier successes. */

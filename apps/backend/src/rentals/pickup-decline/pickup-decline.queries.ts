@@ -180,12 +180,6 @@ export const CLAIM_REFUND = `
   }
 `;
 
-export const DELETE_DECLINE = `
-  mutation DeleteConditionDecline($id: uuid!) {
-    delete_rental_condition_declines_by_pk(id: $id) { id }
-  }
-`;
-
 export const CLAIM_EFFECTS = `
   mutation ClaimDeclineEffects($id: uuid!, $at: timestamptz!) {
     update_rental_condition_declines(

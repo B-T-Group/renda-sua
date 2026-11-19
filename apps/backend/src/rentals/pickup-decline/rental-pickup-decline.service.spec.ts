@@ -172,11 +172,6 @@ function harness(options: {
         declines.push(row);
         return { insert_rental_condition_declines_one: { id: 'decline-1' } };
       }
-      if (query.includes('DeleteConditionDecline')) {
-        calls.removed += 1;
-        declines.splice(0, declines.length);
-        return { delete_rental_condition_declines_by_pk: { id: 'decline-1' } };
-      }
       if (query.includes('ReleaseDeclineRefundClaim')) {
         const row = refundRow((vars as { id?: string }).id);
         if (row.refund_claim_token !== (vars as { token?: string }).token) {
@@ -423,6 +418,27 @@ function harness(options: {
     lookupFedapayExternal: jest.fn(async () => options.fedapayExternal ?? { kind: 'unknown', status: null, id: null, provableEmpty: false }),
     externalRefundId: (bookingId: string) => `rental-decline-${bookingId}`,
   };
+  const revertUnpaid = (text: string, params?: unknown[]) => {
+    if (!text.includes('blocked')) return [];
+    const landed = calls.debited > 0 || Boolean(state.refund_provider_ref) || Boolean(state.refund_sent_at)
+      || Boolean(state.refund_status && state.refund_status !== 'none');
+    if (landed) return [];
+    const declineId = (params?.[2] as string | null) ?? null;
+    const index = declineId ? declines.findIndex((row) => row.id === declineId) : -1;
+    if (declineId && index < 0) return [];
+    if (index >= 0) {
+      declines.splice(index, 1);
+      calls.removed += 1;
+    }
+    if (declines.length > 0) return [];
+    Object.assign(state, {
+      status: params?.[3],
+      payment_status: params?.[4],
+      contract_expires_at: params?.[5],
+      condition_declined_at: null,
+    });
+    return [{ id: state.id }];
+  };
   const service = new RentalPickupDeclineService(
     hasura as never,
     { getUser: jest.fn(async () => options.user ?? { id: 'user-1', active_persona: 'client', client: { id: CLIENT } }) } as never,
@@ -493,6 +509,15 @@ function harness(options: {
         isSuperuser: options.superuser ?? options.refunds !== false,
         permissions: options.permissions ?? [],
       })),
+    } as never,
+    {
+      transaction: jest.fn(async (fn: (query: (text: string, params?: unknown[]) => Promise<unknown[]>) => Promise<unknown>) => {
+        calls.steps.push('lock');
+        const result = await fn(async () => []);
+        calls.steps.push('unlock');
+        return result;
+      }),
+      query: jest.fn(async (text: string, params?: unknown[]) => revertUnpaid(text, params)),
     } as never
   );
   return { service, state, calls, momo, hasura, wallet, historyNotes };
@@ -675,6 +700,21 @@ describe('RentalPickupDeclineService', () => {
     expect(run.calls.removed).toBe(0);
     expect(run.calls.history).toBe(1);
     expect(run.calls.pins).toBe(1);
+  });
+
+  it('sends the provider payout after the booking lock commits', async () => {
+    const run = harness({ hold: 100, collects: collect() });
+    await run.service.decline(BOOKING, input);
+    expect(run.calls.steps.indexOf('unlock')).toBeLessThan(run.calls.steps.indexOf('refund'));
+    expect(run.calls.steps.indexOf('lock')).toBeLessThan(run.calls.steps.indexOf('unlock'));
+    expect(run.calls.refund).toHaveLength(1);
+  });
+
+  it('does not restore the booking when the revert sees a debit', async () => {
+    const run = harness({ hold: 100, collects: collect(), consumeRace: 'applied' });
+    await run.service.decline(BOOKING, input);
+    expect(run.state.status).toBe('cancelled');
+    expect(run.calls.removed).toBe(0);
   });
 
   it('does not revert the cancel when the debit was already applied', async () => {

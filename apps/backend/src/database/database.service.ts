@@ -12,6 +12,10 @@ export type DatabaseQuery = <T extends QueryResultRow = QueryResultRow>(
   params?: unknown[]
 ) => Promise<T[]>;
 
+/** Shared with commerce jobs on one RDS instance. Declines must not hold a client during provider HTTP. */
+export const DB_POOL_MAX = 8;
+export const DB_CONNECT_TIMEOUT_MS = 5_000;
+
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
@@ -25,7 +29,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('database.url not configured; Postgres queries disabled');
       return;
     }
-    this.pool = new Pool({ connectionString: url });
+    this.pool = new Pool({
+      connectionString: url,
+      max: DB_POOL_MAX,
+      connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
