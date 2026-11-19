@@ -123,6 +123,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Add order comes from git history. A shallow checkout cannot see it.
+          fetch-depth: 0
 
       - name: Start Hasura v2.36
         run: |
@@ -144,18 +147,27 @@ jobs:
           curl -L https://github.com/hasura/graphql-engine/raw/stable/cli/get.sh | VERSION=v2.36.0 bash
           hasura version
 
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
       - name: Apply migrations and metadata
         working-directory: apps/hasura
+        env:
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgrespassword
+          PGDATABASE: postgres
         run: |
           set -euo pipefail
           endpoint=http://127.0.0.1:8080
           secret=myadminsecretkey
-          # A fresh server has no sources. Register Rendasua, then migrate, then load metadata.
+          # Version order is not replayable: numbers mix unix-ms and calendar
+          # stamps, so hasura migrate apply alters tables that are not created yet.
+          python3 scripts/replay-migrations.py
           curl -fsS -X POST "$endpoint/v1/metadata" \
             -H "x-hasura-admin-secret: $secret" \
             -H 'content-type: application/json' \
             -d '{"type":"pg_add_source","args":{"name":"Rendasua","configuration":{"connection_info":{"database_url":{"from_env":"PG_DATABASE_URL"}}}}}'
-          hasura migrate apply --database-name Rendasua --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
           hasura metadata apply --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
           hasura metadata reload --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
           hasura metadata inconsistency status --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
