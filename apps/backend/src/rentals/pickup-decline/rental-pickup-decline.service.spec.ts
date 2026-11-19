@@ -1527,6 +1527,59 @@ describe('RentalPickupDeclineService', () => {
     expect(wait).toBeLessThan(90_000);
   });
 
+  it('resets the poll streak when an exhausted row sees an empty list or a match', async () => {
+    const empty = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_unknown_streak: 6,
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [empty],
+      fedapayExternal: { kind: 'missing', status: null, id: null, provableEmpty: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(empty.refund_unknown_streak).toBe(0);
+    expect(empty.refund_attempts).toBe(5);
+    const matched = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 5,
+      refund_unknown_streak: 6,
+      currency: 'XOF',
+    });
+    const found = harness({
+      pending: [matched],
+      fedapayExternal: { kind: 'live', status: 'sent', id: '9001', provableEmpty: false },
+    });
+    expect(await found.service.reconcilePending()).toBe(1);
+    expect(matched.refund_unknown_streak).toBe(0);
+    expect(matched.refund_provider_ref).toBe('9001');
+  });
+
+  it('caps a configured lag above 24 hours', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_send_attempted_at: new Date(Date.now() - 25 * 60 * 60_000).toISOString(),
+      refund_list_empty_at: new Date(Date.now() - 25 * 60 * 60_000).toISOString(),
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayMinutes: { rentals_fedapay_list_lag_minutes: 1_000_000, rentals_fedapay_list_confirm_minutes: 1_000_000 },
+      fedapayExternal: { kind: 'missing', status: null, id: null, provableEmpty: true },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(run.calls.refund[0]).toEqual(expect.objectContaining({ trustEmptyList: true }));
+  });
+
   it('keeps the 10 minute floor when lag and confirm are configured lower', async () => {
     const row = pendingRefund({
       refund_provider: 'fedapay',

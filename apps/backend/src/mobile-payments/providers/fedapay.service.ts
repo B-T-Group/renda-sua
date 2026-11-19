@@ -143,16 +143,43 @@ function emptyLook(): FedaPayExternalMatch {
   return { found: false, status: null, id: null, unknown: false, provableEmpty: true, matches: [] };
 }
 
-/** A short page is unknown unless a sent or approved payout is already visible. */
+/** Hard stop so a missing page cursor cannot walk the payout list forever. */
+export const FEDAPAY_LIST_PAGE_CAP = 20;
+
+/** A page is complete only when meta says there is no next page. A paid match still wins. */
 export function classifyFedapayPayouts(existing: unknown, externalId: string): FedaPayExternalMatch {
   const rows = payoutRows(existing);
   if (!rows) return unknownLook();
+  return classifyStrictRows(rows, externalId, listPageEnded(existing, rows.length));
+}
+
+export function classifyStrictRows(rows: PayoutRow[], externalId: string, complete: boolean): FedaPayExternalMatch {
   const matches = matchedPayouts(rows, externalId);
   if (paidMatch(matches)) return aggregatePayouts(matches);
-  if (hasMorePages(existing, rows.length)) return unknownLook();
+  if (!complete) return unknownLook();
   if (matches.length) return aggregatePayouts(matches);
   if (rows.some((row) => externalOf(row) == null) || rows.length > 0) return unknownLook();
   return emptyLook();
+}
+
+/** `next_page: null` is the positive last page. An empty body with no meta is the whole list. */
+export function listPageEnded(existing: unknown, rowCount: number): boolean {
+  const meta = readMeta(existing);
+  if (!meta) return rowCount === 0;
+  if (!explicitLastPage(meta)) return false;
+  return !earlierPage(meta) && !shortOfTotal(meta, rowCount);
+}
+
+/** The next page to request. Null when meta does not name one. */
+export function nextListPage(existing: unknown, requested: number): number | null {
+  const meta = readMeta(existing);
+  if (!meta || explicitLastPage(meta)) return null;
+  const next = num(meta.next_page ?? meta.nextPage);
+  if (Number.isFinite(next) && next > requested) return next;
+  const pages = num(meta.total_pages ?? meta.totalPages);
+  const current = num(meta.current_page ?? meta.currentPage ?? requested);
+  if (Number.isFinite(pages) && current < pages) return current + 1;
+  return null;
 }
 
 function payoutRows(existing: unknown): PayoutRow[] | null {
@@ -185,14 +212,36 @@ export function aggregatePayouts(matches: Array<{ id: string; status: string }>)
   return { found: true, status, id: chosen.id, unknown: false, provableEmpty: false, matches };
 }
 
-function hasMorePages(existing: unknown, count: number): boolean {
-  const meta = (existing as { meta?: Record<string, unknown> } | null)?.meta;
-  if (!meta) return false;
-  const pages = Number(meta.total_pages ?? meta.totalPages ?? 0);
-  const current = Number(meta.current_page ?? meta.currentPage ?? 1);
-  if (pages > 1 && current < pages) return true;
-  const total = Number(meta.total ?? meta.total_count ?? Number.NaN);
-  return Number.isFinite(total) && total > count;
+function readMeta(existing: unknown): Record<string, unknown> | null {
+  const meta = (existing as { meta?: unknown } | null)?.meta;
+  if (!meta || typeof meta !== 'object') return null;
+  return meta as Record<string, unknown>;
+}
+
+function num(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function explicitLastPage(meta: Record<string, unknown>): boolean {
+  return ('next_page' in meta && meta.next_page === null) || ('nextPage' in meta && meta.nextPage === null);
+}
+
+function earlierPage(meta: Record<string, unknown>): boolean {
+  const pages = num(meta.total_pages ?? meta.totalPages);
+  const current = num(meta.current_page ?? meta.currentPage ?? 1);
+  return Number.isFinite(pages) && pages >= 1 && current < pages;
+}
+
+function shortOfTotal(meta: Record<string, unknown>, rowCount: number): boolean {
+  const total = num(meta.total ?? meta.total_count ?? meta.totalCount);
+  return Number.isFinite(total) && total > rowCount;
+}
+
+function reportedPage(existing: unknown, requested: number): number {
+  const meta = readMeta(existing);
+  const current = num(meta?.current_page ?? meta?.currentPage ?? requested);
+  return Number.isFinite(current) && current > 0 ? current : requested;
 }
 
 @Injectable()
@@ -574,12 +623,51 @@ export class FedaPayService implements OnModuleInit {
   async findPayoutByExternalId(externalId: string): Promise<FedaPayExternalMatch> {
     if (this.mockEnabled) return emptyLook();
     try {
-      const existing = await this.liveLookup('payout', () => Payout.all({ 'custom_metadata.externalId': externalId }));
-      return classifyFedapayPayouts(existing, externalId);
+      return await this.strictListLook(externalId);
     } catch (error: any) {
       void error;
       return unknownLook();
     }
+  }
+
+  /** Decline lists walk every page. A paid match stops the walk. The cap stays unknown. */
+  private async strictListLook(externalId: string): Promise<FedaPayExternalMatch> {
+    const rows: PayoutRow[] = [];
+    let page = 1;
+    let seen = 0;
+    for (let step = 0; step < FEDAPAY_LIST_PAGE_CAP; step += 1) {
+      const turned = await this.readStrictPage(externalId, page, seen, rows);
+      if (turned.done) return turned.match;
+      seen = turned.seen;
+      page = turned.page;
+    }
+    return classifyStrictRows(rows, externalId, false);
+  }
+
+  private async readStrictPage(
+    externalId: string,
+    page: number,
+    seen: number,
+    rows: PayoutRow[]
+  ): Promise<{ done: true; match: FedaPayExternalMatch } | { done: false; seen: number; page: number }> {
+    const body = await this.liveLookup('payout', () => Payout.all(this.listQuery(externalId, page)));
+    const pageRows = payoutRows(body);
+    if (!pageRows) return { done: true, match: classifyStrictRows(rows, externalId, false) };
+    const current = reportedPage(body, page);
+    if (current <= seen) return { done: true, match: classifyStrictRows(rows, externalId, false) };
+    rows.push(...pageRows);
+    const paid = classifyStrictRows(rows, externalId, false);
+    if (!paid.unknown) return { done: true, match: paid };
+    if (listPageEnded(body, pageRows.length)) return { done: true, match: classifyStrictRows(rows, externalId, true) };
+    const next = nextListPage(body, current);
+    if (next == null) return { done: true, match: classifyStrictRows(rows, externalId, false) };
+    return { done: false, seen: current, page: next };
+  }
+
+  private listQuery(externalId: string, page: number): Record<string, string | number> {
+    const query: Record<string, string | number> = { 'custom_metadata.externalId': externalId };
+    if (page > 1) query.page = page;
+    return query;
   }
 
   /** A 4xx means FedaPay refused the create. A timeout or 5xx may have created it. */
@@ -599,38 +687,35 @@ export class FedaPayService implements OnModuleInit {
 
   /** Wallet withdrawals create when no row has this external id, even if the page is foreign. */
   private async reuseOpenList(externalId: string): Promise<FedaPayWithdrawalResponse | null> {
-    const looked = await this.openLook(externalId);
-    if (!looked.found || !looked.id) return null;
-    return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId);
-  }
-
-  /** Same client-side filter as before the decline list rule. A thrown lookup is unknown. */
-  private async openLook(externalId: string): Promise<FedaPayExternalMatch> {
-    try {
-      const existing = await this.liveLookup('payout', () => Payout.all({ 'custom_metadata.externalId': externalId }));
-      const payouts = ((existing as { payouts?: PayoutRow[] } | null)?.payouts) || [];
-      const matching = payouts.find((row) => row.custom_metadata?.externalId === externalId);
-      if (!matching?.id) return emptyLook();
-      const status = String(matching.status || 'pending').toLowerCase();
-      return { found: true, status, id: String(matching.id), unknown: false, provableEmpty: false, matches: [{ id: String(matching.id), status }] };
-    } catch (error: any) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Payout lookup failed for ${externalId}: ${sanitized.message}`);
-      throw new Error(`Failed to check existing payout: ${sanitized.message}`);
-    }
+    const existingPayouts = await Payout.all({ 'custom_metadata.externalId': externalId });
+    const payouts = (existingPayouts as { payouts?: Array<{ custom_metadata?: { externalId?: string } }> } | null)?.payouts || [];
+    const matching = payouts.find((row) => row.custom_metadata?.externalId === externalId);
+    if (!matching) return null;
+    this.logger.log(`Found existing FedaPay payout for ${externalId}: ${(matching as { id?: unknown }).id} (status=${(matching as { status?: unknown }).status})`);
+    return this.resumeOpenPayout(matching, externalId);
   }
 
   /** A 4xx is a refusal. A lookup that finds nothing after a 5xx is a refusal too. */
-  private async openCreateError(error: any, externalId: string): Promise<FedaPayWithdrawalResponse> {
-    if (this.clientStatus(error)) return this.failedWithdraw(error);
-    try {
-      const looked = await this.openLook(externalId);
-      if (looked.found) return this.pendingWithdraw(externalId, looked);
-    } catch (lookupError: any) {
-      void lookupError;
-      return this.pendingWithdraw(externalId, unknownLook());
-    }
+  private async openCreateError(error: any, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> {
+    if (this.clientStatus(error) || !externalId) return this.failedWithdraw(error);
+    const looked = await this.openFind(externalId);
+    if (looked.found || looked.unknown) return this.pendingWithdraw(externalId, looked);
     return this.failedWithdraw(error);
+  }
+
+  /** The pre-create list throws. The after-create list uses the same timeout as main. */
+  private async openFind(externalId: string): Promise<FedaPayExternalMatch> {
+    try {
+      const existing = await this.liveLookup('payout', () => Payout.all({ 'custom_metadata.externalId': externalId }));
+      const payouts = (existing as { payouts?: Array<{ id?: number | string; status?: string; custom_metadata?: { externalId?: string } }> } | null)?.payouts ?? [];
+      const match = payouts.find((row) => row.custom_metadata?.externalId === externalId);
+      if (!match) return emptyLook();
+      const id = match.id == null ? null : String(match.id);
+      return { found: true, status: String(match.status || 'pending'), id, unknown: false, provableEmpty: false, matches: [] };
+    } catch (error: any) {
+      void error;
+      return unknownLook();
+    }
   }
 
   private pendingWithdraw(externalId: string, looked: FedaPayExternalMatch): FedaPayWithdrawalResponse {
@@ -731,7 +816,7 @@ export class FedaPayService implements OnModuleInit {
       if (payout && payout.id) {
         // N1: from here on a FedaPay payout exists. Nothing below may report a
         // plain failure (that would release the hold while money may go out).
-        return this.sendCreatedPayout(payout, externalId);
+        return this.sendCreatedPayout(payout, externalId, strict);
       }
 
       return {
@@ -762,7 +847,8 @@ export class FedaPayService implements OnModuleInit {
    */
   private async sendCreatedPayout(
     payout: any,
-    externalId: string | undefined
+    externalId: string | undefined,
+    strict = false
   ): Promise<FedaPayWithdrawalResponse> {
     const payoutId = String(payout.id);
     try {
@@ -779,7 +865,7 @@ export class FedaPayService implements OnModuleInit {
       this.logger.warn(
         `FedaPay payout ${payoutId} created but sendNow failed (externalId=${externalId}): ${sanitized.message}; reconciling via Payout.retrieve`
       );
-      return this.reconcileAmbiguousPayout(payoutId, externalId);
+      return this.reconcileAmbiguousPayout(payoutId, externalId, strict);
     }
   }
 
@@ -790,7 +876,8 @@ export class FedaPayService implements OnModuleInit {
    */
   private async reconcileAmbiguousPayout(
     payoutId: string,
-    externalId: string | undefined
+    externalId: string | undefined,
+    strict: boolean
   ): Promise<FedaPayWithdrawalResponse> {
     let liveStatus: string | undefined;
     try {
@@ -802,9 +889,7 @@ export class FedaPayService implements OnModuleInit {
         `FedaPay payout ${payoutId} retrieve after failed send also failed: ${sanitized.message}`
       );
     }
-    if (liveStatus && this.terminalPayout(liveStatus)) {
-      return this.failedExisting(payoutId, externalId);
-    }
+    if (this.reconcileFailed(liveStatus, strict)) return this.reconcileFailure(payoutId, externalId, strict);
     return {
       success: true,
       ambiguous: true,
@@ -822,6 +907,45 @@ export class FedaPayService implements OnModuleInit {
    * Dedupe hit: an existing payout for this externalId. Pass through terminal
    * states; (re)send one that was created but never sent.
    */
+  private reconcileFailed(status: string | undefined, strict: boolean): boolean {
+    if (!status) return false;
+    return strict ? this.terminalPayout(status) : status === 'failed';
+  }
+
+  private reconcileFailure(payoutId: string, externalId: string | undefined, strict: boolean): FedaPayWithdrawalResponse {
+    if (strict) return this.failedExisting(payoutId, externalId);
+    return {
+      success: false,
+      transactionId: payoutId,
+      reference: externalId,
+      status: 'failed',
+      errorCode: 'PAYOUT_FAILED',
+      message: normalizeProviderMessage(null, 'Payout failed'),
+    };
+  }
+
+  /** Non-strict resume matches main: a canceled payout is passed through, and a missed retrieve keeps the id. */
+  private async resumeOpenPayout(matching: any, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> {
+    const payoutId = String(matching.id);
+    const status = String(matching.status || 'pending');
+    if (status === 'failed') return this.failedExisting(payoutId, externalId);
+    if (status !== 'pending') return this.passedPayout(payoutId, externalId, status);
+    return this.openResend(payoutId, externalId);
+  }
+
+  private async openResend(payoutId: string, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> {
+    const existing = await this.retrieveForResend(payoutId);
+    if (existing && typeof existing.sendNow === 'function') return this.sendCreatedPayout(existing, externalId, false);
+    return {
+      success: true,
+      ambiguous: true,
+      transactionId: payoutId,
+      reference: externalId,
+      status: 'pending',
+      message: normalizeProviderMessage(null, 'Payout exists; awaiting confirmation'),
+    };
+  }
+
   private terminalPayout(status: string): boolean {
     return status === 'failed' || status === 'canceled' || status === 'cancelled';
   }
@@ -860,7 +984,7 @@ export class FedaPayService implements OnModuleInit {
     const existing = await this.retrieveForResend(payoutId);
     const live = String(existing?.status || '');
     if (this.terminalPayout(live)) return this.failedExisting(payoutId, externalId);
-    if (live === 'pending' && typeof existing?.sendNow === 'function') return this.sendCreatedPayout(existing, externalId);
+    if (live === 'pending' && typeof existing?.sendNow === 'function') return this.sendCreatedPayout(existing, externalId, true);
     if (live) return this.passedPayout(payoutId, externalId, live);
     return this.unknownWithdraw();
   }

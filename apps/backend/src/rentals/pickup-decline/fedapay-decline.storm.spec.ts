@@ -139,7 +139,11 @@ function wirePayouts(): void {
   (Payout.all as jest.Mock).mockImplementation(async (query: { 'custom_metadata.externalId': string }) => {
     const step = store.plans.get(query['custom_metadata.externalId']);
     if (step?.lists.shift() === 'down') throw new Error('lookup down');
-    return { payouts: listed(query['custom_metadata.externalId']) };
+    const payouts = listed(query['custom_metadata.externalId']);
+    return {
+      payouts,
+      meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: payouts.length },
+    };
   });
   (Payout.retrieve as jest.Mock).mockImplementation(async (id: number) => {
     const row = store.rows.find((item) => item.id === id);

@@ -736,6 +736,7 @@ export class RentalPickupDeclineService implements OnModuleInit {
       refunded_at: status === 'refunded' ? now : null,
       refund_claim_at: null,
       refund_claim_token: null,
+      refund_unknown_streak: 0,
     };
   }
 
@@ -1114,7 +1115,15 @@ export class RentalPickupDeclineService implements OnModuleInit {
     const aged = this.markerAged(booking, lag);
     if (looked.provableEmpty && aged && !prior) await this.stampListEmpty(booking, token);
     if (this.emptyConfirmed(prior, looked.provableEmpty, aged, gap)) return this.noteAbsent(booking, token);
+    if (looked.provableEmpty) return this.resetStreak(booking, token);
     return this.waitUnknown(booking, token);
+  }
+
+  /** A real empty list is not another unknown. Put the attempt back and clear the streak. */
+  private async resetStreak(booking: DeclineBooking, token: string): Promise<boolean> {
+    const kept = Math.max(1, (booking.refund_attempts ?? 1) - 1);
+    await this.restoreAttempt(booking, token, 0, nextRefundAt(kept));
+    return false;
   }
 
   private async waitUnknown(booking: DeclineBooking, token: string): Promise<boolean> {
@@ -1185,10 +1194,10 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return this.passConfig;
   }
 
-  /** A stored window below 10 minutes is ignored. A missing row uses the code default. */
+  /** Below 10 minutes or above 24 hours is clamped. A missing row uses the code default. */
   private minutesFloor(value: number | null, fallbackMs: number): number {
     if (value == null) return fallbackMs;
-    return Math.max(value, 10) * 60_000;
+    return Math.min(24 * 60, Math.max(value, 10)) * 60_000;
   }
 
   private async configNumber(key: string): Promise<number | null> {

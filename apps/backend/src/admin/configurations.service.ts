@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, Optional } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { PlatformRoles } from '../rbac/platform-permissions';
+import { RbacService } from '../rbac/rbac.service';
 import { UpdateConfigurationDto } from './dto/update-configuration.dto';
 
 export interface ApplicationConfiguration {
@@ -65,7 +67,10 @@ const CONFIGURATION_FIELDS = `
 export class ConfigurationsService {
   private readonly logger = new Logger(ConfigurationsService.name);
 
-  constructor(private readonly hasuraService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraService: HasuraSystemService,
+    @Optional() private readonly rbac?: RbacService,
+  ) {}
 
   async getAllConfigurations(): Promise<ApplicationConfiguration[]> {
     try {
@@ -239,7 +244,7 @@ export class ConfigurationsService {
       if (!existingConfig) {
         throw new Error('Configuration not found');
       }
-      this.rejectFedapayFloor(existingConfig, updateDto);
+      await this.rejectFedapayFloor(existingConfig, updateDto, updatedBy);
 
       // Prepare update object with only provided fields
       const updateObject: any = {
@@ -297,12 +302,23 @@ export class ConfigurationsService {
     }
   }
 
-  /** Lag and confirm cannot be set below the 10 minute floor. */
-  private rejectFedapayFloor(existing: ApplicationConfiguration, update: UpdateConfigurationDto): void {
-    const watched = existing.config_key === 'rentals_fedapay_list_lag_minutes'
-      || existing.config_key === 'rentals_fedapay_list_confirm_minutes';
-    if (!watched || update.number_value == null || update.number_value >= 10) return;
-    throw new BadRequestException('FedaPay list lag and confirm gap must be at least 10 minutes');
+  /** Lag, confirm, and the notice threshold are superuser-only. The windows stay inside 10 minutes to 24 hours. */
+  private async rejectFedapayFloor(
+    existing: ApplicationConfiguration,
+    update: UpdateConfigurationDto,
+    actor?: string
+  ): Promise<void> {
+    const key = existing.config_key;
+    const watched = key === 'rentals_fedapay_list_lag_minutes'
+      || key === 'rentals_fedapay_list_confirm_minutes'
+      || key === 'rentals_fedapay_unknown_notice_after';
+    if (!watched) return;
+    const superuser = Boolean(actor && this.rbac && await this.rbac.hasRole(actor, PlatformRoles.SUPERUSER));
+    if (!superuser) throw new ForbiddenException('Only a superuser can change FedaPay list timing');
+    const window = key !== 'rentals_fedapay_unknown_notice_after';
+    const value = update.number_value;
+    if (!window || value == null || (value >= 10 && value <= 24 * 60)) return;
+    throw new BadRequestException('FedaPay list lag and confirm gap must be between 10 minutes and 24 hours');
   }
 
   async deleteConfiguration(id: string): Promise<boolean> {

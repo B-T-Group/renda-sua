@@ -3,10 +3,12 @@ import { ConfigurationsService } from '../admin/configurations.service';
 describe('ConfigurationsService', () => {
   let service: ConfigurationsService;
   let hasura: { executeQuery: jest.Mock };
+  let rbac: { hasRole: jest.Mock };
 
   beforeEach(() => {
     hasura = { executeQuery: jest.fn() };
-    service = new ConfigurationsService(hasura as any);
+    rbac = { hasRole: jest.fn(async () => true) };
+    service = new ConfigurationsService(hasura as any, rbac as any);
   });
 
   it('returns active configuration by key and country', async () => {
@@ -33,8 +35,11 @@ describe('ConfigurationsService', () => {
         number_value: 10,
       },
     });
-    await expect(service.updateConfiguration('cfg-1', { number_value: 1 })).rejects.toThrow(/10 minutes/);
+    await expect(service.updateConfiguration('cfg-1', { number_value: 1 }, 'user-1')).rejects.toThrow(/10 minutes and 24 hours/);
     expect(hasura.executeQuery).toHaveBeenCalledTimes(1);
+    await expect(service.updateConfiguration('cfg-1', { number_value: 1_000_000 }, 'user-1')).rejects.toThrow(/24 hours/);
+    rbac.hasRole.mockResolvedValue(false);
+    await expect(service.updateConfiguration('cfg-1', { number_value: 15 }, 'user-1')).rejects.toThrow(/superuser/);
   });
 
   it('returns null when no active configuration exists', async () => {

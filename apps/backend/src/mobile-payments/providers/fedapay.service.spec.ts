@@ -577,6 +577,7 @@ describe('FedaPayService', () => {
         payouts: [
           { id: 5001, status: 'pending', custom_metadata: { externalId: 'n1-ref' } },
         ],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 1 },
       });
       const sendNow = jest.fn().mockResolvedValue(undefined);
       Payout.retrieve.mockResolvedValue({ id: 5001, status: 'pending', sendNow });
@@ -597,6 +598,7 @@ describe('FedaPayService', () => {
         payouts: [
           { id: 5002, status: 'pending', custom_metadata: { externalId: 'n1-ref' } },
         ],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 1 },
       });
       Payout.retrieve
         .mockResolvedValueOnce({
@@ -637,6 +639,7 @@ describe('FedaPayService', () => {
         payouts: [
           { id: 5004, status: 'failed', custom_metadata: { externalId: 'n1-ref' } },
         ],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 1 },
       });
 
       const result = await service.withdraw(withdrawReq);
@@ -665,7 +668,10 @@ describe('FedaPayService', () => {
       const sendNow = jest.fn().mockResolvedValue(undefined);
       Payout.all
         .mockResolvedValueOnce({ payouts: [] })
-        .mockResolvedValueOnce({ payouts: [{ id: 91, status: 'pending', custom_metadata: { externalId: 'n1-ref' } }] });
+        .mockResolvedValueOnce({
+          payouts: [{ id: 91, status: 'pending', custom_metadata: { externalId: 'n1-ref' } }],
+          meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 1 },
+        });
       Payout.create.mockRejectedValue(Object.assign(new Error('socket timeout'), { code: 'ETIMEDOUT' }));
       Payout.retrieve.mockResolvedValue({ id: 91, status: 'pending', sendNow });
 
@@ -699,6 +705,7 @@ describe('FedaPayService', () => {
       const sendNow = jest.fn().mockResolvedValue(undefined);
       Payout.all.mockResolvedValue({
         payouts: [{ id: 91, status: 'pending', custom_metadata: { externalId: 'n1-ref' } }],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 1 },
       });
       Payout.retrieve.mockResolvedValue({ id: 91, status: 'started', sendNow });
 
@@ -715,6 +722,7 @@ describe('FedaPayService', () => {
       const { Payout } = require('fedapay');
       Payout.all.mockResolvedValue({
         payouts: [{ id: 92, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 1 },
       });
 
       const result = await service.withdraw(withdrawReq);
@@ -859,6 +867,67 @@ describe('FedaPayService', () => {
       expect(result.transactionId).toBe('12');
     });
 
+    it('stays unknown when meta is missing, understated, or only a next page', async () => {
+      const { Payout } = require('fedapay');
+      const canceled = [{ id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }];
+      const bodies = [
+        { payouts: canceled },
+        { payouts: canceled, meta: { current_page: 1, total_pages: 1, per_page: 1 } },
+        { payouts: canceled, meta: { current_page: 1, next_page: 2, per_page: 1 } },
+      ];
+      for (const body of bodies) {
+        Payout.create.mockClear();
+        Payout.all.mockResolvedValue(body);
+        const result = await service.withdraw(withdrawReq);
+        expect(Payout.create).not.toHaveBeenCalled();
+        expect(result.ambiguous).toBe(true);
+        expect(result.success).toBe(false);
+        expect(result.transactionId).toBeUndefined();
+      }
+    });
+
+    it('stays unknown when the page cap is reached before the list ends', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockImplementation(async (query: { page?: number }) => {
+        const page = query.page ?? 1;
+        return {
+          payouts: [{ id: page, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+          meta: { current_page: page, next_page: page + 1, per_page: 1 },
+        };
+      });
+      const result = await service.withdraw(withdrawReq);
+      expect(Payout.all).toHaveBeenCalledTimes(20);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
+      expect(result.transactionId).toBeUndefined();
+    });
+
+    it('keeps the transaction id when a wallet payout retrieve fails', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 501, status: 'pending', custom_metadata: { externalId: 'n1-ref' } }],
+      });
+      Payout.retrieve.mockRejectedValue(new Error('retrieve down'));
+      const result = await service.withdraw({ ...withdrawReq, strictList: false });
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.ambiguous).toBe(true);
+      expect(result.transactionId).toBe('501');
+      expect(result.status).toBe('pending');
+    });
+
+    it('passes a canceled wallet payout through with its id', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 501, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+      });
+      const result = await service.withdraw({ ...withdrawReq, strictList: false });
+      expect(result.success).toBe(true);
+      expect(result.status).toBe('canceled');
+      expect(result.transactionId).toBe('501');
+      expect(Payout.create).not.toHaveBeenCalled();
+    });
+
     it('creates a wallet withdrawal when the payout list is not filtered', async () => {
       const { Payout } = require('fedapay');
       const sendNow = jest.fn(async () => undefined);
@@ -879,6 +948,7 @@ describe('FedaPayService', () => {
           { id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } },
           { id: 12, status: 'failed', custom_metadata: { externalId: 'n1-ref' } },
         ],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 2 },
       });
       const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true });
       expect(Payout.create).not.toHaveBeenCalled();

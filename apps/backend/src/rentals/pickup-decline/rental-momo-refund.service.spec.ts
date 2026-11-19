@@ -119,6 +119,16 @@ describe('RentalMomoRefundService', () => {
     expect(mypvit.getSupportedPaymentMethods).toHaveBeenCalled();
   });
 
+  it('passes strictList to the FedaPay decline payout', async () => {
+    const { api, fedapay } = service();
+    await api.refund({ ...request, provider: 'fedapay', currency: 'XOF', markedResend: true, trustEmptyList: false });
+    expect(fedapay.withdraw).toHaveBeenCalledWith(expect.objectContaining({
+      strictList: true,
+      markedResend: true,
+      trustEmptyList: false,
+    }));
+  });
+
   it('sends Moov on the channel from the original collect', async () => {
     const { api, fedapay } = service();
     await api.refund({ ...request, provider: 'fedapay', currency: 'XOF', channel: 'moov_tg' });
