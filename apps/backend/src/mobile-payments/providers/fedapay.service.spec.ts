@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
-import { FedaPayService } from './fedapay.service';
+import { FedaPayService, resetFedapayListSpend } from './fedapay.service';
 
 // Mock the FedaPay SDK to avoid module loading issues
 jest.mock('fedapay', () => ({
@@ -511,6 +511,9 @@ describe('FedaPayService', () => {
 
     beforeEach(() => {
       const { Payout } = require('fedapay');
+      resetFedapayListSpend();
+      FedaPayService.listCallBudget = 20;
+      FedaPayService.listWalkMs = 90_000;
       Payout.all.mockReset();
       Payout.create.mockReset();
       Payout.retrieve.mockReset();
@@ -939,6 +942,150 @@ describe('FedaPayService', () => {
       expect(Payout.create).toHaveBeenCalledTimes(1);
       expect(result.success).toBe(true);
       expect(result.transactionId).toBe('44');
+    });
+
+    it('does not credit a canceled payout when the page is understated as one page', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockImplementation(async (query: { page?: number }) => {
+        if ((query.page ?? 1) > 1) {
+          return {
+            payouts: [{ id: 12, status: 'sent', custom_metadata: { externalId: 'n1-ref' } }],
+            meta: { current_page: 2, total_pages: 2, next_page: null, per_page: 1, total_count: 2 },
+          };
+        }
+        return {
+          payouts: [{ id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+          meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 1 },
+        };
+      });
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true });
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
+      expect(result.success).toBe(false);
+      expect(result.transactionId).toBeUndefined();
+    });
+
+    it('stays unknown when later pages report a different total', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockImplementation(async (query: { page?: number }) => {
+        const page = query.page ?? 1;
+        const row = page === 1
+          ? { id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }
+          : { id: 12, status: 'failed', custom_metadata: { externalId: 'n1-ref' } };
+        return {
+          payouts: [row],
+          meta: {
+            current_page: page,
+            total_pages: 2,
+            next_page: page === 1 ? 2 : null,
+            per_page: 1,
+            total_count: page === 1 ? 2 : 1,
+          },
+        };
+      });
+      const result = await service.withdraw(withdrawReq);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
+      expect(result.transactionId).toBeUndefined();
+    });
+
+    it('does not credit when the list shrinks between walks', async () => {
+      const { Payout } = require('fedapay');
+      let calls = 0;
+      Payout.all.mockImplementation(async (query: { page?: number }) => {
+        calls += 1;
+        const page = query.page ?? 1;
+        if (calls > 2) {
+          return {
+            payouts: [{ id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+            meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 1, total_count: 1 },
+          };
+        }
+        const row = page === 1
+          ? { id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }
+          : { id: 12, status: 'failed', custom_metadata: { externalId: 'n1-ref' } };
+        return {
+          payouts: [row],
+          meta: { current_page: page, total_pages: 2, next_page: page === 1 ? 2 : null, per_page: 1, total_count: 2 },
+        };
+      });
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true });
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
+      expect(result.status).toBe('pending');
+    });
+
+    it('credits a multi-page all-dead list once two walks agree', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockImplementation(async (query: { page?: number }) => {
+        const page = query.page ?? 1;
+        const row = page === 1
+          ? { id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }
+          : { id: 12, status: 'failed', custom_metadata: { externalId: 'n1-ref' } };
+        return {
+          payouts: [row],
+          meta: { current_page: page, total_pages: 2, next_page: page === 1 ? 2 : null, per_page: 1, total_count: 2 },
+        };
+      });
+      const result = await service.withdraw({ ...withdrawReq, markedResend: true, trustEmptyList: true });
+      expect(Payout.all).toHaveBeenCalledTimes(4);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.ambiguous).toBeUndefined();
+      expect(result.status).toBe('failed');
+      expect(result.transactionId).toBe('11');
+    });
+
+    it('sends a pending payout found on page 3 and does not create another', async () => {
+      const { Payout } = require('fedapay');
+      const sendNow = jest.fn(async () => undefined);
+      const rows = [
+        { id: 1, status: 'sent', custom_metadata: { externalId: 'other' } },
+        { id: 2, status: 'canceled', custom_metadata: { externalId: 'other' } },
+        { id: 77, status: 'pending', custom_metadata: { externalId: 'n1-ref' } },
+      ];
+      Payout.all.mockImplementation(async (query: { page?: number }) => {
+        const page = query.page ?? 1;
+        return {
+          payouts: [rows[page - 1]],
+          meta: { current_page: page, total_pages: 3, next_page: page < 3 ? page + 1 : null, per_page: 1, total_count: 3 },
+        };
+      });
+      Payout.retrieve.mockResolvedValue({ id: 77, status: 'pending', sendNow });
+      const result = await service.withdraw(withdrawReq);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(sendNow).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(true);
+      expect(result.transactionId).toBe('77');
+    });
+
+    it('stops the walk at the list-call budget', async () => {
+      const { Payout } = require('fedapay');
+      FedaPayService.listCallBudget = 2;
+      Payout.all.mockImplementation(async (query: { page?: number }) => {
+        const page = query.page ?? 1;
+        return {
+          payouts: [{ id: page, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+          meta: { current_page: page, next_page: page + 1, per_page: 1, total_count: 99 },
+        };
+      });
+      const result = await service.withdraw(withdrawReq);
+      expect(Payout.all).toHaveBeenCalledTimes(2);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
+    });
+
+    it('stops the walk when the shared time budget is already spent', async () => {
+      const { Payout } = require('fedapay');
+      FedaPayService.listWalkMs = 0;
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 11, status: 'canceled', custom_metadata: { externalId: 'n1-ref' } }],
+        meta: { current_page: 1, total_pages: 2, next_page: 2, per_page: 1, total_count: 2 },
+      });
+      const result = await service.withdraw(withdrawReq);
+      expect(Payout.all).not.toHaveBeenCalled();
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.ambiguous).toBe(true);
     });
 
     it('credits only when every match is failed or canceled', async () => {

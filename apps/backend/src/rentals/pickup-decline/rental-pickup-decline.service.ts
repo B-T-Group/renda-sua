@@ -736,8 +736,13 @@ export class RentalPickupDeclineService implements OnModuleInit {
       refunded_at: status === 'refunded' ? now : null,
       refund_claim_at: null,
       refund_claim_token: null,
-      refund_unknown_streak: 0,
+      ...(this.clearStreakOnWrite(status, providerRef) ? { refund_unknown_streak: 0 } : {}),
     };
+  }
+
+  /** A blank pending write is still an unknown. A match or a final status clears the streak. */
+  private clearStreakOnWrite(status: RefundStatus, providerRef: string | null): boolean {
+    return status !== 'refund_pending' || Boolean(providerRef);
   }
 
   private async unsupported(booking: DeclineBooking, ledger: Ledger): Promise<RefundStatus> {
@@ -1119,10 +1124,10 @@ export class RentalPickupDeclineService implements OnModuleInit {
     return this.waitUnknown(booking, token);
   }
 
-  /** A real empty list is not another unknown. Put the attempt back and clear the streak. */
+  /** A real empty list is not another unknown. The exhausted poll comes back in about an hour. */
   private async resetStreak(booking: DeclineBooking, token: string): Promise<boolean> {
-    const kept = Math.max(1, (booking.refund_attempts ?? 1) - 1);
-    await this.restoreAttempt(booking, token, 0, nextRefundAt(kept));
+    const next = new Date(Date.now() + FEDAPAY_EXHAUSTED_POLL_MS).toISOString();
+    await this.restoreAttempt(booking, token, 0, next);
     return false;
   }
 
@@ -1189,9 +1194,15 @@ export class RentalPickupDeclineService implements OnModuleInit {
     this.passConfig = {
       lagMs: this.minutesFloor(lag, RentalPickupDeclineService.fedapayListLagMs),
       confirmMs: this.minutesFloor(gap, RentalPickupDeclineService.fedapayConfirmMs),
-      noticeAfter: notice == null ? RentalPickupDeclineService.unknownNoticeAfter : notice,
+      noticeAfter: this.noticeBound(notice),
     };
     return this.passConfig;
+  }
+
+  /** The notice count stays between 1 and 100. A missing row uses the code default. */
+  private noticeBound(value: number | null): number {
+    if (value == null) return RentalPickupDeclineService.unknownNoticeAfter;
+    return Math.min(100, Math.max(1, value));
   }
 
   /** Below 10 minutes or above 24 hours is clamped. A missing row uses the code default. */

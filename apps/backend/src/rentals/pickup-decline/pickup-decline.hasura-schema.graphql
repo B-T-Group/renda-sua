@@ -249,10 +249,15 @@ input application_configurations_bool_exp {
   country_code: string_comparison_exp
 }
 type application_configurations { number_value: numeric }
+input application_configurations_order_by { created_at: order_by }
 
 type query_root {
   rental_bookings_by_pk(id: uuid!): rental_bookings
-  application_configurations(where: application_configurations_bool_exp, limit: Int): [application_configurations!]!
+  application_configurations(
+    where: application_configurations_bool_exp
+    order_by: application_configurations_order_by
+    limit: Int
+  ): [application_configurations!]!
   rental_bookings(
     where: rental_bookings_bool_exp
     order_by: rental_bookings_order_by

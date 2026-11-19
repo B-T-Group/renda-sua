@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { Payout } from 'fedapay';
-import { FedaPayService } from '../../mobile-payments/providers/fedapay.service';
+import { FedaPayService, resetFedapayListSpend } from '../../mobile-payments/providers/fedapay.service';
 
 jest.mock('fedapay', () => ({
   FedaPay: { setApiKey: jest.fn(), setEnvironment: jest.fn(), getApiKey: jest.fn(), getEnvironment: jest.fn() },
@@ -243,6 +243,7 @@ describe('FedaPay decline storm', () => {
     store.seq = 9000;
     store.hidden = new Set();
     store.plans = new Map();
+    resetFedapayListSpend();
     const moduleRef = await Test.createTestingModule({
       providers: [
         FedaPayService,
@@ -292,4 +293,108 @@ describe('FedaPay decline storm', () => {
     expect(text).toContain('extraPayouts=0');
     expect(text).toContain('pending:0');
   });
+
+  it('keeps a filter-ignored multi-page list at zero double pays and zero orphans', async () => {
+    const lines: string[] = [];
+    for (const mode of ['present', 'absent', 'understated', 'shrinking'] as const) {
+      lines.push(await pagedCase(service, mode));
+    }
+    const text = lines.join('\n');
+    const dir = '/opt/cursor/artifacts';
+    if (existsSync(dir) || existsSync('/opt/cursor')) {
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(`${dir}/fedapay-storm-pages.txt`, `${text}\n`);
+    }
+    expect(text).not.toContain('doublePaid=1');
+    expect(text).not.toContain('orphans=1');
+    lines.forEach((line) => {
+      expect(line).toContain('doublePaid=0');
+      expect(line).toContain('orphans=0');
+    });
+  });
 });
+
+type PageMode = 'present' | 'absent' | 'understated' | 'shrinking';
+
+function pagedMeta(page: number, pages: number, total: number | null, next: number | null) {
+  const meta: Record<string, unknown> = { current_page: page, total_pages: pages, next_page: next, per_page: 1 };
+  if (total != null) meta.total_count = total;
+  return meta;
+}
+
+async function pagedCase(service: FedaPayService, mode: PageMode): Promise<string> {
+  store.rows = [];
+  store.seq = 9100;
+  resetFedapayListSpend();
+  const external = `rental-decline-storm-${mode}`;
+  if (mode === 'present') store.rows.push({ id: ++store.seq, status: 'pending', externalId: external, sends: 0 });
+  if (mode === 'absent' || mode === 'understated') {
+    store.rows.push({ id: ++store.seq, status: 'sent', externalId: external, sends: 1 });
+  }
+  let calls = 0;
+  (Payout.all as jest.Mock).mockImplementation(async (query: { page?: number }) => {
+    calls += 1;
+    return pagedBody(mode, query.page ?? 1, calls, external);
+  });
+  (Payout.create as jest.Mock).mockClear();
+  const result = await service.withdraw({
+    payee: '+22878123456',
+    amount: 5000,
+    externalId: external,
+    description: 'Decline refund',
+    callback: 'https://test.com/callback',
+    channel: 'togocel',
+    markedResend: true,
+    trustEmptyList: true,
+    strictList: true,
+  });
+  const created = (Payout.create as jest.Mock).mock.calls.length;
+  const credited = !result.success && !result.ambiguous;
+  const sentRows = store.rows.filter((row) => row.externalId === external && row.sends > 0).length;
+  const doublePaid = credited && sentRows > 0 ? 1 : 0;
+  const orphans = store.rows.filter((row) => row.status === 'pending' && row.sends === 0).length;
+  return `${mode} created=${created} doublePaid=${doublePaid} orphans=${orphans}`;
+}
+
+function pagedBody(mode: PageMode, page: number, calls: number, external: string) {
+  if (mode === 'present') return presentPage(page, external);
+  if (mode === 'absent') return absentPage(page, external);
+  if (mode === 'shrinking') return shrinkingPage(page, calls, external);
+  return claimedLastPage(external);
+}
+
+function absentPage(page: number, external: string) {
+  const row = page === 1
+    ? { id: 11, status: 'canceled', custom_metadata: { externalId: external } }
+    : { id: store.rows[0].id, status: 'sent', custom_metadata: { externalId: external } };
+  return { payouts: [row], meta: pagedMeta(page, 2, null, page === 1 ? 2 : null) };
+}
+
+function presentPage(page: number, external: string) {
+  const rows = [
+    { id: 1, status: 'sent', custom_metadata: { externalId: 'other' } },
+    { id: 2, status: 'canceled', custom_metadata: { externalId: 'other' } },
+    { id: store.rows[0].id, status: 'pending', custom_metadata: { externalId: external } },
+  ];
+  return { payouts: [rows[page - 1]], meta: pagedMeta(page, 3, 3, page < 3 ? page + 1 : null) };
+}
+
+function claimedLastPage(external: string) {
+  return {
+    payouts: [{ id: 11, status: 'canceled', custom_metadata: { externalId: external } }],
+    meta: pagedMeta(1, 1, null, null),
+  };
+}
+
+function shrinkingPage(page: number, calls: number, external: string) {
+  if (calls > 2) {
+    return {
+      payouts: [{ id: 11, status: 'canceled', custom_metadata: { externalId: external } }],
+      meta: pagedMeta(1, 1, 1, null),
+    };
+  }
+  const row = page === 1
+    ? { id: 11, status: 'canceled', custom_metadata: { externalId: external } }
+    : { id: 12, status: 'failed', custom_metadata: { externalId: external } };
+  return { payouts: [row], meta: pagedMeta(page, 2, 2, page === 1 ? 2 : null) };
+}

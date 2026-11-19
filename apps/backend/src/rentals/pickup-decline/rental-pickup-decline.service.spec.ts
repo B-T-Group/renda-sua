@@ -1527,6 +1527,40 @@ describe('RentalPickupDeclineService', () => {
     expect(wait).toBeLessThan(90_000);
   });
 
+  it('grows the resend unknown streak and notifies at the configured count', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_attempts: 0,
+      refund_unknown_streak: 0,
+      refund_send_attempted_at: new Date().toISOString(),
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      fedapayMinutes: { rentals_fedapay_unknown_notice_after: 3 },
+      fedapayExternal: { kind: 'unknown', status: null, id: null, provableEmpty: false },
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(1);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(50_000);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeLessThan(70_000);
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(2);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(110_000);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeLessThan(130_000);
+    expect(run.calls.support).toBe(0);
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_unknown_streak).toBe(3);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeGreaterThan(220_000);
+    expect(Date.parse(String(row.refund_next_at)) - Date.now()).toBeLessThan(260_000);
+    expect(run.calls.support).toBe(1);
+    expect(run.calls.supportPayload?.outcome).toBe('unknown_streak');
+  });
+
   it('resets the poll streak when an exhausted row sees an empty list or a match', async () => {
     const empty = pendingRefund({
       refund_provider: 'fedapay',
@@ -1543,6 +1577,9 @@ describe('RentalPickupDeclineService', () => {
     expect(await run.service.reconcilePending()).toBe(0);
     expect(empty.refund_unknown_streak).toBe(0);
     expect(empty.refund_attempts).toBe(5);
+    const wait = Date.parse(String(empty.refund_next_at)) - Date.now();
+    expect(wait).toBeGreaterThan(50 * 60_000);
+    expect(wait).toBeLessThan(70 * 60_000);
     const matched = pendingRefund({
       refund_provider: 'fedapay',
       refund_provider_ref: null,

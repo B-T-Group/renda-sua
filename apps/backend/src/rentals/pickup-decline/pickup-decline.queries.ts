@@ -345,6 +345,7 @@ export const FEDAPAY_REFUND_CONFIG = `
   query FedapayRefundConfig($key: String!) {
     application_configurations(
       where: { config_key: { _eq: $key }, status: { _eq: "active" }, country_code: { _is_null: true } }
+      order_by: { created_at: asc }
       limit: 1
     ) { number_value }
   }

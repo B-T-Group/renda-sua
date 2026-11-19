@@ -45,6 +45,6 @@ Do not enable the decline-refund flags in production until each of these is done
 - MTN sandbox: confirm an X-Reference-Id resend, the 409 on a duplicate reference, and a forced timeout after the provider has accepted the request.
 - FreemoPay sandbox: confirm lookup by the stable external id, and a forced timeout after the provider has accepted the request.
 - DEV soak with the flags on: payouts in the provider dashboards match the `refund_pending` rows, and no `refund_pending` row is older than its retry window.
-- Alerts: age of `refund_pending` rows, unknown-lookup streaks, manual-check and exhausted counts, and more than one payout for the same external id.
-- The lag and confirm keys are locked between 10 minutes and 24 hours by a database check, the admin endpoint, and the code. Only a superuser can change the lag, confirm, and unknown-notice keys. `platform.config.application` is not enough.
+- Alerts: age of `refund_pending` rows, unknown-lookup streaks, manual-check and exhausted counts, more than one payout for the same external id, and FedaPay `Payout.all` volume per booking.
+- The lag and confirm keys are locked between 10 minutes and 24 hours by a database check, the admin endpoint, and the code. The unknown-notice count is locked between 1 and 100. Only a superuser can change those keys, including a rename into one of them. `platform.config.application` is not enough. A global key cannot be inserted twice.
 - Finance and support have walked this runbook: a duplicate payout is canceled and not sent, an exhausted row with no payout stays a 409 for finance to act on, and a dashboard send on an exhausted FedaPay row closes within about an hour.

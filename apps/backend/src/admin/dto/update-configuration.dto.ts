@@ -13,6 +13,15 @@ import {
 
 export class UpdateConfigurationDto {
   @ApiProperty({
+    description: 'Configuration key. Renaming into a FedaPay timing key is a superuser change.',
+    example: 'rentals_fedapay_list_lag_minutes',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  config_key?: string;
+
+  @ApiProperty({
     description: 'Configuration name',
     example: 'Base Delivery Fee',
     required: false,

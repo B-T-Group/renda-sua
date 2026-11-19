@@ -131,6 +131,16 @@ export interface FedaPayExternalMatch {
 
 type PayoutRow = { id?: number | string; status?: string; custom_metadata?: { externalId?: string } };
 
+type StrictWalk = {
+  match: FedaPayExternalMatch;
+  complete: boolean;
+  pages: number;
+  total: number | null;
+  digest: string;
+};
+
+type WalkState = { page: number; seen: number; pages: number; total: number | null };
+
 const PAID_PAYOUT = new Set(['sent', 'approved', 'successful', 'success', 'transferred']);
 const OPEN_PAYOUT = new Set(['pending', 'started', 'processing', 'scheduled']);
 const DEAD_PAYOUT = new Set(['failed', 'failure', 'declined', 'canceled', 'cancelled', 'rejected']);
@@ -145,12 +155,35 @@ function emptyLook(): FedaPayExternalMatch {
 
 /** Hard stop so a missing page cursor cannot walk the payout list forever. */
 export const FEDAPAY_LIST_PAGE_CAP = 20;
+/** One booking tick may list this many pages, across the lookup and the withdraw. */
+export const FEDAPAY_LIST_CALL_BUDGET = 20;
+/** Shared by the walks in one tick. Two walks stay inside the two-minute claim. */
+export const FEDAPAY_LIST_WALK_MS = 90_000;
+const FEDAPAY_LIST_TICK_MS = 45_000;
+
+type ListSpend = { start: number; used: number };
+const listSpend = new Map<string, ListSpend>();
+
+/** Tests start a tick with a fresh list budget. Production ticks are separated by the retry wait. */
+export function resetFedapayListSpend(): void {
+  listSpend.clear();
+}
+
+function tickSpend(externalId: string, now: number): ListSpend {
+  const row = listSpend.get(externalId);
+  if (!row || now - row.start > FEDAPAY_LIST_TICK_MS) {
+    const fresh = { start: now, used: 0 };
+    listSpend.set(externalId, fresh);
+    return fresh;
+  }
+  return row;
+}
 
 /** A page is complete only when meta says there is no next page. A paid match still wins. */
 export function classifyFedapayPayouts(existing: unknown, externalId: string): FedaPayExternalMatch {
   const rows = payoutRows(existing);
   if (!rows) return unknownLook();
-  return classifyStrictRows(rows, externalId, listPageEnded(existing, rows.length));
+  return classifyStrictRows(rows, externalId, listPageEnded(existing, uniqueRowCount(rows)));
 }
 
 export function classifyStrictRows(rows: PayoutRow[], externalId: string, complete: boolean): FedaPayExternalMatch {
@@ -162,12 +195,22 @@ export function classifyStrictRows(rows: PayoutRow[], externalId: string, comple
   return emptyLook();
 }
 
-/** `next_page: null` is the positive last page. An empty body with no meta is the whole list. */
+/** `next_page: null` and a total that matches every distinct row walked. An empty body with no meta is the whole list. */
 export function listPageEnded(existing: unknown, rowCount: number): boolean {
   const meta = readMeta(existing);
   if (!meta) return rowCount === 0;
-  if (!explicitLastPage(meta)) return false;
-  return !earlierPage(meta) && !shortOfTotal(meta, rowCount);
+  if (!explicitLastPage(meta) || earlierPage(meta)) return false;
+  const total = listedTotal(meta);
+  return total != null && total === rowCount;
+}
+
+export function uniqueRowCount(rows: PayoutRow[]): number {
+  return new Set(rows.map((row, index) => rowKey(row, index))).size;
+}
+
+export function listDigest(rows: PayoutRow[]): string {
+  const keys = rows.map((row, index) => `${rowKey(row, index)}:${String(row.status ?? '').toLowerCase()}`);
+  return [...new Set(keys)].sort().join('|');
 }
 
 /** The next page to request. Null when meta does not name one. */
@@ -233,9 +276,18 @@ function earlierPage(meta: Record<string, unknown>): boolean {
   return Number.isFinite(pages) && pages >= 1 && current < pages;
 }
 
-function shortOfTotal(meta: Record<string, unknown>, rowCount: number): boolean {
+function listedTotal(meta: Record<string, unknown>): number | null {
   const total = num(meta.total ?? meta.total_count ?? meta.totalCount);
-  return Number.isFinite(total) && total > rowCount;
+  return Number.isFinite(total) ? total : null;
+}
+
+function rowKey(row: PayoutRow, index: number): string {
+  return row.id == null ? `n:${index}` : `id:${row.id}`;
+}
+
+function pageTotal(existing: unknown): number | null {
+  const meta = readMeta(existing);
+  return meta ? listedTotal(meta) : null;
 }
 
 function reportedPage(existing: unknown, requested: number): number {
@@ -630,38 +682,87 @@ export class FedaPayService implements OnModuleInit {
     }
   }
 
-  /** Decline lists walk every page. A paid match stops the walk. The cap stays unknown. */
+  /** Decline lists walk every page. A paid match stops the walk. A multi-page credit needs a second walk. */
   private async strictListLook(externalId: string): Promise<FedaPayExternalMatch> {
+    const first = await this.collectStrict(externalId);
+    if (!this.needsSecondWalk(first)) return first.match;
+    const second = await this.collectStrict(externalId);
+    return this.confirmedCredit(first, second);
+  }
+
+  private needsSecondWalk(walk: StrictWalk): boolean {
+    return walk.complete && walk.pages > 1 && walk.match.status === 'failed';
+  }
+
+  private confirmedCredit(first: StrictWalk, second: StrictWalk): FedaPayExternalMatch {
+    if (second.match.found && second.match.status !== 'failed') return second.match;
+    if (this.sameWalk(first, second)) return first.match;
+    return unknownLook();
+  }
+
+  private sameWalk(first: StrictWalk, second: StrictWalk): boolean {
+    const sameTotal = first.total != null && first.total === second.total;
+    return first.complete && second.complete && sameTotal && first.digest === second.digest;
+  }
+
+  private async collectStrict(externalId: string): Promise<StrictWalk> {
     const rows: PayoutRow[] = [];
-    let page = 1;
-    let seen = 0;
+    const state: WalkState = { page: 1, seen: 0, pages: 0, total: null };
+    const began = Date.now();
     for (let step = 0; step < FEDAPAY_LIST_PAGE_CAP; step += 1) {
-      const turned = await this.readStrictPage(externalId, page, seen, rows);
-      if (turned.done) return turned.match;
-      seen = turned.seen;
-      page = turned.page;
+      const turn = await this.readStrictPage(externalId, state, rows, began);
+      if (turn.done) return this.walkResult(rows, externalId, turn.complete, state);
     }
-    return classifyStrictRows(rows, externalId, false);
+    return this.walkResult(rows, externalId, false, state);
+  }
+
+  private walkResult(rows: PayoutRow[], externalId: string, complete: boolean, state: WalkState): StrictWalk {
+    const match = classifyStrictRows(rows, externalId, complete);
+    return { match, complete, pages: state.pages, total: state.total, digest: listDigest(rows) };
   }
 
   private async readStrictPage(
     externalId: string,
-    page: number,
-    seen: number,
-    rows: PayoutRow[]
-  ): Promise<{ done: true; match: FedaPayExternalMatch } | { done: false; seen: number; page: number }> {
-    const body = await this.liveLookup('payout', () => Payout.all(this.listQuery(externalId, page)));
+    state: WalkState,
+    rows: PayoutRow[],
+    began: number
+  ): Promise<{ done: boolean; complete: boolean }> {
+    if (!this.allowListCall(externalId, began)) return { done: true, complete: false };
+    const body = await this.liveLookup('payout', () => Payout.all(this.listQuery(externalId, state.page)));
+    if (!this.acceptPage(body, state, rows)) return { done: true, complete: false };
+    if (!classifyStrictRows(rows, externalId, false).unknown) return { done: true, complete: false };
+    if (listPageEnded(body, uniqueRowCount(rows))) return { done: true, complete: true };
+    const next = nextListPage(body, state.seen);
+    if (next == null) return { done: true, complete: false };
+    state.page = next;
+    return { done: false, complete: false };
+  }
+
+  private acceptPage(body: unknown, state: WalkState, rows: PayoutRow[]): boolean {
     const pageRows = payoutRows(body);
-    if (!pageRows) return { done: true, match: classifyStrictRows(rows, externalId, false) };
-    const current = reportedPage(body, page);
-    if (current <= seen) return { done: true, match: classifyStrictRows(rows, externalId, false) };
+    const current = reportedPage(body, state.page);
+    if (!pageRows || current <= state.seen || this.totalsSplit(state, body)) return false;
+    const total = pageTotal(body);
+    if (total != null) state.total = total;
     rows.push(...pageRows);
-    const paid = classifyStrictRows(rows, externalId, false);
-    if (!paid.unknown) return { done: true, match: paid };
-    if (listPageEnded(body, pageRows.length)) return { done: true, match: classifyStrictRows(rows, externalId, true) };
-    const next = nextListPage(body, current);
-    if (next == null) return { done: true, match: classifyStrictRows(rows, externalId, false) };
-    return { done: false, seen: current, page: next };
+    state.seen = current;
+    state.pages += 1;
+    return true;
+  }
+
+  private totalsSplit(state: WalkState, body: unknown): boolean {
+    const total = pageTotal(body);
+    return state.total != null && total != null && state.total !== total;
+  }
+
+  /** The call budget and the clock are shared by every walk for this booking in the tick. */
+  private allowListCall(externalId: string, began: number): boolean {
+    const now = Date.now();
+    if (now - began >= FedaPayService.listWalkMs) return false;
+    const row = tickSpend(externalId, now);
+    if (row.used >= FedaPayService.listCallBudget) return false;
+    row.used += 1;
+    return true;
   }
 
   private listQuery(externalId: string, page: number): Record<string, string | number> {
@@ -1007,6 +1108,8 @@ export class FedaPayService implements OnModuleInit {
    * after-credit path: alert; ambiguous payout: stays pending for polling).
    */
   static liveLookupTimeoutMs = FEDAPAY_LIVE_LOOKUP_TIMEOUT_MS;
+  static listCallBudget = FEDAPAY_LIST_CALL_BUDGET;
+  static listWalkMs = FEDAPAY_LIST_WALK_MS;
 
   private async liveLookup<T>(kind: 'transaction' | 'payout', lookup: () => Promise<T>): Promise<T> {
     const ms = FedaPayService.liveLookupTimeoutMs;

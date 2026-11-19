@@ -302,23 +302,39 @@ export class ConfigurationsService {
     }
   }
 
-  /** Lag, confirm, and the notice threshold are superuser-only. The windows stay inside 10 minutes to 24 hours. */
+  /** The existing key and the key being written are both watched. A rename into a timing key counts. */
   private async rejectFedapayFloor(
     existing: ApplicationConfiguration,
     update: UpdateConfigurationDto,
     actor?: string
   ): Promise<void> {
-    const key = existing.config_key;
-    const watched = key === 'rentals_fedapay_list_lag_minutes'
+    const nextKey = update.config_key ?? existing.config_key;
+    if (!this.fedapayWatched(existing.config_key) && !this.fedapayWatched(nextKey)) return;
+    await this.requireFedapaySuperuser(actor);
+    this.rejectFedapayValue(nextKey, update.number_value);
+  }
+
+  private fedapayWatched(key?: string): boolean {
+    return key === 'rentals_fedapay_list_lag_minutes'
       || key === 'rentals_fedapay_list_confirm_minutes'
       || key === 'rentals_fedapay_unknown_notice_after';
-    if (!watched) return;
-    const superuser = Boolean(actor && this.rbac && await this.rbac.hasRole(actor, PlatformRoles.SUPERUSER));
-    if (!superuser) throw new ForbiddenException('Only a superuser can change FedaPay list timing');
-    const window = key !== 'rentals_fedapay_unknown_notice_after';
-    const value = update.number_value;
-    if (!window || value == null || (value >= 10 && value <= 24 * 60)) return;
+  }
+
+  private async requireFedapaySuperuser(actor?: string): Promise<void> {
+    const allowed = Boolean(actor && this.rbac && await this.rbac.hasRole(actor, PlatformRoles.SUPERUSER));
+    if (!allowed) throw new ForbiddenException('Only a superuser can change FedaPay list timing');
+  }
+
+  private rejectFedapayValue(key: string, value?: number): void {
+    if (value == null) return;
+    if (key === 'rentals_fedapay_unknown_notice_after') return this.rejectNotice(value);
+    if (value >= 10 && value <= 24 * 60) return;
     throw new BadRequestException('FedaPay list lag and confirm gap must be between 10 minutes and 24 hours');
+  }
+
+  private rejectNotice(value: number): void {
+    if (value >= 1 && value <= 100) return;
+    throw new BadRequestException('FedaPay unknown notice must be between 1 and 100');
   }
 
   async deleteConfiguration(id: string): Promise<boolean> {
