@@ -26,6 +26,8 @@ export interface MomoRefundResult {
   unsent?: boolean;
   /** True only for a connect failure. A read timeout stays false. */
   connectFailure?: boolean;
+  /** Pending, and the caller must not store a fallback reference. */
+  blankRef?: boolean;
 }
 
 @Injectable()
@@ -124,9 +126,15 @@ export class RentalMomoRefundService {
       callback: this.callbackUrl('fedapay'),
       channel: request.channel === 'moov_tg' ? 'moov_tg' : 'togocel',
     });
-    const ref = sent.transactionId ?? sent.reference ?? null;
-    if (!sent.success && !sent.ambiguous) return this.failed('fedapay', ref);
-    return this.pending('fedapay', ref, false);
+    if (!sent.success && !sent.ambiguous) {
+      return this.failed('fedapay', sent.transactionId ?? sent.reference ?? null);
+    }
+    if (!sent.transactionId) return this.pendingBlank('fedapay');
+    return this.pending('fedapay', sent.transactionId, false);
+  }
+
+  private pendingBlank(provider: string): MomoRefundResult {
+    return { ...this.pending(provider, null, false), blankRef: true };
   }
 
   private async sendFreemopay(request: MomoRefundRequest, externalId: string): Promise<MomoRefundResult> {

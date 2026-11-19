@@ -88,6 +88,20 @@ describe('RentalMomoRefundService', () => {
     expect(result.providerRef).toBe('free-ref');
   });
 
+  it('leaves the FedaPay reference empty when create is ambiguous and no payout id came back', async () => {
+    const { api, fedapay } = service({
+      fedapay: {
+        withdraw: jest.fn(async () => ({ success: false, ambiguous: true, status: 'pending' })),
+        checkPayoutStatus: jest.fn(),
+      },
+    });
+    const result = await api.refund({ ...request, provider: 'fedapay', currency: 'XOF' });
+    expect(result.status).toBe('refund_pending');
+    expect(result.providerRef).toBeNull();
+    expect(result.blankRef).toBe(true);
+    expect(fedapay.checkPayoutStatus).not.toHaveBeenCalled();
+  });
+
   it('keeps an ambiguous FedaPay payout pending', async () => {
     const { api } = service({ fedapay: { withdraw: jest.fn(async () => ({ success: false, ambiguous: true, transactionId: 'feda-ref' })), checkPayoutStatus: jest.fn(async () => ({ status: 'pending' })) } });
     const result = await api.refund({ ...request, provider: 'fedapay' });

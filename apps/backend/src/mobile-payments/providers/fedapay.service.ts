@@ -515,18 +515,19 @@ export class FedaPayService implements OnModuleInit {
   private async afterCreateError(error: any, externalId?: string): Promise<FedaPayWithdrawalResponse> {
     if (this.clientStatus(error) || !externalId) return this.failedWithdraw(error);
     const looked = await this.findPayoutByExternalId(externalId);
-    if (looked.found || looked.unknown) return this.pendingWithdraw(externalId, looked);
+    if (looked.unknown) return this.unknownWithdraw();
+    if (looked.found && looked.id) {
+      return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId);
+    }
     return this.failedWithdraw(error);
   }
 
-  private pendingWithdraw(externalId: string, looked: { status: string | null; id: string | null; unknown: boolean }): FedaPayWithdrawalResponse {
-    const status = !looked.unknown && looked.status && looked.status !== 'failed' ? looked.status : 'pending';
+  /** The create may have landed, but the lookup did not answer. Store no reference. */
+  private unknownWithdraw(): FedaPayWithdrawalResponse {
     return {
-      success: !looked.unknown,
+      success: false,
       ambiguous: true,
-      transactionId: looked.id ?? undefined,
-      reference: externalId,
-      status,
+      status: 'pending',
       message: normalizeProviderMessage(null, 'Payout created; awaiting confirmation'),
     };
   }

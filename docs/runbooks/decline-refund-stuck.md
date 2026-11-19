@@ -16,11 +16,18 @@ Those rows need this procedure. Do not clear `refund_send_attempted_at`, `refund
 1. Open the booking in admin and copy `refund_provider`, `refund_provider_ref`, `refund_sent_at`, and `refund_send_attempted_at`.
 2. Search the provider dashboard with that provider's key:
    - FedaPay: custom metadata external id `rental-decline-<booking id>`.
-   - MTN: X-Reference-Id. That is the stable refund UUID, not the booking id. Copy it from `refund_provider_ref` when the reference is that UUID.
+   - MTN: X-Reference-Id. That is the stable refund UUID, not the booking id. Copy it from `refund_provider_ref` when the reference is that UUID. When the row has no reference, derive it from the booking id. It is the SHA-256 of `rental-decline:<booking id>`, formatted as a UUID (version nibble `4`, variant nibble `a`):
+
+     ```bash
+     python3 -c "import hashlib,sys; b=sys.argv[1]; h=hashlib.sha256(('rental-decline:'+b).encode()).hexdigest(); print('-'.join([h[0:8],h[8:12],'4'+h[13:16],'a'+h[17:20],h[20:32]]))" BOOKING_ID
+     ```
+
    - FreemoPay: the stored `FP-` reference. When none is stored, search the same stable refund UUID.
 3. Record what the dashboard shows: success, failed, pending, or no payout. Keep a screenshot with the booking number.
 
 A row with a send-attempt marker and no provider reference is resent by the refund cron. Wait one cron cycle before escalating that row.
+
+FedaPay shows a pending payout for the booking (created, never sent): finance sends that existing payout from the dashboard. Do not create another payout and do not credit the wallet. The next poll closes the row when that payout is sent.
 
 ## Then
 

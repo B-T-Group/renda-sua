@@ -651,31 +651,38 @@ describe('FedaPayService', () => {
       expect(result.transactionId).toBeUndefined();
     });
 
-    it('keeps a created payout pending when create times out after the payout exists', async () => {
+    it('sends the payout it finds when create times out, and does not create a second one', async () => {
       const { Payout } = require('fedapay');
+      const sendNow = jest.fn().mockResolvedValue(undefined);
       Payout.all
         .mockResolvedValueOnce({ payouts: [] })
         .mockResolvedValueOnce({ payouts: [{ id: 91, status: 'pending', custom_metadata: { externalId: 'n1-ref' } }] });
       Payout.create.mockRejectedValue(Object.assign(new Error('socket timeout'), { code: 'ETIMEDOUT' }));
+      Payout.retrieve.mockResolvedValue({ id: 91, status: 'pending', sendNow });
 
       const result = await service.withdraw(withdrawReq);
 
+      expect(Payout.create).toHaveBeenCalledTimes(1);
+      expect(sendNow).toHaveBeenCalledTimes(1);
       expect(result.success).toBe(true);
-      expect(result.ambiguous).toBe(true);
-      expect(result.status).toBe('pending');
       expect(result.transactionId).toBe('91');
+      expect(result.status).toBe('pending');
     });
 
-    it('stays pending when a 502 create cannot be looked up', async () => {
+    it('returns no reference when a 502 create cannot be looked up', async () => {
       const { Payout } = require('fedapay');
       Payout.all.mockResolvedValueOnce({ payouts: [] }).mockRejectedValueOnce(new Error('lookup down'));
       Payout.create.mockRejectedValue(Object.assign(new Error('bad gateway'), { status: 502 }));
 
       const result = await service.withdraw(withdrawReq);
 
+      expect(Payout.create).toHaveBeenCalledTimes(1);
+      expect(Payout.retrieve).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect(result.ambiguous).toBe(true);
       expect(result.status).toBe('pending');
+      expect(result.transactionId).toBeUndefined();
+      expect(result.reference).toBeUndefined();
     });
   });
 

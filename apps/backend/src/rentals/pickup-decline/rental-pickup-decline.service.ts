@@ -368,13 +368,13 @@ export class RentalPickupDeclineService implements OnModuleInit {
   private async settleResult(
     booking: DeclineBooking,
     ledger: Ledger,
-    result: { status: RefundStatus; provider: string; providerRef: string | null; unsupported: boolean; unsent?: boolean },
+    result: { status: RefundStatus; provider: string; providerRef: string | null; unsupported: boolean; unsent?: boolean; blankRef?: boolean },
     referenceId: string,
     token: string
   ): Promise<RefundStatus> {
     if (result.unsupported) return this.holdUnsupported(booking, ledger, token);
     if (result.status === 'failed') return this.failOwned(booking, ledger.amount, result.providerRef ?? referenceId, token);
-    const ref = result.providerRef ?? referenceId;
+    const ref = result.blankRef ? null : (result.providerRef ?? referenceId);
     const wrote = await this.writeOwned(booking.id, token, result.status, result.provider, ref);
     if (!wrote) await this.keepProviderRef(booking.id, referenceId, ref);
     if (wrote && result.status === 'refunded') await this.tellRenter(booking, 'sent');

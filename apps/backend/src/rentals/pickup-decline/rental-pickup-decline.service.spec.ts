@@ -1236,6 +1236,26 @@ describe('RentalPickupDeclineService', () => {
     expect(cleared.state.refund_send_attempted_at).toBeFalsy();
   });
 
+  it('keeps a FedaPay attempt marker and stores no reference when the create lookup is unknown', async () => {
+    const row = pendingRefund({
+      refund_provider: 'fedapay',
+      refund_provider_ref: null,
+      refund_sent_at: null,
+      refund_send_attempted_at: '2026-11-18T00:00:00.000Z',
+      currency: 'XOF',
+    });
+    const run = harness({
+      pending: [row],
+      collects: [{ amount: 100, currency: 'XOF', provider: 'fedapay', customer_phone: '22890000000', transaction_id: 'tx' }],
+      refund: { status: 'refund_pending', provider: 'fedapay', providerRef: null, unsupported: false, blankRef: true },
+    });
+    expect(await run.service.reconcilePending()).toBe(0);
+    expect(row.refund_provider_ref).toBeNull();
+    expect(row.refund_send_attempted_at).toBe('2026-11-18T00:00:00.000Z');
+    expect(row.refund_status).toBe('refund_pending');
+    expect(run.calls.restore).toBe(0);
+  });
+
   it('resends a row the cron loaded with its send-attempt marker', async () => {
     expect(PENDING_REFUNDS).toContain('refund_send_attempted_at');
     for (const provider of ['mtn', 'freemopay', 'fedapay']) {
