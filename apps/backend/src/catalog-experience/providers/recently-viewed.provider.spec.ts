@@ -133,4 +133,81 @@ describe('RecentlyViewedProvider surface filter', () => {
       provider.build(context({ surface: 'export' }))
     ).resolves.toBeNull();
   });
+
+  it('keeps a padded cooked-food name and drops a near miss', async () => {
+    const { provider } = createProvider([
+      listing({
+        id: 'padded',
+        item_id: 'padded-item',
+        item: {
+          name: 'Jollof',
+          item_sub_category: { item_category: { name: '  Restaurant & Cooked Food  ' } },
+        },
+      }),
+      listing({
+        id: 'near',
+        item_id: 'near-item',
+        item: {
+          name: 'Snack',
+          item_sub_category: { item_category: { name: 'Restaurant' } },
+        },
+      }),
+    ]);
+
+    const module = await provider.build(context({ surface: 'food' }));
+    expect(module?.products.map((row) => row.id)).toEqual(['padded']);
+  });
+
+  it('matches an export market in any case, and keeps every export when the country is blank', async () => {
+    const rows = [
+      listing({
+        id: 'cm',
+        item_id: 'cm-item',
+        item: { name: 'Tea', export_available: true, export_markets: [{ country_code: ' cm ' }] },
+      }),
+      listing({
+        id: 'tg',
+        item_id: 'tg-item',
+        item: { name: 'Coffee', export_available: true, export_markets: [{ country_code: 'TG' }] },
+      }),
+      listing({
+        id: 'empty-markets',
+        item_id: 'empty-item',
+        item: { name: 'Cocoa', export_available: true, export_markets: [] },
+      }),
+      listing({
+        id: 'local',
+        item_id: 'local-item',
+        item: { name: 'Local', export_available: false },
+      }),
+    ];
+    const { provider } = createProvider(rows);
+    const scoped = await provider.build(context({ surface: 'export', country: 'CM' }));
+    expect(scoped?.products.map((row) => row.id)).toEqual(['cm']);
+    const open = await provider.build(context({ surface: 'export', country: '  ' }));
+    expect(open?.products.map((row) => row.id)).toEqual(['cm', 'tg', 'empty-markets']);
+  });
+
+  it('asks for each viewed item once and skips a row with no item', async () => {
+    const hasura = {
+      executeQuery: jest.fn().mockResolvedValue({
+        item_view_events: [
+          { business_inventory: { item_id: 'a' } },
+          { business_inventory: null },
+          { business_inventory: { item_id: 'a' } },
+          { business_inventory: { item_id: 'b' } },
+        ],
+      }),
+    };
+    const inventory = {
+      getBestListingsForCatalogItemIds: jest.fn().mockResolvedValue([
+        listing({ id: 'la', item_id: 'a' }),
+        listing({ id: 'lb', item_id: 'b' }),
+      ]),
+    };
+    const provider = new RecentlyViewedProvider(hasura as any, inventory as any);
+    const module = await provider.build(context({ surface: 'all' }));
+    expect(inventory.getBestListingsForCatalogItemIds).toHaveBeenCalledWith(['a', 'b']);
+    expect(module?.products.map((row) => row.id)).toEqual(['la', 'lb']);
+  });
 });
