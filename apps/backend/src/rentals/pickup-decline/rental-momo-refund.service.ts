@@ -21,6 +21,8 @@ export interface MomoRefundRequest {
   trustEmptyList?: boolean;
   /** When false, an all-dead FedaPay list stays unknown. */
   creditAged?: boolean;
+  /** Runs immediately before a FedaPay create or sendNow. */
+  beforeProviderSend?: () => Promise<boolean>;
 }
 
 export interface MomoRefundResult {
@@ -62,9 +64,13 @@ export class RentalMomoRefundService {
   }
 
   /** `missing` is a 404. `unknown` is a lookup that did not prove the payout is absent. */
-  async probeByExternalId(provider: string, externalId: string): Promise<RefundStatus | 'missing' | 'unknown'> {
+  async probeByExternalId(
+    provider: string,
+    externalId: string,
+    spendKey = externalId
+  ): Promise<RefundStatus | 'missing' | 'unknown'> {
     if (providerRefundPlan(provider) !== 'fedapay') return 'unknown';
-    const found = await this.fedapay.findPayoutByExternalId(externalId);
+    const found = await this.fedapay.findPayoutByExternalId(externalId, 'lookup', spendKey);
     if (found.unknown || (!found.provableEmpty && !found.found)) return 'unknown';
     if (!found.found) return 'missing';
     return mapRefundPoll(found.status);
@@ -145,6 +151,7 @@ export class RentalMomoRefundService {
       trustEmptyList: request.trustEmptyList !== false,
       strictList: true,
       creditAged: request.creditAged === true,
+      beforeProviderSend: request.beforeProviderSend,
     });
     if (!sent.success && !sent.ambiguous) {
       return this.failed('fedapay', sent.transactionId ?? sent.reference ?? null);

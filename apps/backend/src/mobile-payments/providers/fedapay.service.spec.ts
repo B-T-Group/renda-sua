@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
-import { FedaPayService, beginFedapayListTick, resetFedapayListSpend } from './fedapay.service';
+import { FedaPayService, beginFedapayListTick, fedapayListTick, resetFedapayListSpend } from './fedapay.service';
 
 // Mock the FedaPay SDK to avoid module loading issues
 jest.mock('fedapay', () => ({
@@ -1164,6 +1164,73 @@ describe('FedaPayService', () => {
       expect(opened.provableEmpty).toBe(true);
       expect(Payout.all).toHaveBeenCalledTimes(2);
       clock.mockRestore();
+    });
+
+    it('does not reset a live cron tick when an override lists on its own key', async () => {
+      const { Payout } = require('fedapay');
+      let now = 4_000_000;
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+      FedaPayService.listCallBudget = 2;
+      Payout.all.mockImplementation(async () => openPage(1));
+      const cronKey = 'rental-decline-b1';
+      beginFedapayListTick(cronKey, now);
+      await service.findPayoutByExternalId(cronKey);
+      const before = fedapayListTick(cronKey);
+      expect(before?.lookup).toBe(2);
+      now += 10_000;
+      const overrideKey = `override-${cronKey}`;
+      beginFedapayListTick(overrideKey, now);
+      await service.findPayoutByExternalId(cronKey, 'lookup', overrideKey);
+      expect(fedapayListTick(cronKey)).toEqual(before);
+      expect(fedapayListTick(overrideKey)?.lookup).toBe(2);
+      expect(fedapayListTick(overrideKey)?.start).toBe(now);
+      clock.mockRestore();
+    });
+
+    it('stamps before create when the create reply is lost', async () => {
+      const { Payout } = require('fedapay');
+      const stamped: string[] = [];
+      Payout.all.mockResolvedValue({
+        payouts: [],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 25, total_count: 0 },
+      });
+      Payout.create.mockRejectedValue(Object.assign(new Error('timeout'), { status: 504 }));
+      const result = await service.withdraw({
+        ...withdrawReq,
+        markedResend: true,
+        trustEmptyList: true,
+        strictList: true,
+        beforeProviderSend: async () => {
+          stamped.push('create');
+          return true;
+        },
+      });
+      expect(stamped).toEqual(['create']);
+      expect(Payout.create).toHaveBeenCalledTimes(1);
+      expect(result.transactionId).toBeUndefined();
+      expect(result.status).toBe('pending');
+    });
+
+    it('stamps before sendNow on a pending resend', async () => {
+      const { Payout } = require('fedapay');
+      const stamped: string[] = [];
+      const sendNow = jest.fn(async () => undefined);
+      Payout.all.mockResolvedValue({
+        payouts: [{ id: 77, status: 'pending', custom_metadata: { externalId: 'n1-ref' } }],
+        meta: { current_page: 1, total_pages: 1, next_page: null, per_page: 1, total_count: 1 },
+      });
+      Payout.retrieve.mockResolvedValue({ id: 77, status: 'pending', sendNow });
+      const result = await service.withdraw({
+        ...withdrawReq,
+        beforeProviderSend: async () => {
+          stamped.push('send');
+          return true;
+        },
+      });
+      expect(stamped).toEqual(['send']);
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(sendNow).toHaveBeenCalledTimes(1);
+      expect(result.transactionId).toBe('77');
     });
 
     it('skips retrieve and sendNow when fewer than 25s remain in the claim', async () => {

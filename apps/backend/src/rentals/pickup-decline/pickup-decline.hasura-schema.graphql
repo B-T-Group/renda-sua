@@ -6,7 +6,7 @@ scalar timestamptz
 scalar numeric
 scalar currency_enum
 
-enum order_by { asc desc }
+enum order_by { asc desc desc_nulls_last }
 enum rental_booking_status_enum { cancelled active reserved }
 enum payment_entity_enum { rental_booking }
 
@@ -145,6 +145,8 @@ input close_decline_refund_args {
   p_changed_by: uuid!
   p_notes: String!
   p_previous_status: String!
+  p_send_attempted_at: timestamptz
+  p_guard_open: Boolean!
 }
 type clients { id: uuid user_id: uuid user: users }
 type businesses { id: uuid user_id: uuid name: String }

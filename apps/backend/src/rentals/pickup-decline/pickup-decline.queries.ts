@@ -345,7 +345,7 @@ export const FEDAPAY_REFUND_CONFIG = `
   query FedapayRefundConfig($key: String!) {
     application_configurations(
       where: { config_key: { _eq: $key }, status: { _eq: "active" }, country_code: { _is_null: true } }
-      order_by: [{ updated_at: desc }, { created_at: desc }, { id: desc }]
+      order_by: [{ updated_at: desc_nulls_last }, { created_at: desc }, { id: desc }]
       limit: 1
     ) { number_value }
   }
@@ -411,6 +411,8 @@ export const CLOSE_DECLINE_REFUND = `
     $changedBy: uuid!
     $notes: String!
     $previousStatus: String!
+    $sendAttemptedAt: timestamptz
+    $guardOpen: Boolean!
   ) {
     close_decline_refund(args: {
       p_booking_id: $id
@@ -425,7 +427,22 @@ export const CLOSE_DECLINE_REFUND = `
       p_changed_by: $changedBy
       p_notes: $notes
       p_previous_status: $previousStatus
+      p_send_attempted_at: $sendAttemptedAt
+      p_guard_open: $guardOpen
     }) { id }
+  }
+`;
+
+export const RELEASE_CLAIM = `
+  mutation ReleaseDeclineRefundClaim($id: uuid!, $token: uuid!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        refund_claim_token: { _eq: $token }
+        refund_status: { _eq: "refund_pending" }
+      }
+      _set: { refund_claim_at: null, refund_claim_token: null }
+    ) { affected_rows }
   }
 `;
 

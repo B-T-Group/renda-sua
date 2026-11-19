@@ -55,6 +55,8 @@ export interface FedaPayWithdrawalRequest {
   strictList?: boolean;
   /** When false, an all-dead list is unknown until the send attempt is older than the lag. */
   creditAged?: boolean;
+  /** Runs immediately before create and sendNow. A false result skips the call. */
+  beforeProviderSend?: () => Promise<boolean>;
 }
 
 export interface FedaPayPaymentResponse {
@@ -187,9 +189,15 @@ export function resetFedapayListSpend(): void {
   listSpend.clear();
 }
 
-/** A claimed retry or an override starts here. A live tick is not reset. */
+/** Replaces any stored tick for this key, including one that is still live. */
 export function beginFedapayListTick(externalId: string, now = Date.now()): void {
   listSpend.set(externalId, blankSpend(now));
+}
+
+/** A copy of the tick, so a test can see that another key did not reset it. */
+export function fedapayListTick(externalId: string): ListSpend | null {
+  const row = listSpend.get(externalId);
+  return row ? { ...row } : null;
 }
 
 function blankSpend(start: number): ListSpend {
@@ -710,11 +718,15 @@ export class FedaPayService implements OnModuleInit {
   }
 
   /** Read-only. Does not create a payout. `unknown` means the lookup did not answer. */
-  async findPayoutByExternalId(externalId: string, phase: ListPhase = 'lookup'): Promise<FedaPayExternalMatch> {
+  async findPayoutByExternalId(
+    externalId: string,
+    phase: ListPhase = 'lookup',
+    spendKey = externalId
+  ): Promise<FedaPayExternalMatch> {
     if (this.mockEnabled) return emptyLook();
-    openListTick(externalId, Date.now());
+    openListTick(spendKey, Date.now());
     try {
-      return await this.strictListLook(externalId, phase);
+      return await this.strictListLook(externalId, phase, spendKey);
     } catch (error: any) {
       void error;
       return unknownLook();
@@ -722,10 +734,10 @@ export class FedaPayService implements OnModuleInit {
   }
 
   /** Decline lists walk every page. A paid match stops the walk. A multi-page credit needs a second walk. */
-  private async strictListLook(externalId: string, phase: ListPhase): Promise<FedaPayExternalMatch> {
-    const first = await this.collectStrict(externalId, phase);
+  private async strictListLook(externalId: string, phase: ListPhase, spendKey: string): Promise<FedaPayExternalMatch> {
+    const first = await this.collectStrict(externalId, phase, spendKey);
     if (!this.needsSecondWalk(first)) return this.withLimit(first);
-    const second = await this.collectStrict(externalId, confirmPhase(phase));
+    const second = await this.collectStrict(externalId, confirmPhase(phase), spendKey);
     return this.confirmedCredit(first, second);
   }
 
@@ -750,11 +762,11 @@ export class FedaPayService implements OnModuleInit {
     return first.complete && second.complete && sameTotal && first.digest === second.digest;
   }
 
-  private async collectStrict(externalId: string, phase: ListPhase): Promise<StrictWalk> {
+  private async collectStrict(externalId: string, phase: ListPhase, spendKey: string): Promise<StrictWalk> {
     const rows: PayoutRow[] = [];
     const state: WalkState = { page: 1, seen: 0, pages: 0, total: null };
     for (let step = 0; step < FEDAPAY_LIST_PAGE_CAP; step += 1) {
-      const turn = await this.readStrictPage(externalId, state, rows, phase);
+      const turn = await this.readStrictPage(externalId, state, rows, phase, spendKey);
       if (turn.done) return this.walkResult(rows, externalId, turn.complete, state, turn.limited);
     }
     return this.walkResult(rows, externalId, false, state, true);
@@ -770,9 +782,10 @@ export class FedaPayService implements OnModuleInit {
     externalId: string,
     state: WalkState,
     rows: PayoutRow[],
-    phase: ListPhase
+    phase: ListPhase,
+    spendKey: string
   ): Promise<{ done: boolean; complete: boolean; limited: boolean }> {
-    if (!this.allowListCall(externalId, phase)) return { done: true, complete: false, limited: true };
+    if (!this.allowListCall(spendKey, phase)) return { done: true, complete: false, limited: true };
     const body = await this.liveLookup('payout', () => Payout.all(this.listQuery(externalId, state.page)));
     if (!this.acceptPage(body, state, rows)) return this.pageStop(false);
     if (!classifyStrictRows(rows, externalId, false).unknown) return this.pageStop(false);
@@ -881,10 +894,17 @@ export class FedaPayService implements OnModuleInit {
   }
 
   /** Reuse any match. Create only when the caller already confirmed an empty list. */
-  private async reuseByExternalId(externalId: string, trustEmpty: boolean, creditAged: boolean): Promise<FedaPayWithdrawalResponse | null> {
+  private async reuseByExternalId(
+    externalId: string,
+    trustEmpty: boolean,
+    creditAged: boolean,
+    beforeSend?: () => Promise<boolean>
+  ): Promise<FedaPayWithdrawalResponse | null> {
     const looked = await this.findPayoutByExternalId(externalId, 'withdraw');
     if (looked.limited) return this.unknownWithdraw(true);
-    if (looked.found && looked.id) return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId, creditAged);
+    if (looked.found && looked.id) {
+      return this.resumeExistingPayout({ id: looked.id, status: looked.status }, externalId, creditAged, beforeSend);
+    }
     if (looked.provableEmpty && trustEmpty) return null;
     return this.unknownWithdraw();
   }
@@ -939,13 +959,15 @@ export class FedaPayService implements OnModuleInit {
       const strict = withdrawalRequest.strictList === true;
       const trustEmpty = withdrawalRequest.trustEmptyList !== false;
       const creditAged = withdrawalRequest.creditAged !== false;
+      const beforeSend = withdrawalRequest.beforeProviderSend;
       const reused = strict
-        ? await this.reuseByExternalId(externalId, trustEmpty, creditAged)
+        ? await this.reuseByExternalId(externalId, trustEmpty, creditAged, beforeSend)
         : await this.reuseOpenList(externalId);
       if (reused) return reused;
 
       let payout: { id?: number | string; status?: string; sendNow?: () => Promise<unknown> };
       try {
+        if (!(await this.noteProviderSend(beforeSend))) return this.unknownWithdraw();
         payout = await Payout.create({
           amount: withdrawalRequest.amount,
           currency: { iso: 'XOF' },
@@ -969,7 +991,7 @@ export class FedaPayService implements OnModuleInit {
       if (payout && payout.id) {
         // N1: from here on a FedaPay payout exists. Nothing below may report a
         // plain failure (that would release the hold while money may go out).
-        return this.sendCreatedPayout(payout, externalId, strict);
+        return this.sendCreatedPayout(payout, externalId, strict, beforeSend);
       }
 
       return {
@@ -994,6 +1016,17 @@ export class FedaPayService implements OnModuleInit {
     }
   }
 
+  /** A false or thrown stamp skips create and sendNow. */
+  private async noteProviderSend(beforeSend?: () => Promise<boolean>): Promise<boolean> {
+    if (!beforeSend) return true;
+    try {
+      return await beforeSend();
+    } catch (error: any) {
+      this.logger.warn(`FedaPay send stamp: ${error?.message ?? error}`);
+      return false;
+    }
+  }
+
   /**
    * Send a payout that already exists at FedaPay. Any error is treated as
    * ambiguous (pending) unless a Payout.retrieve confirms it failed.
@@ -1001,9 +1034,11 @@ export class FedaPayService implements OnModuleInit {
   private async sendCreatedPayout(
     payout: any,
     externalId: string | undefined,
-    strict = false
+    strict = false,
+    beforeSend?: () => Promise<boolean>
   ): Promise<FedaPayWithdrawalResponse> {
     if (strict && !this.roomToSend(externalId)) return this.unknownWithdraw(true);
+    if (!(await this.noteProviderSend(beforeSend))) return this.unknownWithdraw();
     const payoutId = String(payout.id);
     try {
       await payout.sendNow();
@@ -1125,12 +1160,17 @@ export class FedaPayService implements OnModuleInit {
     };
   }
 
-  private async resumeExistingPayout(matching: any, externalId: string | undefined, creditAged: boolean): Promise<FedaPayWithdrawalResponse> {
+  private async resumeExistingPayout(
+    matching: any,
+    externalId: string | undefined,
+    creditAged: boolean,
+    beforeSend?: () => Promise<boolean>
+  ): Promise<FedaPayWithdrawalResponse> {
     const payoutId = String(matching.id);
     const status = String(matching.status || 'pending');
     if (this.terminalPayout(status)) return this.deadCredit(payoutId, externalId, creditAged);
     if (status !== 'pending') return this.passedPayout(payoutId, externalId, status);
-    return this.resendIfStillPending(payoutId, externalId);
+    return this.resendIfStillPending(payoutId, externalId, beforeSend);
   }
 
   /** An all-dead list credits only after the send attempt is older than the lag window. */
@@ -1140,23 +1180,36 @@ export class FedaPayService implements OnModuleInit {
   }
 
   /** Send only while the retrieved payout is still pending. A missed read stores no ref. */
-  private async resendIfStillPending(payoutId: string, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> {
+  private async resendIfStillPending(
+    payoutId: string,
+    externalId: string | undefined,
+    beforeSend?: () => Promise<boolean>
+  ): Promise<FedaPayWithdrawalResponse> {
     if (!this.roomToSend(externalId)) return this.unknownWithdraw(true);
     const existing = await this.retrieveForResend(payoutId);
-    return this.sendRetrieved(existing, payoutId, externalId);
+    return this.sendRetrieved(existing, payoutId, externalId, beforeSend);
   }
 
-  private sendRetrieved(existing: any, payoutId: string, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> | FedaPayWithdrawalResponse {
+  private sendRetrieved(
+    existing: any,
+    payoutId: string,
+    externalId: string | undefined,
+    beforeSend?: () => Promise<boolean>
+  ): Promise<FedaPayWithdrawalResponse> | FedaPayWithdrawalResponse {
     const live = String(existing?.status || '');
     if (this.terminalPayout(live)) return this.failedExisting(payoutId, externalId);
-    if (live === 'pending' && typeof existing?.sendNow === 'function') return this.sendIfRoom(existing, externalId);
+    if (live === 'pending' && typeof existing?.sendNow === 'function') return this.sendIfRoom(existing, externalId, beforeSend);
     if (live) return this.passedPayout(payoutId, externalId, live);
     return this.unknownWithdraw();
   }
 
-  private sendIfRoom(existing: any, externalId: string | undefined): Promise<FedaPayWithdrawalResponse> {
+  private sendIfRoom(
+    existing: any,
+    externalId: string | undefined,
+    beforeSend?: () => Promise<boolean>
+  ): Promise<FedaPayWithdrawalResponse> {
     if (!this.roomToSend(externalId)) return Promise.resolve(this.unknownWithdraw(true));
-    return this.sendCreatedPayout(existing, externalId, true);
+    return this.sendCreatedPayout(existing, externalId, true, beforeSend);
   }
 
   /** Skip retrieve and sendNow when the claim would expire inside the margin. */
