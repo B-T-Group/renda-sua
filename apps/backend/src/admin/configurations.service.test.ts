@@ -86,4 +86,102 @@ describe('ConfigurationsService', () => {
 
     await expect(service.getConfigurationByKey('missing')).resolves.toBeNull();
   });
+
+  it('accepts the inclusive FedaPay windows and refuses the next step outside them', async () => {
+    hasura.executeQuery.mockResolvedValue(stored('rentals_fedapay_list_confirm_minutes', 10));
+    await expect(service.updateConfiguration('cfg-1', { number_value: 10 }, 'user-1')).resolves.toMatchObject({
+      number_value: 10,
+    });
+    await expect(service.updateConfiguration('cfg-1', { number_value: 9 }, 'user-1')).rejects.toMatchObject({
+      status: 400,
+    });
+    hasura.executeQuery.mockResolvedValue(stored('rentals_fedapay_list_lag_minutes', 1440));
+    await expect(service.updateConfiguration('cfg-1', { number_value: 24 * 60 }, 'user-1')).resolves.toMatchObject({
+      number_value: 1440,
+    });
+    await expect(service.updateConfiguration('cfg-1', { number_value: 1441 }, 'user-1')).rejects.toThrow(/24 hours/);
+    await expect(service.updateConfiguration('cfg-1', { number_value: Number.NaN }, 'user-1')).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(updatePayloads(hasura).map((row) => row.number_value)).toEqual([10, 1440]);
+  });
+
+  it('keeps the unknown-notice streak between 1 and 100', async () => {
+    hasura.executeQuery.mockResolvedValue(stored('rentals_fedapay_unknown_notice_after', 1));
+    await expect(service.updateConfiguration('cfg-1', { number_value: 1 }, 'user-1')).resolves.toMatchObject({
+      number_value: 1,
+    });
+    await expect(service.updateConfiguration('cfg-1', { number_value: 100 }, 'user-1')).resolves.toBeTruthy();
+    await expect(service.updateConfiguration('cfg-1', { number_value: 0 }, 'user-1')).rejects.toThrow(/1 and 100/);
+    await expect(service.updateConfiguration('cfg-1', { number_value: 101 }, 'user-1')).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(updatePayloads(hasura)).toHaveLength(2);
+  });
+
+  it('refuses a timing change with no actor and with no role service', async () => {
+    hasura.executeQuery.mockResolvedValue(stored('rentals_fedapay_list_lag_minutes', 15));
+    await expect(service.updateConfiguration('cfg-1', { number_value: 15 })).rejects.toMatchObject({ status: 403 });
+    await expect(service.updateConfiguration('cfg-1', { description: 'later' }, 'user-1')).resolves.toBeTruthy();
+    rbac.hasRole.mockResolvedValue(false);
+    await expect(
+      service.updateConfiguration('cfg-1', { config_key: 'fast_delivery' }, 'user-1')
+    ).rejects.toThrow(/superuser/);
+    const bare = new ConfigurationsService(hasura as any);
+    await expect(bare.updateConfiguration('cfg-1', { number_value: 15 }, 'user-1')).rejects.toMatchObject({
+      status: 403,
+    });
+    const wroteFastDelivery = hasura.executeQuery.mock.calls.some((call) => call[1]?.updates?.config_key === 'fast_delivery');
+    expect(wroteFastDelivery).toBe(false);
+  });
+
+  it('maps a GraphQL uniqueness error to a conflict and rethrows other write errors', async () => {
+    hasura.executeQuery.mockResolvedValueOnce(stored('fast_delivery', 1)).mockRejectedValueOnce(graphqlUnique());
+    await expect(service.updateConfiguration('cfg-1', { config_key: 'taken_key' }, 'user-1')).rejects.toMatchObject({
+      status: 409,
+    });
+    const reset = new Error('connection reset');
+    hasura.executeQuery.mockResolvedValueOnce(stored('fast_delivery', 1)).mockRejectedValueOnce(reset);
+    await expect(service.updateConfiguration('cfg-1', { config_key: 'other_key' }, 'user-1')).rejects.toBe(reset);
+  });
+
+  it('lets a platform user delete an ordinary key and refuses every FedaPay timing key', async () => {
+    rbac.hasRole.mockResolvedValue(false);
+    for (const key of [
+      'rentals_fedapay_list_lag_minutes',
+      'rentals_fedapay_list_confirm_minutes',
+      'rentals_fedapay_unknown_notice_after',
+    ]) {
+      hasura.executeQuery.mockResolvedValue(stored(key, 10));
+      await expect(service.deleteConfiguration('cfg-1', 'user-1')).rejects.toMatchObject({ status: 403 });
+    }
+    hasura.executeQuery.mockResolvedValue(stored('fast_delivery', 1));
+    await expect(service.deleteConfiguration('cfg-1', 'user-1')).resolves.toBe(true);
+    hasura.executeQuery.mockResolvedValue({ application_configurations_by_pk: null });
+    await expect(service.deleteConfiguration('missing', 'user-1')).resolves.toBe(false);
+    expect(rbac.hasRole).toHaveBeenCalledTimes(3);
+  });
 });
+
+function stored(key: string, numberValue: number) {
+  const row = { id: 'cfg-1', config_key: key, number_value: numberValue };
+  return {
+    application_configurations_by_pk: row,
+    update_application_configurations_by_pk: row,
+    delete_application_configurations_by_pk: { id: 'cfg-1' },
+  };
+}
+
+function updatePayloads(hasura: { executeQuery: jest.Mock }): Array<{ number_value?: number }> {
+  return hasura.executeQuery.mock.calls
+    .filter((call) => String(call[0]).includes('UpdateConfiguration'))
+    .map((call) => call[1].updates);
+}
+
+function graphqlUnique(): Error {
+  const error = new Error('graphql');
+  (error as { response?: unknown }).response = {
+    errors: [{ message: 'Uniqueness violation. duplicate key value violates unique constraint' }],
+  };
+  return error;
+}
