@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { DECLINE_IDLE_TX_TIMEOUT, DECLINE_LOCK_TIMEOUT, withDeclineLock } from './decline-booking-lock';
+import { DECLINE_LOCK_TIMEOUT, withDeclineLock } from './decline-booking-lock';
 
 describe('withDeclineLock', () => {
   it('fails closed when the pool is missing and does not run the decline', async () => {
@@ -52,7 +52,7 @@ describe('withDeclineLock', () => {
     });
   });
 
-  it('sets the lock and idle timeouts before the advisory lock, then runs the work', async () => {
+  it('sets the lock timeout before the advisory lock and does not idle-timeout the session', async () => {
     const seen: string[] = [];
     const database = {
       transaction: async (fn: (query: (text: string, params?: unknown[]) => Promise<unknown[]>) => Promise<unknown>) =>
@@ -68,14 +68,13 @@ describe('withDeclineLock', () => {
     });
     expect(result).toBe('ok');
     expect(seen[0]).toBe(`SELECT set_config('lock_timeout', $1, true)`);
-    expect(seen[1]).toBe(`SELECT set_config('idle_in_transaction_session_timeout', $1, true)`);
-    expect(seen[2]).toContain('pg_advisory_xact_lock');
-    expect(seen[3]).toBe('work');
+    expect(seen.some((text) => text.includes('idle_in_transaction_session_timeout'))).toBe(false);
+    expect(seen[1]).toContain('pg_advisory_xact_lock');
+    expect(seen[2]).toBe('work');
     expect(DECLINE_LOCK_TIMEOUT).toBe('4s');
-    expect(DECLINE_IDLE_TX_TIMEOUT).toBe('8s');
   });
 
-  it('keeps the 4s lock wait and the 8s idle timeout on this booking only', async () => {
+  it('keeps the 4s lock wait on this booking only', async () => {
     const calls: Array<{ text: string; params?: unknown[] }> = [];
     const database = lockingDb((text, params) => calls.push({ text, params }));
     await withDeclineLock('booking-9', database, async () => 'ok');
@@ -83,12 +82,9 @@ describe('withDeclineLock', () => {
       text: `SELECT set_config('lock_timeout', $1, true)`,
       params: ['4s'],
     });
-    expect(calls[1]).toEqual({
-      text: `SELECT set_config('idle_in_transaction_session_timeout', $1, true)`,
-      params: ['8s'],
-    });
-    expect(calls[2].params).toEqual(['booking-9']);
-    expect(calls[2].text).toContain('pg_advisory_xact_lock');
+    expect(calls.some((call) => call.text.includes('idle_in_transaction'))).toBe(false);
+    expect(calls[1].params).toEqual(['booking-9']);
+    expect(calls[1].text).toContain('pg_advisory_xact_lock');
   });
 
   it.each([
