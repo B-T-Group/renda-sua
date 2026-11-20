@@ -5,10 +5,14 @@ const gates = new Map<string, Promise<unknown>>();
 
 /** How long a second tap waits for the booking lock before 409. */
 export const DECLINE_LOCK_TIMEOUT = '4s';
-/** Releases a lock transaction that stops issuing queries. */
-export const DECLINE_IDLE_TX_TIMEOUT = '8s';
 
-/** One decline per booking. The provider call runs after this transaction commits. */
+/**
+ * One decline per booking. The provider call runs after this transaction commits.
+ * Do not set idle_in_transaction_session_timeout. The session is idle for the
+ * whole Hasura decline, so that timeout kills it while the debit is still running.
+ * pg then emits `error` on the checked-out client and crashes the process, and
+ * the advisory lock is already gone.
+ */
 export function withDeclineLock<T>(
   bookingId: string,
   database: DatabaseService | undefined,
@@ -50,7 +54,6 @@ async function holdBooking<T>(
   work: () => Promise<T>
 ): Promise<T> {
   await query(`SELECT set_config('lock_timeout', $1, true)`, [DECLINE_LOCK_TIMEOUT]);
-  await query(`SELECT set_config('idle_in_transaction_session_timeout', $1, true)`, [DECLINE_IDLE_TX_TIMEOUT]);
   await query(LOCK_SQL, [bookingId]);
   return work();
 }
