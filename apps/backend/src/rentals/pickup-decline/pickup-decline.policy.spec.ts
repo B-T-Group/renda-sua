@@ -10,8 +10,12 @@ describe('pickup decline money', () => {
 
   it('doubles unknown-lookup waits and caps them at 30 minutes', () => {
     const now = Date.parse('2026-11-19T00:00:00.000Z');
+    expect(Date.parse(unknownRetryAt(0, now)) - now).toBe(60_000);
+    expect(Date.parse(unknownRetryAt(-3, now)) - now).toBe(60_000);
     expect(Date.parse(unknownRetryAt(1, now)) - now).toBe(60_000);
     expect(Date.parse(unknownRetryAt(2, now)) - now).toBe(120_000);
+    expect(Date.parse(unknownRetryAt(5, now)) - now).toBe(16 * 60_000);
+    expect(Date.parse(unknownRetryAt(6, now)) - now).toBe(30 * 60_000);
     expect(Date.parse(unknownRetryAt(10, now)) - now).toBe(30 * 60_000);
   });
 
