@@ -34,6 +34,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       max: DB_POOL_MAX,
       connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
     });
+    // pg-pool emits this for an idle client and then removes it. No listener exits the process.
+    this.pool.on('error', (error: Error) => this.noteIdleClientError(error));
+  }
+
+  private noteIdleClientError(error: Error): void {
+    this.logger.error(`Postgres idle client error: ${error?.message ?? error}`);
   }
 
   async onModuleDestroy(): Promise<void> {
