@@ -2,9 +2,16 @@ import { EventEmitter } from 'events';
 import { Logger } from '@nestjs/common';
 import { DB_CONNECT_TIMEOUT_MS, DB_POOL_MAX, DatabaseService } from '../../database/database.service';
 
-jest.mock('pg', () => ({
-  Pool: jest.fn().mockImplementation(() => ({ end: jest.fn() })),
-}));
+jest.mock('pg', () => {
+  const { EventEmitter } = require('events');
+  return {
+    Pool: jest.fn().mockImplementation(() => {
+      const pool = new EventEmitter();
+      pool.end = jest.fn(async () => undefined);
+      return pool;
+    }),
+  };
+});
 
 type FakeClient = EventEmitter & {
   query: jest.Mock;
@@ -12,6 +19,25 @@ type FakeClient = EventEmitter & {
 };
 
 describe('shared Postgres pool', () => {
+  it('logs an idle client error instead of crashing', async () => {
+    const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const { Pool } = jest.requireMock('pg') as { Pool: jest.Mock };
+    Pool.mockClear();
+    const service = new DatabaseService({
+      get: () => 'postgresql://user:pass@db.example/rendasua',
+    } as never);
+    try {
+      service.onModuleInit();
+      const pool = Pool.mock.results[0]?.value as EventEmitter;
+      const failure = new Error('Connection terminated unexpectedly');
+      expect(() => pool.emit('error', failure, {})).not.toThrow();
+      expect(logged).toHaveBeenCalledWith('Postgres idle client error: Connection terminated unexpectedly');
+    } finally {
+      logged.mockRestore();
+      await service.onModuleDestroy();
+    }
+  });
+
   it('caps the pool and times out a connect', async () => {
     const { Pool } = jest.requireMock('pg') as { Pool: jest.Mock };
     Pool.mockClear();
@@ -132,10 +158,13 @@ function fakeClient(queryImpl?: (text: string) => Promise<{ rows: unknown[] }>):
 
 function serviceOn(client: FakeClient): DatabaseService {
   const { Pool } = jest.requireMock('pg') as { Pool: jest.Mock };
-  Pool.mockImplementation(() => ({
-    connect: async () => client,
-    end: async () => undefined,
-  }));
+  Pool.mockImplementation(() => {
+    const pool = new EventEmitter();
+    return Object.assign(pool, {
+      connect: async () => client,
+      end: async () => undefined,
+    });
+  });
   const service = new DatabaseService({
     get: () => 'postgresql://user:pass@db.example/rendasua',
   } as never);
