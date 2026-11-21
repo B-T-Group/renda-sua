@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { Logger } from '@nestjs/common';
 import { DB_CONNECT_TIMEOUT_MS, DB_POOL_MAX, DatabaseService } from '../../database/database.service';
 
 jest.mock('pg', () => ({
@@ -50,6 +51,74 @@ describe('shared Postgres pool', () => {
     await expect(service.transaction(async (query) => query('SELECT boom'))).rejects.toThrow('boom');
     expect(client.query).toHaveBeenCalledWith('ROLLBACK');
     expect(client.release).toHaveBeenCalled();
+    await service.onModuleDestroy();
+  });
+
+  it('keeps the query error when the connection is dead and rollback fails', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const client = fakeClient(async (text: string) => {
+      if (text === 'SELECT boom') {
+        client.emit('error', new Error('Connection terminated unexpectedly'));
+        throw new Error('canceling statement due to lock timeout');
+      }
+      if (text === 'ROLLBACK') throw 'socket hang up';
+      return { rows: [] };
+    });
+    const service = serviceOn(client);
+    try {
+      await expect(service.transaction(async (query) => query('SELECT boom'))).rejects.toThrow(
+        'canceling statement due to lock timeout'
+      );
+      expect(client.query).not.toHaveBeenCalledWith('COMMIT');
+      expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(client.release).toHaveBeenCalledTimes(1);
+      expect(client.listenerCount('error')).toBe(0);
+      expect(warn).toHaveBeenCalledWith('Postgres rollback failed: socket hang up');
+    } finally {
+      warn.mockRestore();
+      await service.onModuleDestroy();
+    }
+  });
+
+  it('rejects with the commit error when the drop survives a failed rollback', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const client = fakeClient(async (text: string) => {
+      if (text === 'COMMIT') {
+        client.emit('error', new Error('terminating connection due to idle-in-transaction timeout'));
+        throw new Error('Connection terminated unexpectedly');
+      }
+      if (text === 'ROLLBACK') throw new Error('connection closed');
+      return { rows: [{ ok: true }] };
+    });
+    const service = serviceOn(client);
+    try {
+      await expect(service.transaction(async (query) => query('SELECT 1'))).rejects.toThrow(
+        'Connection terminated unexpectedly'
+      );
+      expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(client.release).toHaveBeenCalledTimes(1);
+      expect(client.listenerCount('error')).toBe(0);
+      expect(warn).toHaveBeenCalledWith('Postgres rollback failed: connection closed');
+    } finally {
+      warn.mockRestore();
+      await service.onModuleDestroy();
+    }
+  });
+
+  it('removes the error listener before the client returns to the pool', async () => {
+    const client = fakeClient();
+    const service = serviceOn(client);
+    await service.transaction(async (query) => {
+      expect(client.listenerCount('error')).toBe(1);
+      return query('SELECT 1');
+    });
+    expect(client.listenerCount('error')).toBe(0);
+    await service.transaction(async () => {
+      expect(client.listenerCount('error')).toBe(1);
+      return 'second';
+    });
+    expect(client.listenerCount('error')).toBe(0);
+    expect(client.release).toHaveBeenCalledTimes(2);
     await service.onModuleDestroy();
   });
 });
