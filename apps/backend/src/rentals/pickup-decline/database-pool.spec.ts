@@ -18,6 +18,13 @@ type FakeClient = EventEmitter & {
   release: jest.Mock;
 };
 
+type OpenedPool = {
+  service: DatabaseService;
+  pool: EventEmitter;
+  end: jest.Mock;
+  query: jest.Mock;
+};
+
 describe('shared Postgres pool', () => {
   it('logs an idle client error instead of crashing', async () => {
     const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
@@ -53,6 +60,57 @@ describe('shared Postgres pool', () => {
     expect(DB_POOL_MAX).toBe(8);
     expect(DB_CONNECT_TIMEOUT_MS).toBe(5_000);
     await service.onModuleDestroy();
+  });
+
+  it('logs a missing or non-Error idle failure and keeps serving', async () => {
+    const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const opened = openPool();
+    try {
+      emitIdleFailures(opened.pool);
+      expect(logged).toHaveBeenCalledWith('Postgres idle client error: undefined');
+      expect(logged).toHaveBeenCalledWith('Postgres idle client error: socket hang up');
+      expect(logged).toHaveBeenCalledWith('Postgres idle client error: [object Object]');
+      expect(logged).toHaveBeenCalledWith('Postgres idle client error: ');
+      expect(opened.end).not.toHaveBeenCalled();
+      await expect(opened.service.query('SELECT 1', ['a'])).resolves.toEqual([{ ok: true }]);
+      expect(opened.query).toHaveBeenCalledWith('SELECT 1', ['a']);
+    } finally {
+      logged.mockRestore();
+      await opened.service.onModuleDestroy();
+    }
+  });
+
+  it('fails closed when the database url is blank', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const { Pool } = jest.requireMock('pg') as { Pool: jest.Mock };
+    try {
+      for (const url of [undefined, null, '', '   ']) {
+        await blankUrlRejects(Pool, url);
+      }
+      expect(warn).toHaveBeenCalledTimes(4);
+      expect(warn).toHaveBeenCalledWith('database.url not configured; Postgres queries disabled');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('drops the pool on shutdown and does not query it again', async () => {
+    const opened = openPool();
+    await opened.service.onModuleDestroy();
+    expect(opened.end).toHaveBeenCalledTimes(1);
+    await expect(opened.service.query('SELECT 1')).rejects.toThrow(POOL_MISSING);
+    const work = jest.fn();
+    await expect(opened.service.transaction(work)).rejects.toThrow(POOL_MISSING);
+    expect(work).not.toHaveBeenCalled();
+    await opened.service.onModuleDestroy();
+    expect(opened.end).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not swallow a pool query failure', async () => {
+    const opened = openPool();
+    opened.query.mockRejectedValueOnce(new Error('connection reset'));
+    await expect(opened.service.query('SELECT id')).rejects.toThrow('connection reset');
+    await opened.service.onModuleDestroy();
   });
 
   it('handles a client error during a transaction instead of crashing', async () => {
@@ -148,6 +206,41 @@ describe('shared Postgres pool', () => {
     await service.onModuleDestroy();
   });
 });
+
+const POOL_MISSING = 'Postgres pool is not configured (set DATABASE_URL)';
+
+function emitIdleFailures(pool: EventEmitter): void {
+  expect(pool.listenerCount('error')).toBe(1);
+  expect(() => pool.emit('error', undefined)).not.toThrow();
+  expect(() => pool.emit('error', 'socket hang up')).not.toThrow();
+  expect(() => pool.emit('error', { code: 'ECONNRESET' })).not.toThrow();
+  expect(() => pool.emit('error', new Error(''))).not.toThrow();
+  expect(pool.listenerCount('error')).toBe(1);
+}
+
+async function blankUrlRejects(Pool: jest.Mock, url: string | null | undefined): Promise<void> {
+  Pool.mockClear();
+  const service = new DatabaseService({ get: () => url } as never);
+  const work = jest.fn();
+  service.onModuleInit();
+  expect(Pool).not.toHaveBeenCalled();
+  await expect(service.query('SELECT 1')).rejects.toThrow(POOL_MISSING);
+  await expect(service.transaction(work)).rejects.toThrow(POOL_MISSING);
+  expect(work).not.toHaveBeenCalled();
+}
+
+function openPool(): OpenedPool {
+  const end = jest.fn(async () => undefined);
+  const query = jest.fn(async () => ({ rows: [{ ok: true }] }));
+  const { Pool } = jest.requireMock('pg') as { Pool: jest.Mock };
+  Pool.mockImplementation(() => Object.assign(new EventEmitter(), { end, query }));
+  const service = new DatabaseService({
+    get: () => 'postgresql://user:pass@db.example/rendasua',
+  } as never);
+  service.onModuleInit();
+  const pool = Pool.mock.results.at(-1)?.value as EventEmitter;
+  return { service, pool, end, query };
+}
 
 function fakeClient(queryImpl?: (text: string) => Promise<{ rows: unknown[] }>): FakeClient {
   const client = new EventEmitter() as FakeClient;
