@@ -686,6 +686,21 @@ export class RentalsController {
     return this.rentalsService.initiateRentalPickupPayment(bookingId);
   }
 
+  @Post('bookings/:id/start')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Renter starts the rental from the pickup day. Pays Mobile Money if it is still due, then marks the booking started.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Started, already started, or Mobile Money pending' })
+  @ApiResponse({ status: 403, description: 'Only the renter' })
+  @ApiResponse({ status: 404, description: 'Not the renter of this booking' })
+  @ApiResponse({ status: 409, description: 'RENTAL_START_WINDOW or pickup not accepted' })
+  async startRental(@Param('id') bookingId: string) {
+    return this.rentalsService.startRental(bookingId);
+  }
+
   @Post('bookings/:id/accept-and-start')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -705,6 +720,19 @@ export class RentalsController {
     @Body() body: AcceptAndStartRentalDto
   ) {
     return this.rentalsService.acceptAndStartRental(bookingId, body.versionId);
+  }
+
+  @Post('bookings/:id/item-not-collected')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Business says the renter did not collect the item. Support is told. The booking is unchanged.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Support told, or alreadyReported on a repeat' })
+  @ApiResponse({ status: 403, description: 'Only the business' })
+  @ApiResponse({ status: 409, description: 'Booking is not waiting for pickup' })
+  reportItemNotCollected(@Param('id') bookingId: string) {
+    return this.rentalsService.reportItemNotCollected(bookingId);
   }
 
   @Post('bookings/:id/report-not-received')
@@ -825,7 +853,7 @@ export class RentalsController {
 
   @Get('bookings/:id/start-pin')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get rental start PIN (client)' })
+  @ApiOperation({ summary: 'Retired. Old apps get 409 Update the app to start this rental' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'PIN returned' })
   async getStartPin(@Param('id') bookingId: string) {
@@ -834,7 +862,7 @@ export class RentalsController {
 
   @Post('bookings/:id/verify-start-pin')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify start PIN or overwrite (business)' })
+  @ApiOperation({ summary: 'Retired. Old apps get 409 Update the app to start this rental' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiBody({ type: VerifyRentalStartPinDto })
   @ApiResponse({ status: 200, description: 'Rental started' })
@@ -848,8 +876,7 @@ export class RentalsController {
   @Post('bookings/:id/messages/start-pin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary:
-      'Share rental start PIN in booking chat (client). Mentions the business and sends a push.',
+    summary: 'Retired. Old apps get 409 Update the app to start this rental',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 201, description: 'PIN shared as structured message' })
@@ -869,7 +896,7 @@ export class RentalsController {
   @Get('bookings/:id/messages/active-start-pin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get latest active start PIN shared in chat (business only)',
+    summary: 'Retired. Old apps get 409 Update the app to start this rental',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Active PIN or null' })
@@ -890,8 +917,7 @@ export class RentalsController {
   @Post('bookings/:id/start-overwrite-code')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Rejected. Businesses cannot mint a start code. Support uses the admin route.',
+    summary: 'Retired. Old apps get 409 Update the app to start this rental',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 403, description: 'Business cannot start a rental alone' })

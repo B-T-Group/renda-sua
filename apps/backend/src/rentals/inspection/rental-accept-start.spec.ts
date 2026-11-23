@@ -144,17 +144,17 @@ describe('accept and start', () => {
     expect(svc.confirmWalletContract).not.toHaveBeenCalled();
     expect(svc.pushMomoPickupPayment).not.toHaveBeenCalled();
     expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
-    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
     expect(svc.notificationsService.sendRentalStartedClientPush).not.toHaveBeenCalled();
     expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'pickup_accepted' })
     );
   });
 
-  it('sends nothing new on activation when confirmations are off', async () => {
+  it('tells the business the rental started even when confirmations are off', async () => {
     svc.inspectionFlags.confirmationsEnabled.mockResolvedValue(false);
     await svc.acceptAndStartRental('b1', 'ver-1');
-    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
     expect(svc.notificationsService.sendRentalStartedClientPush).not.toHaveBeenCalled();
     expect(svc.notificationsService.sendRentalInspectionNotice).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'pickup_accepted', paymentPending: false })
@@ -417,7 +417,7 @@ describe('accept and start', () => {
     expect(svc.confirmWalletContract).toHaveBeenCalled();
     expect(markCalls()).toHaveLength(1);
     expect(markCalls()[0][1].at).toEqual(expect.any(String));
-    expect(svc.notificationsService.sendBusinessRentalStarted).not.toHaveBeenCalled();
+    expect(svc.notificationsService.sendBusinessRentalStarted).toHaveBeenCalledTimes(1);
   });
 
   it('writes one row and sends one push when a flagged Mobile Money webhook is replayed', async () => {
@@ -539,45 +539,18 @@ describe('accept and start', () => {
     expect(svc.pushMomoPickupPayment).not.toHaveBeenCalled();
   });
 
-  it('still starts a legacy booking from the PIN', async () => {
-    svc.hasuraUserService.getUser.mockResolvedValue({
-      id: 'biz-user',
-      active_persona: 'business',
-      business: { id: 'biz' },
+  it('returns 409 on the retired PIN and pickup-payment paths', async () => {
+    await expect(svc.getStartPinForClient('b1')).rejects.toMatchObject({
+      status: 409,
+      message: 'Update the app to start this rental',
     });
-    svc.fetchBooking.mockResolvedValue({ id: 'b1', business_id: 'biz', status: 'confirmed' });
-    svc.hasuraSystemService.executeQuery.mockResolvedValue({
-      rental_bookings_by_pk: { inspection_policy_version: null },
-    });
-    await expect(svc.verifyRentalStartPin('b1', { pin: '1234' })).resolves.toEqual({
-      success: true,
-    });
-    expect(svc.verifyPinAttempt).toHaveBeenCalled();
-    expect(markCalls()).toHaveLength(1);
-  });
-
-  it('returns 426 on the old start, PIN, and pickup-payment paths for an enrolled booking', async () => {
-    svc.hasuraSystemService.executeQuery.mockResolvedValue(
-      gate({ pickup_ack_current: true, pickup_accepted_version_id: 'ver-1' })
-    );
-    await expect(svc.getStartPinForClient('b1')).rejects.toMatchObject({ status: 426 });
     expect(svc.deliveryPinService.getPinForClient).not.toHaveBeenCalled();
-
-    svc.hasuraUserService.getUser.mockResolvedValue({
-      id: 'biz-user',
-      active_persona: 'business',
-      business: { id: 'biz' },
-    });
     await expect(svc.verifyRentalStartPin('b1', { pin: '1234' })).rejects.toMatchObject({
-      status: 426,
+      status: 409,
     });
-    expect(svc.verifyPinAttempt).not.toHaveBeenCalled();
-
-    svc.fetchBooking.mockResolvedValue(
-      enrolled({ status: 'reserved', payment_status: 'pending', payment_timing: 'pay_at_pickup' })
-    );
-    await expect(svc.initiateRentalPickupPayment('b1')).rejects.toMatchObject({ status: 426 });
+    await expect(svc.initiateRentalPickupPayment('b1')).rejects.toMatchObject({ status: 409 });
     expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
+    expect(markCalls()).toHaveLength(0);
   });
 
   it('allows only the renter of an enrolled booking', async () => {
@@ -602,8 +575,11 @@ describe('accept and start', () => {
     });
     svc.fetchBooking.mockResolvedValue(enrolled({ inspection_policy_version: null }));
     await expect(svc.acceptAndStartRental('b1', 'ver-1')).rejects.toMatchObject({
-      status: 400,
-      response: { code: 'RENTAL_ACCEPT_START_NOT_ENROLLED' },
+      status: 409,
+      response: {
+        code: 'RENTAL_ACCEPT_START_NOT_ENROLLED',
+        message: 'Update the app to start this rental',
+      },
     });
   });
 

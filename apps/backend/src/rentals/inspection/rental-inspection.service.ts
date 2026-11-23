@@ -134,12 +134,7 @@ export class RentalInspectionService {
       DEFAULT_MIN_PHOTOS
     );
     const version = await this.callSubmit(bookingId, stage, booking, manifest, minPhotos, claim);
-    await this.notice(
-      booking,
-      stage === 'pickup' ? 'review_pickup' : 'review_return',
-      booking.client.user_id,
-      'client'
-    );
+    await this.notice(booking, this.submitNoticeKind(stage, inspection.status), booking.client.user_id, 'client');
     if (stage === 'pickup') await this.notifyReportSent(booking);
     return { versionId: version.id, versionNo: version.version_no };
   }
@@ -375,7 +370,8 @@ export class RentalInspectionService {
       { id: booking.id, stage, version: versionId, actor: booking.actorId, reason },
       'That report changed. Review it again.'
     );
-    await this.notice(booking, 'correction', booking.business.user_id, 'business');
+    const kind = stage === 'pickup' ? 'photos_requested' : 'correction';
+    await this.notice(booking, kind, booking.business.user_id, 'business');
     return { correctionRequested: true };
   }
 
@@ -716,6 +712,11 @@ export class RentalInspectionService {
       await this.notice(booking, 'escalated', booking.business.user_id, 'business');
     }
     return count;
+  }
+
+  private submitNoticeKind(stage: InspectionStage, status: string) {
+    if (stage !== 'pickup') return 'review_return' as const;
+    return status === 'correction_requested' ? ('photos_ready' as const) : ('review_pickup' as const);
   }
 
   private async notice(

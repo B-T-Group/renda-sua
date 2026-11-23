@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { endOfStartDay, reservedUnpaidDue } from '../simple-start/simple-start.policy';
 
 /** Stamped on bookings created while the flag is on. NULL stays legacy. */
 export const INSPECTION_POLICY_VERSION = 1;
@@ -150,6 +151,7 @@ export interface AcceptAndStartResult {
   payment_rail: AcceptStartPaymentRail;
   amount_due_at_pickup: number;
   bookingId: string;
+  start_opens_at?: string;
 }
 
 /** Card is already authorized. Wallet covers the contract. Otherwise Mobile Money. */
@@ -251,23 +253,23 @@ export interface ReservedExpiryInput {
   pickupInspectionPending: boolean;
   reservedCancelAfter: Date | null;
   graceMinutes?: number;
+  timeZone?: string;
 }
 
-/** Pause cancel while a pickup inspection is pending. After accept, use the stored deadline. */
+/** Pause while pickup photos are pending. Otherwise the deadline is the end of the start day. */
 export function reservedBookingExpired(input: ReservedExpiryInput): boolean {
-  if (input.policyVersion != null && input.pickupInspectionPending) return false;
-  const graceMs = (input.graceMinutes ?? RESERVED_UNPAID_GRACE_MINUTES) * 60000;
-  const deadline =
-    input.policyVersion != null && input.reservedCancelAfter
-      ? input.reservedCancelAfter
-      : new Date(input.startAt.getTime() + graceMs);
-  return input.now.getTime() >= deadline.getTime();
+  return reservedUnpaidDue({
+    now: input.now,
+    startAt: input.startAt,
+    timeZone: input.timeZone ?? 'Africa/Douala',
+    policyVersion: input.policyVersion,
+    pickupInspectionPending: input.pickupInspectionPending,
+  });
 }
 
-/** Later of start+60 and accept+60. An early accept stays open until the start window. */
-export function extendedReservedDeadline(startAt: Date, acceptedAt: Date): Date {
-  const graceMs = RESERVED_UNPAID_GRACE_MINUTES * 60000;
-  return new Date(Math.max(startAt.getTime() + graceMs, acceptedAt.getTime() + graceMs));
+/** End of the start day in the listing time zone. Accept time no longer extends it. */
+export function extendedReservedDeadline(startAt: Date, _acceptedAt: Date, timeZone = 'Africa/Douala'): Date {
+  return endOfStartDay(startAt, timeZone);
 }
 
 /**

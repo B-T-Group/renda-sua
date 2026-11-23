@@ -8,9 +8,7 @@ import { RentalRenterReturnService } from './renter-return/rental-renter-return.
 import { casUpdateRentalBooking } from './rental-booking-cas';
 import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
-
-/** Grace after the scheduled start before an unpaid reservation is released. */
-const RESERVED_UNPAID_GRACE_MINUTES = 60;
+import { isStartDay, listingZoneFor, startOpensAt } from './simple-start/simple-start.policy';
 
 /**
  * Singleton cron host for rental system jobs.
@@ -72,6 +70,26 @@ export class RentalsCronService {
       }
     } catch (error: any) {
       this.logger.error(error?.message ?? String(error));
+    }
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleRentalNoShows(): Promise<void> {
+    try {
+      const n = await this.cancelNoShowBookings();
+      if (n > 0) this.logger.log(`Cancelled ${n} rental no-show(s)`);
+    } catch (error: any) {
+      this.logger.error(`rental no-show: ${error?.message ?? error}`);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleRentalStartDayReminders(): Promise<void> {
+    try {
+      const n = await this.remindStartDayBookings();
+      if (n > 0) this.logger.log(`Sent ${n} rental pickup-day reminder(s)`);
+    } catch (error: any) {
+      this.logger.error(`rental start day: ${error?.message ?? error}`);
     }
   }
 
@@ -191,11 +209,8 @@ export class RentalsCronService {
    * An open pickup inspection pauses that clock until the client accepts.
    */
   async expireReservedRentalBookings(): Promise<number> {
-    const cutoff = new Date(
-      Date.now() - RESERVED_UNPAID_GRACE_MINUTES * 60 * 1000
-    ).toISOString();
     const now = new Date().toISOString();
-    const res = await this.listExpiredReserved(cutoff, now);
+    const res = await this.listExpiredReserved(now);
     const rows = res.rental_bookings ?? [];
     for (const b of rows) {
       try {
@@ -207,24 +222,23 @@ export class RentalsCronService {
     return rows.length;
   }
 
-  private async listExpiredReserved(cutoff: string, now: string) {
+  private async listExpiredReserved(now: string) {
     try {
       return await this.hasuraSystemService.executeQuery<{
         rental_bookings: Array<{ id: string }>;
-      }>(Q.LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS, { cutoff, now });
+      }>(Q.LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS, { now });
     } catch (error: any) {
       this.logger.warn(`reserved expiry using legacy predicate: ${error?.message ?? error}`);
       return this.hasuraSystemService.executeQuery<{
         rental_bookings: Array<{ id: string }>;
-      }>(Q.LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS_LEGACY, { cutoff });
+      }>(Q.LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS_LEGACY, { now });
     }
   }
 
   private async expireOneReservedBooking(bookingId: string): Promise<void> {
     const booking = await this.fetchBooking(bookingId);
-    if (!booking || booking.status !== 'reserved' || booking.actual_start_at) {
-      return;
-    }
+    if (!booking || booking.status !== 'reserved' || booking.actual_start_at) return;
+    if (this.rentalsService && !this.rentalsService.unpaidReservationDue(booking)) return;
     const won = await casUpdateRentalBooking(
       this.hasuraSystemService,
       bookingId,
@@ -323,6 +337,78 @@ export class RentalsCronService {
       clientUserId: booking.client.user_id,
       businessUserId: booking.business.user_id,
     });
+  }
+
+  async cancelNoShowBookings(): Promise<number> {
+    const now = new Date().toISOString();
+    const res = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: Array<{ id: string }>;
+    }>(Q.LIST_RENTAL_NO_SHOWS, { now });
+    let cancelled = 0;
+    for (const row of res.rental_bookings ?? []) {
+      if (await this.cancelOneNoShow(row.id)) cancelled += 1;
+    }
+    return cancelled;
+  }
+
+  private async cancelOneNoShow(bookingId: string): Promise<boolean> {
+    try {
+      return await this.rentalsService.cancelNoShowBooking(bookingId);
+    } catch (error: any) {
+      this.logger.error(`cancelNoShow ${bookingId}: ${error?.message ?? error}`);
+      return false;
+    }
+  }
+
+  async remindStartDayBookings(): Promise<number> {
+    const now = new Date();
+    const res = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: Array<{ id: string }>;
+    }>(Q.LIST_RENTAL_START_DAY_CANDIDATES, {
+      from: new Date(now.getTime() - 36 * 3600000).toISOString(),
+      until: new Date(now.getTime() + 36 * 3600000).toISOString(),
+    });
+    let sent = 0;
+    for (const row of res.rental_bookings ?? []) {
+      sent += await this.remindOneStartDay(row.id, now);
+    }
+    return sent;
+  }
+
+  private async remindOneStartDay(bookingId: string, now: Date): Promise<number> {
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || !this.bookingIsStartDay(booking, now)) return 0;
+    const item = booking.rental_location_listing?.rental_item?.name ?? 'Rental';
+    const client = await this.pushStartDay(booking, booking.client?.user_id, item, 'client');
+    const business = await this.pushStartDay(booking, booking.business?.user_id, item, 'business');
+    return Number(client) + Number(business);
+  }
+
+  private bookingIsStartDay(booking: any, now: Date): boolean {
+    const zone = listingZoneFor(booking?.rental_location_listing?.business_location?.address?.country);
+    const startAt = new Date(booking.start_at);
+    if (!isStartDay(startAt, now, zone)) return false;
+    return now.getTime() >= startOpensAt(startAt, zone).getTime();
+  }
+
+  private async pushStartDay(
+    booking: any,
+    userId: string | undefined,
+    item: string,
+    persona: 'client' | 'business'
+  ): Promise<boolean> {
+    if (!userId) return false;
+    try {
+      return await this.notificationsService.sendRentalStartDayReminder({
+        recipientUserId: userId,
+        rentalItemName: item,
+        bookingId: booking.id,
+        persona,
+      });
+    } catch (error: any) {
+      this.logger.warn(`start day ${booking.id}: ${error?.message ?? error}`);
+      return false;
+    }
   }
 
   private async fetchBooking(id: string) {

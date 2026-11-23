@@ -63,7 +63,7 @@ export class AdminRentalBookingsController {
 
   @Post('bookings/:id/start-overwrite-code')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Issue a one-time rental start code (support, reason required)' })
+  @ApiOperation({ summary: 'Retired. Returns 409 Update the app to start this rental' })
   @ApiParam({ name: 'id', format: 'uuid' })
   async issueStartCode(
     @Param('id', ParseUUIDPipe) bookingId: string,
