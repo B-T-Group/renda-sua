@@ -49,7 +49,7 @@ export function DeliveryPinMessageCard({
         <Key fontSize="small" color={isActive ? 'primary' : 'disabled'} />
         <Typography variant="subtitle2" fontWeight={600}>
           {isRental
-            ? t('rentals.messaging.startPin.title', 'Start PIN')
+            ? t('rentals.messaging.startPin.title', 'Start in the app')
             : t('orders.messaging.deliveryPin.title', 'Delivery PIN')}
         </Typography>
         {!isActive ? (
@@ -57,7 +57,11 @@ export function DeliveryPinMessageCard({
         ) : null}
       </Box>
 
-      {content.pin ? (
+      {isRental ? (
+        <Typography variant="body2" color="text.secondary">
+          {t('rentals.messaging.startPin.retired', 'Start this rental from the booking. There is no start PIN.')}
+        </Typography>
+      ) : content.pin ? (
         <Typography
           variant={compact ? 'h6' : 'h5'}
           component="div"

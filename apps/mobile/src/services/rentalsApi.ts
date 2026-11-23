@@ -347,6 +347,19 @@ export async function retryPayment(
   );
 }
 
+export async function startRental(bookingId: string): Promise<{
+  started: boolean;
+  paymentPending: boolean;
+  payment_rail?: string;
+  start_opens_at?: string;
+  message?: string;
+}> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/start`,
+    { method: 'POST' }
+  );
+}
+
 export async function getStartPin(
   bookingId: string
 ): Promise<RentalStartPinResult> {
@@ -693,6 +706,7 @@ export const rentalsApi = {
   getBooking,
   getPaymentStatus,
   retryPayment,
+  startRental,
   getStartPin,
   cancelBooking,
   initiatePickupPayment,

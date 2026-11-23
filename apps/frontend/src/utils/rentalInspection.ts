@@ -153,31 +153,28 @@ export interface PickupGate {
   showCollectPayment: boolean;
   showStart: boolean;
   showOverwrite: boolean;
+  /** The renter starts. There is no PIN and no business pickup payment. */
+  showRenterStart: boolean;
 }
 
-/** Legacy bookings keep today's payment, PIN, and support-code actions. */
+/** The renter starts. Business PIN, overwrite, and collect-payment stay hidden. */
 export function pickupGate(input: PickupGateInput): PickupGate {
   const reserved = input.status === 'reserved';
   const confirmed = input.status === 'confirmed';
+  const hidden = { showCollectPayment: false, showStart: false, showOverwrite: false };
   if (!input.enrolled) {
-    return {
-      mode: 'legacy',
-      showCollectPayment: reserved,
-      showStart: confirmed,
-      showOverwrite: confirmed,
-    };
+    return { mode: 'legacy', ...hidden, showRenterStart: reserved || confirmed };
   }
   if (!reserved && !confirmed) {
-    return { mode: 'ready', showCollectPayment: false, showStart: false, showOverwrite: false };
+    return { mode: 'ready', ...hidden, showRenterStart: false };
   }
   if (input.accepted) {
-    return { mode: 'ready', showCollectPayment: false, showStart: false, showOverwrite: false };
+    return { mode: 'ready', ...hidden, showRenterStart: true };
   }
   return {
     mode: input.submitted ? 'waiting' : 'capture',
-    showCollectPayment: false,
-    showStart: false,
-    showOverwrite: false,
+    ...hidden,
+    showRenterStart: false,
   };
 }
 

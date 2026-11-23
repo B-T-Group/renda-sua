@@ -212,11 +212,10 @@ const RentalBookingDetailPage: React.FC = () => {
   const { isStripeRail } = useIsStripeRail();
   const {
     fetchBookingDetail,
-    getStartPin,
+    startRental,
     cancelBooking,
     initiatePickupPayment,
     verifyStartPin,
-    shareStartPin,
     getActiveStartPin,
     confirmReturn,
     getBookingPaymentStatus,
@@ -390,7 +389,7 @@ const RentalBookingDetailPage: React.FC = () => {
 
   const isClient = profile?.client?.id === booking?.client_id;
   const isBusiness = profile?.business?.id === booking?.business_id;
-  const showClientPin = isClient && inspection.gate.showStart && !inspection.loading;
+  const showClientStart = isClient && inspection.gate.showRenterStart && !inspection.loading;
   const showCollect = isBusiness && inspection.gate.showCollectPayment && !inspection.loading;
   const showVerify = isBusiness && inspection.gate.showStart && !inspection.loading;
   const showReturnPicker =
@@ -684,55 +683,34 @@ const RentalBookingDetailPage: React.FC = () => {
                       {t('rentals.actions.completePayment', 'Complete payment')}
                     </Button>
                   </Stack>
-                ) : showClientPin ? (
-                  <Stack spacing={1}>
-                    <Button
-                      variant="contained"
-                      disabled={sharingPin}
-                      onClick={async () => {
-                        if (!bookingId) return;
-                        setSharingPin(true);
-                        try {
-                          await shareStartPin(bookingId);
-                          setInfo(
-                            t(
-                              'rentals.messaging.startPin.sentConfirmation',
-                              'PIN shared in booking chat. The business will be notified.'
-                            )
-                          );
-                          setError(null);
-                        } catch (e: unknown) {
-                          setError(
-                            e instanceof Error
-                              ? e.message
-                              : t(
-                                  'rentals.messaging.startPin.unavailable',
-                                  'Start PIN is not available. Try again in a moment.'
-                                )
-                          );
-                        } finally {
-                          setSharingPin(false);
-                        }
-                      }}
-                    >
-                      {t('rentals.actions.sendStartPin', 'Send start PIN')}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={async () => {
-                        try {
-                          const r = await getStartPin(bookingId);
-                          setPinValue(r.pin);
-                          setPinModalOpen(true);
-                          setError(null);
-                        } catch (e: unknown) {
-                          setError(e instanceof Error ? e.message : 'Error');
-                        }
-                      }}
-                    >
-                      {t('rentals.actions.showStartPin', 'Show PIN on screen')}
-                    </Button>
-                  </Stack>
+                ) : showClientStart ? (
+                  <Button
+                    variant="contained"
+                    disabled={sharingPin}
+                    onClick={async () => {
+                      if (!bookingId) return;
+                      setSharingPin(true);
+                      try {
+                        const started = await startRental(bookingId);
+                        setInfo(
+                          started.paymentPending
+                            ? t(
+                                'rentals.start.paymentPending',
+                                'Approve the Mobile Money prompt on your phone. The rental starts when it is paid.'
+                              )
+                            : t('rentals.start.started', 'Rental started. The business can hand over the item.')
+                        );
+                        setError(null);
+                        await load();
+                      } catch (e: unknown) {
+                        setError(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
+                      } finally {
+                        setSharingPin(false);
+                      }
+                    }}
+                  >
+                    {t('rentals.actions.startRental', 'Start rental')}
+                  </Button>
                 ) : showCollect ? (
                   <Stack spacing={1}>
                     {inspection.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (

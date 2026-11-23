@@ -536,7 +536,7 @@ export default function BusinessRentalBookingDetailScreen() {
           <Text style={{ color: colors.text.primary }}>
             {t(
               'rentals.bookingDetail.reservedBusinessHint',
-              'Reserved without payment. Collect the rental total at pickup — the start PIN unlocks after payment.'
+              'Reserved without payment. The renter starts this rental on the pickup day and pays then if it is still due.'
             )}
           </Text>
         </View>

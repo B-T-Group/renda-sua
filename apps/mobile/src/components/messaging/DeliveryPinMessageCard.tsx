@@ -19,7 +19,7 @@ export function DeliveryPinMessageCard({ content, variant = 'delivery' }: Props)
   const isActive = content.status === 'active';
   const isRental = variant === 'rentalStart';
   const title = isRental
-    ? t('rentals.messaging.startPin.title', 'Start PIN')
+    ? t('rentals.messaging.startPin.title', 'Start in the app')
     : t('orders.messaging.deliveryPin.title', 'Delivery PIN');
   const a11y = isRental
     ? t('rentals.messaging.startPin.cardA11y', 'Rental start PIN message')
@@ -63,7 +63,11 @@ export function DeliveryPinMessageCard({ content, variant = 'delivery' }: Props)
         ) : null}
       </View>
 
-      {content.pin ? (
+      {isRental ? (
+        <Text style={[typography.body2, { color: colors.text.secondary }]}>
+          {t('rentals.messaging.startPin.retired', 'Start this rental from the booking. There is no start PIN.')}
+        </Text>
+      ) : content.pin ? (
         <Text
           style={[
             typography.headlineSmall,

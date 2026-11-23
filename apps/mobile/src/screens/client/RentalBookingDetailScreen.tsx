@@ -25,7 +25,6 @@ import { DeclineOutcomeCard, declineCardView } from '../../components/rentals/De
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { RenterReturnCard } from '../../components/rentals/RenterReturnCard';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
-import { SendRentalStartPinButton } from '../../components/rentals/SendRentalStartPinButton';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalBookingDetail } from '../../hooks/useRentalBookingDetail';
 import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
@@ -100,7 +99,7 @@ export default function RentalBookingDetailScreen() {
     refetch,
     cancel,
     retryPayment,
-    getStartPin,
+    startRental,
   } = useRentalBookingDetail(bookingId);
   const {
     isStripeRail,
@@ -130,8 +129,7 @@ export default function RentalBookingDetailScreen() {
     setWindowForcedClosed(false);
   }, [bookingId]);
 
-  const [pinOpen, setPinOpen] = useState(false);
-  const [pinValue, setPinValue] = useState<string | null>(null);
+  const [startOpen, setStartOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -237,7 +235,7 @@ export default function RentalBookingDetailScreen() {
   });
   const reviewStage =
     reviewAction === 'review_pickup' ? 'pickup' : reviewAction === 'review_return' ? 'return' : null;
-  const canShowPin = gate.showStart && !snapshot.loading;
+  const canStart = gate.showRenterStart && !snapshot.loading;
   const isReserved = booking?.status === 'reserved';
   const depositAmount = showsCardDeposit(booking?.currency)
     ? toAmount(booking?.security_deposit_amount)
@@ -276,15 +274,17 @@ export default function RentalBookingDetailScreen() {
     booking?.rental_location_listing?.rental_item?.rental_item_images ?? [];
   const imageUri = bookingImages[0]?.image_url;
 
-  const onRevealPin = useCallback(async () => {
+  const onStartRental = useCallback(async () => {
     try {
-      const res = await getStartPin();
-      setPinValue(res.pin);
-      setPinOpen(true);
+      const res = await startRental();
+      setStartOpen(false);
+      if (res.paymentPending) {
+        setSnack(t('rentals.start.paymentPending', 'Approve the Mobile Money prompt on your phone. The rental starts when it is paid.'));
+      }
     } catch (e: unknown) {
       setSnack(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
     }
-  }, [getStartPin, t]);
+  }, [startRental, t]);
 
   const onRetry = useCallback(async () => {
     try {
@@ -488,21 +488,15 @@ export default function RentalBookingDetailScreen() {
                 >
                   {t('rentals.actions.completePayment', 'Complete payment')}
                 </Button>
-              ) : canShowPin ? (
-                <View style={{ gap: spacing.sm, marginTop: spacing.xs }}>
-                  <SendRentalStartPinButton
-                    bookingId={booking.id}
-                    onSent={() => void refetchMessages()}
-                    onError={(msg) => setSnack(msg)}
-                  />
-                  <Button
-                    mode="outlined"
-                    loading={actionLoading}
-                    onPress={() => void onRevealPin()}
-                  >
-                    {t('rentals.actions.showStartPin', 'Show PIN on screen')}
-                  </Button>
-                </View>
+              ) : canStart ? (
+                <Button
+                  mode="contained"
+                  loading={actionLoading}
+                  onPress={() => setStartOpen(true)}
+                  style={{ marginTop: spacing.xs }}
+                >
+                  {t('rentals.actions.startRental', 'Start rental')}
+                </Button>
               ) : booking.status === 'completed' ? (
                 <Button
                   mode="contained"
@@ -812,7 +806,7 @@ export default function RentalBookingDetailScreen() {
                   )
                 : t(
                     'rentals.bookingDetail.reservedClientHint',
-                    'Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.'
+                    'Your reservation is held for free. On the pickup day, tap Start rental. Pay then if it is still due.'
                   )}
             </Text>
           </View>
@@ -922,15 +916,21 @@ export default function RentalBookingDetailScreen() {
       ) : null}
 
       <Portal>
-        <Dialog visible={pinOpen} onDismiss={() => setPinOpen(false)}>
-          <Dialog.Title>{t('rentals.yourPin', 'Your start PIN')}</Dialog.Title>
+        <Dialog visible={startOpen} onDismiss={() => setStartOpen(false)}>
+          <Dialog.Title>{t('rentals.start.confirmTitle', 'Start this rental?')}</Dialog.Title>
           <Dialog.Content>
-            <Text style={[typography.h4, { color: colors.text.primary, textAlign: 'center' }]}>
-              {pinValue ?? '—'}
+            <Text>
+              {t(
+                'rentals.start.confirmBody',
+                'Start only when you are with the business and ready to take the item.'
+              )}
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setPinOpen(false)}>{t('common.close', 'Close')}</Button>
+            <Button onPress={() => setStartOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
+            <Button loading={actionLoading} onPress={() => void onStartRental()}>
+              {t('rentals.actions.startRental', 'Start rental')}
+            </Button>
           </Dialog.Actions>
         </Dialog>
         <Dialog visible={cancelOpen} onDismiss={() => setCancelOpen(false)}>

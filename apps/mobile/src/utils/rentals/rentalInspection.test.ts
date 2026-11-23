@@ -54,14 +54,15 @@ describe('inspection enrolment', () => {
     expect(isInspectionEnrolled({ inspection_policy_version: 1 })).toBe(true);
   });
 
-  it('keeps collect payment, start, and the support code on legacy bookings', () => {
+  it('lets the renter start a legacy booking and hides PIN and collect payment', () => {
     expect(pickupGate({ enrolled: false, status: 'reserved', submitted: false, accepted: false })).toEqual({
       mode: 'legacy',
-      showCollectPayment: true,
+      showCollectPayment: false,
       showStart: false,
       showOverwrite: false,
+      showRenterStart: true,
     });
-    expect(pickupGate({ enrolled: false, status: 'confirmed', submitted: false, accepted: false }).showOverwrite).toBe(
+    expect(pickupGate({ enrolled: false, status: 'confirmed', submitted: false, accepted: false }).showRenterStart).toBe(
       true
     );
     expect(showLegacyReturnPicker(false, 'active')).toBe(true);

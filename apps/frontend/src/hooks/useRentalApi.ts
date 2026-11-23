@@ -770,6 +770,15 @@ export function useRentalApi() {
     [api]
   );
 
+  const startRental = useCallback(async (bookingId: string) => {
+    const { data } = await api.post(`/rentals/bookings/${bookingId}/start`);
+    return data as {
+      started: boolean;
+      paymentPending: boolean;
+      start_opens_at?: string;
+    };
+  }, [api]);
+
   const verifyStartPin = useCallback(
     async (
       bookingId: string,
@@ -892,6 +901,7 @@ export function useRentalApi() {
     acceptAndStart,
     reportNotReceived,
     reportReturned,
+    startRental,
     getStartPin,
     fetchBookingDetail,
     verifyStartPin,
