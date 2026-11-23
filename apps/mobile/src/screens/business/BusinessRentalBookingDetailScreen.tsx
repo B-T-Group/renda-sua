@@ -22,10 +22,11 @@ import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
 import { PickupDayCallout } from '../../components/rentals/inspection/PickupPhotoChrome';
-import { unpaidCancelMinutesLeft } from '../../utils/rentals/rentalInspection';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
-import { useActiveRentalStartPin } from '../../hooks/useActiveRentalStartPin';
+import { RentalStartCard } from '../../components/rentals/RentalStartCard';
+import { RentalJourneyList } from '../../components/rentals/RentalJourneyList';
+import { BusinessPhotoRequest } from '../../components/rentals/inspection/BusinessPhotoRequest';
 import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
 import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
@@ -51,11 +52,11 @@ import { formatDoualaStamp } from '../../utils/rentals/renterReturnPhase';
 import {
   businessCanReplaceReport,
   reportReadyToReview,
-  classifyInspectionError,
   pickupGate,
   showEnrolledReturn,
   showLegacyReturnPicker,
 } from '../../utils/rentals/rentalInspection';
+import { formatZonedDay, formatZonedWhen, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalBookingDetail'>;
 
@@ -73,10 +74,6 @@ export default function BusinessRentalBookingDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
-  const [pin, setPin] = useState('');
-  const [overwriteInput, setOverwriteInput] = useState('');
-  const [pinDialog, setPinDialog] = useState(false);
-  const [overwriteDialog, setOverwriteDialog] = useState(false);
   const [cancelDialog, setCancelDialog] = useState(false);
   const [returnDialog, setReturnDialog] = useState(false);
   const [returnDate, setReturnDate] = useState('');
@@ -89,14 +86,6 @@ export default function BusinessRentalBookingDetailScreen() {
     refetch: refetchMessages,
     mentionableParticipants,
   } = useRentalBookingMessages(bookingId);
-  const {
-    autoSharedPin,
-    autoPinMessageId,
-    resolvingSharedPin,
-    noSharedPin,
-    resetSharedPinState,
-  } = useActiveRentalStartPin(bookingId, pinDialog);
-  const [showManualPin, setShowManualPin] = useState(false);
   const snapshot = useInspectionSnapshot(bookingId, booking);
   const confirmationsOn = !flagsLoading && flags.rentals_inspection_confirmations_enabled;
 
@@ -147,66 +136,17 @@ export default function BusinessRentalBookingDetailScreen() {
     return new Date(iso).getTime() > new Date(booking.end_at).getTime();
   })();
 
-  const verifyPin = useCallback(async (opts?: {
-    useShared?: boolean;
-  }) => {
+  const reportNotCollected = useCallback(async () => {
     setBusy(true);
     try {
-      if (opts?.useShared) {
-        await rentalsApi.verifyStartPin(bookingId, {
-          useLatestSharedPin: true,
-          pinMessageId: autoPinMessageId || undefined,
-        });
-      } else {
-        await rentalsApi.verifyStartPin(bookingId, { pin: pin.trim() });
-      }
-      setPinDialog(false);
-      setPin('');
-      setShowManualPin(false);
-      resetSharedPinState();
-      setSnack(t('rentals.started', 'Rental started'));
-      await load();
+      await rentalsApi.reportItemNotCollected(bookingId);
+      setSnack(t('rentals.business.notCollectedSent', 'Support was notified that the item was not collected.'));
     } catch (e: unknown) {
-      setSnack(inspectionFailure(e, t) ?? (e instanceof Error ? e.message : t('business.rentals.pinFailed', 'PIN failed')));
+      setSnack(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
     } finally {
       setBusy(false);
     }
-  }, [autoPinMessageId, bookingId, load, pin, resetSharedPinState, t]);
-
-  useEffect(() => {
-    if (!pinDialog) {
-      setShowManualPin(false);
-      setPin('');
-    }
-  }, [pinDialog]);
-
-  useEffect(() => {
-    if (pinDialog && autoSharedPin && !showManualPin) {
-      setPin(autoSharedPin);
-    }
-  }, [pinDialog, autoSharedPin, showManualPin]);
-
-  const applyOverwrite = useCallback(async () => {
-    setBusy(true);
-    try {
-      await rentalsApi.verifyStartPin(bookingId, {
-        overwriteCode: overwriteInput.trim() || undefined,
-      });
-      setOverwriteDialog(false);
-      setOverwriteInput('');
-      setSnack(t('rentals.started', 'Rental started'));
-      await load();
-    } catch (e: unknown) {
-      setSnack(
-        inspectionFailure(e, t) ??
-          (e instanceof Error
-            ? e.message
-            : t('business.rentals.overwriteFailed', 'Could not start rental'))
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [bookingId, load, overwriteInput, t]);
+  }, [bookingId, t]);
 
   const openReturnDialog = useCallback(() => {
     const parts = localDateTimeParts(new Date());
@@ -247,31 +187,6 @@ export default function BusinessRentalBookingDetailScreen() {
     }
   }, [bookingId, load, returnDate, returnTime, t]);
 
-  const collectPickupPayment = useCallback(async () => {
-    setBusy(true);
-    try {
-      const res = await rentalsApi.initiatePickupPayment(bookingId);
-      setSnack(
-        res.confirmed
-          ? t('rentals.bookingDetail.pickupPaid', 'Payment collected — rental confirmed')
-          : t(
-              'rentals.bookingDetail.pickupPaymentSent',
-              'Mobile money request sent to the client. The booking confirms once payment lands.'
-            )
-      );
-      await load();
-    } catch (e: unknown) {
-      setSnack(
-        inspectionFailure(e, t) ??
-          (e instanceof Error
-            ? e.message
-            : t('rentals.bookingDetail.pickupPaymentError', 'Could not collect payment'))
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [bookingId, load, t]);
-
   const cancelBooking = useCallback(async () => {
     setBusy(true);
     try {
@@ -309,6 +224,18 @@ export default function BusinessRentalBookingDetailScreen() {
   const sc = rentalBookingStatusColors(booking.status, colors);
   const phaseInfo = resolveBookingPhase(booking.status, 'business');
   const listingCountry = booking.rental_location_listing?.business_location?.address?.country;
+  const listingZone = confirmationTimeZone(listingCountry, booking.currency);
+  const photosAsked = snapshot.pickup?.status === 'correction_requested';
+  const startPhase = pickupPhase({
+    now: Date.now(),
+    startAt: booking.start_at,
+    endAt: booking.end_at,
+    startOpensAt: booking.start_opens_at,
+    timeZone: listingZone,
+    started: booking.status === 'active' || Boolean(booking.actual_start_at),
+  });
+  const pickupDay = formatZonedDay(booking.start_at, listingZone, i18n.language);
+  const returnWhen = formatZonedWhen(booking.end_at, listingZone, i18n.language);
   const bookedSpan = formatBookedSpan(
     booking.start_at,
     booking.end_at,
@@ -346,7 +273,6 @@ export default function BusinessRentalBookingDetailScreen() {
     submitted: snapshot.pickup?.status === 'submitted' && !snapshot.pickup.yourDecision,
     accepted: snapshot.pickup?.yourDecision === 'accept',
   });
-  const canVerify = gate.showStart && !snapshot.loading;
   const canReturn = showLegacyReturnPicker(snapshot.enrolled, booking.status);
   const showReturnInspection = showEnrolledReturn(snapshot.enrolled, booking.status);
   const showRenterReport =
@@ -354,7 +280,6 @@ export default function BusinessRentalBookingDetailScreen() {
     flags.rentals_renter_return_report_enabled &&
     Boolean(booking.renter_reported_returned_at);
   const isReserved = booking.status === 'reserved';
-  const showCollectPayment = gate.showCollectPayment && !snapshot.loading;
   const canCancel =
     (booking.status === 'confirmed' || isReserved) && !booking.actual_start_at;
   const depositAmount = Math.max(0, Number(booking.security_deposit_amount) || 0);
@@ -404,16 +329,7 @@ export default function BusinessRentalBookingDetailScreen() {
           </Text>
           <StatusPill
             compact
-            label={
-              reviewReady
-                ? t('rentalInspection.phase.waitingRenter', 'Waiting for renter')
-                : t(
-                    booking.status === 'awaiting_return'
-                      ? bookingDetailStatusLabelKey(booking.status)
-                      : phaseInfo.labelKey,
-                    booking.status === 'awaiting_return' ? 'Return due' : booking.status
-                  )
-            }
+            label={handoverPill(booking.status, photosAsked, startPhase, pickupDay, reviewReady, phaseInfo.labelKey, t)}
             backgroundColor={reviewReady ? '#B4530918' : sc.backgroundColor}
             textColor={reviewReady ? '#B45309' : sc.textColor}
             borderColor={reviewReady ? '#B4530944' : sc.borderColor}
@@ -464,7 +380,7 @@ export default function BusinessRentalBookingDetailScreen() {
         </View>
       ) : null}
 
-      {showRenterReport ? null : (
+      {showRenterReport || booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active' ? null : (
       <View style={{ marginTop: spacing.md }}>
         <RentalPhaseBanner
           bookingStatus={booking.status}
@@ -477,35 +393,7 @@ export default function BusinessRentalBookingDetailScreen() {
               : undefined
           }
           action={
-            showCollectPayment ? (
-              <>
-                {snapshot.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (
-                  <Text style={{ color: colors.text.secondary, marginBottom: 8 }}>
-                    {t('rentalInspection.autoCancel', 'Auto-cancel if unpaid: {{minutes}} min left. The clock started when Collect payment opened. Inspection time is not included.', {
-                      minutes: unpaidCancelMinutesLeft(booking.reserved_cancel_after),
-                    })}
-                  </Text>
-                ) : null}
-                <Button
-                  mode="contained"
-                  loading={busy}
-                  disabled={busy}
-                  onPress={() => void collectPickupPayment()}
-                  style={{ marginTop: 4 }}
-                >
-                  {t('rentals.actions.collectPayment', 'Collect payment')}
-                </Button>
-              </>
-            ) : canVerify ? (
-              <Button
-                mode="contained"
-                disabled={busy}
-                onPress={() => setPinDialog(true)}
-                style={{ marginTop: 4 }}
-              >
-                {t('rentals.actions.verifyStartPin', 'Verify start PIN')}
-              </Button>
-            ) : canReturn && !showRenterReport ? (
+            canReturn && !showRenterReport ? (
               <Button
                 mode="contained"
                 disabled={busy}
@@ -590,7 +478,7 @@ export default function BusinessRentalBookingDetailScreen() {
         />
       ) : null}
 
-      {snapshot.enrolled ? (
+      {snapshot.enrolled && !photosAsked ? (
         <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
           <BusinessAcceptStartHero
             booking={booking}
@@ -629,20 +517,55 @@ export default function BusinessRentalBookingDetailScreen() {
         </View>
       ) : null}
 
-      {canVerify && snapshot.enrolled ? (
-        <Text style={{ color: colors.text.secondary, marginTop: spacing.sm }}>
-          {t('rentalInspection.overwriteSupportOnly', 'Overwrite codes are issued by Rendasua support only — not shown here.')}
-        </Text>
+      {photosAsked && !showRenterReport ? (
+        <BusinessPhotoRequest
+          bookingId={bookingId}
+          renterName={clientName || t('rentals.renter', 'The renter')}
+          reason={snapshot.pickup?.correctionReason}
+          photos={(snapshot.pickup?.units[0]?.photos ?? []).map((photo) => ({
+            ...photo,
+            unitId: snapshot.pickup?.units[0]?.unitId ?? '',
+          }))}
+          timeZone={listingZone}
+          onSent={() => void load({ soft: true })}
+        />
       ) : null}
-      {canVerify && gate.showOverwrite ? (
-        <Button
-          mode="text"
-          style={{ marginTop: spacing.sm, minHeight: 48 }}
-          disabled={busy}
-          onPress={() => setOverwriteDialog(true)}
-        >
-          {t('rentals.enterSupportCode', 'Enter support code')}
-        </Button>
+
+      {(booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active') && !showRenterReport && !photosAsked ? (
+        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          <RentalStartCard
+            booking={booking}
+            timeZone={confirmationTimeZone(listingCountry, booking.currency)}
+            role="business"
+            renterName={clientName || undefined}
+            place={booking.rental_location_listing?.business_location?.name ?? ''}
+            money={detailMoney(Number(booking.total_amount) || 0)}
+            returnLabel={returnWhen}
+            starting={busy}
+            open={false}
+            onOpen={() => undefined}
+            onClose={() => undefined}
+            onConfirm={() => undefined}
+            onNotCollected={booking.status === 'active' ? () => void reportNotCollected() : undefined}
+          />
+          <View
+            style={[
+              styles.card,
+              { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.md },
+            ]}
+          >
+            <Text style={[typography.subtitle2, { color: colors.text.primary, marginBottom: 8 }]}>
+              {t('rentals.status', 'Status')}
+            </Text>
+            <RentalJourneyList
+              hideTitle
+              status={booking.status}
+              payAtPickup={booking.payment_timing === 'pay_at_pickup'}
+              paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
+              accent={colors.success.main}
+            />
+          </View>
+        </View>
       ) : null}
 
       {canCancel ? (
@@ -691,108 +614,6 @@ export default function BusinessRentalBookingDetailScreen() {
       ) : null}
 
       <Portal>
-        <Dialog visible={pinDialog} onDismiss={() => !busy && setPinDialog(false)}>
-          <Dialog.Title>{t('rentals.verifyStart', 'Verify start')}</Dialog.Title>
-          <Dialog.Content>
-            {resolvingSharedPin ? (
-              <Text style={{ marginBottom: 12, color: colors.text.secondary }}>
-                {t('rentals.messaging.startPin.resolving', 'Looking for shared start PIN…')}
-              </Text>
-            ) : null}
-            {noSharedPin && !resolvingSharedPin && !autoSharedPin ? (
-              <Text style={{ marginBottom: 12, color: colors.text.secondary }}>
-                {t(
-                  'rentals.messaging.startPin.noShared',
-                  'The client has not shared a start PIN in chat yet. Ask them to tap Send start PIN, or enter it manually.'
-                )}
-              </Text>
-            ) : null}
-            {autoSharedPin && !showManualPin ? (
-              <>
-                <Text style={{ marginBottom: 8, color: colors.text.secondary }}>
-                  {t(
-                    'rentals.messaging.startPin.usingShared',
-                    'Using the start PIN shared by the client in chat.'
-                  )}
-                </Text>
-                <Text
-                  style={{
-                    textAlign: 'center',
-                    letterSpacing: 8,
-                    fontSize: 28,
-                    fontWeight: '700',
-                    color: colors.text.primary,
-                    marginVertical: 12,
-                  }}
-                >
-                  {autoSharedPin}
-                </Text>
-                <Button mode="text" compact onPress={() => setShowManualPin(true)}>
-                  {t('rentals.messaging.startPin.enterManually', 'Enter PIN manually instead')}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Text style={{ marginBottom: 12, color: colors.text.secondary }}>
-                  {t(
-                    'business.rentals.startRentalHint',
-                    'Enter the 4-digit start PIN from the customer.'
-                  )}
-                </Text>
-                <TextInput
-                  label={t('rentals.clientPin', 'Client PIN')}
-                  value={pin}
-                  onChangeText={setPin}
-                  keyboardType="number-pad"
-                  mode="outlined"
-                  maxLength={8}
-                />
-              </>
-            )}
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setPinDialog(false)} disabled={busy}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button
-              loading={busy}
-              disabled={busy || resolvingSharedPin || (!autoSharedPin && !pin.trim())}
-              onPress={() =>
-                void verifyPin({
-                  useShared: !!autoSharedPin && !showManualPin,
-                })
-              }
-            >
-              {t('common.confirm', 'Confirm')}
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-
-        <Dialog visible={overwriteDialog} onDismiss={() => setOverwriteDialog(false)}>
-          <Dialog.Title>{t('rentals.enterSupportCode', 'Enter support code')}</Dialog.Title>
-          <Dialog.Content>
-            <Text style={{ marginBottom: 12, color: colors.text.secondary }}>
-              {t(
-                'rentals.supportCodeHint',
-                'Ask the client for their start PIN. A support code is only for when the client cannot share it, and only support can issue one.'
-              )}
-            </Text>
-            <TextInput
-              label={t('rentals.overwriteCode', 'Overwrite code')}
-              value={overwriteInput}
-              onChangeText={setOverwriteInput}
-              mode="outlined"
-            />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setOverwriteDialog(false)}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button loading={busy} onPress={() => void applyOverwrite()}>
-              {t('rentals.verifyStart', 'Verify start')}
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
 
         <Dialog visible={cancelDialog} onDismiss={() => setCancelDialog(false)}>
           <Dialog.Title>{t('rentals.cancelBooking', 'Cancel booking')}</Dialog.Title>
@@ -1033,21 +854,32 @@ function combineLocalDateTime(date: string, time: string): string | null {
   return d.toISOString();
 }
 
-function inspectionFailure(
-  error: unknown,
-  t: (key: string, fallback: string) => string
-): string | null {
-  const kind = classifyInspectionError(error);
-  if (kind === 'conflict') {
-    return t('rentalInspection.reportChanged', 'That report changed. Review it again.');
-  }
-  if (kind === 'update_required') {
-    return t(
-      'rentalInspection.updateRequired',
-      'This rental uses condition inspections. Review the report here, or update the app if this screen is missing.'
-    );
-  }
-  return null;
+function handoverPill(
+  status: string,
+  photosAsked: boolean,
+  phase: PickupPhase,
+  day: string,
+  reviewReady: boolean,
+  fallbackKey: string,
+  t: (key: string, fallback: string, vars?: Record<string, string>) => string,
+): string {
+  if (photosAsked) return t('rentals.business.photosPill', 'New photos asked');
+  if (reviewReady) return t('rentalInspection.phase.waitingRenter', 'Waiting for renter');
+  if (status === 'awaiting_return') return t(bookingDetailStatusLabelKey(status), 'Return due');
+  if (status === 'reserved' || status === 'confirmed' || status === 'active') return phaseLabel(phase, day, t);
+  return t(fallbackKey, status);
+}
+
+function phaseLabel(
+  phase: PickupPhase,
+  day: string,
+  t: (key: string, fallback: string, vars?: Record<string, string>) => string,
+): string {
+  if (phase === 'before') return t('rentals.start.pillDay', 'Pickup {{day}}', { day });
+  if (phase === 'late') return t('rentals.start.latePickup', 'Late pickup');
+  if (phase === 'started') return t('rentals.journey.inProgress', 'In progress');
+  if (phase === 'today') return t('rentals.start.pickupToday', 'Pickup today');
+  return t('rentals.phases.readyForPickup', 'Ready for pickup');
 }
 
 const styles = StyleSheet.create({

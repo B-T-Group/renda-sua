@@ -742,7 +742,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     </Typography>
                     <TextField
                       type="time"
-                      label={t('rentals.start', 'Start')}
+                      label={t('rentals.windowStart', 'Start')}
                       value={(slot.start_time ?? '08:00:00').slice(0, 5)}
                       disabled={!slot.is_available}
                       onChange={(e) =>

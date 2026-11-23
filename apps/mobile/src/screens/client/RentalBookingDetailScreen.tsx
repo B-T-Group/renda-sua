@@ -23,6 +23,9 @@ import {
 } from '../../components/rentals/DidntReceiveReportButton';
 import { DeclineOutcomeCard, declineCardView } from '../../components/rentals/DeclinePickupScreens';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
+import { RentalStartCard } from '../../components/rentals/RentalStartCard';
+import { RentalJourneyList } from '../../components/rentals/RentalJourneyList';
+import { MobileMoneyConfirmIllustration } from '../../components/illustrations/MobileMoneyConfirmIllustration';
 import { RenterReturnCard } from '../../components/rentals/RenterReturnCard';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -49,7 +52,6 @@ import {
 import {
   bookingRequestedPeriodLines,
   formatListingDeadline,
-  formatRentalPeriod,
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
 import { clientInspectionAction, pickupGate, reportReadyToReview } from '../../utils/rentals/rentalInspection';
@@ -60,6 +62,7 @@ import {
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
 import { renterReturnPhase } from '../../utils/rentals/renterReturnPhase';
+import { formatZonedDay, formatZonedWhen, pickupPhase } from '../../utils/rentals/rentalStartWindow';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
@@ -130,6 +133,7 @@ export default function RentalBookingDetailScreen() {
   }, [bookingId]);
 
   const [startOpen, setStartOpen] = useState(false);
+  const [momoWaiting, setMomoWaiting] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -182,10 +186,10 @@ export default function RentalBookingDetailScreen() {
     ? [bookedSpan]
     : bookingRequestedPeriodLines(windows, booking, i18n.language, dayCountLabel);
   const returnByLabel = booking?.end_at
-    ? formatRentalPeriod(
-        [{ start_at: booking.end_at, end_at: booking.end_at }],
-        i18n.language,
-        dayCountLabel
+    ? formatZonedWhen(
+        booking.end_at,
+        confirmationTimeZone(listingCountry, booking.currency),
+        i18n.language
       )
     : '—';
   const timelineStepsBase = bookingDetailTimeline(booking?.status ?? '');
@@ -235,7 +239,6 @@ export default function RentalBookingDetailScreen() {
   });
   const reviewStage =
     reviewAction === 'review_pickup' ? 'pickup' : reviewAction === 'review_return' ? 'return' : null;
-  const canStart = gate.showRenterStart && !snapshot.loading;
   const isReserved = booking?.status === 'reserved';
   const depositAmount = showsCardDeposit(booking?.currency)
     ? toAmount(booking?.security_deposit_amount)
@@ -250,7 +253,28 @@ export default function RentalBookingDetailScreen() {
   });
   const showReturnReport = !flagsLoading && flags.rentals_renter_return_report_enabled && returnPhase !== 'hidden';
   const headerOverdue = showReturnReport && returnPhase === 'overdue';
-  const pillLabel = headerOverdue ? t('rentals.returnReport.overdue', 'Overdue') : statusLabel;
+  const startZone = booking
+    ? confirmationTimeZone(booking.rental_location_listing?.business_location?.address?.country, booking.currency)
+    : 'Africa/Douala';
+  const startPhase = booking && (booking.status === 'reserved' || booking.status === 'confirmed')
+    ? pickupPhase({
+        now: Date.now(),
+        startAt: booking.start_at,
+        endAt: booking.end_at,
+        startOpensAt: booking.start_opens_at,
+        timeZone: startZone,
+      })
+    : null;
+  const pickupDay = booking ? formatZonedDay(booking.start_at, startZone, i18n.language) : '';
+  const pillLabel = headerOverdue
+    ? t('rentals.returnReport.overdue', 'Overdue')
+    : startPhase === 'before'
+      ? t('rentals.start.pillDay', 'Pickup {{day}}', { day: pickupDay })
+      : startPhase === 'today'
+        ? t('rentals.start.pickupToday', 'Pickup today')
+        : startPhase === 'late'
+          ? t('rentals.start.latePickup', 'Late pickup')
+          : statusLabel;
   const pillColors = headerOverdue
     ? {
         backgroundColor: colors.error.main + '18',
@@ -278,9 +302,7 @@ export default function RentalBookingDetailScreen() {
     try {
       const res = await startRental();
       setStartOpen(false);
-      if (res.paymentPending) {
-        setSnack(t('rentals.start.paymentPending', 'Approve the Mobile Money prompt on your phone. The rental starts when it is paid.'));
-      }
+      if (res.paymentPending) setMomoWaiting(true);
     } catch (e: unknown) {
       setSnack(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
     }
@@ -370,6 +392,30 @@ export default function RentalBookingDetailScreen() {
       t('rentals.clientRequests.unknownItem', 'Rental'),
     [booking, t]
   );
+
+  useEffect(() => {
+    if (!momoWaiting) return undefined;
+    if (booking?.status === 'active' || booking?.actual_start_at) {
+      setMomoWaiting(false);
+      return undefined;
+    }
+    const timer = setInterval(() => void refetch(), 4000);
+    return () => clearInterval(timer);
+  }, [booking?.actual_start_at, booking?.status, momoWaiting, refetch]);
+
+  if (momoWaiting) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.pageBackground, padding: spacing.lg, gap: spacing.md }]}>
+        <MobileMoneyConfirmIllustration />
+        <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center' }]}>
+          {t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')}
+        </Text>
+        <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
+          {t('orders.momoAwaiting.waitingBody', 'Approve the request on your phone. This page updates when payment succeeds.')}
+        </Text>
+      </View>
+    );
+  }
 
   if (loading && !booking) {
     return (
@@ -466,7 +512,7 @@ export default function RentalBookingDetailScreen() {
           />
         ) : null}
 
-        {showReturnReport ? null : (
+        {showReturnReport || booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active' ? null : (
         <View style={{ marginTop: spacing.md }}>
           <RentalPhaseBanner
             bookingStatus={booking.status}
@@ -488,15 +534,6 @@ export default function RentalBookingDetailScreen() {
                 >
                   {t('rentals.actions.completePayment', 'Complete payment')}
                 </Button>
-              ) : canStart ? (
-                <Button
-                  mode="contained"
-                  loading={actionLoading}
-                  onPress={() => setStartOpen(true)}
-                  style={{ marginTop: spacing.xs }}
-                >
-                  {t('rentals.actions.startRental', 'Start rental')}
-                </Button>
               ) : booking.status === 'completed' ? (
                 <Button
                   mode="contained"
@@ -512,6 +549,31 @@ export default function RentalBookingDetailScreen() {
           />
         </View>
         )}
+
+        {(booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active') && !showReturnReport ? (
+          <View style={{ marginTop: spacing.md }}>
+            <RentalStartCard
+              booking={booking}
+              timeZone={confirmationTimeZone(
+                booking.rental_location_listing?.business_location?.address?.country,
+                booking.currency
+              )}
+              role="client"
+              place={booking.rental_location_listing?.business_location?.name ?? ''}
+              money={formatConfirmationMoney(
+                Number(booking.accept_start_preview?.amount_due_at_pickup) || Number(booking.total_amount) || 0,
+                booking.currency,
+                i18n.language
+              )}
+              returnLabel={returnByLabel}
+              starting={actionLoading}
+              open={startOpen}
+              onOpen={() => setStartOpen(true)}
+              onClose={() => setStartOpen(false)}
+              onConfirm={() => void onStartRental()}
+            />
+          </View>
+        ) : null}
 
         {snapshot.enrolled && !confirmationsOn ? (
           <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
@@ -630,6 +692,13 @@ export default function RentalBookingDetailScreen() {
             <Text style={[typography.body2, { color: colors.error.main, marginTop: spacing.xs }]}>
               {t('rentals.cancelled', 'Booking cancelled')}
             </Text>
+          ) : booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active' || booking.status === 'awaiting_return' || booking.status === 'completed' ? (
+            <RentalJourneyList
+              hideTitle
+              status={booking.status}
+              payAtPickup={booking.payment_timing === 'pay_at_pickup' || booking.currency === 'XAF' || booking.currency === 'XOF'}
+              paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
+            />
           ) : (
             timelineSteps.map((step, idx) => {
               const done = currentIdx >= idx;
@@ -916,23 +985,6 @@ export default function RentalBookingDetailScreen() {
       ) : null}
 
       <Portal>
-        <Dialog visible={startOpen} onDismiss={() => setStartOpen(false)}>
-          <Dialog.Title>{t('rentals.start.confirmTitle', 'Start this rental?')}</Dialog.Title>
-          <Dialog.Content>
-            <Text>
-              {t(
-                'rentals.start.confirmBody',
-                'Start only when you are with the business and ready to take the item.'
-              )}
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setStartOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
-            <Button loading={actionLoading} onPress={() => void onStartRental()}>
-              {t('rentals.actions.startRental', 'Start rental')}
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
         <Dialog visible={cancelOpen} onDismiss={() => setCancelOpen(false)}>
           <Dialog.Title>{t('rentals.cancelBooking', 'Cancel booking')}</Dialog.Title>
           <Dialog.Content>

@@ -7,6 +7,7 @@ import { initReactI18next } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import { theme } from '../../apps/frontend/src/theme/theme';
+import { LoadingProvider } from '../../apps/frontend/src/contexts/LoadingContext';
 import RentalBookingDetailPage from '../../apps/frontend/src/components/pages/RentalBookingDetailPage';
 import RentalRequestSubmittedPage from '../../apps/frontend/src/components/pages/RentalRequestSubmittedPage';
 import { ReportSentConfirmation } from '../../apps/frontend/src/components/rentals/ReportSentConfirmation';
@@ -31,10 +32,18 @@ function CaptureApp() {
   (window as Window & { __scene?: string }).__scene = scene;
   document.documentElement.lang = language;
   if (i18n.language !== language) void i18n.changeLanguage(language);
+  const clocks: Record<string, string> = {
+    before: '2026-11-23T16:00:00.000Z',
+    today: '2026-11-24T14:00:00.000Z',
+    momoDay: '2026-11-24T07:00:00.000Z',
+    bizPhotos: '2026-11-24T15:06:00.000Z',
+  };
+  if (clocks[scene]) Date.now = () => Date.parse(clocks[scene]);
   const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush';
   return (
     <I18nextProvider i18n={i18n}>
       <ThemeProvider theme={theme}>
+        <LoadingProvider>
         <CssBaseline />
         {direct ? (
           <Box sx={{ bgcolor: '#FAF9F7', minHeight: '100vh', py: 4 }}>
@@ -56,6 +65,7 @@ function CaptureApp() {
             </Routes>
           </MemoryRouter>
         )}
+        </LoadingProvider>
       </ThemeProvider>
     </I18nextProvider>
   );

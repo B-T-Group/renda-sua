@@ -37,14 +37,16 @@ function CaptureScreen() {
   const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush';
   const submitted = scene === 'requestSubmitted';
   const inspection = scene === 'review' || scene === 'momo' || scene === 'conflict';
-  const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait';
+  const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait' || scene === 'bizWait' || scene === 'bizStarted' || scene === 'bizPhotos';
+  const simpleInspect = scene === 'inspect' || scene === 'waitingPhotos' || scene === 'inspectStart';
+  freezeClock(scene);
   return (
     <View style={{ flex: 1, minHeight: '100vh', backgroundColor: '#FAF9F7' }}>
       {direct ? (
         <DirectConfirmation scene={scene} language={language} />
       ) : submitted ? (
         <RentalRequestSubmittedScreen />
-      ) : inspection ? (
+      ) : inspection || simpleInspect ? (
         <ClientInspectionScreen />
       ) : business ? (
         <BusinessRentalBookingDetailScreen />
@@ -53,6 +55,27 @@ function CaptureScreen() {
       )}
     </View>
   );
+}
+
+const CLOCK: Record<string, string> = {
+  before: '2026-11-23T16:00:00.000Z',
+  today: '2026-11-24T14:00:00.000Z',
+  momoDay: '2026-11-24T07:00:00.000Z',
+  late: '2026-11-24T16:00:00.000Z',
+  startedSimple: '2026-11-24T15:20:00.000Z',
+  inspect: '2026-11-24T14:30:00.000Z',
+  waitingPhotos: '2026-11-24T15:06:00.000Z',
+  inspectStart: '2026-11-24T15:12:00.000Z',
+  bizWait: '2026-11-24T14:00:00.000Z',
+  bizStarted: '2026-11-24T15:10:00.000Z',
+  bizPhotos: '2026-11-24T15:06:00.000Z',
+};
+
+function freezeClock(scene: string) {
+  const iso = CLOCK[scene];
+  if (!iso) return;
+  const fixed = Date.parse(iso);
+  Date.now = () => fixed;
 }
 
 const PHOTOS = [

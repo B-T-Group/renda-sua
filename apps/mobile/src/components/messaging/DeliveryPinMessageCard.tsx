@@ -9,21 +9,15 @@ import { StatusPill } from '../common/StatusPill';
 
 type Props = {
   content: DeliveryPinStructuredContent;
-  variant?: 'delivery' | 'rentalStart';
 };
 
-export function DeliveryPinMessageCard({ content, variant = 'delivery' }: Props) {
+export function DeliveryPinMessageCard({ content }: Props) {
   const { t } = useTranslation();
   const { colors, typography, borderRadius, shadows } = useTheme();
 
   const isActive = content.status === 'active';
-  const isRental = variant === 'rentalStart';
-  const title = isRental
-    ? t('rentals.messaging.startPin.title', 'Start in the app')
-    : t('orders.messaging.deliveryPin.title', 'Delivery PIN');
-  const a11y = isRental
-    ? t('rentals.messaging.startPin.cardA11y', 'Rental start PIN message')
-    : t('orders.messaging.deliveryPin.cardA11y', 'Delivery PIN message');
+  const title = t('orders.messaging.deliveryPin.title', 'Delivery PIN');
+  const a11y = t('orders.messaging.deliveryPin.cardA11y', 'Delivery PIN message');
 
   return (
     <View
@@ -63,11 +57,7 @@ export function DeliveryPinMessageCard({ content, variant = 'delivery' }: Props)
         ) : null}
       </View>
 
-      {isRental ? (
-        <Text style={[typography.body2, { color: colors.text.secondary }]}>
-          {t('rentals.messaging.startPin.retired', 'Start this rental from the booking. There is no start PIN.')}
-        </Text>
-      ) : content.pin ? (
+      {content.pin ? (
         <Text
           style={[
             typography.headlineSmall,
@@ -75,10 +65,8 @@ export function DeliveryPinMessageCard({ content, variant = 'delivery' }: Props)
             { color: colors.text.primary },
           ]}
           accessibilityLabel={t(
-            isRental
-              ? 'rentals.messaging.startPin.pinA11y'
-              : 'orders.messaging.deliveryPin.pinA11y',
-            isRental ? 'Start PIN {{pin}}' : 'Delivery PIN {{pin}}',
+            'orders.messaging.deliveryPin.pinA11y',
+            'Delivery PIN {{pin}}',
             { pin: content.pin.split('').join(' ') }
           )}
         >
@@ -87,24 +75,12 @@ export function DeliveryPinMessageCard({ content, variant = 'delivery' }: Props)
       ) : (
         <Text style={[typography.body2, { color: colors.text.secondary }]}>
           {isActive
-            ? isRental
-              ? t(
-                  'rentals.messaging.startPin.maskedActive',
-                  'Start PIN shared with {{business}}',
-                  {
-                    business:
-                      content.sharedToDisplayName ??
-                      t('common.business', 'business'),
-                  }
-                )
-              : t(
-                  'orders.messaging.deliveryPin.maskedActive',
-                  'Delivery PIN shared with {{agent}}',
-                  { agent: content.sharedToDisplayName ?? t('common.agent', 'agent') }
-                )
-            : isRental
-              ? t('rentals.messaging.startPin.maskedInactive', 'Start PIN (hidden)')
-              : t('orders.messaging.deliveryPin.maskedInactive', 'Delivery PIN (hidden)')}
+            ? t(
+                'orders.messaging.deliveryPin.maskedActive',
+                'Delivery PIN shared with {{agent}}',
+                { agent: content.sharedToDisplayName ?? t('common.agent', 'agent') }
+              )
+            : t('orders.messaging.deliveryPin.maskedInactive', 'Delivery PIN (hidden)')}
         </Text>
       )}
     </View>

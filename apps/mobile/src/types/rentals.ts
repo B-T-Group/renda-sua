@@ -219,6 +219,7 @@ export interface RentalBookingDetail {
   status: RentalBookingStatus | string;
   start_at: string;
   end_at: string;
+  start_opens_at?: string | null;
   total_amount: number;
   currency: string;
   security_deposit_amount?: number | string | null;

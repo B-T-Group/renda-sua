@@ -9,14 +9,15 @@ import { MobileMoneyConfirmIllustration } from '../../components/illustrations/M
 import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
 import { DeclineConditionSheet } from '../../components/rentals/DeclinePickupScreens';
+import { PickupStartFlow } from '../../components/rentals/inspection/PickupStartFlow';
 import { RentalStartedConfirmation } from '../../components/rentals/inspection/RentalStartedConfirmation';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useClientInspection } from '../../hooks/useClientInspection';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
-import { acceptAndStart, getBooking, getPaymentStatus } from '../../services/rentalsApi';
-import { formatListingDue } from '../../utils/rentals/rentalRequestFormat';
+import { getBooking, getPaymentStatus, startRental } from '../../services/rentalsApi';
+import { formatZonedWhen } from '../../utils/rentals/rentalStartWindow';
 import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
 import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import {
@@ -66,12 +67,13 @@ export default function ClientInspectionScreen() {
 
   const preview = model.booking?.accept_start_preview;
   const amountDue = preview?.amount_due_at_pickup ?? 0;
-  const amountLabel = formatConfirmationMoney(amountDue, model.booking?.currency ?? 'XAF', i18n.language);
+  const shownAmount = amountDue > 0 ? amountDue : Number(model.booking?.total_amount) || 0;
+  const amountLabel = formatConfirmationMoney(shownAmount, model.booking?.currency ?? 'XAF', i18n.language);
   const photoZone = confirmationTimeZone(
     model.booking?.rental_location_listing?.business_location?.address?.country,
     model.booking?.currency
   );
-  const dueLabel = model.booking?.end_at ? formatListingDue(model.booking.end_at, i18n.language) : '';
+  const dueLabel = model.booking?.end_at ? formatZonedWhen(model.booking.end_at, photoZone, i18n.language) : '';
   const pickupStart = stage === 'pickup' && !damaged;
 
   useEffect(() => {
@@ -125,7 +127,7 @@ export default function ClientInspectionScreen() {
     });
     setStarting(true);
     try {
-      const result = await acceptAndStart(bookingId, model.view.versionId);
+      const result = await startRental(bookingId);
       setConfirmOpen(false);
       setNotice(null);
       if (result.paymentPending) {
@@ -233,6 +235,35 @@ export default function ClientInspectionScreen() {
         <Text style={[typography.body1, { color: colors.text.primary, textAlign: 'center' }]}>
           {t('rentalInspection.businessRecording', 'The business is recording the condition report.')}
         </Text>
+      </View>
+    );
+  }
+
+  if (pickupStart && model.view && unit) {
+    return (
+      <View style={{ flex: 1 }}>
+        <PickupStartFlow
+          view={model.view}
+          photos={unit.photos}
+          timeZone={photoZone}
+          place={model.booking?.rental_location_listing?.business_location?.name ?? ''}
+          returnLabel={dueLabel}
+          money={amountLabel}
+          startAt={model.booking?.start_at ?? ''}
+          endAt={model.booking?.end_at ?? ''}
+          startOpensAt={model.booking?.start_opens_at}
+          busy={model.busy}
+          starting={starting}
+          showDecline={Boolean(flags.rentals_pickup_decline_enabled)}
+          onMatch={() => void model.accept()}
+          onAsk={(codes, note) => void model.sendReason('correction', codes, note, reasonLabels)}
+          onDecline={() => setDeclineOpen(true)}
+          onStart={() => void confirmStart()}
+          onReport={() => navigation.navigate('SupportTickets')}
+        />
+        {declineOpen && model.booking ? (
+          <DeclineConditionSheet money={declinePreview(model.booking)} onClose={() => setDeclineOpen(false)} />
+        ) : null}
       </View>
     );
   }

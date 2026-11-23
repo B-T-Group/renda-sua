@@ -282,6 +282,47 @@ for (const surface of ['web', 'mobile']) {
   }
 }
 
+const shots = [
+  ['mobile', 'before', 'en', 390, '01-before-start-day-en.png', 'Pickup'],
+  ['mobile', 'before', 'fr', 390, '01-before-start-day-fr.png', 'Retrait'],
+  ['mobile', 'today', 'en', 390, '02-start-day-en.png', 'Start rental'],
+  ['mobile', 'today', 'fr', 390, '02-start-day-fr.png', 'Démarrer'],
+  ['mobile', 'momoDay', 'en', 390, '02b-start-day-momo-en.png', 'FCFA'],
+  ['mobile', 'today', 'en', 390, '03-confirm-sheet-en.png', 'Start rental'],
+  ['mobile', 'today', 'fr', 390, '03-confirm-sheet-fr.png', 'Démarrer'],
+  ['mobile', 'startedSimple', 'en', 390, '04-started-en.png', 'In progress'],
+  ['mobile', 'inspect', 'en', 390, '05-inspect-step1-en.png', 'Matches'],
+  ['mobile', 'inspect', 'fr', 390, '05-inspect-step1-fr.png', 'correspond'],
+  ['mobile', 'inspect', 'en', 390, '06-ask-photos-sheet-en.png', 'ask for new photos'],
+  ['mobile', 'waitingPhotos', 'en', 390, '07-waiting-photos-en.png', 'Waiting for new photos'],
+  ['mobile', 'inspectStart', 'en', 390, '08-inspect-step2-en.png', 'Start rental'],
+  ['mobile', 'bizWait', 'en', 390, '09-business-waiting-en.png', 'Waiting for'],
+  ['mobile', 'bizStarted', 'en', 390, '10-business-started-en.png', 'hand over'],
+  ['mobile', 'bizPhotos', 'en', 390, '11-business-photo-request-en.png', 'Send updated photos'],
+  ['mobile', 'bizPhotos', 'fr', 390, '11-business-photo-request-fr.png', 'photos'],
+  ['web', 'today', 'en', 1440, '12-web-renter-start-day-en.png', 'Start rental'],
+  ['web', 'bizPhotos', 'en', 1440, '13-web-business-photo-request-en.png', 'Send updated photos'],
+];
+
+for (const [surface, scene, lang, width, file, text] of shots) {
+  if (!selected(file)) continue;
+  const height = surface === 'web' ? 900 : 844;
+  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
+  page.on('pageerror', (err) => console.log('PAGEERROR', file, err.message));
+  const port = surface === 'mobile' ? 8766 : 8765;
+  await page.goto(`http://127.0.0.1:${port}/?scene=${scene}&lang=${lang}`, { waitUntil: 'networkidle' });
+  if (file.startsWith('03-')) {
+    await page.locator('button').filter({ hasText: /Start rental|Démarrer/ }).first().click();
+  }
+  if (file.startsWith('06-')) {
+    await page.locator('button').filter({ hasText: /ask for new photos|nouvelles photos/i }).first().click();
+  }
+  await page.getByText(text, { exact: false }).first().waitFor({ timeout: 15000 }).catch(() => undefined);
+  await page.screenshot({ path: path.join(artifacts, file), fullPage: surface === 'mobile' });
+  await page.close();
+  console.log('shot', file);
+}
+
 await browser.close();
 webServer.close();
 mobileServer.close();

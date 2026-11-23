@@ -50,7 +50,7 @@ const WeeklyAvailabilityEditor: React.FC<WeeklyAvailabilityEditorProps> = ({
         >
           <Typography variant="body2">{WEEKDAY_LABELS[slot.weekday]}</Typography>
           <TextField
-            label={t('rentals.start', 'Start')}
+            label={t('rentals.windowStart', 'Start')}
             type="time"
             size="small"
             value={(slot.start_time ?? '08:00:00').slice(0, 5)}

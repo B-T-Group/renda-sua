@@ -122,11 +122,11 @@ const RentalRequestSubmittedPage: React.FC = () => {
                     noPin
                       ? t(
                           'rentals.requestSubmitted.pinBodyInspected',
-                          'At pickup, the business will share a condition report. Review and accept it to start the rental.'
+                          'At pickup, check the condition photos, then tap Start rental.'
                         )
                       : t(
                           'rentals.requestSubmitted.pinBody',
-                          'When you meet the owner to begin the rental, you will need to give them your start PIN so they can confirm the handover in the app.'
+                          'On the pickup day, open the booking and tap Start rental when you are with the business.'
                         )
                   }
                 />

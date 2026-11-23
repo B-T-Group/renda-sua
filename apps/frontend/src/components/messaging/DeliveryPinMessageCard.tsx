@@ -7,20 +7,17 @@ import type { DeliveryPinStructuredContent } from '../../hooks/useOrderMessages'
 interface DeliveryPinMessageCardProps {
   content: DeliveryPinStructuredContent;
   compact?: boolean;
-  variant?: 'delivery' | 'rentalStart';
 }
 
 export function DeliveryPinMessageCard({
   content,
   compact = false,
-  variant = 'delivery',
 }: DeliveryPinMessageCardProps) {
   const { t } = useTranslation();
 
   const isActive = content.status === 'active';
   const isSuperseded = content.status === 'superseded';
   const isRevoked = content.status === 'revoked';
-  const isRental = variant === 'rentalStart';
 
   const statusLabel = isSuperseded
     ? t('orders.messaging.deliveryPin.superseded', 'Superseded')
@@ -39,29 +36,19 @@ export function DeliveryPinMessageCard({
         maxWidth: 360,
       }}
       role="region"
-      aria-label={
-        isRental
-          ? t('rentals.messaging.startPin.cardA11y', 'Rental start PIN message')
-          : t('orders.messaging.deliveryPin.cardA11y', 'Delivery PIN message')
-      }
+      aria-label={t('orders.messaging.deliveryPin.cardA11y', 'Delivery PIN message')}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <Key fontSize="small" color={isActive ? 'primary' : 'disabled'} />
         <Typography variant="subtitle2" fontWeight={600}>
-          {isRental
-            ? t('rentals.messaging.startPin.title', 'Start in the app')
-            : t('orders.messaging.deliveryPin.title', 'Delivery PIN')}
+          {t('orders.messaging.deliveryPin.title', 'Delivery PIN')}
         </Typography>
         {!isActive ? (
           <Chip size="small" label={statusLabel} variant="outlined" />
         ) : null}
       </Box>
 
-      {isRental ? (
-        <Typography variant="body2" color="text.secondary">
-          {t('rentals.messaging.startPin.retired', 'Start this rental from the booking. There is no start PIN.')}
-        </Typography>
-      ) : content.pin ? (
+      {content.pin ? (
         <Typography
           variant={compact ? 'h6' : 'h5'}
           component="div"
@@ -72,10 +59,8 @@ export function DeliveryPinMessageCard({
             py: 1,
           }}
           aria-label={t(
-            isRental
-              ? 'rentals.messaging.startPin.pinA11y'
-              : 'orders.messaging.deliveryPin.pinA11y',
-            isRental ? 'Start PIN {{pin}}' : 'Delivery PIN {{pin}}',
+            'orders.messaging.deliveryPin.pinA11y',
+            'Delivery PIN {{pin}}',
             { pin: content.pin.split('').join(' ') }
           )}
         >
@@ -84,27 +69,15 @@ export function DeliveryPinMessageCard({
       ) : (
         <Typography variant="body2" color="text.secondary">
           {isActive
-            ? isRental
-              ? t(
-                  'rentals.messaging.startPin.maskedActive',
-                  'Start PIN shared with {{business}}',
-                  {
-                    business:
-                      content.sharedToDisplayName ??
-                      t('common.business', 'business'),
-                  }
-                )
-              : t(
-                  'orders.messaging.deliveryPin.maskedActive',
-                  'Delivery PIN shared with {{agent}}',
-                  { agent: content.sharedToDisplayName ?? t('common.agent', 'agent') }
-                )
-            : isRental
-              ? t('rentals.messaging.startPin.maskedInactive', 'Start PIN (hidden)')
-              : t(
-                  'orders.messaging.deliveryPin.maskedInactive',
-                  'Delivery PIN (hidden)'
-                )}
+            ? t(
+                'orders.messaging.deliveryPin.maskedActive',
+                'Delivery PIN shared with {{agent}}',
+                { agent: content.sharedToDisplayName ?? t('common.agent', 'agent') }
+              )
+            : t(
+                'orders.messaging.deliveryPin.maskedInactive',
+                'Delivery PIN (hidden)'
+              )}
         </Typography>
       )}
 

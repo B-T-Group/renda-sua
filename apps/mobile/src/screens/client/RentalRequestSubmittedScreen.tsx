@@ -40,7 +40,7 @@ const STEPS = [
     titleKey: 'rentals.requestSubmitted.pinTitle',
     titleDefault: 'Starting the rental',
     bodyKey: 'rentals.requestSubmitted.pinBody',
-    bodyDefault: 'When you meet the owner, give them your start PIN to confirm handover.',
+    bodyDefault: 'On the pickup day, open the booking and tap Start rental when you are with the business.',
   },
   {
     icon: 'cash-check' as const,
@@ -174,7 +174,7 @@ export default function RentalRequestSubmittedScreen() {
               {step.bodyKey === 'rentals.requestSubmitted.pinBody' && noPin
                 ? t(
                     'rentals.requestSubmitted.pinBodyInspected',
-                    'At pickup, the business will share a condition report. Review and accept it to start the rental.'
+                    'At pickup, check the condition photos, then tap Start rental.'
                   )
                 : t(step.bodyKey, step.bodyDefault)}
             </Text>

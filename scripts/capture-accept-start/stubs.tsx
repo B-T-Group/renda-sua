@@ -13,7 +13,11 @@ type Scene =
   | 'reportSent'
   | 'rentalStarted'
   | 'momoStarted'
-  | 'push';
+  | 'push'
+  | 'today'
+  | 'before'
+  | 'momoDay'
+  | 'bizPhotos';
 
 interface CaptureWindow extends Window {
   __scene?: Scene;
@@ -71,6 +75,28 @@ function reviewBooking(current: Scene) {
 }
 
 function bookingFor(current: Scene) {
+  if (current === 'today' || current === 'before' || current === 'momoDay' || current === 'bizPhotos') {
+    const momo = current === 'momoDay';
+    return {
+      ...reviewBooking(current),
+      booking_number: momo ? 'RB-38140211' : 'RB-38138754',
+      status: 'confirmed',
+      start_at: momo ? '2026-11-24T08:00:00.000Z' : '2026-11-24T15:00:00.000Z',
+      end_at: momo ? '2026-11-29T17:00:00.000Z' : '2026-11-26T23:00:00.000Z',
+      start_opens_at: momo ? '2026-11-23T23:00:00.000Z' : '2026-11-24T05:00:00.000Z',
+      total_amount: momo ? 45000 : 180,
+      currency: momo ? 'XAF' : 'CAD',
+      payment_status: momo ? 'pending' : 'authorized',
+      payment_timing: momo ? 'pay_at_pickup' : 'pay_now',
+      inspection_policy_version: current === 'bizPhotos' ? 1 : null,
+      authorized_amount: momo ? 0 : 180,
+      rental_location_listing: {
+        rental_item: { name: 'JBL PartyBox 310', rental_item_images: [{ id: 'img', image_url: '/hero-jbl.png' }] },
+        business_location: { name: momo ? 'Akwa Sound' : "Stripe Rail · L'Assomption", address: { country: momo ? 'CM' : 'CA' } },
+      },
+      client: { user: { first_name: 'Amina', last_name: 'K.' } },
+    };
+  }
   if (current === 'clientReview' || current === 'businessWait') return reviewBooking(current);
   const active = current === 'started' || current === 'handed';
   const legacy = current === 'legacy';
@@ -145,7 +171,7 @@ export function useSessionAuth() {
 
 export function useUserProfileContext() {
   const current = scene();
-  const business = current === 'waiting' || current === 'handed' || current === 'businessWait';
+  const business = current === 'waiting' || current === 'handed' || current === 'businessWait' || current === 'bizPhotos';
   return useMemo(
     () => ({
       loading: false,
@@ -439,10 +465,12 @@ export function useRentalInspection() {
   const full = viewFor(labels);
   const pickup = current === 'legacy'
     ? null
+    : current === 'bizPhotos'
+      ? { ...full, status: 'correction_requested', correctionReason: "Scratch on the left grille isn't shown.", units: [full.units[0]] }
     : one
       ? { ...full, units: [full.units[0]], submittedAt: '2026-11-17T15:32:00.000Z' }
       : full;
-  const enrolled = current !== 'legacy' && !captureParams().get('return');
+  const enrolled = current !== 'legacy' && current !== 'today' && current !== 'before' && current !== 'momoDay' && !captureParams().get('return');
   return {
     api: {
       acknowledge: async () => undefined,
@@ -460,8 +488,8 @@ export function useRentalInspection() {
     error: null,
     reload: async () => undefined,
     gate: enrolled
-      ? { mode: 'waiting' as const, showCollectPayment: false, showStart: false, showOverwrite: false }
-      : { mode: 'legacy' as const, showCollectPayment: false, showStart: true, showOverwrite: true },
+      ? { mode: 'waiting' as const, showCollectPayment: false, showStart: false, showOverwrite: false, showRenterStart: false }
+      : { mode: 'legacy' as const, showCollectPayment: false, showStart: false, showOverwrite: false, showRenterStart: true },
     reviewStage:
       current === 'review' || current === 'momo' || current === 'conflict' || current === 'clientReview'
         ? 'pickup'
