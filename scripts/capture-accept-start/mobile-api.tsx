@@ -24,6 +24,7 @@ type Scene =
   | 'waitingPhotos'
   | 'inspectStart'
   | 'bizWait'
+  | 'bizMomo'
   | 'bizStarted'
   | 'bizPhotos';
 
@@ -124,11 +125,11 @@ function bookingFor(current: Scene) {
 }
 
 const SIMPLE = new Set<Scene>([
-  'before', 'today', 'momoDay', 'late', 'startedSimple', 'inspect', 'waitingPhotos', 'inspectStart', 'bizWait', 'bizStarted', 'bizPhotos',
+  'before', 'today', 'momoDay', 'late', 'startedSimple', 'inspect', 'waitingPhotos', 'inspectStart', 'bizWait', 'bizMomo', 'bizStarted', 'bizPhotos',
 ]);
 
 function simpleBooking(current: Scene) {
-  const momo = current === 'momoDay';
+  const momo = current === 'momoDay' || current === 'bizMomo';
   const started = current === 'startedSimple' || current === 'bizStarted';
   const enrolled = current === 'inspect' || current === 'waitingPhotos' || current === 'inspectStart' || current === 'bizPhotos';
   return {
@@ -191,7 +192,9 @@ function inspectionFor() {
     : [unit('u1', french ? 'Unité 1' : 'Unit 1'), unit('u2', french ? 'Unité 2' : 'Unit 2')];
   return {
     status: (current === 'waitingPhotos' || current === 'bizPhotos' ? 'correction_requested' : 'submitted') as 'submitted' | 'correction_requested',
-    correctionReason: current === 'waitingPhotos' || current === 'bizPhotos' ? "Scratch on the left grille isn't shown." : null,
+    correctionReason: current === 'waitingPhotos' || current === 'bizPhotos'
+      ? (french ? "La rayure sur la grille gauche n'est pas visible." : "Scratch on the left grille isn't shown.")
+      : null,
     submittedAt: one ? '2026-11-17T15:32:00.000Z' : '2026-11-12T15:12:00.000Z',
     yourDecision: accepted ? ('accept' as const) : null,
     versionId: 'ver-1',

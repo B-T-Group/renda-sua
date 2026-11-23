@@ -7122,6 +7122,8 @@
       "todayBody": "Au commerce, touchez Démarrer la location. On vous remet l'article dès que vous démarrez.",
       "momoBody": "Au commerce, touchez Démarrer la location. Vous payez à ce moment, et on vous remet l'article une fois le paiement reçu.",
       "momoLine": "Mobile Money · {{amount}}",
+      "momoWaitingTitle": "Approuvez sur votre téléphone",
+      "momoWaitingBody": "Approuvez la demande sur votre téléphone. Cette page se met à jour quand le paiement est accepté.",
       "held": "{{amount}} retenus sur votre carte",
       "returnBy": "Retour le {{when}}",
       "locked": "Démarrer la location · à partir du {{day}}",

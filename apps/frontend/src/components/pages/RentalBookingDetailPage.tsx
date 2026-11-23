@@ -544,9 +544,9 @@ const RentalBookingDetailPage: React.FC = () => {
       <Box sx={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
         <Stack spacing={2} alignItems="center" sx={{ maxWidth: 420 }}>
           <MobileMoneyConfirmIllustration />
-          <Typography variant="h5" textAlign="center">{t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')}</Typography>
+          <Typography variant="h5" textAlign="center">{t('rentals.start.momoWaitingTitle', 'Approve on your phone')}</Typography>
           <Typography variant="body2" color="text.secondary" textAlign="center">
-            {t('orders.momoAwaiting.waitingBody', 'Approve the request on your phone. This page updates when payment succeeds.')}
+            {t('rentals.start.momoWaitingBody', 'Approve the request on your phone. This page updates when the payment goes through.')}
           </Typography>
         </Stack>
       </Box>

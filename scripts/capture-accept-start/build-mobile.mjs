@@ -5,6 +5,8 @@ const root = path.resolve(import.meta.dirname, '../..');
 const api = path.join(root, 'scripts/capture-accept-start/mobile-api.tsx');
 const nav = path.join(root, 'scripts/capture-accept-start/mobile-nav.tsx');
 const codegen = path.join(root, 'scripts/capture-accept-start/codegen-stub.js');
+const fontLoader = path.join(root, 'scripts/capture-accept-start/font-loader.js');
+const svgWeb = path.join(root, 'scripts/capture-accept-start/svg-web.js');
 const rnw = path.join(root, 'scripts/capture-accept-start/rn-shim.js');
 const mobileNm = path.join(root, 'apps/mobile/node_modules');
 
@@ -83,7 +85,13 @@ export async function buildMobile(outfile, entry = 'scripts/capture-accept-start
         name: 'mobile-capture-stubs',
         setup(build) {
           build.onResolve({ filter: /^react-native$/ }, () => ({ path: rnw }));
+          build.onResolve({ filter: /^react-native-svg$/ }, () => ({ path: svgWeb }));
           build.onResolve({ filter: /codegenNativeComponent$/ }, () => ({ path: codegen }));
+          build.onResolve({ filter: /(Expo)?FontLoader$/ }, (args) => {
+            if (!options.keepVectorIcons) return null;
+            if (!(args.importer ?? '').includes(`${path.sep}expo-font${path.sep}`)) return null;
+            return { path: fontLoader };
+          });
           build.onResolve({ filter: /.*/ }, (args) => {
             const hit = stubFor(args.path, args.importer ?? '', options);
             if (hit) return { path: hit };

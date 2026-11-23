@@ -408,10 +408,10 @@ export default function RentalBookingDetailScreen() {
       <View style={[styles.center, { backgroundColor: colors.pageBackground, padding: spacing.lg, gap: spacing.md }]}>
         <MobileMoneyConfirmIllustration />
         <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center' }]}>
-          {t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')}
+          {t('rentals.start.momoWaitingTitle', 'Approve on your phone')}
         </Text>
         <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
-          {t('orders.momoAwaiting.waitingBody', 'Approve the request on your phone. This page updates when payment succeeds.')}
+          {t('rentals.start.momoWaitingBody', 'Approve the request on your phone. This page updates when the payment goes through.')}
         </Text>
       </View>
     );

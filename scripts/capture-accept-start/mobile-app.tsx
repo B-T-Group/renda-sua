@@ -8,6 +8,7 @@ import { I18nextProvider, useTranslation } from 'react-i18next';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { ThemeProvider } from '../../apps/mobile/src/contexts/ThemeContext';
+import { paperTheme } from '../../apps/mobile/src/theme/paperTheme';
 import ClientInspectionScreen from '../../apps/mobile/src/screens/client/ClientInspectionScreen';
 import RentalBookingDetailScreen from '../../apps/mobile/src/screens/client/RentalBookingDetailScreen';
 import RentalRequestSubmittedScreen from '../../apps/mobile/src/screens/client/RentalRequestSubmittedScreen';
@@ -37,7 +38,7 @@ function CaptureScreen() {
   const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush';
   const submitted = scene === 'requestSubmitted';
   const inspection = scene === 'review' || scene === 'momo' || scene === 'conflict';
-  const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait' || scene === 'bizWait' || scene === 'bizStarted' || scene === 'bizPhotos';
+  const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait' || scene === 'bizWait' || scene === 'bizMomo' || scene === 'bizStarted' || scene === 'bizPhotos';
   const simpleInspect = scene === 'inspect' || scene === 'waitingPhotos' || scene === 'inspectStart';
   freezeClock(scene);
   return (
@@ -67,6 +68,7 @@ const CLOCK: Record<string, string> = {
   waitingPhotos: '2026-11-24T15:06:00.000Z',
   inspectStart: '2026-11-24T15:12:00.000Z',
   bizWait: '2026-11-24T14:00:00.000Z',
+  bizMomo: '2026-11-24T07:00:00.000Z',
   bizStarted: '2026-11-24T15:10:00.000Z',
   bizPhotos: '2026-11-24T15:06:00.000Z',
 };
@@ -155,7 +157,7 @@ function CaptureApp() {
         }}
       >
         <ThemeProvider>
-          <PaperProvider>
+          <PaperProvider theme={paperTheme}>
             <CaptureScreen />
           </PaperProvider>
         </ThemeProvider>

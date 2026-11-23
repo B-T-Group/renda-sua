@@ -466,7 +466,7 @@ export function useRentalInspection() {
   const pickup = current === 'legacy'
     ? null
     : current === 'bizPhotos'
-      ? { ...full, status: 'correction_requested', correctionReason: "Scratch on the left grille isn't shown.", units: [full.units[0]] }
+      ? { ...full, status: 'correction_requested', correctionReason: french ? "La rayure sur la grille gauche n'est pas visible." : "Scratch on the left grille isn't shown.", units: [full.units[0]] }
     : one
       ? { ...full, units: [full.units[0]], submittedAt: '2026-11-17T15:32:00.000Z' }
       : full;

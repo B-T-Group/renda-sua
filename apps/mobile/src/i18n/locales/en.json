@@ -6507,6 +6507,8 @@
       "todayBody": "At the business, tap Start rental. They hand over the item once you start.",
       "momoBody": "At the business, tap Start rental. You pay then, and they hand over the item once the payment goes through.",
       "momoLine": "Mobile Money · {{amount}}",
+      "momoWaitingTitle": "Approve on your phone",
+      "momoWaitingBody": "Approve the request on your phone. This page updates when the payment goes through.",
       "held": "{{amount}} held on your card",
       "returnBy": "Return by {{when}}",
       "locked": "Start rental · from {{day}}",

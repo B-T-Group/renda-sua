@@ -119,7 +119,7 @@ function CheckActions(props: Props) {
       <Button mode="contained" icon="check" buttonColor={colors.primary.main} loading={props.busy} onPress={props.onMatch}>
         {t('rentalInspection.matches', 'Matches')}
       </Button>
-      <Button mode="outlined" icon="camera" onPress={() => setOpen(true)}>
+      <Button mode="outlined" icon="camera" textColor={colors.text.secondary} onPress={() => setOpen(true)}>
         {t('rentalInspection.askPhotos', "Doesn't match · ask for new photos")}
       </Button>
       {props.showDecline ? (
