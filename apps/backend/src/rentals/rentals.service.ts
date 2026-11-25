@@ -54,6 +54,12 @@ import { resolveCardPaymentPolicy } from './rental-card-window';
 import { marketTimeZone } from '../common/market-timezones';
 import { cappedContractExpiry, computeRespondBy, earliestRequestStartIso, effectiveRespondBy } from './rental-respond-by';
 import { listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
+import {
+  dayHoursPickerViolation,
+  listingModesViolation,
+  modeViolation,
+  type DayHoursViolation,
+} from './day-hours/day-hours.rules';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { refundLateCollectIfDeclined } from './pickup-decline/late-collect-refund';
@@ -2460,17 +2466,18 @@ export class RentalsService {
         HttpStatus.BAD_REQUEST
       );
     }
-    const price = Number(dto.base_price_per_hour);
+    const price = Number(dto.base_price_per_hour ?? (dto.offers_hourly === false ? 0 : NaN));
     if (Number.isNaN(price) || price < 0) {
       throw new HttpException('Invalid base_price_per_hour', HttpStatus.BAD_REQUEST);
     }
-    const dayPrice = Number(dto.base_price_per_day);
+    const dayPrice = Number(dto.base_price_per_day ?? (dto.offers_daily === false ? 0 : NaN));
     if (Number.isNaN(dayPrice) || dayPrice < 0) {
       throw new HttpException('Invalid base_price_per_day', HttpStatus.BAD_REQUEST);
     }
+    const modes = this.createListingModes(dto, price, dayPrice);
     const securityDeposit = this.resolveListingSecurityDeposit(
       dto.security_deposit_amount,
-      price,
+      price > 0 ? price : dayPrice / 12,
       currency
     );
     const availability = this.normalizeWeeklyAvailability(dto.weekly_availability);
@@ -2484,6 +2491,7 @@ export class RentalsService {
         dropoff_instructions: dto.dropoff_instructions?.trim() ?? '',
         base_price_per_hour: price,
         base_price_per_day: dayPrice,
+        ...modes,
         security_deposit_amount: securityDeposit,
         min_rental_hours: minHours,
         max_rental_hours: maxHours,
@@ -2615,6 +2623,7 @@ export class RentalsService {
     }
     if (Object.keys(changes).length) {
       await this.assertListingMinMaxAfterPatch(listingId, changes);
+      await this.assertListingModesAfterPatch(listingId, changes);
       if (changes.units_available !== undefined) {
         await this.assertUnitsAvailableNotBelowCommitted(
           listingId,
@@ -2668,6 +2677,52 @@ export class RentalsService {
     return out;
   }
 
+  /**
+   * Rent by the day / Rent by the hour. Old clients send neither switch, so the
+   * columns keep their DB default (both on) and prices are checked as before.
+   */
+  private createListingModes(
+    dto: CreateBusinessRentalListingDto,
+    hourPrice: number,
+    dayPrice: number
+  ): { offers_hourly?: boolean; offers_daily?: boolean } {
+    if (dto.offers_hourly === undefined && dto.offers_daily === undefined) return {};
+    const offersHourly = dto.offers_hourly !== false;
+    const offersDaily = dto.offers_daily !== false;
+    this.throwDayHours(
+      listingModesViolation({ offersHourly, offersDaily, hourPrice, dayPrice })
+    );
+    return { offers_hourly: offersHourly, offers_daily: offersDaily };
+  }
+
+  /** Same rule after a patch: at least one switch on, and a price for each one on. */
+  private async assertListingModesAfterPatch(
+    listingId: string,
+    set: Record<string, unknown>
+  ): Promise<void> {
+    if (set.offers_hourly === undefined && set.offers_daily === undefined) return;
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_location_listings_by_pk: {
+        offers_hourly: boolean | null;
+        offers_daily: boolean | null;
+        base_price_per_hour: number | string | null;
+        base_price_per_day: number | string | null;
+      } | null;
+    }>(Q.GET_RENTAL_LISTING_MODES, { id: listingId });
+    const cur = r.rental_location_listings_by_pk;
+    if (!cur) return;
+    const pick = <T>(key: string, fallback: T): T =>
+      set[key] === undefined ? fallback : (set[key] as T);
+    this.throwDayHours(
+      listingModesViolation({
+        offersHourly: pick('offers_hourly', cur.offers_hourly !== false),
+        offersDaily: pick('offers_daily', cur.offers_daily !== false),
+        hourPrice: Number(pick('base_price_per_hour', cur.base_price_per_hour)) || 0,
+        dayPrice: Number(pick('base_price_per_day', cur.base_price_per_day)) || 0,
+      })
+    );
+  }
+
   private buildListingUpdateSet(
     dto: UpdateBusinessRentalListingDto
   ): Record<string, unknown> {
@@ -2715,6 +2770,12 @@ export class RentalsService {
     }
     if (dto.is_active !== undefined) {
       out.is_active = dto.is_active;
+    }
+    if (dto.offers_hourly !== undefined) {
+      out.offers_hourly = dto.offers_hourly;
+    }
+    if (dto.offers_daily !== undefined) {
+      out.offers_daily = dto.offers_daily;
     }
     return out;
   }
@@ -5310,6 +5371,39 @@ export class RentalsService {
     }
   }
 
+  private throwDayHours(violation: DayHoursViolation | null): void {
+    if (!violation) return;
+    throw new HttpException(
+      { message: violation.message, error: violation.message, code: violation.code },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  /** rentals_day_hours_picker_enabled for the listing's country. Off when unreadable. */
+  private async dayHoursPickerOn(listing: {
+    business_location?: { address?: { country?: string | null } | null } | null;
+  }): Promise<boolean> {
+    try {
+      if (!this.hasuraSystemService) return false;
+      const res = await this.hasuraSystemService.executeQuery<{
+        application_configurations?: DashboardRequestFlagRow[];
+      }>(Q.GET_DAY_HOURS_PICKER_FLAG, {});
+      return listingDashboardFlag(
+        res?.application_configurations ?? [],
+        listing?.business_location?.address?.country
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private listingTimeZone(listing: {
+    business_location?: { address?: { country?: string | null } | null } | null;
+  }): string {
+    const country = resolveItemCountry(listing?.business_location?.address?.country);
+    return marketTimeZone(country) ?? 'Africa/Douala';
+  }
+
   private assertRentalRequestStartsInFuture(start: Date) {
     if (start.getTime() <= Date.now()) {
       throw new HttpException('Start must be in the future', HttpStatus.BAD_REQUEST);
@@ -5406,7 +5500,22 @@ export class RentalsService {
       Math.min(...plan.windows.map((w) => w.start.getTime()))
     );
     this.assertRentalRequestStartsInFuture(earliest);
-    this.assertDurationHours(listing, plan.totalHours);
+    this.throwDayHours(modeViolation(plan.windows, listing));
+    if (await this.dayHoursPickerOn(listing)) {
+      this.throwDayHours(
+        dayHoursPickerViolation({
+          windows: plan.windows,
+          listing,
+          minHours: listing.block_min_hours ?? listing.min_rental_hours,
+          maxHours:
+            listing.block_max_hours !== undefined ? listing.block_max_hours : listing.max_rental_hours,
+          nowMs: Date.now(),
+          timeZone: this.listingTimeZone(listing),
+        })
+      );
+    } else {
+      this.assertDurationHours(listing, plan.totalHours);
+    }
     this.assertAllDayWindows(plan, listing);
     const weekly = listing.weekly_availability ?? [];
     for (const w of plan.windows) {

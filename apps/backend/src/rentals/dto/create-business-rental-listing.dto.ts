@@ -58,15 +58,29 @@ export class CreateBusinessRentalListingDto {
   @IsOptional()
   dropoff_instructions?: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Required unless offers_hourly is false' })
+  @ValidateIf((o) => o.offers_hourly !== false || o.base_price_per_hour !== undefined)
   @IsNumber()
   @Min(0)
   base_price_per_hour!: number;
 
-  @ApiProperty({ description: 'Flat price for one full-day (all-day) rental window' })
+  @ApiProperty({
+    description: 'Flat price for one full-day (all-day) rental window. Required unless offers_daily is false',
+  })
+  @ValidateIf((o) => o.offers_daily !== false || o.base_price_per_day !== undefined)
   @IsNumber()
   @Min(0)
   base_price_per_day!: number;
+
+  @ApiProperty({ required: false, default: true, description: 'Rent by the hour' })
+  @IsOptional()
+  @IsBoolean()
+  offers_hourly?: boolean;
+
+  @ApiProperty({ required: false, default: true, description: 'Rent by the day' })
+  @IsOptional()
+  @IsBoolean()
+  offers_daily?: boolean;
 
   @ApiProperty({
     required: false,

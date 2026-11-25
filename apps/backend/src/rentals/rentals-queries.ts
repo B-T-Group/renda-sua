@@ -10,6 +10,8 @@ export const GET_LISTING_FOR_REQUEST = `
       units_available
       base_price_per_hour
       base_price_per_day
+      offers_hourly
+      offers_daily
       security_deposit_amount
       weekly_availability(order_by: { weekday: asc }) {
         weekday
@@ -93,6 +95,8 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
       id
       base_price_per_hour
       base_price_per_day
+      offers_hourly
+      offers_daily
       security_deposit_amount
       min_rental_hours
       max_rental_hours
@@ -163,6 +167,8 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
       moderation_status
       base_price_per_hour
       base_price_per_day
+      offers_hourly
+      offers_daily
       security_deposit_amount
       min_rental_hours
       max_rental_hours
@@ -261,6 +267,10 @@ export const GET_RENTAL_REQUEST_FULL = `
         units_available
         base_price_per_hour
         base_price_per_day
+        offers_hourly
+        offers_daily
+        block_min_hours: min_rental_hours
+        block_max_hours: max_rental_hours
         security_deposit_amount
         weekly_availability(order_by: { weekday: asc }) {
           weekday
@@ -1078,6 +1088,8 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
         business_location_id
         base_price_per_hour
         base_price_per_day
+        offers_hourly
+        offers_daily
         security_deposit_amount
         is_active
         deleted_at
@@ -1113,6 +1125,8 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
         business_location_id
         base_price_per_hour
         base_price_per_day
+        offers_hourly
+        offers_daily
         security_deposit_amount
         min_rental_hours
         max_rental_hours
@@ -1219,6 +1233,28 @@ export const PUBLISH_RENTAL_LISTING_FROM_DRAFT = `
         id
         moderation_status
       }
+    }
+  }
+`;
+
+export const GET_RENTAL_LISTING_MODES = `
+  query GetRentalListingModes($id: uuid!) {
+    rental_location_listings_by_pk(id: $id) {
+      offers_hourly
+      offers_daily
+      base_price_per_hour
+      base_price_per_day
+    }
+  }
+`;
+
+export const GET_DAY_HOURS_PICKER_FLAG = `
+  query GetDayHoursPickerFlag {
+    application_configurations(
+      where: { config_key: { _eq: "rentals_day_hours_picker_enabled" }, status: { _eq: "active" } }
+    ) {
+      boolean_value
+      country_code
     }
   }
 `;
