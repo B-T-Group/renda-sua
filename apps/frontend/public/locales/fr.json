@@ -6987,6 +6987,7 @@
       "bookConfirmLabelTotal": "Total indiqué",
       "bookConfirmLabelAcceptBy": "Offre valable jusqu’au",
       "contractExpiredBookError": "Cette offre a expiré. Envoyez une nouvelle demande depuis l’annonce.",
+      "priceChangeUnseenError": "L’entreprise a modifié le prix. Vérifiez le nouveau total de votre demande, puis réessayez.",
       "browseRentals": "Parcourir les locations",
       "bookSuccess": "Réservation créée",
       "bookError": "Impossible de finaliser la réservation",

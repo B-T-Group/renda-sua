@@ -7267,6 +7267,7 @@
       "bookConfirmLabelTotal": "Quoted total",
       "bookConfirmLabelAcceptBy": "Offer valid until",
       "contractExpiredBookError": "This offer has expired. Send a new request from the listing.",
+      "priceChangeUnseenError": "The business changed the price. Check the new total on your request, then try again.",
       "browseRentals": "Browse rentals",
       "bookSuccess": "Booking created",
       "bookError": "Could not complete booking",
