@@ -14,10 +14,10 @@ const item = 'JBL PartyBox 310';
 const number = 'RB-25496259';
 
 describe('rental push copy', () => {
-  it('keeps the legacy booking-confirmed PIN sentence byte for byte', () => {
+  it('tells a confirmed renter to start on the pickup day', () => {
     expect(buildRentalBookingConfirmedPush({ rentalItemName: item, bookingNumber: number })).toEqual({
       title: 'Rental confirmed',
-      body: `${item} (${number}) is confirmed. Your start PIN is ready.`,
+      body: `${item} (${number}) is confirmed. On the pickup day, tap Start rental at the business.`,
     });
     expect(
       buildRentalBookingConfirmedPush({
@@ -27,7 +27,7 @@ describe('rental push copy', () => {
       })
     ).toEqual({
       title: 'Location confirmée',
-      body: `${item} (${number}) est confirmée. Votre code PIN est prêt.`,
+      body: `${item} (${number}) est confirmée. Le jour du retrait, appuyez sur Démarrer la location chez le commerce.`,
     });
   });
 
@@ -127,7 +127,7 @@ describe('rental push copy', () => {
       returnDue: '18 Nov · 20:00',
     });
     expect(started.title).toBe('Rental started');
-    expect(started.body).toContain('is now in progress');
+    expect(started.body).toBe(`Amina started ${item}. You can hand over the item.`);
   });
 
   it('builds the flagged client, return, and report-sent notices', () => {

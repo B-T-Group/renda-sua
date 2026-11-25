@@ -18,7 +18,6 @@ import type {
   RentalCategory,
   RentalListingRow,
   RentalListingsPage,
-  RentalStartPinResult,
   RentalTakenWindow,
   RespondRentalRequestBody,
   TopRentalLocationRow,
@@ -347,27 +346,29 @@ export async function retryPayment(
   );
 }
 
-export async function getStartPin(
-  bookingId: string
-): Promise<RentalStartPinResult> {
-  return apiRequest<RentalStartPinResult>(
-    `/rentals/bookings/${encodeURIComponent(bookingId)}/start-pin`,
-    { method: 'GET' }
+export async function startRental(bookingId: string): Promise<{
+  started: boolean;
+  paymentPending: boolean;
+  payment_rail?: string;
+  start_opens_at?: string;
+  message?: string;
+}> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/start`,
+    { method: 'POST' }
+  );
+}
+
+export async function reportItemNotCollected(bookingId: string): Promise<RentalApiSuccess> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/item-not-collected`,
+    { method: 'POST' }
   );
 }
 
 export async function cancelBooking(bookingId: string): Promise<RentalApiSuccess> {
   return apiRequest<RentalApiSuccess>(
     `/rentals/bookings/${encodeURIComponent(bookingId)}/cancel`,
-    { method: 'POST' }
-  );
-}
-
-export async function initiatePickupPayment(
-  bookingId: string
-): Promise<CreateRentalBookingResult> {
-  return apiRequest<CreateRentalBookingResult>(
-    `/rentals/bookings/${encodeURIComponent(bookingId)}/pickup-payment`,
     { method: 'POST' }
   );
 }
@@ -555,30 +556,6 @@ export async function getBusinessSchedule(
   return res.data?.schedule ?? [];
 }
 
-export async function verifyStartPin(
-  bookingId: string,
-  body: {
-    pin?: string;
-    overwriteCode?: string;
-    useLatestSharedPin?: boolean;
-    pinMessageId?: string;
-  }
-): Promise<RentalApiSuccess> {
-  return apiRequest(
-    `/rentals/bookings/${encodeURIComponent(bookingId)}/verify-start-pin`,
-    { method: 'POST', body: JSON.stringify(body) }
-  );
-}
-
-export async function generateOverwriteCode(
-  bookingId: string
-): Promise<{ overwriteCode: string }> {
-  return apiRequest(
-    `/rentals/bookings/${encodeURIComponent(bookingId)}/start-overwrite-code`,
-    { method: 'POST' }
-  );
-}
-
 export async function confirmReturn(
   bookingId: string,
   body?: { actualEndAt?: string }
@@ -647,38 +624,6 @@ export async function markBookingMessagesRead(
   );
 }
 
-export async function shareStartPin(bookingId: string): Promise<{
-  success: boolean;
-  message?: import('./agentApi').OrderMessage;
-  error?: string;
-}> {
-  return apiRequest(
-    `/rentals/bookings/${encodeURIComponent(bookingId)}/messages/start-pin`,
-    { method: 'POST' }
-  );
-}
-
-export async function getActiveStartPin(bookingId: string): Promise<{
-  messageId: string;
-  pin: string;
-  pinVersion: number;
-  sharedAt: string;
-} | null> {
-  const res = await apiRequest<{
-    success: boolean;
-    activePin?: {
-      messageId: string;
-      pin: string;
-      pinVersion: number;
-      sharedAt: string;
-    } | null;
-  }>(
-    `/rentals/bookings/${encodeURIComponent(bookingId)}/messages/active-start-pin`,
-    { method: 'GET' }
-  );
-  return res.activePin ?? null;
-}
-
 export const rentalsApi = {
   getCategories,
   createCategory,
@@ -693,9 +638,9 @@ export const rentalsApi = {
   getBooking,
   getPaymentStatus,
   retryPayment,
-  getStartPin,
+  startRental,
+  reportItemNotCollected,
   cancelBooking,
-  initiatePickupPayment,
   acceptAndStart,
   reportNotReceived,
   reportReturned,
@@ -711,13 +656,9 @@ export const rentalsApi = {
   getBusinessRequests,
   respondToRequest,
   getBusinessSchedule,
-  verifyStartPin,
-  generateOverwriteCode,
   confirmReturn,
   getBookingMessages,
   sendBookingMessage,
   getBookingMentionableParticipants,
   markBookingMessagesRead,
-  shareStartPin,
-  getActiveStartPin,
 };

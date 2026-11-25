@@ -67,13 +67,20 @@ await esbuild.build({
     },
   ],
 });
-await buildMobile(mobileOut);
+await buildMobile(mobileOut, undefined, { keepVectorIcons: true });
 
-const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,#root{margin:0;background:#FAF9F7}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>`;
+const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,#root{margin:0;background:#FAF9F7} img{object-fit:cover}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>`;
+const heroPng = readFileSync(path.join(root, 'scripts/capture-inspection-optin/hero.png'));
 
 function listen(js, port) {
   const server = createServer((req, res) => {
-    if (req.url?.startsWith('/app.js')) {
+    const url = req.url?.split('?')[0] ?? '';
+    if (url === '/hero-jbl.png' || url === '/hero.png') {
+      res.setHeader('content-type', 'image/png');
+      res.end(heroPng);
+      return;
+    }
+    if (url === '/app.js') {
       res.setHeader('content-type', 'text/javascript');
       res.end(js);
       return;
@@ -280,6 +287,95 @@ for (const surface of ['web', 'mobile']) {
       console.log('FAIL', tag, error instanceof Error ? error.message.split('\n')[0] : error);
     }
   }
+}
+
+const shots = [
+  ['mobile', 'before', 'en', 390, '01-before-start-day-en.png', 'Pickup'],
+  ['mobile', 'before', 'fr', 390, '01-before-start-day-fr.png', 'Retrait'],
+  ['mobile', 'today', 'en', 390, '02-start-day-card-en.png', 'Start rental'],
+  ['mobile', 'today', 'fr', 390, '02-start-day-card-fr.png', 'Démarrer'],
+  ['mobile', 'momoDay', 'en', 390, '02b-start-day-momo-en.png', 'FCFA'],
+  ['mobile', 'momoDay', 'fr', 390, '02b-start-day-momo-fr.png', 'FCFA'],
+  ['mobile', 'late', 'en', 390, '02c-late-pickup-en.png', 'Late pickup'],
+  ['mobile', 'late', 'fr', 390, '02c-late-pickup-fr.png', 'Retrait en retard'],
+  ['mobile', 'momoDay', 'en', 390, '02d-momo-waiting-en.png', 'Approve on your phone'],
+  ['mobile', 'momoDay', 'fr', 390, '02d-momo-waiting-fr.png', 'Approuvez'],
+  ['mobile', 'today', 'en', 390, '03-confirm-sheet-en.png', 'Start rental?'],
+  ['mobile', 'today', 'fr', 390, '03-confirm-sheet-fr.png', 'Démarrer la location ?'],
+  ['mobile', 'momoDay', 'en', 390, '03b-momo-confirm-en.png', 'Start rental?'],
+  ['mobile', 'momoDay', 'fr', 390, '03b-momo-confirm-fr.png', 'Démarrer la location ?'],
+  ['mobile', 'startedSimple', 'en', 390, '04-started-en.png', 'In progress'],
+  ['mobile', 'startedSimple', 'fr', 390, '04-started-fr.png', 'En cours'],
+  ['mobile', 'inspect', 'en', 390, '05-inspect-step1-en.png', 'Matches'],
+  ['mobile', 'inspect', 'fr', 390, '05-inspect-step1-fr.png', 'correspond'],
+  ['mobile', 'inspect', 'en', 390, '06-ask-photos-sheet-en.png', 'ask for new photos'],
+  ['mobile', 'inspect', 'fr', 390, '06-ask-photos-sheet-fr.png', 'nouvelles photos'],
+  ['mobile', 'waitingPhotos', 'en', 390, '07-waiting-photos-en.png', 'Waiting for new photos'],
+  ['mobile', 'waitingPhotos', 'fr', 390, '07-waiting-photos-fr.png', 'nouvelles photos'],
+  ['mobile', 'inspectStart', 'en', 390, '08-inspect-step2-en.png', 'Start rental'],
+  ['mobile', 'inspectStart', 'fr', 390, '08-inspect-step2-fr.png', 'Démarrer'],
+  ['mobile', 'bizWait', 'en', 390, '09-business-waiting-en.png', 'Waiting for'],
+  ['mobile', 'bizWait', 'fr', 390, '09-business-waiting-fr.png', 'En attente'],
+  ['mobile', 'bizMomo', 'en', 390, '09b-business-waiting-momo-en.png', 'Mobile Money'],
+  ['mobile', 'bizMomo', 'fr', 390, '09b-business-waiting-momo-fr.png', 'Mobile Money'],
+  ['mobile', 'bizStarted', 'en', 390, '10-business-started-en.png', 'hand over'],
+  ['mobile', 'bizStarted', 'fr', 390, '10-business-started-fr.png', 'remettez'],
+  ['mobile', 'bizPush', 'en', 390, '10b-business-inapp-en.png', 'Rental started, hand over the item'],
+  ['mobile', 'bizPush', 'fr', 390, '10b-business-inapp-fr.png', 'Location démarrée, remettez'],
+  ['mobile', 'bizOsPush', 'en', 390, '10c-business-push-en.png', 'You can hand over the item'],
+  ['mobile', 'bizOsPush', 'fr', 390, '10c-business-push-fr.png', 'Vous pouvez remettre'],
+  ['mobile', 'bizPhotos', 'en', 390, '11-business-photo-request-en.png', 'Send updated photos'],
+  ['mobile', 'bizPhotos', 'fr', 390, '11-business-photo-request-fr.png', 'photos'],
+  ['web', 'today', 'en', 800, '12-web-renter-start-day-en.png', 'Pickup today'],
+  ['web', 'today', 'fr', 800, '12-web-renter-start-day-fr.png', "Retrait aujourd'hui"],
+  ['web', 'bizPhotos', 'en', 800, '13-web-business-photo-request-en.png', 'Send updated photos'],
+  ['web', 'bizPhotos', 'fr', 800, '13-web-business-photo-request-fr.png', 'photos'],
+];
+
+for (const [surface, scene, lang, width, file, text] of shots) {
+  if (!selected(file)) continue;
+    const sheet = file.startsWith('06-') || file.startsWith('03');
+  const height = surface === 'web' ? 900 : 844;
+  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
+  page.on('pageerror', (err) => console.log('PAGEERROR', file, err.message));
+  try {
+    const port = surface === 'mobile' ? 8766 : 8765;
+    await page.goto(`http://127.0.0.1:${port}/?scene=${scene}&lang=${lang}`, { waitUntil: 'networkidle' });
+    let askTitle;
+    if (file.startsWith('03')) {
+      await page.locator('button').filter({ hasText: /Start rental|Démarrer/ }).first().click();
+      askTitle = page.getByText(/^(Start rental\?|Démarrer la location \?)$/).first();
+      await askTitle.waitFor({ timeout: 15000 });
+    }
+    if (file.startsWith('06-')) {
+      await page.locator('button').filter({ hasText: /ask for new photos|nouvelles photos/i }).first().click();
+      askTitle = page.getByText(/^(Ask for new photos|Demander de nouvelles photos)$/).first();
+      const title = askTitle;
+      await title.waitFor({ timeout: 15000 });
+    }
+    if (file.startsWith('02d-')) {
+      await page.locator('button').filter({ hasText: /Start rental|Démarrer la location/ }).first().click();
+      await page.getByText(/Start rental\?|Démarrer la location \?/).first().waitFor({ timeout: 15000 });
+      await page.locator('button').filter({ hasText: /Start rental|Démarrer la location/ }).last().click();
+    }
+    await page.getByText(text, { exact: false }).first().waitFor({ timeout: 15000 }).catch(() => undefined);
+    await page.waitForFunction(() => document.fonts && document.fonts.check('18px "material-community"'), undefined, { timeout: 8000 }).catch(() => undefined);
+    await page.waitForFunction(() => {
+      const images = [...document.querySelectorAll('img')];
+      return images.every((img) => img.complete && img.naturalWidth > 0);
+    }, undefined, { timeout: 8000 }).catch(() => undefined);
+    if (sheet) {
+      await askTitle.locator('xpath=..').screenshot({ path: path.join(artifacts, file) });
+    } else {
+      const webFull = file.startsWith('12-') || file.startsWith('13-');
+      await page.screenshot({ path: path.join(artifacts, file), fullPage: surface === 'mobile' || webFull });
+    }
+    console.log('shot', file);
+  } catch (error) {
+    console.log('FAIL', file, error instanceof Error ? error.message.split('\n')[0] : error);
+    await page.screenshot({ path: path.join(artifacts, `debug-${file}`), fullPage: true }).catch(() => undefined);
+  }
+  await page.close();
 }
 
 await browser.close();

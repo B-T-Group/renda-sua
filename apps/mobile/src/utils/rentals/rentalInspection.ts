@@ -43,6 +43,7 @@ export interface InspectionView {
   allocationVersion?: number | null;
   minPhotos?: number;
   correctionReason?: string | null;
+  askedAt?: string | null;
   claimedDamageAmount?: number | null;
   slotSkips?: Array<{ unitId: string; slotKey: string; reason: string }>;
   pickupPhotoRules?: PickupPhotoRules | null;
@@ -155,31 +156,30 @@ export interface PickupGate {
   showCollectPayment: boolean;
   showStart: boolean;
   showOverwrite: boolean;
+  /** The renter starts. There is no PIN and no business pickup payment. */
+  showRenterStart: boolean;
 }
 
-/** Legacy bookings keep today's payment, PIN, and support-code actions. */
+/** The renter starts. Business PIN, overwrite, and collect-payment stay hidden. */
 export function pickupGate(input: PickupGateInput): PickupGate {
   const reserved = input.status === 'reserved';
   const confirmed = input.status === 'confirmed';
+  const hidden = { showCollectPayment: false, showStart: false, showOverwrite: false };
   if (!input.enrolled) {
-    return {
-      mode: 'legacy',
-      showCollectPayment: reserved,
-      showStart: confirmed,
-      showOverwrite: confirmed,
-    };
+    return { mode: 'legacy', ...hidden, showRenterStart: reserved || confirmed };
   }
   if (!reserved && !confirmed) {
-    return { mode: 'ready', showCollectPayment: false, showStart: false, showOverwrite: false };
+    return { mode: 'ready', ...hidden, showRenterStart: false };
   }
   if (input.accepted) {
-    return { mode: 'ready', showCollectPayment: false, showStart: false, showOverwrite: false };
+    return { mode: 'ready', ...hidden, showRenterStart: true };
   }
   return {
     mode: input.submitted ? 'waiting' : 'capture',
     showCollectPayment: false,
     showStart: false,
     showOverwrite: false,
+    showRenterStart: false,
   };
 }
 
@@ -210,8 +210,19 @@ export function showDidntReceiveLink(input: {
   startedAt: string | null | undefined;
   now?: number;
 }): boolean {
-  if (!input.enrolled) return false;
+  void input.enrolled;
   return didntReceiveWindowOpen(input.startedAt, input.now ?? Date.now());
+}
+
+export function didntReceiveMinutesLeft(
+  startedAt: string | null | undefined,
+  now = Date.now(),
+  minutes = 30
+): number {
+  if (!didntReceiveWindowOpen(startedAt, now, minutes) || !startedAt) return 0;
+  const at = new Date(startedAt).getTime();
+  const left = Math.ceil((at + minutes * 60000 - now) / 60000);
+  return Math.max(1, left);
 }
 
 export function didntReceiveWindowOpen(
@@ -317,6 +328,24 @@ export function normalizeAccessories(value: unknown): InspectionAccessory[] {
       return { name: String(item?.name ?? '').trim(), count: Number(item?.count) };
     })
     .filter((row) => row.name.length > 0 && Number.isInteger(row.count) && row.count >= 1);
+}
+
+export function splitCorrectionReason(
+  text: string | null | undefined,
+  labels: Record<string, string>
+): { chips: string[]; note: string } {
+  const raw = (text ?? '').trim();
+  const chips = Object.values(labels).filter((label) => raw.toLowerCase().includes(label.toLowerCase()));
+  return { chips, note: stripLabels(raw, chips) };
+}
+
+function stripLabels(raw: string, chips: string[]): string {
+  const note = chips.reduce((left, label) => left.replace(new RegExp(escapeLabel(label), 'ig'), ''), raw);
+  return note.replace(/^[\s.]+|[\s.]+$/g, '').replace(/\s{2,}/g, ' ');
+}
+
+function escapeLabel(label: string): string {
+  return label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function correctionReasonText(

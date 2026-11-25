@@ -90,13 +90,10 @@ describe('RentalNotReceivedService.report', () => {
     expect(agent.executeQuery).not.toHaveBeenCalled();
   });
 
-  it('rejects a booking with no condition report', async () => {
+  it('accepts a booking with no condition report inside the window', async () => {
     const { service, notifications } = setup({ booking: { inspection_policy_version: null } });
-    await expect(service.report('b1', inside)).rejects.toMatchObject({
-      status: 409,
-      response: { code: 'RENTAL_NOT_RECEIVED_NOT_INSPECTED' },
-    });
-    expect(notifications.sendBusinessRentalNotReceived).not.toHaveBeenCalled();
+    await expect(service.report('b1', inside)).resolves.toMatchObject({ success: true });
+    expect(notifications.sendBusinessRentalNotReceived).toHaveBeenCalled();
   });
 
   it('rejects a report before the start, with no start, or with an unusable start', async () => {

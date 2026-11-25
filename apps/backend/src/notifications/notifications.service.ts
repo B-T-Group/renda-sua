@@ -131,6 +131,9 @@ import {
   buildRentalBookingReservedPush,
   buildRentalEndingSoonPush,
   buildRentalInspectionNotice,
+  buildItemNotCollectedSupport,
+  buildRentalNoShowNotice,
+  buildRentalStartDayReminder,
   buildRentalStartedBusinessNotice,
   buildRentalStartedClientPush,
   buildReturnAcceptedPush,
@@ -4279,6 +4282,126 @@ export class NotificationsService {
       rentalBookingId: params.bookingId,
       url,
     });
+  }
+
+  /** True the first time. A repeat insert is the idempotency conflict. */
+  async recordItemNotCollected(params: {
+    businessUserId: string;
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<boolean> {
+    const inserted = await this.insertRentalUserMessage(
+      params.businessUserId,
+      params.bookingId,
+      'RENTAL_NOT_COLLECTED',
+      buildItemNotCollectedSupport(params).body,
+      `/rentals/bookings/${params.bookingId}?persona=business`,
+      'item_not_collected'
+    );
+    if (!inserted) return false;
+    await this.notifySupportItemNotCollected(params);
+    return true;
+  }
+
+  async sendRentalNoShowNotice(params: {
+    recipientUserId: string;
+    rentalItemName: string;
+    bookingId: string;
+    bookingNumber: string;
+  }): Promise<void> {
+    const preferredLanguage = await this.languageFor(params.recipientUserId, null);
+    const msg = buildRentalNoShowNotice({ ...params, preferredLanguage });
+    const url = `/rentals/bookings/${params.bookingId}`;
+    const inserted = await this.insertRentalUserMessage(
+      params.recipientUserId,
+      params.bookingId,
+      'RENTAL_NO_SHOW',
+      msg.body,
+      url,
+      `no_show:${params.recipientUserId}`
+    );
+    if (!inserted || !this.rentalPushEnabled()) return;
+    await this.sendPushNotificationByUserId(params.recipientUserId, msg.title, msg.body, {
+      type: 'rental_no_show',
+      rentalBookingId: params.bookingId,
+      url,
+    });
+  }
+
+  async sendRentalStartDayReminder(params: {
+    recipientUserId: string;
+    rentalItemName: string;
+    bookingId: string;
+    persona: 'client' | 'business';
+  }): Promise<boolean> {
+    const preferredLanguage = await this.languageFor(params.recipientUserId, null);
+    const msg = buildRentalStartDayReminder({ ...params, preferredLanguage });
+    const url = `/rentals/bookings/${params.bookingId}?persona=${params.persona}`;
+    const inserted = await this.insertRentalUserMessage(
+      params.recipientUserId,
+      params.bookingId,
+      'RENTAL_START_DAY',
+      msg.body,
+      url,
+      `start_day:${params.persona}`
+    );
+    if (!inserted || !this.rentalPushEnabled()) return inserted;
+    await this.sendPushNotificationByUserId(params.recipientUserId, msg.title, msg.body, {
+      type: 'rental_start_day',
+      rentalBookingId: params.bookingId,
+      url,
+    });
+    return true;
+  }
+
+  private async notifySupportItemNotCollected(params: {
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    try {
+      await this.emailSupportNotCollected(params);
+      await this.pushSupportNotCollected(params);
+    } catch (error: any) {
+      this.logger.error(`notifySupportItemNotCollected: ${error?.message ?? error}`);
+    }
+  }
+
+  private async emailSupportNotCollected(params: {
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    const adminTo = process.env.ADMIN_NOTIFICATION_EMAIL || 'support@rendasua.com';
+    const msg = buildItemNotCollectedSupport({ ...params, preferredLanguage: 'en' });
+    await this.sendSimpleLifecycleEmail({
+      to: adminTo,
+      subject: msg.title,
+      html: `<p>${escapeHtmlForEmail(msg.body)}</p>`,
+    });
+  }
+
+  private async pushSupportNotCollected(params: {
+    bookingId: string;
+    bookingNumber: string;
+    rentalItemName: string;
+  }): Promise<void> {
+    if (!this.rentalPushEnabled()) return;
+    const recipients = buildOrderRiskRecipients({
+      staff: await this.rbacService.listUsersWithRoles(),
+      roleKeys: [PlatformRoles.SUPERUSER, PlatformRoles.SUPPORT, PlatformRoles.ORDER_MANAGER],
+    });
+    for (const recipient of recipients) {
+      const msg = buildItemNotCollectedSupport({
+        ...params,
+        preferredLanguage: recipient.preferredLanguage,
+      });
+      await this.sendPushNotificationByUserId(recipient.userId, msg.title, msg.body, {
+        type: 'rental_item_not_collected',
+        rentalBookingId: params.bookingId,
+        url: '/admin/rental-inspections',
+      });
+    }
   }
 
   /** Flagged. The client hears the rental is active after card, wallet, or MoMo. */

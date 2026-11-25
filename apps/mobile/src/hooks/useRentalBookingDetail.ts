@@ -3,8 +3,8 @@ import {
   cancelBooking,
   getBooking,
   getPaymentStatus,
-  getStartPin,
   retryPayment,
+  startRental,
 } from '../services/rentalsApi';
 import type {
   CreateRentalBookingResult,
@@ -132,10 +132,17 @@ export function useRentalBookingDetail(
     [bookingId, load]
   );
 
-  const fetchStartPin = useCallback(async () => {
+  const start = useCallback(async () => {
     if (!bookingId?.trim()) throw new Error('Missing booking');
-    return getStartPin(bookingId.trim());
-  }, [bookingId]);
+    setActionLoading(true);
+    try {
+      const res = await startRental(bookingId.trim());
+      await load(bookingId.trim());
+      return res;
+    } finally {
+      setActionLoading(false);
+    }
+  }, [bookingId, load]);
 
   return {
     booking,
@@ -146,6 +153,6 @@ export function useRentalBookingDetail(
     refetch,
     cancel,
     retryPayment: retryPay,
-    getStartPin: fetchStartPin,
+    startRental: start,
   };
 }

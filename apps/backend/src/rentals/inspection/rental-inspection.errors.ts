@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { PIN_RETIRED_MESSAGE } from '../simple-start/simple-start.policy';
 import { INSPECTION_CODES } from './rental-inspection.policy';
 import type { ListingCardWindow } from '../rental-card-window';
 
@@ -32,10 +33,10 @@ export function acceptStartNotEnrolled(): HttpException {
     {
       success: false,
       code: 'RENTAL_ACCEPT_START_NOT_ENROLLED',
-      error: 'This booking uses the start PIN.',
-      message: 'This booking uses the start PIN.',
+      error: PIN_RETIRED_MESSAGE,
+      message: PIN_RETIRED_MESSAGE,
     },
-    HttpStatus.BAD_REQUEST
+    HttpStatus.CONFLICT
   );
 }
 

@@ -23,15 +23,16 @@ import {
 } from '../../components/rentals/DidntReceiveReportButton';
 import { DeclineOutcomeCard, declineCardView } from '../../components/rentals/DeclinePickupScreens';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
+import { RentalStartCard } from '../../components/rentals/RentalStartCard';
+import { RentalJourneyList } from '../../components/rentals/RentalJourneyList';
 import { RenterReturnCard } from '../../components/rentals/RenterReturnCard';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
-import { SendRentalStartPinButton } from '../../components/rentals/SendRentalStartPinButton';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalBookingDetail } from '../../hooks/useRentalBookingDetail';
 import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
 import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
-import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { cardHoldLines, holdCopyFallback, holdCopyKey, showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import {
   settleRentalStripePayment,
   useRentalStripePayment,
@@ -50,7 +51,6 @@ import {
 import {
   bookingRequestedPeriodLines,
   formatListingDeadline,
-  formatRentalPeriod,
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
 import { clientInspectionAction, pickupGate, reportReadyToReview } from '../../utils/rentals/rentalInspection';
@@ -61,6 +61,10 @@ import {
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
 import { renterReturnPhase } from '../../utils/rentals/renterReturnPhase';
+import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { RentalMomoWaiting } from '../../components/rentals/RentalMomoWaiting';
+import { BookingQuickActions } from '../../components/rentals/BookingQuickActions';
+import { maskPhoneE164 } from '../../utils/maskPhoneE164';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
@@ -100,7 +104,7 @@ export default function RentalBookingDetailScreen() {
     refetch,
     cancel,
     retryPayment,
-    getStartPin,
+    startRental,
   } = useRentalBookingDetail(bookingId);
   const {
     isStripeRail,
@@ -120,18 +124,15 @@ export default function RentalBookingDetailScreen() {
 
   const [reportedNow, setReportedNow] = useState(false);
   const [windowForcedClosed, setWindowForcedClosed] = useState(false);
-  const didntWindowOpen = useDidntReceiveWindow(
-    booking?.inspection_policy_version != null,
-    booking?.actual_start_at
-  );
+  const didntWindowOpen = useDidntReceiveWindow(true, booking?.actual_start_at);
   const reportedMissingItem = reportedNow || Boolean(booking?.not_received_report);
   useEffect(() => {
     setReportedNow(false);
     setWindowForcedClosed(false);
   }, [bookingId]);
 
-  const [pinOpen, setPinOpen] = useState(false);
-  const [pinValue, setPinValue] = useState<string | null>(null);
+  const [startOpen, setStartOpen] = useState(false);
+  const [momoWaiting, setMomoWaiting] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -184,10 +185,10 @@ export default function RentalBookingDetailScreen() {
     ? [bookedSpan]
     : bookingRequestedPeriodLines(windows, booking, i18n.language, dayCountLabel);
   const returnByLabel = booking?.end_at
-    ? formatRentalPeriod(
-        [{ start_at: booking.end_at, end_at: booking.end_at }],
-        i18n.language,
-        dayCountLabel
+    ? formatZonedWhen(
+        booking.end_at,
+        confirmationTimeZone(listingCountry, booking.currency),
+        i18n.language
       )
     : '—';
   const timelineStepsBase = bookingDetailTimeline(booking?.status ?? '');
@@ -237,12 +238,16 @@ export default function RentalBookingDetailScreen() {
   });
   const reviewStage =
     reviewAction === 'review_pickup' ? 'pickup' : reviewAction === 'review_return' ? 'return' : null;
-  const canShowPin = gate.showStart && !snapshot.loading;
   const isReserved = booking?.status === 'reserved';
   const depositAmount = showsCardDeposit(booking?.currency)
     ? toAmount(booking?.security_deposit_amount)
     : 0;
   const authorizedAmount = toAmount(booking?.authorized_amount);
+  const hold = cardHoldLines({
+    total: toAmount(booking?.total_amount),
+    deposit: depositAmount,
+    authorized: authorizedAmount,
+  });
   const overtimeAmount = toAmount(booking?.overtime_amount);
   const returnPhase = renterReturnPhase({
     status: booking?.status ?? '',
@@ -252,14 +257,50 @@ export default function RentalBookingDetailScreen() {
   });
   const showReturnReport = !flagsLoading && flags.rentals_renter_return_report_enabled && returnPhase !== 'hidden';
   const headerOverdue = showReturnReport && returnPhase === 'overdue';
-  const pillLabel = headerOverdue ? t('rentals.returnReport.overdue', 'Overdue') : statusLabel;
+  const startZone = booking
+    ? confirmationTimeZone(booking.rental_location_listing?.business_location?.address?.country, booking.currency)
+    : 'Africa/Douala';
+  const startPhase = booking && (booking.status === 'reserved' || booking.status === 'confirmed')
+    ? pickupPhase({
+        now: Date.now(),
+        startAt: booking.start_at,
+        endAt: booking.end_at,
+        startOpensAt: booking.start_opens_at,
+        timeZone: startZone,
+      })
+    : null;
+  const pickupDay = booking ? formatZonedDay(booking.start_at, startZone, i18n.language) : '';
+  const paidSource = booking?.paid_at || booking?.created_at;
+  const paidAside = paidSource && (booking?.payment_status === 'paid' || booking?.payment_status === 'authorized')
+    ? formatZonedDay(paidSource, startZone, i18n.language)
+    : undefined;
+  const pickupSource = booking?.actual_start_at || booking?.start_at;
+  const pickupAside = pickupSource
+    ? `${formatZonedDay(pickupSource, startZone, i18n.language)} ${formatZonedTime(pickupSource, startZone)}`
+    : undefined;
+  const pillLabel = headerOverdue
+    ? t('rentals.returnReport.overdue', 'Overdue')
+    : startPhase === 'before'
+      ? t('rentals.start.pillDay', 'Pickup {{day}}', { day: pickupDay })
+      : startPhase === 'today'
+        ? t('rentals.start.pickupToday', 'Pickup today')
+        : startPhase === 'late'
+          ? t('rentals.start.latePickup', 'Late pickup')
+          : statusLabel;
+  const phaseTone = startPhase === 'late' ? colors.warning : startPhase === 'today' || startPhase === 'before' ? colors.success : null;
   const pillColors = headerOverdue
     ? {
         backgroundColor: colors.error.main + '18',
         textColor: colors.error.main,
         borderColor: colors.error.main + '44',
       }
-    : statusColors;
+    : phaseTone
+      ? {
+          backgroundColor: phaseTone.main + '18',
+          textColor: phaseTone.dark ?? phaseTone.main,
+          borderColor: phaseTone.main + '44',
+        }
+      : statusColors;
   const returnLocation =
     booking?.return_place?.name ||
     booking?.rental_location_listing?.business_location?.name ||
@@ -276,15 +317,15 @@ export default function RentalBookingDetailScreen() {
     booking?.rental_location_listing?.rental_item?.rental_item_images ?? [];
   const imageUri = bookingImages[0]?.image_url;
 
-  const onRevealPin = useCallback(async () => {
+  const onStartRental = useCallback(async () => {
     try {
-      const res = await getStartPin();
-      setPinValue(res.pin);
-      setPinOpen(true);
+      const res = await startRental();
+      setStartOpen(false);
+      if (res.paymentPending) setMomoWaiting(true);
     } catch (e: unknown) {
       setSnack(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
     }
-  }, [getStartPin, t]);
+  }, [startRental, t]);
 
   const onRetry = useCallback(async () => {
     try {
@@ -370,6 +411,27 @@ export default function RentalBookingDetailScreen() {
       t('rentals.clientRequests.unknownItem', 'Rental'),
     [booking, t]
   );
+
+  useEffect(() => {
+    if (!momoWaiting) return undefined;
+    if (booking?.status === 'active' || booking?.actual_start_at) {
+      setMomoWaiting(false);
+      return undefined;
+    }
+    const timer = setInterval(() => void refetch(), 4000);
+    return () => clearInterval(timer);
+  }, [booking?.actual_start_at, booking?.status, momoWaiting, refetch]);
+
+  if (momoWaiting) {
+    return (
+      <RentalMomoWaiting
+        amount={formatConfirmationMoney(Number(booking?.total_amount) || 0, booking?.currency || 'XAF', i18n.language)}
+        item={booking?.rental_location_listing?.rental_item?.name ?? ''}
+        phone={maskPhoneE164(booking?.client?.user?.phone_number || '')}
+        onBack={() => setMomoWaiting(false)}
+      />
+    );
+  }
 
   if (loading && !booking) {
     return (
@@ -466,7 +528,7 @@ export default function RentalBookingDetailScreen() {
           />
         ) : null}
 
-        {showReturnReport ? null : (
+        {showReturnReport || booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active' ? null : (
         <View style={{ marginTop: spacing.md }}>
           <RentalPhaseBanner
             bookingStatus={booking.status}
@@ -488,21 +550,6 @@ export default function RentalBookingDetailScreen() {
                 >
                   {t('rentals.actions.completePayment', 'Complete payment')}
                 </Button>
-              ) : canShowPin ? (
-                <View style={{ gap: spacing.sm, marginTop: spacing.xs }}>
-                  <SendRentalStartPinButton
-                    bookingId={booking.id}
-                    onSent={() => void refetchMessages()}
-                    onError={(msg) => setSnack(msg)}
-                  />
-                  <Button
-                    mode="outlined"
-                    loading={actionLoading}
-                    onPress={() => void onRevealPin()}
-                  >
-                    {t('rentals.actions.showStartPin', 'Show PIN on screen')}
-                  </Button>
-                </View>
               ) : booking.status === 'completed' ? (
                 <Button
                   mode="contained"
@@ -518,6 +565,42 @@ export default function RentalBookingDetailScreen() {
           />
         </View>
         )}
+
+        {(booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active') && !showReturnReport ? (
+          <View style={{ marginTop: spacing.md }}>
+            <RentalStartCard
+              booking={booking}
+              timeZone={confirmationTimeZone(
+                booking.rental_location_listing?.business_location?.address?.country,
+                booking.currency
+              )}
+              role="client"
+              place={booking.rental_location_listing?.business_location?.name ?? ''}
+              money={formatConfirmationMoney(
+                Number(booking.accept_start_preview?.amount_due_at_pickup) || Number(booking.total_amount) || 0,
+                booking.currency,
+                i18n.language
+              )}
+              returnLabel={returnByLabel}
+              starting={actionLoading}
+              open={startOpen}
+              onOpen={() => setStartOpen(true)}
+              onClose={() => setStartOpen(false)}
+              onConfirm={() => void onStartRental()}
+              missing={
+                reportedMissingItem || (didntWindowOpen && !windowForcedClosed) ? (
+                  <DidntReceiveReportButton
+                    bookingId={booking.id}
+                    startedAt={booking.actual_start_at}
+                    reported={reportedMissingItem}
+                    onReported={() => setReportedNow(true)}
+                    onWindowClosed={() => setWindowForcedClosed(true)}
+                  />
+                ) : undefined
+              }
+            />
+          </View>
+        ) : null}
 
         {snapshot.enrolled && !confirmationsOn ? (
           <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
@@ -552,13 +635,13 @@ export default function RentalBookingDetailScreen() {
             phone={booking.return_place?.phone ?? null}
             endAt={booking.end_at}
             reportedAt={booking.renter_reported_returned_at}
-            depositLabel={depositAmount > 0 ? formatDetailMoney(depositAmount) : ''}
+            depositLabel={hold.showDeposit ? formatDetailMoney(depositAmount) : ''}
             onReported={() => void refetch()}
             onAlreadyConfirmed={() => void refetch()}
             onMessage={() => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true })}
           />
         ) : null}
-        {!showReturnReport && (booking.status === 'active' || booking.status === 'awaiting_return') ? (
+        {!showReturnReport && booking.status === 'awaiting_return' ? (
           <View
             style={[
               styles.card,
@@ -607,15 +690,6 @@ export default function RentalBookingDetailScreen() {
           </View>
         ) : null}
 
-        {reportedMissingItem || (didntWindowOpen && !windowForcedClosed) ? (
-          <DidntReceiveReportButton
-            bookingId={booking.id}
-            reported={reportedMissingItem}
-            onReported={() => setReportedNow(true)}
-            onWindowClosed={() => setWindowForcedClosed(true)}
-          />
-        ) : null}
-
         <View
           style={[
             styles.card,
@@ -636,6 +710,15 @@ export default function RentalBookingDetailScreen() {
             <Text style={[typography.body2, { color: colors.error.main, marginTop: spacing.xs }]}>
               {t('rentals.cancelled', 'Booking cancelled')}
             </Text>
+          ) : booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active' || booking.status === 'awaiting_return' || booking.status === 'completed' ? (
+            <RentalJourneyList
+              hideTitle
+              status={booking.status}
+              payAtPickup={booking.payment_timing === 'pay_at_pickup' || booking.currency === 'XAF' || booking.currency === 'XOF'}
+              paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
+              paidAside={paidAside}
+              pickupAside={pickupAside}
+            />
           ) : (
             timelineSteps.map((step, idx) => {
               const done = currentIdx >= idx;
@@ -741,7 +824,7 @@ export default function RentalBookingDetailScreen() {
           <Text style={[typography.h6, { color: colors.text.primary }]}>
             {formatDetailMoney(pricing?.total ?? toAmount(booking.total_amount))}
           </Text>
-          {depositAmount > 0 ? (
+          {hold.showDeposit ? (
             <Text style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}>
               {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
               {': '}
@@ -751,15 +834,9 @@ export default function RentalBookingDetailScreen() {
           {authorizedAmount > 0 ? (
             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
               {t(
-                booking.inspection_policy_version != null
-                  ? 'rentals.bookingDetail.authorizedOnCardInspected'
-                  : 'rentals.bookingDetail.authorizedOnCard',
-                booking.inspection_policy_version != null
-                  ? 'Held on your card: {{amount}} (rental + deposit). The rental is charged at return. The deposit is released unless there\'s damage or a late return.'
-                  : 'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
-                {
-                  amount: formatDetailMoney(authorizedAmount),
-                }
+                holdCopyKey(hold.additive, booking.inspection_policy_version != null),
+                holdCopyFallback(hold.additive, booking.inspection_policy_version != null),
+                { amount: formatDetailMoney(authorizedAmount) }
               )}
             </Text>
           ) : null}
@@ -812,24 +889,21 @@ export default function RentalBookingDetailScreen() {
                   )
                 : t(
                     'rentals.bookingDetail.reservedClientHint',
-                    'Your reservation is held for free. Pay the rental total at pickup to receive your start PIN.'
+                    'Your reservation is held for free. On the pickup day, tap Start rental. Pay then if it is still due.'
                   )}
             </Text>
           </View>
         ) : null}
 
-        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-          {canCancel ? (
-            <Button
-              mode="outlined"
-              textColor={colors.error.main}
-              loading={actionLoading}
-              onPress={() => setCancelOpen(true)}
-            >
-              {t('rentals.cancelBooking', 'Cancel booking')}
-            </Button>
-          ) : null}
-        </View>
+        <BookingQuickActions
+          title={title}
+          start={booking.start_at}
+          end={booking.end_at}
+          location={booking.rental_location_listing?.business_location?.name}
+          showCancel={canCancel}
+          onMessage={() => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true })}
+          onCancel={() => setCancelOpen(true)}
+        />
 
         {booking.status !== 'cancelled' ? (
           <View
@@ -922,17 +996,6 @@ export default function RentalBookingDetailScreen() {
       ) : null}
 
       <Portal>
-        <Dialog visible={pinOpen} onDismiss={() => setPinOpen(false)}>
-          <Dialog.Title>{t('rentals.yourPin', 'Your start PIN')}</Dialog.Title>
-          <Dialog.Content>
-            <Text style={[typography.h4, { color: colors.text.primary, textAlign: 'center' }]}>
-              {pinValue ?? '—'}
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setPinOpen(false)}>{t('common.close', 'Close')}</Button>
-          </Dialog.Actions>
-        </Dialog>
         <Dialog visible={cancelOpen} onDismiss={() => setCancelOpen(false)}>
           <Dialog.Title>{t('rentals.cancelBooking', 'Cancel booking')}</Dialog.Title>
           <Dialog.Content>

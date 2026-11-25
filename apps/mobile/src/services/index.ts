@@ -21,7 +21,8 @@ export {
   getBooking,
   getPaymentStatus,
   retryPayment,
-  getStartPin,
+  startRental,
+  reportItemNotCollected,
   cancelBooking,
   getBusinessItems,
   getBusinessItem,
@@ -35,8 +36,6 @@ export {
   getBusinessRequests,
   respondToRequest,
   getBusinessSchedule,
-  verifyStartPin,
-  generateOverwriteCode,
   confirmReturn,
 } from './rentalsApi';
 export {

@@ -485,7 +485,7 @@ export default function RentalListingDetailScreen() {
                   : n === 3 && listing.inspection_policy_version != null
                     ? t(
                         'rentals.detail.howItWorksStep3Inspected',
-                        'At pickup, review and accept the condition report to start. Return by the booked end time.'
+                        'At pickup, check the item, then tap Start rental. Return by the booked end time.'
                       )
                   : t(
                       `rentals.detail.howItWorksStep${n}`,

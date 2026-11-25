@@ -31,13 +31,13 @@ const NEXT_STEP_DEFAULTS: Record<string, string> = {
   'rentals.nextStep.proposedClient': 'Complete payment to confirm this booking.',
   'rentals.nextStep.proposedBusiness': 'Waiting for the client to complete payment.',
   'rentals.nextStep.reservedClient':
-    'Pay the rental total at pickup to unlock your start PIN.',
+    'On the pickup day, tap Start rental at the business. Pay then if it is still due.',
   'rentals.nextStep.reservedBusiness':
-    'Collect payment at pickup, then verify the start PIN.',
+    'The renter starts this rental on the pickup day. Hand over the item after it starts.',
   'rentals.nextStep.confirmedClient':
-    'Send your start PIN in chat when you pick up the item.',
+    'On the pickup day, tap Start rental when you are with the business.',
   'rentals.nextStep.confirmedBusiness':
-    'Verify the client PIN to start the rental at pickup.',
+    'The renter starts this rental. Hand over the item after it starts.',
   'rentals.nextStep.activeClient':
     'Your rental is in progress. Return the item by the booked end time.',
   'rentals.nextStep.activeBusiness':

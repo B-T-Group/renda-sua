@@ -94,7 +94,7 @@ export function buildRentalBookingConfirmedPush(params: {
   rentalItemName: string;
   bookingNumber: string;
   preferredLanguage?: string | null;
-  /** Inspected bookings have no start PIN. Legacy copy stays when this is false. */
+  /** Inspected bookings mention the condition report. Every booking starts in the app. */
   inspected?: boolean;
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
@@ -110,8 +110,8 @@ export function buildRentalBookingConfirmedPush(params: {
   return {
     title: fr ? 'Location confirmée' : 'Rental confirmed',
     body: fr
-      ? `${item} est confirmée. Votre code PIN est prêt.`
-      : `${item} is confirmed. Your start PIN is ready.`,
+      ? `${item} est confirmée. Le jour du retrait, appuyez sur Démarrer la location chez le commerce.`
+      : `${item} is confirmed. On the pickup day, tap Start rental at the business.`,
   };
 }
 
@@ -308,23 +308,18 @@ export function buildRentalNotReceivedSupportNotice(params: {
   };
 }
 
-function rentalStartedBody(fr: boolean, renter: string, item: string, due?: string | null): string {
-  const until = due?.trim()
-    ? fr
-      ? `jusqu'au ${due.trim()}`
-      : `until ${due.trim()}`
-    : fr
-      ? "jusqu'à la fin prévue"
-      : 'until the booked end';
+function rentalStartedBody(fr: boolean, renter: string, item: string): string {
   return fr
-    ? `${renter} a accepté l'état des lieux. ${item} est désormais en cours ${until}.`
-    : `${renter} accepted the condition report. ${item} is now in progress ${until}.`;
+    ? `${renter} a démarré la location de ${item}. Vous pouvez remettre l'article.`
+    : `${renter} started ${item}. You can hand over the item.`;
 }
 
 export function buildRentalInspectionNotice(params: {
   kind:
     | 'review_pickup'
     | 'review_return'
+    | 'photos_ready'
+    | 'photos_requested'
     | 'correction'
     | 'pickup_accepted'
     | 'return_reminder'
@@ -340,6 +335,7 @@ export function buildRentalInspectionNotice(params: {
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
   const item = params.rentalItemName;
+  const renter = params.renterName?.trim() || (fr ? 'Le locataire' : 'The renter');
   const copy: Record<typeof params.kind, { title: string; body: string }> = {
     review_pickup: {
       title: fr ? "Vérifiez l'état des lieux" : 'Review item condition',
@@ -352,6 +348,18 @@ export function buildRentalInspectionNotice(params: {
       body: fr
         ? `Comparez le retour de ${item} aux photos de départ.`
         : `Compare the return of ${item} with the pickup photos.`,
+    },
+    photos_ready: {
+      title: fr ? 'Nouvelles photos prêtes' : 'New photos are ready',
+      body: fr
+        ? `De nouvelles photos de ${item} sont prêtes à vérifier.`
+        : `New photos of ${item} are ready to check.`,
+    },
+    photos_requested: {
+      title: fr ? 'Nouvelles photos demandées' : 'New photos requested',
+      body: fr
+        ? `${renter} demande de nouvelles photos avant de démarrer ${item}.`
+        : `${renter} asked for new photos before starting ${item}.`,
     },
     correction: {
       title: fr ? 'Correction demandée' : 'Correction requested',
@@ -407,7 +415,53 @@ export function buildRentalStartedBusinessNotice(params: {
   const renter = params.renterName?.trim() || (fr ? 'Le locataire' : 'The renter');
   return {
     title: fr ? 'Location démarrée' : 'Rental started',
-    body: rentalStartedBody(fr, renter, item, params.returnDue),
+    body: rentalStartedBody(fr, renter, item),
+  };
+}
+
+export function buildRentalNoShowNotice(params: {
+  rentalItemName: string;
+  bookingNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const item = params.rentalItemName || 'Rental';
+  const booking = params.bookingNumber || '—';
+  return {
+    title: fr ? 'Location annulée' : 'Rental cancelled',
+    body: fr
+      ? `La location de ${item} (${booking}) a été annulée car elle n'a pas démarré. Aucun frais.`
+      : `The rental of ${item} (${booking}) was cancelled because it was not started. No charge.`,
+  };
+}
+
+export function buildRentalStartDayReminder(params: {
+  rentalItemName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const item = params.rentalItemName || 'Rental';
+  return {
+    title: fr ? "Retrait aujourd'hui" : 'Pickup today',
+    body: fr
+      ? `Le retrait de ${item} est aujourd'hui. Chez le commerce, appuyez sur Démarrer la location.`
+      : `Pickup is today for ${item}. At the business, tap Start rental.`,
+  };
+}
+
+export function buildItemNotCollectedSupport(params: {
+  bookingNumber: string;
+  rentalItemName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const booking = params.bookingNumber || '—';
+  const item = params.rentalItemName || 'Rental';
+  return {
+    title: fr ? 'Article non récupéré' : 'Item not collected',
+    body: fr
+      ? `${booking} · ${item}. Le commerce indique que l'article n'a pas été récupéré.`
+      : `${booking} · ${item}. The business says the item was not collected.`,
   };
 }
 

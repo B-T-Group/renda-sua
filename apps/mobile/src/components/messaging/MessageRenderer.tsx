@@ -30,13 +30,8 @@ export function MessageRenderer({ message }: Props) {
     );
   }
 
-  if (message.message_type === 'RENTAL_START_PIN' && message.structured_content) {
-    return (
-      <DeliveryPinMessageCard
-        content={message.structured_content as any}
-        variant="rentalStart"
-      />
-    );
+  if (message.message_type === 'RENTAL_START_PIN') {
+    return <Text>{t('rentals.messaging.startPin.retired', 'Start this rental from the booking. There is no start PIN.')}</Text>;
   }
 
   if (

@@ -1,5 +1,11 @@
 import { AsYouType, parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
 
+/** International display for a stored number. Invalid values stay as typed. */
+export function formatStoredPhone(raw: string): string {
+  const parsed = parsePhoneNumberFromString(raw.trim());
+  return parsed ? parsed.formatInternational() : raw;
+}
+
 /** Formats national digits for display using the selected country. */
 export function formatNationalForDisplay(countryIso: CountryCode, digitsOnly: string): string {
   const formatter = new AsYouType(countryIso);

@@ -28,8 +28,8 @@ import psycopg2.extras
 
 JOLIETTE_LOCATION_ID = "af5af903-55cb-4f80-a2d1-26cc57cc92e3"
 # Destination markets for Joliette / Canada export catalog (not home CA).
-# CG = Congo (live market; DRC/CD is not configured). PH kept from prior seed.
-EXPORT_MARKETS = ("CM", "CI", "TG", "CG", "GA", "PH")
+# CG = Congo-Brazzaville; CD = DRC (export-interest only). PH kept from prior seed.
+EXPORT_MARKETS = ("CM", "CI", "TG", "CG", "GA", "PH", "CD")
 SECRET_IDS = {
     "prod": "production-rendasua-backend-secrets",
     "dev": "development-rendasua-backend-secrets",

@@ -114,9 +114,11 @@ describe('assistant intents', () => {
     expect(en).toMatch(/export interest only/);
     expect(en).toMatch(/Local shopping, delivery, pickup, and local payment are not available/);
     expect(en).toMatch(/not the Republic of the Congo \(Congo-Brazzaville, CG\)/);
+    expect(en).toMatch(/Côte d'Ivoire \(CI\)/);
     expect(fr).toMatch(/République démocratique du Congo \(RDC, CD\)/);
     expect(fr).toMatch(/uniquement pour cet intérêt à l'export/);
     expect(fr).toMatch(/n'est pas la République du Congo \(Congo-Brazzaville, CG\)/);
+    expect(fr).toMatch(/Côte d'Ivoire \(CI\)/);
     expect(fr).not.toEqual(en);
   });
 

@@ -532,13 +532,13 @@ function buildClientItems(
       case 'rentals_pin_ready':
         return {
           kind: action.kind,
-          title: t('actionsNeeded.client.rentalPinReady.title', 'Share pickup PIN'),
+          title: t('actionsNeeded.client.rentalPinReady.title', 'Start your rental'),
           subtitle: t(
             'actionsNeeded.client.rentalPinReady.subtitle',
-            '{{count}} rental(s) ready — send your start PIN to the business.',
+            '{{count}} rental(s) ready — tap Start rental at the business.',
             { count: action.count }
           ),
-          icon: 'key-outline',
+          icon: 'play-circle-outline',
           count: action.count,
           priority: action.priority,
           onPress: () =>
