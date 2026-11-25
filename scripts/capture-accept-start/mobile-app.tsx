@@ -16,6 +16,7 @@ import BusinessRentalBookingDetailScreen from '../../apps/mobile/src/screens/bus
 import { ReportSentConfirmation } from '../../apps/mobile/src/components/rentals/inspection/ReportSentConfirmation';
 import { RentalStartedConfirmation } from '../../apps/mobile/src/components/rentals/inspection/RentalStartedConfirmation';
 import { RentalHandoverNotice } from '../../apps/mobile/src/components/rentals/RentalHandoverNotice';
+import { buildRentalStartedBusinessNotice } from '../../apps/backend/src/notifications/rental-push.messages';
 import { formatConfirmationDue, formatConfirmationMoney } from '../../apps/mobile/src/utils/rentals/confirmationFormat';
 import en from '../../apps/mobile/src/i18n/locales/en.json';
 import fr from '../../apps/mobile/src/i18n/locales/fr.json';
@@ -36,7 +37,7 @@ function CaptureScreen() {
   (window as Window & { __scene?: string }).__scene = scene;
   document.documentElement.lang = language;
   if (i18n.language !== language) void i18n.changeLanguage(language);
-  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush' || scene === 'bizPush';
+  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush' || scene === 'bizPush' || scene === 'bizOsPush';
   const submitted = scene === 'requestSubmitted';
   const inspection = scene === 'review' || scene === 'momo' || scene === 'conflict';
   const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait' || scene === 'bizWait' || scene === 'bizMomo' || scene === 'bizStarted' || scene === 'bizPhotos';
@@ -110,7 +111,8 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
     );
   }
   if (scene === 'push' || scene === 'clientPush') return <StartedNotice language={language} due={due} zone={zone} kind={scene} />;
-  if (scene === 'bizPush') return <HandoverPair />;
+  if (scene === 'bizPush') return <RentalHandoverNotice mode="banner" renterName="Amina K." itemName="JBL PartyBox 310" />;
+  if (scene === 'bizOsPush') return <OsPush language={language} />;
   return (
     <RentalStartedConfirmation
       momo={scene === 'momoStarted'}
@@ -128,11 +130,18 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
   );
 }
 
-function HandoverPair() {
+function OsPush({ language }: { language: string }) {
+  const notice = buildRentalStartedBusinessNotice({
+    rentalItemName: 'JBL PartyBox 310',
+    renterName: 'Amina K.',
+    preferredLanguage: language,
+  });
   return (
-    <View style={{ padding: 16, gap: 12 }}>
-      <RentalHandoverNotice mode="push" renterName="Amina K." itemName="JBL PartyBox 310" />
-      <RentalHandoverNotice mode="banner" renterName="Amina K." itemName="JBL PartyBox 310" />
+    <View style={{ padding: 20 }}>
+      <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E6E1D8' }}>
+        <Text variant="titleMedium" style={{ fontWeight: '800' }}>{notice.title}</Text>
+        <Text variant="bodyMedium" style={{ marginTop: 6 }}>{notice.body}</Text>
+      </View>
     </View>
   );
 }

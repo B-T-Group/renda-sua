@@ -320,8 +320,10 @@ const shots = [
   ['mobile', 'bizMomo', 'fr', 390, '09b-business-waiting-momo-fr.png', 'Mobile Money'],
   ['mobile', 'bizStarted', 'en', 390, '10-business-started-en.png', 'hand over'],
   ['mobile', 'bizStarted', 'fr', 390, '10-business-started-fr.png', 'remettez'],
-  ['mobile', 'bizPush', 'en', 390, '10b-business-push-en.png', 'Rental started, hand over the item'],
-  ['mobile', 'bizPush', 'fr', 390, '10b-business-push-fr.png', 'Location démarrée'],
+  ['mobile', 'bizPush', 'en', 390, '10b-business-inapp-en.png', 'Rental started, hand over the item'],
+  ['mobile', 'bizPush', 'fr', 390, '10b-business-inapp-fr.png', 'Location démarrée, remettez'],
+  ['mobile', 'bizOsPush', 'en', 390, '10c-business-push-en.png', 'You can hand over the item'],
+  ['mobile', 'bizOsPush', 'fr', 390, '10c-business-push-fr.png', 'Vous pouvez remettre'],
   ['mobile', 'bizPhotos', 'en', 390, '11-business-photo-request-en.png', 'Send updated photos'],
   ['mobile', 'bizPhotos', 'fr', 390, '11-business-photo-request-fr.png', 'photos'],
   ['web', 'today', 'en', 800, '12-web-renter-start-day-en.png', 'Pickup today'],
@@ -365,7 +367,8 @@ for (const [surface, scene, lang, width, file, text] of shots) {
     if (sheet) {
       await askTitle.locator('xpath=..').screenshot({ path: path.join(artifacts, file) });
     } else {
-      await page.screenshot({ path: path.join(artifacts, file), fullPage: surface === 'mobile' });
+      const webFull = file.startsWith('12-') || file.startsWith('13-');
+      await page.screenshot({ path: path.join(artifacts, file), fullPage: surface === 'mobile' || webFull });
     }
     console.log('shot', file);
   } catch (error) {
