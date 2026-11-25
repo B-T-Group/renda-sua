@@ -12,6 +12,6 @@ describe('listingRentModes', () => {
 
   it('prices an hourly-only listing from its hour rate', () => {
     expect(fromHourlyPrice(3000, 'XAF', 'en')).toBe('from 3\u00A0000\u00A0FCFA / h');
-    expect(fromHourlyPrice(3000, 'XAF', 'fr')).toBe('dès 3\u00A0000\u00A0FCFA / h');
+    expect(fromHourlyPrice(3000, 'XAF', 'fr')).toBe('dès\u00A03\u00A0000\u00A0FCFA / h');
   });
 });

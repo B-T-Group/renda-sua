@@ -3397,6 +3397,7 @@
       "securityDeposit": "Caution",
       "depositInvalid": "Saisissez une caution valide.",
       "securityDepositHelper": "Retenue sur les locations par carte pour couvrir les heures supplémentaires. Par défaut : 8× le tarif horaire.",
+      "securityDepositHelperDaily": "Retenue sur les locations par carte pour couvrir le temps supplémentaire.",
       "securityDepositCreateHint": "Laissez vide pour utiliser 8 × le tarif horaire. Retenue sur les locations par carte pour couvrir les heures supplémentaires.",
       "activity": {
         "title": "Activité de location",
@@ -7193,7 +7194,7 @@
       "held": "{{amount}} retenus sur votre carte",
       "returnBy": "Retournez avant le {{when}}",
       "lateStill": "Réservé pour {{time}} · vous pouvez encore démarrer jusqu'au {{until}}",
-      "locked": "Démarrer · dès le {{day}}",
+      "locked": "Démarrer · dès\u00a0le\u00a0{{day}}",
       "button": "Démarrer la location{{amount}}",
       "confirmTitle": "Démarrer la location ?",
       "confirmBody": "Démarrez seulement lorsque vous êtes avec le commerce. On vous remet l'article dès que vous démarrez.",

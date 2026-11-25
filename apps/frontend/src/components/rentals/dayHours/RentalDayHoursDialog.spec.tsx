@@ -26,7 +26,7 @@ const listing: DayHoursListing = {
 // Wed 25 Nov 2026, 10:20 in Libreville (UTC+1).
 const NOW = Date.UTC(2026, 10, 25, 9, 20);
 
-function renderDialog(onContinue = jest.fn()) {
+function renderDialog(onContinue = jest.fn(), serverError?: string) {
   render(
     <ThemeProvider theme={createTheme()}>
       <RentalDayHoursDialog
@@ -39,6 +39,7 @@ function renderDialog(onContinue = jest.fn()) {
         nowMs={NOW}
         onClose={jest.fn()}
         onContinue={onContinue}
+        serverError={serverError}
       />
     </ThemeProvider>
   );
@@ -67,5 +68,10 @@ describe('RentalDayHoursDialog', () => {
     fireEvent.click(screen.getByTestId('day-hours-day-2026-11-27'));
     fireEvent.click(screen.getByTestId('day-hours-day-2026-11-30'));
     expect(screen.getByTestId('day-hours-banner').textContent).toContain('Pick days in a row');
+  });
+
+  it('shows a server refusal inside the dialog', () => {
+    renderDialog(jest.fn(), 'That start is now less than 2\u00A0h away. Pick a later time.');
+    expect(screen.getByTestId('day-hours-server-error').textContent).toBe('That start is now less than 2\u00A0h away. Pick a later time.');
   });
 });

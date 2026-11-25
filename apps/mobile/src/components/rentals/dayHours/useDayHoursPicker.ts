@@ -61,6 +61,7 @@ export function useDayHoursPicker(input: {
   const { enabled, listing, booked, seed, language } = input;
   const [open, setOpen] = useState(Boolean(input.enabled && input.openOnStart));
   const [picked, setPicked] = useState<{ rows: SelectionRange[]; days: PickedDay[] } | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
   const model = useMemo(() => (listing ? dayHoursListingModel(listing, booked) : null), [booked, listing]);
   const seedDays = useMemo(() => {
     if (!model) return [];
@@ -74,6 +75,16 @@ export function useDayHoursPicker(input: {
     : undefined;
   const onContinue = useCallback((rows: SelectionRange[], next: PickedDay[]) => {
     setPicked({ rows, days: next });
+    setServerError(null);
+    setOpen(false);
+  }, []);
+  /** The server refused the submit: reopen the sheet with the reason inside it. */
+  const reopenWithError = useCallback((text: string) => {
+    setServerError(text);
+    setOpen(true);
+  }, []);
+  const close = useCallback(() => {
+    setServerError(null);
     setOpen(false);
   }, []);
   return {
@@ -86,6 +97,9 @@ export function useDayHoursPicker(input: {
     initialDays: days,
     dateLine,
     onContinue,
+    serverError,
+    reopenWithError,
+    close,
     selectionKey: picked ? picked.days.map((d) => `${d.key}:${d.mode}:${d.start}-${d.end}`).join('|') : 'seed',
     todayKey: model ? utcMsToKey(listingNowMs(Date.now(), listing?.timezone)) : '',
   };

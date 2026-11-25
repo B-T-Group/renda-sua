@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Text } from 'react-native-paper';
+import { Text as PaperText } from 'react-native-paper';
+import { fontFamilyForWeight } from '../../../theme/fonts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppModal } from '../../common/AppModal';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -71,9 +72,17 @@ export interface RentalDayHoursSheetProps {
   onContinue: (rows: SelectionRange[], days: PickedDay[]) => void;
   /** 'inline' renders the sheet without a Modal (render tests). */
   presentation?: 'modal' | 'inline';
+  /** Why the server refused the last submit (EN/FR rule text); shown at the top of the sheet. */
+  serverError?: string | null;
 }
 
 type Notes = Record<string, BlockNote | null>;
+
+/** Paper Text with the brand Inter face for its weight, like typography.ts (family + weight). */
+function Text({ style, ...rest }: ComponentProps<typeof PaperText>) {
+  const weight = StyleSheet.flatten(style)?.fontWeight;
+  return <PaperText {...rest} style={[style, { fontFamily: fontFamilyForWeight(weight) }]} />;
+}
 
 export function RentalDayHoursSheet(props: RentalDayHoursSheetProps) {
   const { visible, onClose, presentation = 'modal' } = props;
@@ -100,6 +109,7 @@ function SheetBody({
   nowMs,
   onClose,
   onContinue,
+  serverError,
 }: RentalDayHoursSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -247,6 +257,12 @@ function SheetBody({
         </Pressable>
       </View>
       <PriceChips listing={listing} currency={currency} lang={lang} />
+      {serverError ? (
+        <View testID="day-hours-server-error" accessibilityRole="alert" style={[styles.serverError, { backgroundColor: '#FDECEC', borderColor: '#F5C2C2' }]}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.error.main} />
+          <Text style={[styles.serverErrorText, { color: colors.error.dark }]}>{serverError}</Text>
+        </View>
+      ) : null}
       <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {calendarOpen || days.length < 2 ? (
           <Calendar
@@ -784,7 +800,7 @@ function SharedCard({
         {isHours ? (
           <>
             <TimeChip text={rangeLabel(first.start, first.end, lang, timeZone)} />
-            <Text style={[styles.hours, { color: colors.text.secondary }]}>{blockHours(first)}{'\u00A0'}h × {days.length}</Text>
+            <Text style={[styles.hours, { color: colors.text.secondary }]}>{days.length} × {blockHours(first)}{'\u00A0'}h</Text>
           </>
         ) : null}
         <View style={styles.flex} />
@@ -876,6 +892,8 @@ const styles = StyleSheet.create({
   price: { fontSize: 15, fontWeight: '800' },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   noteText: { fontSize: 13, flex: 1 },
+  serverError: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderWidth: 1, borderRadius: 12, padding: 12, marginHorizontal: 20, marginBottom: 8 },
+  serverErrorText: { fontSize: 14, fontWeight: '600', flex: 1 },
   dayChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   dayChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingLeft: 12, paddingRight: 6, paddingVertical: 6 },
   dayChipText: { fontWeight: '700', fontSize: 14 },

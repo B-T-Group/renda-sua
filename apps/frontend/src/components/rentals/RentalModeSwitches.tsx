@@ -6,6 +6,12 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useTranslation } from 'react-i18next';
 
+/** An off switch should read as a normal unchecked switch, not a faint disabled one. */
+const OFF_READS_NORMAL = {
+  '& .MuiSwitch-switchBase:not(.Mui-checked):not(.Mui-disabled) + .MuiSwitch-track': { backgroundColor: '#8A94A6', opacity: 1 },
+  '& .MuiSwitch-switchBase:not(.Mui-disabled) .MuiSwitch-thumb': { boxShadow: '0 1px 3px rgba(15, 23, 42, 0.35)' },
+} as const;
+
 export interface RentalModes {
   offersDaily: boolean;
   offersHourly: boolean;
@@ -45,6 +51,7 @@ export const RentalModeSwitches: React.FC<{ value: RentalModes; onChange: (next:
           checked={on}
           disabled={disabled}
           onChange={(e) => toggle(e.target.checked)}
+          sx={OFF_READS_NORMAL}
         />
       </Stack>
     );

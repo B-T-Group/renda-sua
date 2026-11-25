@@ -200,6 +200,7 @@ function ModifyRequestForm({
             openDates();
           }}
           onEditDates={openDates}
+          onServerRuleError={picker.enabled ? picker.reopenWithError : undefined}
           onModifySave={onSave}
         />
       </KeyboardAvoidingView>
@@ -212,7 +213,8 @@ function ModifyRequestForm({
           timeZone={listing?.timezone}
           city={listing?.business_location?.address?.city}
           initialDays={picker.initialDays}
-          onClose={() => picker.setOpen(false)}
+          onClose={picker.close}
+          serverError={picker.serverError}
           onContinue={(rows, days) => {
             onClearBlocked();
             picker.onContinue(rows, days);

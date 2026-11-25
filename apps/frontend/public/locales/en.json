@@ -3703,6 +3703,7 @@
       "securityDeposit": "Security deposit",
       "depositInvalid": "Enter a valid security deposit.",
       "securityDepositHelper": "Held on card rentals to cover extra hours. Default is 8× the hourly rate.",
+      "securityDepositHelperDaily": "Held on card rentals to cover extra time.",
       "securityDepositCreateHint": "Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours.",
       "activity": {
         "title": "Rental activity",

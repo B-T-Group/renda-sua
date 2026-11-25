@@ -135,6 +135,7 @@ export default function RentalRequestScreen() {
           imageUrl={image?.display_url || image?.image_url || null}
           dateLine={picked ? picker.dateLine : dates.dateLine}
           onEditDates={openDates}
+          onServerRuleError={picker.enabled ? picker.reopenWithError : undefined}
           unavailableLabel={picked ? undefined : dates.unavailableLabel}
           cardSendDisabled={unfit}
           blockedReason={unfit ? t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language)) : undefined}
@@ -159,7 +160,8 @@ export default function RentalRequestScreen() {
           timeZone={zone}
           city={listing.business_location?.address?.city}
           initialDays={picker.initialDays}
-          onClose={() => picker.setOpen(false)}
+          onClose={picker.close}
+          serverError={picker.serverError}
           onContinue={picker.onContinue}
         />
       ) : guardOn ? (

@@ -5,6 +5,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
@@ -89,6 +90,8 @@ export interface RentalDayHoursDialogProps {
   nowMs?: number;
   onClose: () => void;
   onContinue: (rows: SelectionRange[], days: PickedDay[]) => void;
+  /** Why the server refused the last submit (EN/FR rule text); shown at the top of the dialog. */
+  serverError?: string | null;
 }
 
 type Notes = Record<string, BlockNote | null>;
@@ -121,6 +124,7 @@ function DialogBody({
   onClose,
   onContinue,
   narrow,
+  serverError,
 }: RentalDayHoursDialogProps & { narrow: boolean }) {
   const lang = pickerLang(language);
   const now = useMemo(() => listingNowMs(nowMs ?? Date.now(), timeZone), [nowMs, timeZone]);
@@ -246,6 +250,12 @@ function DialogBody({
           <CloseIcon />
         </IconButton>
       </Box>
+      {serverError ? (
+        <Box data-testid="day-hours-server-error" role="alert" sx={{ mx: 3, mb: 1.5, p: 1.5, display: 'flex', alignItems: 'flex-start', gap: 1, borderRadius: '12px', border: '1px solid #F5C2C2', bgcolor: '#FDECEC', color: 'error.dark' }}>
+          <ErrorOutlineIcon sx={{ fontSize: 20, color: 'error.main' }} />
+          <Typography sx={{ fontSize: 14, fontWeight: 600, color: 'inherit' }}>{serverError}</Typography>
+        </Box>
+      ) : null}
       <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 3, pb: 2, display: 'flex', flexDirection: narrow ? 'column' : 'row', gap: 3 }}>
         <Box sx={{ width: narrow ? '100%' : 284, flexShrink: 0 }}>
           <Calendar lang={lang} month={month} todayKey={todayKey} picked={days.map((d) => d.key)} info={info} onMonth={setMonth} onDay={onDayTap} showPartial={listing.offersHourly} />

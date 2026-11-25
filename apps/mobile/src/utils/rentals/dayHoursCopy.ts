@@ -86,13 +86,13 @@ const FR: Record<keyof typeof EN, string> = {
   lockToday: 'Journée impossible aujourd’hui\u00A0: elle a déjà commencé.',
   lockTodaySoon: 'Journée impossible aujourd’hui\u00A0: elle commence dans moins de 2\u00A0h.',
   sharedLockBooked: 'Journée impossible\u00A0: {{day}} est en partie réservé.',
-  fromPerHour: 'dès {{amount}} / h',
+  fromPerHour: 'dès\u00A0{{amount}} / h',
   stretched: 'Minimum {{count}}\u00A0h\u00A0: la fin passe à {{time}}.',
   capped: 'Maximum {{count}}\u00A0h\u00A0: la fin passe à {{time}}.',
   tooShort: 'Pas assez d’heures libres à partir de {{time}}. Choisissez un autre début.',
   notInARow: 'Choisissez des jours qui se suivent.',
   notInARowRemove: 'Retirez plutôt le premier ou le dernier jour, pour que les autres se suivent.',
-  todayFrom: 'Aujourd’hui · dès {{time}}',
+  todayFrom: 'Aujourd’hui · dès\u00A0{{time}}',
   daysChanged: '{{count}} jours · touchez pour modifier',
   noDays: 'Aucun jour pour l’instant',
   noDaysSub: 'Journée ou heures\u00A0: vous choisissez pour chaque jour.',
@@ -321,4 +321,13 @@ export function serverRuleCode(error: unknown): string | null {
   const e = error as { code?: unknown; data?: { code?: unknown }; response?: { data?: { code?: unknown } } };
   const code = e?.response?.data?.code ?? e?.data?.code ?? e?.code;
   return typeof code === 'string' ? code : null;
+}
+
+/**
+ * Submit failed: the EN/FR text to show inside the reopened picker when the server refused a
+ * day-and-hours rule, or null (picker off, or some other error that stays on the page).
+ */
+export function submitRuleText(error: unknown, pickerOn: boolean, language?: string | null): string | null {
+  if (!pickerOn) return null;
+  return serverRuleText(serverRuleCode(error), pickerLang(language));
 }

@@ -64,7 +64,7 @@ import {
 import { RentalDayHoursDialog } from './dayHours/RentalDayHoursDialog';
 import { dayHoursBlockError, dayHoursListingModel } from './dayHours/dayHoursListingModel';
 import { fromSelectionRanges, listingNowMs } from '../../utils/rentalDayHoursPicker';
-import { pickerLang, serverRuleCode, serverRuleText } from '../../utils/rentalDayHoursCopy';
+import { submitRuleText } from '../../utils/rentalDayHoursCopy';
 
 export const RENTAL_REQUEST_SECTION_ID = 'rental-request-section';
 const RENTAL_MIN_START_BUFFER_MS = 2 * 60 * 60 * 1000;
@@ -153,6 +153,8 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   const guardOn = flags.rentals_card_window_guard_enabled;
   const pickerOn = flags.rentals_day_hours_picker_enabled === true;
   const [pickerOpen, setPickerOpen] = useState(false);
+  /** Server rule text shown inside the reopened picker, not on the page behind it. */
+  const [pickerError, setPickerError] = useState<string | null>(null);
   const [payingByCard, setPayingByCard] = useState<boolean | null>(null);
   const [cardFallback, setCardFallback] = useState<string | null>(null);
   const cardOn = payingByCard ?? cardWindow?.payment_rail === 'stripe';
@@ -481,12 +483,13 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         state: { inspectionPolicyVersion: version, requestId: created.requestId },
       });
     } catch (e: unknown) {
-      const ruleText = pickerOn ? serverRuleText(serverRuleCode(e), pickerLang(i18n.language)) : null;
+      const ruleText = submitRuleText(e, pickerOn, i18n.language);
       if (ruleText) {
         // Day-and-hours rule (for example the 2 h lead time): say why and reopen the picker.
         setConfirmOpen(false);
         setCardFallback(null);
-        setMsg(ruleText);
+        setMsg(null);
+        setPickerError(ruleText);
         setPickerOpen(true);
         return;
       }
@@ -871,8 +874,13 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
           timeZone={listingZone}
           city={city}
           initialDays={pickerDays}
-          onClose={() => setPickerOpen(false)}
+          serverError={pickerError}
+          onClose={() => {
+            setPickerError(null);
+            setPickerOpen(false);
+          }}
           onContinue={(rows) => {
+            setPickerError(null);
             setMsg(null);
             setCardFallback(null);
             setSelections(rows);

@@ -705,10 +705,14 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     }
                     type="number"
                     fullWidth
-                    helperText={t(
-                      'business.rentals.securityDepositHelper',
-                      'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-                    )}
+                    helperText={
+                      modesOn && !f.offers_hourly
+                        ? t('business.rentals.securityDepositHelperDaily', 'Held on card rentals to cover extra time.')
+                        : t(
+                            'business.rentals.securityDepositHelper',
+                            'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                          )
+                    }
                   />
                 ) : null}
                 <TextField

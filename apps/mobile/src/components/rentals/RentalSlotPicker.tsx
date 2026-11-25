@@ -16,7 +16,7 @@ import type { RentalTakenWindow } from '../../types/rentals';
 import { RentalTimeOptionSheet } from './RentalTimeOptionSheet';
 import { RentalRequestScreenForm } from './request/RentalRequestScreenForm';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
-import { pickerLang, serverRuleCode, serverRuleText } from '../../utils/rentals/dayHoursCopy';
+import { submitRuleText } from '../../utils/rentals/dayHoursCopy';
 import { CardWindowNotice } from './request/CardWindowNotice';
 import {
   bookedSegmentsForLocalDay,
@@ -144,6 +144,8 @@ export interface RentalSlotPickerProps {
   imageUrl?: string | null;
   dateLine?: string;
   onEditDates?: () => void;
+  /** Day-and-hours picker: the server refused the request; reopen the picker showing this text. */
+  onServerRuleError?: (text: string) => void;
   unavailableLabel?: string;
   notice?: ReactNode;
   blockedReason?: string;
@@ -202,6 +204,7 @@ export function RentalSlotPicker({
   imageUrl,
   dateLine,
   onEditDates,
+  onServerRuleError,
   unavailableLabel,
   notice,
   blockedReason,
@@ -641,12 +644,16 @@ export function RentalSlotPicker({
 
   /** Day-and-hours server rules: say why in EN/FR and send the renter back to the sheet. */
   function dayHoursRuleError(e: unknown): boolean {
-    if (!dayHoursPicker) return false;
-    const text = serverRuleText(serverRuleCode(e), pickerLang(i18n.language));
+    const text = submitRuleText(e, Boolean(dayHoursPicker), i18n.language);
     if (!text) return false;
     setCardFallback(null);
-    setMsg(text);
-    onEditDates?.();
+    if (onServerRuleError) {
+      setMsg(null);
+      onServerRuleError(text);
+    } else {
+      setMsg(text);
+      onEditDates?.();
+    }
     return true;
   }
 

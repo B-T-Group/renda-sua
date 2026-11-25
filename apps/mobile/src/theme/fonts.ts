@@ -18,3 +18,12 @@ export const fontFamily = {
   display: brandFace('Poppins_600SemiBold'),
   displayBold: brandFace('Poppins_700Bold'),
 } as const;
+
+/** Inter face for a fontWeight, the way typography.ts pairs them (800/900 use the bold face). */
+export function fontFamilyForWeight(weight?: string | number | null): string {
+  const w = weight === 'bold' ? 700 : weight === 'normal' || weight == null ? 400 : Number(weight);
+  if (w >= 700) return fontFamily.bold;
+  if (w >= 600) return fontFamily.semibold;
+  if (w >= 500) return fontFamily.medium;
+  return fontFamily.regular;
+}
