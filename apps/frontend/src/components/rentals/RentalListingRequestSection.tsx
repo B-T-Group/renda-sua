@@ -1,4 +1,5 @@
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import EditCalendarOutlinedIcon from '@mui/icons-material/EditCalendarOutlined';
 import {
   Alert,
   Box,
@@ -60,6 +61,10 @@ import {
   type SelectionRange,
   type WeeklyRow,
 } from './rentalRequestScheduleUtils';
+import { RentalDayHoursDialog } from './dayHours/RentalDayHoursDialog';
+import { dayHoursBlockError, dayHoursListingModel } from './dayHours/dayHoursListingModel';
+import { fromSelectionRanges, listingNowMs } from '../../utils/rentalDayHoursPicker';
+import { submitRuleText } from '../../utils/rentalDayHoursCopy';
 
 export const RENTAL_REQUEST_SECTION_ID = 'rental-request-section';
 const RENTAL_MIN_START_BUFFER_MS = 2 * 60 * 60 * 1000;
@@ -115,6 +120,12 @@ export interface RentalListingRequestSectionProps {
   initialEndDate?: string;
   cardWindow?: CardWindowFields | null;
   inspectionPolicyVersion?: number | null;
+  /** Listing switches; missing means both on. Read only with rentals_day_hours_picker_enabled. */
+  offersDaily?: boolean;
+  offersHourly?: boolean;
+  /** Listing market time zone (floating wall-clock times). */
+  timeZone?: string | null;
+  city?: string | null;
 }
 
 export const RentalListingRequestSection: React.FC<RentalListingRequestSectionProps> = ({
@@ -132,10 +143,18 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   initialEndDate,
   cardWindow = null,
   inspectionPolicyVersion = null,
+  offersDaily,
+  offersHourly,
+  timeZone = null,
+  city = null,
 }) => {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
   const guardOn = flags.rentals_card_window_guard_enabled;
+  const pickerOn = flags.rentals_day_hours_picker_enabled === true;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  /** Server rule text shown inside the reopened picker, not on the page behind it. */
+  const [pickerError, setPickerError] = useState<string | null>(null);
   const [payingByCard, setPayingByCard] = useState<boolean | null>(null);
   const [cardFallback, setCardFallback] = useState<string | null>(null);
   const cardOn = payingByCard ?? cardWindow?.payment_rail === 'stripe';
@@ -174,6 +193,26 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   }, [initialEndDate, initialStartDate]);
 
   const stock = Math.max(1, Math.floor(Number(unitsAvailable)) || 1);
+  const dayHoursModel = useMemo(
+    () =>
+      dayHoursListingModel({
+        weeklyAvailability,
+        booked,
+        unitsAvailable: stock,
+        minRentalHours,
+        maxRentalHours,
+        basePricePerDay,
+        basePricePerHour,
+        offersDaily,
+        offersHourly,
+      }),
+    [basePricePerDay, basePricePerHour, booked, maxRentalHours, minRentalHours, offersDaily, offersHourly, stock, weeklyAvailability]
+  );
+  const listingZone = timeZone ?? cardWindow?.timezone ?? null;
+  const pickerDays = useMemo(
+    () => (pickerOpen ? fromSelectionRanges(selections, dayHoursModel, listingNowMs(Date.now(), listingZone)) : []),
+    [dayHoursModel, listingZone, pickerOpen, selections]
+  );
 
   const loadBooked = useCallback(async () => {
     try {
@@ -333,10 +372,13 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     if (selections.length === 0) {
       return t('rentals.requestForm.addOneRange', 'Add at least one time range.');
     }
-    if (hoursTotal < minRentalHours) {
+    if (pickerOn) {
+      const blockError = dayHoursBlockError(selections, minRentalHours, maxRentalHours);
+      if (blockError === 'min') return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
+      if (blockError === 'max') return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
+    } else if (hoursTotal < minRentalHours) {
       return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
-    }
-    if (maxRentalHours != null && hoursTotal > maxRentalHours) {
+    } else if (maxRentalHours != null && hoursTotal > maxRentalHours) {
       return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
     }
     if (unitsRequested < 1 || unitsRequested > remainingForSelection) {
@@ -351,7 +393,8 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
           return t('rentals.requestForm.allDayNeedsDate', 'All-day selection is missing a date.');
         }
       }
-      if (r.startMs < minStartMs) {
+      if (!pickerOn && r.startMs < minStartMs) {
+        // With the picker on, the dialog and the server check lead time in listing time.
         return t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.');
       }
       if (remainingUnitsInRange(r.startMs, r.endMs, booked, stock) < unitsRequested) {
@@ -375,6 +418,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     unitsRequested,
     cardUnfit,
     i18n.language,
+    pickerOn,
   ]);
 
   const openConfirm = () => {
@@ -439,6 +483,16 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         state: { inspectionPolicyVersion: version, requestId: created.requestId },
       });
     } catch (e: unknown) {
+      const ruleText = submitRuleText(e, pickerOn, i18n.language);
+      if (ruleText) {
+        // Day-and-hours rule (for example the 2 h lead time): say why and reopen the picker.
+        setConfirmOpen(false);
+        setCardFallback(null);
+        setMsg(null);
+        setPickerError(ruleText);
+        setPickerOpen(true);
+        return;
+      }
       const friendly = cardWindowErrorMessage(e, i18n.language);
       setCardFallback(friendly);
       const http = e as { response?: { data?: { message?: string } } };
@@ -497,18 +551,26 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                   <Typography variant="h6" fontWeight={700}>
                     {t('rentals.requestRental', 'Request this rental')}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {t(
-                      'rentals.requestForm.slotSubtitle',
-                      'Pick a day, choose times within open hours, then add each range to your request.'
-                    )}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                    {t(
-                      'rentals.requestForm.halfHourHint',
-                      'Times are in full-hour slots (e.g. 9:00–10:00).'
-                    )}
-                  </Typography>
+                  {pickerOn ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {t('rentals.dayHours.sectionSubtitle', 'Pick the days you need: a full day or just a few hours.')}
+                    </Typography>
+                  ) : (
+                    <>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {t(
+                          'rentals.requestForm.slotSubtitle',
+                          'Pick a day, choose times within open hours, then add each range to your request.'
+                        )}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                        {t(
+                          'rentals.requestForm.halfHourHint',
+                          'Times are in full-hour slots (e.g. 9:00–10:00).'
+                        )}
+                      </Typography>
+                    </>
+                  )}
                 </Box>
                 {guardOn && cardWindow ? (
                   <CardWindowCalendar
@@ -523,7 +585,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                     tone="warn"
                     body={cardWindowWarning(cutoff, i18n.language)}
                     action={i18n.language.startsWith('fr') ? 'Modifier les dates' : 'Change dates'}
-                    onAction={() => dateRef.current?.focus()}
+                    onAction={() => (pickerOn ? setPickerOpen(true) : dateRef.current?.focus())}
                   />
                 ) : null}
                 {cardFallback ? (
@@ -536,7 +598,20 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                   />
                 ) : null}
 
-                {!dayBounds ? (
+                {pickerOn ? (
+                  <Button
+                    data-testid="day-hours-open"
+                    variant={selections.length ? 'outlined' : 'contained'}
+                    size="large"
+                    startIcon={<EditCalendarOutlinedIcon />}
+                    onClick={() => setPickerOpen(true)}
+                    sx={{ minHeight: 48, fontWeight: 700, borderRadius: 2, alignSelf: { sm: 'flex-start' } }}
+                  >
+                    {selections.length
+                      ? t('rentals.dayHours.changeDays', 'Change days and hours')
+                      : t('rentals.dayHours.pickDays', 'Pick days and hours')}
+                  </Button>
+                ) : !dayBounds ? (
                   <Alert severity="info">
                     {t('rentals.requestForm.closedDay', 'The business is closed on this day. Pick another date.')}
                   </Alert>
@@ -659,9 +734,11 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                             bgcolor: 'background.paper',
                           }}
                           secondaryAction={
-                            <IconButton edge="end" aria-label="remove" onClick={() => removeSelection(r.id)}>
-                              <DeleteOutlineIcon />
-                            </IconButton>
+                            pickerOn ? undefined : (
+                              <IconButton edge="end" aria-label="remove" onClick={() => removeSelection(r.id)}>
+                                <DeleteOutlineIcon />
+                              </IconButton>
+                            )
                           }
                         >
                           <ListItemText
@@ -788,6 +865,29 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         </Card>
       </Box>
 
+      {pickerOn ? (
+        <RentalDayHoursDialog
+          open={pickerOpen}
+          listing={dayHoursModel}
+          currency={currency}
+          language={i18n.language}
+          timeZone={listingZone}
+          city={city}
+          initialDays={pickerDays}
+          serverError={pickerError}
+          onClose={() => {
+            setPickerError(null);
+            setPickerOpen(false);
+          }}
+          onContinue={(rows) => {
+            setPickerError(null);
+            setMsg(null);
+            setCardFallback(null);
+            setSelections(rows);
+            setPickerOpen(false);
+          }}
+        />
+      ) : null}
       <Dialog open={confirmOpen} onClose={() => !submitting && setConfirmOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('rentals.requestForm.confirmTitle', 'Confirm your request')}</DialogTitle>
         <DialogContent>

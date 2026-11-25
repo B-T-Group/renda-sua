@@ -2780,6 +2780,16 @@
         "scopeA11y": "Filter rentals",
         "empty": "No rentals in this filter yet.",
         "loadError": "Could not load rental activity"
+      },
+      "rentBy": {
+        "byDay": "Rent by the day",
+        "byDayHint": "Renters can book a full day.",
+        "byHour": "Rent by the hour",
+        "byHourHint": "Renters can book a few hours.",
+        "atLeastOne": "Keep at least one on.",
+        "priceNeeded": "Set a price for each way you rent.",
+        "hourPrice": "Price per hour",
+        "dayPrice": "Price per day"
       }
     },
     "orders": {
@@ -6733,6 +6743,9 @@
       "acceptUnavailable": "Accept unavailable — dates are taken",
       "chargedAfterAccept": "The renter is charged after you accept",
       "notFound": "This request is no longer here."
+    },
+    "dayHours": {
+      "changeDays": "Change days and hours"
     }
   },
   "admin": {

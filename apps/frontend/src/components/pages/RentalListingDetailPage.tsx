@@ -580,6 +580,7 @@ const RentalListingDetailPage: React.FC = () => {
   const tags = row.rental_item.tags ?? [];
   const addressLine = formatAddress(row.business_location.address ?? {});
   const priceLabel = formatMoney(row.base_price_per_hour, row.rental_item.currency);
+  const dailyOnly = row.offers_hourly === false && row.offers_daily !== false;
   const dayPriceLabel = formatMoney(
     Number(row.base_price_per_day ?? 0),
     row.rental_item.currency
@@ -714,18 +715,22 @@ const RentalListingDetailPage: React.FC = () => {
                         wordBreak: 'break-word',
                       }}
                     >
-                      {priceLabel}
+                      {dailyOnly ? dayPriceLabel : priceLabel}
                     </Typography>
                     <Typography variant="subtitle1" color="text.secondary" sx={{ fontSize: { xs: '0.95rem', sm: undefined } }}>
-                      {t('rentals.detail.hourlyRate', 'Hourly rate')}
+                      {dailyOnly
+                        ? t('rentals.detail.fullDayRate', 'Full day (daily rate)')
+                        : t('rentals.detail.hourlyRate', 'Hourly rate')}
                     </Typography>
                   </Stack>
-                  <Typography variant="body1" fontWeight={600} sx={{ mt: 1.5 }}>
-                    {dayPriceLabel}{' '}
-                    <Typography component="span" variant="body2" color="text.secondary" fontWeight={400}>
-                      {t('rentals.detail.fullDayRate', 'Full day (daily rate)')}
+                  {row.offers_daily !== false && !dailyOnly ? (
+                    <Typography variant="body1" fontWeight={600} sx={{ mt: 1.5 }}>
+                      {dayPriceLabel}{' '}
+                      <Typography component="span" variant="body2" color="text.secondary" fontWeight={400}>
+                        {t('rentals.detail.fullDayRate', 'Full day (daily rate)')}
+                      </Typography>
                     </Typography>
-                  </Typography>
+                  ) : null}
                   {showsCardDeposit(row.rental_item.currency) && Number(row.security_deposit_amount ?? 0) > 0 ? (
                     <>
                       <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
@@ -936,6 +941,10 @@ const RentalListingDetailPage: React.FC = () => {
                   initialStartDate={searchParams.get('start_date') || undefined}
                   initialEndDate={searchParams.get('end_date') || undefined}
                   cardWindow={row}
+                  offersDaily={row.offers_daily}
+                  offersHourly={row.offers_hourly}
+                  timeZone={row.timezone ?? null}
+                  city={row.business_location?.address?.city ?? null}
                 />
               ) : null}
             </Grid>

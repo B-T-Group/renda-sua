@@ -95,6 +95,10 @@ export interface RentalListingRow {
   id: string;
   base_price_per_hour: string | number;
   base_price_per_day: string | number;
+  /** Rent by the hour. Missing on older API responses = true. */
+  offers_hourly?: boolean | null;
+  /** Rent by the day. Missing on older API responses = true. */
+  offers_daily?: boolean | null;
   security_deposit_amount?: string | number | null;
   min_rental_hours: number;
   max_rental_hours: number | null;
@@ -379,6 +383,8 @@ export interface BusinessRentalListingDetail {
   business_location_id: string;
   base_price_per_hour: number;
   base_price_per_day: number;
+  offers_hourly?: boolean | null;
+  offers_daily?: boolean | null;
   security_deposit_amount?: number;
   min_rental_hours: number;
   max_rental_hours: number | null;
@@ -439,6 +445,8 @@ export interface CreateBusinessRentalListingBody {
   dropoff_instructions?: string;
   base_price_per_hour: number;
   base_price_per_day: number;
+  offers_hourly?: boolean | null;
+  offers_daily?: boolean | null;
   security_deposit_amount?: number;
   min_rental_hours?: number;
   max_rental_hours?: number | null;
@@ -451,6 +459,8 @@ export interface UpdateBusinessRentalListingBody {
   dropoff_instructions?: string;
   base_price_per_hour?: number;
   base_price_per_day?: number;
+  offers_hourly?: boolean | null;
+  offers_daily?: boolean | null;
   security_deposit_amount?: number;
   min_rental_hours?: number;
   max_rental_hours?: number | null;

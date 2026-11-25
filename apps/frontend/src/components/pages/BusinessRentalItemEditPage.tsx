@@ -18,6 +18,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { InspectionOptInCard } from '../rentals/InspectionOptInCard';
+import { RentalModeSwitches } from '../rentals/RentalModeSwitches';
+import { useClientFlags } from '../../hooks/useClientFlags';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import {
@@ -46,6 +48,8 @@ function rentalDeleteErrorMessage(error: unknown, fallback: string): string {
 interface ListingFormState {
   base_price_per_hour: string;
   base_price_per_day: string;
+  offers_daily: boolean;
+  offers_hourly: boolean;
   security_deposit_amount: string;
   min_rental_hours: string;
   max_rental_hours: string;
@@ -69,6 +73,8 @@ function listingFormsFromDetail(
     out[l.id] = {
       base_price_per_hour: String(l.base_price_per_hour),
       base_price_per_day: String(l.base_price_per_day ?? ''),
+      offers_daily: l.offers_daily !== false,
+      offers_hourly: l.offers_hourly !== false,
       security_deposit_amount:
         l.security_deposit_amount != null ? String(l.security_deposit_amount) : '',
       min_rental_hours: String(l.min_rental_hours),
@@ -106,12 +112,19 @@ function buildItemUpdateBody(
 
 function buildListingUpdateBody(
   f: ListingFormState,
-  currency: string
+  currency: string,
+  modesOn = false
 ): UpdateBusinessRentalListingBody | null {
   const parsed = parsePriceFields(f, currency);
   if (!parsed) return null;
+  if (modesOn) {
+    if (!f.offers_daily && !f.offers_hourly) return null;
+    if (f.offers_hourly && !(parsed.base_price_per_hour > 0)) return null;
+    if (f.offers_daily && !(parsed.base_price_per_day > 0)) return null;
+  }
   return {
     ...parsed,
+    ...(modesOn ? { offers_daily: f.offers_daily, offers_hourly: f.offers_hourly } : {}),
     pickup_instructions: f.pickup_instructions.trim(),
     dropoff_instructions: f.dropoff_instructions.trim(),
     is_active: f.is_active,
@@ -159,6 +172,8 @@ const BusinessRentalItemEditPage: React.FC = () => {
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
   const { lockedCurrency } = useBusinessLockedCurrency(businessId);
+  const { flags } = useClientFlags();
+  const modesOn = flags.rentals_day_hours_picker_enabled === true;
   const {
     fetchBusinessRentalItem,
     updateBusinessRentalItem,
@@ -268,10 +283,12 @@ const BusinessRentalItemEditPage: React.FC = () => {
     async (listingId: string) => {
       const f = listingForms[listingId];
       if (!f) return;
-      const body = buildListingUpdateBody(f, item?.currency || lockedCurrency);
+      const body = buildListingUpdateBody(f, item?.currency || lockedCurrency, modesOn);
       if (!body) {
         enqueueSnackbar(
-          t('business.rentals.listingInvalid', 'Check listing numbers and max ≥ min.'),
+          modesOn
+            ? t('business.rentals.rentBy.listingInvalid', 'Check listing numbers, max ≥ min, and a price for each way you rent.')
+            : t('business.rentals.listingInvalid', 'Check listing numbers and max ≥ min.'),
           { variant: 'warning' }
         );
         return;
@@ -292,7 +309,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
         setSavingListingId(null);
       }
     },
-    [enqueueSnackbar, item?.currency, listingForms, lockedCurrency, reload, t, updateBusinessRentalListing]
+    [enqueueSnackbar, item?.currency, listingForms, lockedCurrency, modesOn, reload, t, updateBusinessRentalListing]
   );
 
   const publishListing = useCallback(
@@ -643,24 +660,40 @@ const BusinessRentalItemEditPage: React.FC = () => {
                 </Alert>
               ) : null}
               <Stack spacing={2}>
-                <TextField
-                  label={t('business.rentals.pricePerHour', 'Price per hour')}
-                  value={f.base_price_per_hour}
-                  onChange={(e) =>
-                    patchListingForm(l.id, { base_price_per_hour: e.target.value })
-                  }
-                  type="number"
-                  fullWidth
-                />
-                <TextField
-                  label={t('business.rentals.pricePerDay', 'Full day price (daily rate)')}
-                  value={f.base_price_per_day}
-                  onChange={(e) =>
-                    patchListingForm(l.id, { base_price_per_day: e.target.value })
-                  }
-                  type="number"
-                  fullWidth
-                />
+                {modesOn ? (
+                  <RentalModeSwitches
+                    value={{ offersDaily: f.offers_daily, offersHourly: f.offers_hourly }}
+                    onChange={(next) =>
+                      patchListingForm(l.id, { offers_daily: next.offersDaily, offers_hourly: next.offersHourly })
+                    }
+                  />
+                ) : null}
+                {!modesOn || f.offers_hourly ? (
+                  <TextField
+                    label={t('business.rentals.pricePerHour', 'Price per hour')}
+                    value={f.base_price_per_hour}
+                    onChange={(e) =>
+                      patchListingForm(l.id, { base_price_per_hour: e.target.value })
+                    }
+                    type="number"
+                    fullWidth
+                  />
+                ) : null}
+                {!modesOn || f.offers_daily ? (
+                  <TextField
+                    label={
+                      modesOn
+                        ? t('business.rentals.rentBy.dayPrice', 'Price per day')
+                        : t('business.rentals.pricePerDay', 'Full day price (daily rate)')
+                    }
+                    value={f.base_price_per_day}
+                    onChange={(e) =>
+                      patchListingForm(l.id, { base_price_per_day: e.target.value })
+                    }
+                    type="number"
+                    fullWidth
+                  />
+                ) : null}
                 {showsCardDeposit(item?.currency || lockedCurrency) ? (
                   <TextField
                     label={t('business.rentals.securityDeposit', 'Security deposit')}
@@ -672,10 +705,14 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     }
                     type="number"
                     fullWidth
-                    helperText={t(
-                      'business.rentals.securityDepositHelper',
-                      'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-                    )}
+                    helperText={
+                      modesOn && !f.offers_hourly
+                        ? t('business.rentals.securityDepositHelperDaily', 'Held on card rentals to cover extra time.')
+                        : t(
+                            'business.rentals.securityDepositHelper',
+                            'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                          )
+                    }
                   />
                 ) : null}
                 <TextField

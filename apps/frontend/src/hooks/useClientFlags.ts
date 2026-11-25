@@ -24,6 +24,7 @@ export type ClientFlagKey =
   | 'rentals_not_received_report_enabled'
   | 'rentals_renter_return_report_enabled'
   | 'rentals_card_window_guard_enabled'
+  | 'rentals_day_hours_picker_enabled'
   | 'rentals_pickup_photo_rules_enabled'
   | 'rentals_inspection_confirmations_enabled'
   | 'rentals_inspection_optin_enabled'
@@ -62,6 +63,7 @@ const DEFAULT_FLAGS: ClientFlags = {
   rentals_renter_return_report_enabled: false,
   /** Card date guard. Off until a config row turns it on. No NODE_ENV override. */
   rentals_card_window_guard_enabled: false,
+  rentals_day_hours_picker_enabled: false,
   /** Pickup-day camera and last-return guide. Off until a config row turns it on. */
   rentals_pickup_photo_rules_enabled: false,
   /** Inspection confirmation screens. Off until a config row turns it on. No NODE_ENV override. */
