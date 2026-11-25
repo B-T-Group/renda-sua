@@ -1,12 +1,15 @@
 export const RANK_SNAPSHOT = `
-  query DeclineRankSnapshot($keys: [String!]!) {
+  query DeclineRankSnapshot($keys: [String!]!, $country: String!) {
     application_configurations(
       where: {
         config_key: { _in: $keys }
         status: { _eq: "active" }
-        country_code: { _is_null: true }
+        _or: [
+          { country_code: { _is_null: true } }
+          { country_code: { _eq: $country } }
+        ]
       }
-    ) { config_key number_value }
+    ) { config_key number_value country_code }
     rental_condition_decline_counts_90d(where: { role: { _eq: "business" } }) {
       party_id
       decline_count

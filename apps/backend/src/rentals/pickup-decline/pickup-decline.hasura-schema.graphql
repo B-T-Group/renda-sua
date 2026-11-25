@@ -1,0 +1,341 @@
+schema { query: query_root mutation: mutation_root }
+
+scalar uuid
+scalar jsonb
+scalar timestamptz
+scalar numeric
+scalar currency_enum
+
+enum order_by { asc desc desc_nulls_last }
+enum rental_booking_status_enum { cancelled active reserved }
+enum payment_entity_enum { rental_booking }
+
+input uuid_comparison_exp { _eq: uuid _in: [uuid!] _is_null: Boolean }
+input string_comparison_exp { _eq: String _in: [String!] _is_null: Boolean }
+input currency_enum_comparison_exp { _eq: currency_enum }
+input accounts_bool_exp { user_id: uuid_comparison_exp currency: currency_enum_comparison_exp }
+input int_comparison_exp { _eq: Int _lt: Int _lte: Int _is_null: Boolean }
+input timestamptz_comparison_exp { _eq: timestamptz _lt: timestamptz _lte: timestamptz _is_null: Boolean }
+input jsonb_comparison_exp { _contains: jsonb _is_null: Boolean }
+input rental_booking_status_comparison_exp { _eq: rental_booking_status_enum _in: [rental_booking_status_enum!] }
+input payment_entity_comparison_exp { _eq: payment_entity_enum }
+
+input rental_bookings_bool_exp {
+  id: uuid_comparison_exp
+  status: rental_booking_status_comparison_exp
+  refund_status: string_comparison_exp
+  refund_attempts: int_comparison_exp
+  refund_next_at: timestamptz_comparison_exp
+  refund_claim_at: timestamptz_comparison_exp
+  refund_claim_token: uuid_comparison_exp
+  refund_provider_ref: string_comparison_exp
+  refund_sent_at: timestamptz_comparison_exp
+  refund_send_attempted_at: timestamptz_comparison_exp
+  refund_list_empty_at: timestamptz_comparison_exp
+  refund_credited_at: timestamptz_comparison_exp
+  refund_notices: jsonb_comparison_exp
+  condition_declined_at: timestamptz_comparison_exp
+  pickup_current_version_id: uuid_comparison_exp
+  actual_start_at: timestamptz_comparison_exp
+  _and: [rental_bookings_bool_exp!]
+  _or: [rental_bookings_bool_exp!]
+  _not: rental_bookings_bool_exp
+}
+
+input rental_bookings_set_input {
+  refund_status: String
+  refund_requested_at: timestamptz
+  refund_status_at: timestamptz
+  refund_amount: numeric
+  refund_currency: String
+  refund_provider: String
+  refund_provider_ref: String
+  refund_attempts: Int
+  refund_claim_at: timestamptz
+  refund_claim_token: uuid
+  refund_next_at: timestamptz
+  refund_sent_at: timestamptz
+  refund_send_attempted_at: timestamptz
+  refund_list_empty_at: timestamptz
+  refund_unknown_streak: Int
+  refund_unknown_notice_at: timestamptz
+  refund_credited_at: timestamptz
+  refunded_at: timestamptz
+  status: rental_booking_status_enum
+  condition_declined_at: timestamptz
+}
+
+input rental_bookings_append_input { refund_notices: jsonb }
+input rental_bookings_delete_key_input { refund_notices: String }
+input rental_bookings_delete_elem_input { refund_notices: Int }
+input rental_bookings_pk_columns_input { id: uuid! }
+
+input rental_condition_declines_bool_exp {
+  id: uuid_comparison_exp
+  rental_booking_id: uuid_comparison_exp
+  version_id: uuid_comparison_exp
+  effects_recorded_at: timestamptz_comparison_exp
+}
+input rental_condition_declines_insert_input {
+  rental_booking_id: uuid
+  effects_recorded_at: timestamptz
+}
+input rental_bookings_order_by { refund_status_at: order_by }
+input rental_condition_declines_order_by { created_at: order_by }
+input rental_condition_declines_pk_columns_input { id: uuid! }
+
+input rental_condition_decline_photos_bool_exp {
+  id: uuid_comparison_exp
+  rental_booking_id: uuid_comparison_exp
+  decline_id: uuid_comparison_exp
+  status: string_comparison_exp
+}
+input rental_condition_decline_photos_order_by { created_at: order_by }
+input rental_condition_decline_photos_insert_input { rental_booking_id: uuid }
+input rental_condition_decline_photos_set_input {
+  decline_id: uuid
+  object_key: String
+  status: String
+  byte_size: Int
+  content_type: String
+}
+input rental_condition_decline_photos_pk_columns_input { id: uuid! }
+
+input mobile_payment_transactions_bool_exp {
+  payment_entity: payment_entity_comparison_exp
+  status: string_comparison_exp
+  entity_id: string_comparison_exp
+}
+input mobile_payment_transactions_order_by { created_at: order_by }
+input mobile_payment_transactions_set_input { status: String error_code: String }
+
+input rental_holds_bool_exp { rental_booking_id: uuid_comparison_exp }
+input rental_status_history_bool_exp {
+  rental_booking_id: uuid_comparison_exp
+  notes: string_comparison_exp
+}
+input rental_status_history_insert_input { rental_booking_id: uuid notes: String status: String }
+
+input rental_condition_decline_counts_90d_bool_exp {
+  role: string_comparison_exp
+  party_id: uuid_comparison_exp
+}
+input rental_condition_decline_counts_90d_order_by { decline_count: order_by }
+input rental_business_pickup_reach_90d_bool_exp { business_id: uuid_comparison_exp }
+input clients_bool_exp { id: uuid_comparison_exp }
+input businesses_bool_exp { id: uuid_comparison_exp }
+input rental_item_baseline_photos_bool_exp {
+  rental_item_id: uuid_comparison_exp
+  status: string_comparison_exp
+}
+input rental_item_baseline_photos_order_by { slot_key: order_by }
+
+type users { first_name: String last_name: String }
+type accounts { id: uuid }
+input close_decline_refund_args {
+  p_booking_id: uuid!
+  p_token: uuid!
+  p_status: String!
+  p_provider: String!
+  p_provider_ref: String
+  p_account_id: uuid
+  p_amount: numeric!
+  p_memo: String
+  p_idempotency_key: String!
+  p_changed_by: uuid!
+  p_notes: String!
+  p_previous_status: String!
+  p_send_attempted_at: timestamptz
+  p_guard_open: Boolean
+}
+type clients { id: uuid user_id: uuid user: users }
+type businesses { id: uuid user_id: uuid name: String }
+type addresses { country: String }
+type business_locations { address: addresses }
+type rental_items { id: uuid name: String inspection_opt_in: Boolean }
+type rental_location_listings { business_location: business_locations rental_item: rental_items }
+
+type rental_bookings {
+  id: uuid
+  booking_number: String
+  status: rental_booking_status_enum
+  payment_status: String
+  contract_expires_at: timestamptz
+  actual_start_at: timestamptz
+  inspection_policy_version: Int
+  pickup_current_version_id: uuid
+  pickup_accepted_version_id: uuid
+  condition_declined_at: timestamptz
+  refund_status: String
+  refund_attempts: Int
+  refund_next_at: timestamptz
+  refund_amount: numeric
+  refund_provider: String
+  refund_provider_ref: String
+  refund_sent_at: timestamptz
+  refund_send_attempted_at: timestamptz
+  refund_list_empty_at: timestamptz
+  refund_unknown_streak: Int
+  refund_unknown_notice_at: timestamptz
+  refund_requested_at: timestamptz
+  refund_credited_at: timestamptz
+  refund_claim_at: timestamptz
+  refund_notices: jsonb
+  authorized_amount: numeric
+  total_amount: numeric
+  currency: String
+  client_id: uuid
+  business_id: uuid
+  client: clients
+  business: businesses
+  rental_location_listing: rental_location_listings
+}
+
+type rental_bookings_mutation_response { affected_rows: Int }
+type rental_condition_declines {
+  id: uuid
+  rental_booking_id: uuid
+  version_id: uuid
+  reason: String
+  reason_text: String
+  money_rail: String
+  money_amount: numeric
+  money_currency: String
+  phone_mask: String
+  effects_recorded_at: timestamptz
+  created_at: timestamptz
+}
+type rental_condition_declines_mutation_response { affected_rows: Int }
+type rental_condition_decline_photos {
+  id: uuid
+  object_key: String
+  status: String
+  decline_id: uuid
+  created_at: timestamptz
+  content_type: String
+  expected_byte_size: Int
+}
+type rental_condition_decline_photos_mutation_response { affected_rows: Int }
+type rental_condition_decline_photos_aggregate { aggregate: rental_condition_decline_photos_aggregate_fields }
+type rental_condition_decline_photos_aggregate_fields { count: Int }
+type mobile_payment_transactions {
+  amount: numeric
+  currency: String
+  provider: String
+  payment_method: String
+  customer_phone: String
+  transaction_id: String
+}
+type mobile_payment_transactions_mutation_response { affected_rows: Int }
+type rental_holds { client_hold_amount: numeric status: String }
+type rental_status_history { id: uuid }
+type rental_condition_decline_counts_90d {
+  id: uuid
+  role: String
+  party_id: uuid
+  decline_count: Int
+  last_decline_at: timestamptz
+}
+type rental_business_pickup_reach_90d { business_id: uuid pickups_reached: Int }
+type rental_item_baseline_photos {
+  id: uuid
+  slot_key: String
+  object_key: String
+  captured_at: timestamptz
+  status: String
+}
+
+input application_configurations_bool_exp {
+  config_key: string_comparison_exp
+  status: string_comparison_exp
+  country_code: string_comparison_exp
+}
+type application_configurations { number_value: numeric }
+input application_configurations_order_by {
+  updated_at: order_by
+  created_at: order_by
+  id: order_by
+}
+
+type query_root {
+  rental_bookings_by_pk(id: uuid!): rental_bookings
+  application_configurations(
+    where: application_configurations_bool_exp
+    order_by: [application_configurations_order_by!]
+    limit: Int
+  ): [application_configurations!]!
+  rental_bookings(
+    where: rental_bookings_bool_exp
+    order_by: rental_bookings_order_by
+    limit: Int
+  ): [rental_bookings!]!
+  rental_condition_declines(
+    where: rental_condition_declines_bool_exp
+    limit: Int
+    order_by: rental_condition_declines_order_by
+  ): [rental_condition_declines!]!
+  rental_condition_decline_photos(
+    where: rental_condition_decline_photos_bool_exp
+    order_by: rental_condition_decline_photos_order_by
+    limit: Int
+  ): [rental_condition_decline_photos!]!
+  rental_condition_decline_photos_aggregate(where: rental_condition_decline_photos_bool_exp): rental_condition_decline_photos_aggregate
+  mobile_payment_transactions(
+    where: mobile_payment_transactions_bool_exp
+    order_by: mobile_payment_transactions_order_by
+  ): [mobile_payment_transactions!]!
+  rental_holds(where: rental_holds_bool_exp): [rental_holds!]!
+  rental_status_history(where: rental_status_history_bool_exp limit: Int): [rental_status_history!]!
+  rental_condition_decline_counts_90d(
+    where: rental_condition_decline_counts_90d_bool_exp
+    order_by: rental_condition_decline_counts_90d_order_by
+    limit: Int
+  ): [rental_condition_decline_counts_90d!]!
+  rental_business_pickup_reach_90d(
+    where: rental_business_pickup_reach_90d_bool_exp
+    limit: Int
+  ): [rental_business_pickup_reach_90d!]!
+  clients(where: clients_bool_exp): [clients!]!
+  accounts(where: accounts_bool_exp, limit: Int): [accounts!]!
+  businesses(where: businesses_bool_exp): [businesses!]!
+  rental_items_by_pk(id: uuid!): rental_items
+  rental_item_baseline_photos(
+    where: rental_item_baseline_photos_bool_exp
+    order_by: rental_item_baseline_photos_order_by
+  ): [rental_item_baseline_photos!]!
+}
+
+type mutation_root {
+  update_rental_bookings(
+    where: rental_bookings_bool_exp
+    _set: rental_bookings_set_input
+    _append: rental_bookings_append_input
+    _delete_key: rental_bookings_delete_key_input
+    _delete_elem: rental_bookings_delete_elem_input
+  ): rental_bookings_mutation_response
+  insert_rental_condition_declines_one(object: rental_condition_declines_insert_input!): rental_condition_declines
+  delete_rental_condition_declines_by_pk(id: uuid!): rental_condition_declines
+  update_rental_condition_declines(
+    where: rental_condition_declines_bool_exp
+    _set: rental_condition_declines_insert_input
+  ): rental_condition_declines_mutation_response
+  update_rental_condition_declines_by_pk(
+    pk_columns: rental_condition_declines_pk_columns_input!
+    _set: rental_condition_declines_insert_input
+  ): rental_condition_declines
+  update_rental_condition_decline_photos(
+    where: rental_condition_decline_photos_bool_exp
+    _set: rental_condition_decline_photos_set_input
+  ): rental_condition_decline_photos_mutation_response
+  insert_rental_condition_decline_photos_one(object: rental_condition_decline_photos_insert_input!): rental_condition_decline_photos
+  update_rental_condition_decline_photos_by_pk(
+    pk_columns: rental_condition_decline_photos_pk_columns_input!
+    _set: rental_condition_decline_photos_set_input
+  ): rental_condition_decline_photos
+  update_mobile_payment_transactions(
+    where: mobile_payment_transactions_bool_exp
+    _set: mobile_payment_transactions_set_input
+  ): mobile_payment_transactions_mutation_response
+  insert_rental_status_history_one(object: rental_status_history_insert_input!): rental_status_history
+  close_decline_refund(args: close_decline_refund_args!): [rental_bookings!]!
+}

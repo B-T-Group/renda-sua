@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, Optional } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { PlatformRoles } from '../rbac/platform-permissions';
+import { RbacService } from '../rbac/rbac.service';
 import { UpdateConfigurationDto } from './dto/update-configuration.dto';
 
 export interface ApplicationConfiguration {
@@ -65,7 +67,10 @@ const CONFIGURATION_FIELDS = `
 export class ConfigurationsService {
   private readonly logger = new Logger(ConfigurationsService.name);
 
-  constructor(private readonly hasuraService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraService: HasuraSystemService,
+    @Optional() private readonly rbac?: RbacService,
+  ) {}
 
   async getAllConfigurations(): Promise<ApplicationConfiguration[]> {
     try {
@@ -239,6 +244,7 @@ export class ConfigurationsService {
       if (!existingConfig) {
         throw new Error('Configuration not found');
       }
+      await this.rejectFedapayFloor(existingConfig, updateDto, updatedBy);
 
       // Prepare update object with only provided fields
       const updateObject: any = {
@@ -292,11 +298,65 @@ export class ConfigurationsService {
       return response.update_application_configurations_by_pk;
     } catch (error) {
       this.logger.error(`Failed to update configuration with id: ${id}`, error);
+      if (this.configKeyTaken(error)) throw new ConflictException('A configuration with this key already exists');
       throw error;
     }
   }
 
-  async deleteConfiguration(id: string): Promise<boolean> {
+  private configKeyTaken(error: unknown): boolean {
+    const body = error as { response?: { errors?: unknown }; message?: unknown };
+    const text = JSON.stringify(body?.response?.errors ?? body?.message ?? '').toLowerCase();
+    return text.includes('uniqueness violation') || text.includes('duplicate key');
+  }
+
+  /** The existing key and the key being written are both watched. A rename into a timing key counts. */
+  private async rejectFedapayFloor(
+    existing: ApplicationConfiguration,
+    update: UpdateConfigurationDto,
+    actor?: string
+  ): Promise<void> {
+    const nextKey = update.config_key ?? existing.config_key;
+    if (!this.fedapayWatched(existing.config_key) && !this.fedapayWatched(nextKey)) return;
+    await this.requireFedapaySuperuser(actor);
+    this.rejectFedapayValue(nextKey, update.number_value);
+  }
+
+  private fedapayWatched(key?: string): boolean {
+    return key === 'rentals_fedapay_list_lag_minutes'
+      || key === 'rentals_fedapay_list_confirm_minutes'
+      || key === 'rentals_fedapay_unknown_notice_after';
+  }
+
+  private async requireFedapaySuperuser(actor?: string): Promise<void> {
+    const allowed = Boolean(actor && this.rbac && await this.rbac.hasRole(actor, PlatformRoles.SUPERUSER));
+    if (!allowed) throw new ForbiddenException('Only a superuser can change FedaPay list timing');
+  }
+
+  private rejectFedapayValue(key: string, value?: number): void {
+    if (value == null) return;
+    if (key === 'rentals_fedapay_unknown_notice_after') return this.rejectNotice(value);
+    if (value >= 10 && value <= 24 * 60) return;
+    throw new BadRequestException('FedaPay list lag and confirm gap must be between 10 minutes and 24 hours');
+  }
+
+  private rejectNotice(value: number): void {
+    if (value >= 1 && value <= 100) return;
+    throw new BadRequestException('FedaPay unknown notice must be between 1 and 100');
+  }
+
+  async deleteConfiguration(id: string, actor?: string): Promise<boolean> {
+    const existing = await this.getConfigurationById(id);
+    if (!existing) return false;
+    await this.rejectFedapayDelete(existing, actor);
+    return this.removeConfiguration(id);
+  }
+
+  private async rejectFedapayDelete(existing: ApplicationConfiguration, actor?: string): Promise<void> {
+    if (!this.fedapayWatched(existing.config_key)) return;
+    await this.requireFedapaySuperuser(actor);
+  }
+
+  private async removeConfiguration(id: string): Promise<boolean> {
     try {
       const mutation = `
         mutation DeleteConfiguration($id: uuid!) {
@@ -305,7 +365,6 @@ export class ConfigurationsService {
           }
         }
       `;
-
       const response = await this.hasuraService.executeQuery(mutation, { id });
       return !!response.delete_application_configurations_by_pk;
     } catch (error) {

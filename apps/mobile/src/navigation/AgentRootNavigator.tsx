@@ -121,7 +121,7 @@ export type AgentRootStackParamList = {
   AssistantChat: undefined;
   Messages: undefined;
   ThreadDetail: { threadId: string };
-  SupportTickets: undefined;
+  SupportTickets: { bookingNumber?: string } | undefined;
   AgentLocationTracking: undefined;
   StoresList: { partnersOnly?: boolean; businessId?: string } | undefined;
   StoreDetail: { businessId: string; previewMode?: boolean; foodOnly?: boolean };

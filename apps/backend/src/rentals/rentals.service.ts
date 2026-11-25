@@ -106,6 +106,12 @@ import {
   rentalLedgerKey,
   rentalProceedsLeg,
 } from './rental-ledger';
+
+const DECLINE_REFUND_DEBIT = `
+  query DeclineRefundDebit($key: String!) {
+    account_transactions(where: { idempotency_key: { _eq: $key } }, limit: 1) { id }
+  }
+`;
 import {
   decideRentalMomoRetry,
   isRentalMomoUniqueViolation,
@@ -3382,22 +3388,65 @@ export class RentalsService {
     amount: number
   ): Promise<void> {
     if (!(amount > 0)) return;
+    if (await this.declineRefundDebited(booking.id)) {
+      await this.settleDeclineHold(booking);
+      return;
+    }
+    await this.settleDeclineHold(booking);
+    await this.debitDeclineRefund(booking, amount);
+  }
+
+  /** The decline:refund key already on the ledger. A second debit is success, not a revert. */
+  async declineRefundDebited(bookingId: string): Promise<boolean> {
+    const key = rentalLedgerKey(bookingId, 'decline:refund');
+    const result = await this.hasuraSystemService.executeQuery<{
+      account_transactions?: Array<{ id: string }>;
+    }>(DECLINE_REFUND_DEBIT, { key });
+    return (result.account_transactions?.length ?? 0) > 0;
+  }
+
+  private async settleDeclineHold(booking: { id: string; currency: string; client: { user_id: string } }): Promise<void> {
     const hold = await this.getHold(booking.id);
+    if (hold?.status !== 'active') return;
+    try {
+      await this.releaseDeclineHold(booking, hold);
+    } catch (error: any) {
+      if (await this.declineHoldSettled(booking.id)) return;
+      throw error;
+    }
+  }
+
+  private async declineHoldSettled(bookingId: string): Promise<boolean> {
+    const hold = await this.getHold(bookingId);
+    if (!hold || hold.status !== 'active') return true;
+    return this.declineRefundDebited(bookingId);
+  }
+
+  private async releaseDeclineHold(
+    booking: { id: string; currency: string; client: { user_id: string } },
+    hold: { client_hold_amount: number; ledger_attempt_id?: string | null }
+  ): Promise<void> {
     const account = await this.hasuraSystemService.getAccount(booking.client.user_id, booking.currency);
     if (!account?.id) throw new HttpException('Account missing', HttpStatus.BAD_GATEWAY);
-    if (hold?.status === 'active') {
-      await this.releaseRentalHold(
-        booking.id,
-        Number(hold.client_hold_amount),
-        account.id,
-        this.holdAttemptId(hold, booking.id)
-      );
-      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
-        bookingId: booking.id,
-        from: 'active',
-        status: 'completed',
-      });
-    }
+    await this.releaseRentalHold(
+      booking.id,
+      Number(hold.client_hold_amount),
+      account.id,
+      this.holdAttemptId(hold, booking.id)
+    );
+    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
+      bookingId: booking.id,
+      from: 'active',
+      status: 'completed',
+    });
+  }
+
+  private async debitDeclineRefund(
+    booking: { id: string; currency: string; client: { user_id: string } },
+    amount: number
+  ): Promise<void> {
+    const account = await this.hasuraSystemService.getAccount(booking.client.user_id, booking.currency);
+    if (!account?.id) throw new HttpException('Account missing', HttpStatus.BAD_GATEWAY);
     const paid = await this.accountsService.registerTransaction({
       accountId: account.id,
       amount,
@@ -3406,7 +3455,14 @@ export class RentalsService {
       referenceId: booking.id,
       idempotencyKey: rentalLedgerKey(booking.id, 'decline:refund'),
     });
+    if (paid?.success || (await this.debitAppears(booking.id))) return;
     assertLedgerResult(paid, 'decline refund');
+  }
+
+  private async debitAppears(bookingId: string): Promise<boolean> {
+    if (await this.declineRefundDebited(bookingId)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return this.declineRefundDebited(bookingId);
   }
 
   /** Payout did not land. Put the debited amount back in the wallet and alert the caller. */

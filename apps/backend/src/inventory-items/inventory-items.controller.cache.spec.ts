@@ -40,7 +40,8 @@ describe('InventoryItemsController catalog cache gates', () => {
     controller = new InventoryItemsController(
       inventoryItemsService as unknown as InventoryItemsService,
       catalogCache as unknown as CatalogCacheService,
-      hasuraUserService as unknown as HasuraUserService
+      hasuraUserService as unknown as HasuraUserService,
+      {} as any
     );
   });
 

@@ -1,3 +1,4 @@
+import SearchIcon from '@mui/icons-material/Search';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import {
@@ -5,23 +6,33 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Container,
   FormControl,
+  InputAdornment,
   InputLabel,
   MenuItem,
-  Pagination,
   Paper,
   Select,
   type SelectChangeEvent,
+  TextField,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
-import React, { useCallback, useMemo, useState } from 'react';
+import { alpha, useTheme } from '@mui/material/styles';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Link as RouterLink,
-  useLocation,
   useNavigate,
   useParams,
+  useSearchParams,
 } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useCart } from '../../contexts/CartContext';
@@ -33,6 +44,7 @@ import {
 } from '../../hooks/useInventoryItems';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useCatalogStore } from '../../hooks/useCatalogStores';
+import { useStoreBrowseContext } from '../../hooks/useStoreBrowseContext';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
@@ -42,40 +54,85 @@ import {
   metaPixelContentCategoryFromItem,
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
+import { composeStoreFeed } from '../../utils/composeStoreFeed';
 import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
+import StoreFeedStop from '../store/StoreFeedStop';
 import SEOHead from '../seo/SEOHead';
 import { StoreDefaultAvatar } from '../illustrations/StoreDefaultAvatar';
 import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
 import { formatDistanceKm } from '../../utils/formatDistanceKm';
-import { alpha } from '@mui/material/styles';
 
 const ITEMS_PER_PAGE = 24;
+const SEARCH_DEBOUNCE_MS = 300;
 
 const StorePage: React.FC = () => {
   const { businessId: locationOrBusinessId } = useParams<{
     businessId: string;
   }>();
-  const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const previewMode = useMemo(
-    () => new URLSearchParams(location.search).get('preview') === '1',
-    [location.search]
+    () => searchParams.get('preview') === '1',
+    [searchParams]
   );
   const foodMenu = useMemo(
-    () => new URLSearchParams(location.search).get('menu') === 'food',
-    [location.search]
+    () => searchParams.get('menu') === 'food',
+    [searchParams]
+  );
+  const searchTerm = useMemo(
+    () => searchParams.get('search') ?? '',
+    [searchParams]
+  );
+  const categoryFilter = useMemo(
+    () => searchParams.get('category') ?? '',
+    [searchParams]
+  );
+  const collectionFilter = useMemo(
+    () => searchParams.get('collection') ?? '',
+    [searchParams]
+  );
+  const sortFilter = useMemo(
+    () => searchParams.get('sort') ?? '',
+    [searchParams]
   );
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
+  const isSmUp = useMediaQuery(theme.breakpoints.up('sm'));
+  const gridColumns = isMdUp ? 3 : isSmUp ? 2 : 1;
+  const productsPerChunk = gridColumns * 2;
   const { isAuthenticated } = useSessionAuth();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchDraft, setSearchDraft] = useState(searchTerm);
+  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
   const browserGeo = usePublicBrowserGeo(true);
   const isClientUser = profile?.user_type_id === 'client';
   const wantsOwnerPreview =
     previewMode && Boolean(profile?.business?.id);
+
+  useEffect(() => {
+    setSearchDraft(searchTerm);
+    setDebouncedSearch(searchTerm);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchDraft.trim());
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchDraft]);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    if (debouncedSearch) next.set('search', debouncedSearch);
+    else next.delete('search');
+    if (next.toString() === searchParams.toString()) return;
+    setSearchParams(next, { replace: true });
+  }, [debouncedSearch, searchParams, setSearchParams]);
 
   const { store, loading: storeLoading, error: storeError } = useCatalogStore(
     locationOrBusinessId,
@@ -110,7 +167,22 @@ const StorePage: React.FC = () => {
     (store?.business_location_id === locationOrBusinessId ||
       store?.business_id === locationOrBusinessId);
 
-  const { inventoryItems, loading, error, pagination } = useInventoryItems({
+  const {
+    context: browseContext,
+  } = useStoreBrowseContext({
+    businessId: storeMatchesRoute ? locationOrBusinessId : undefined,
+    foodOnly: foodMenu,
+    ownerPreview: isOwnerPreview,
+    enabled: storeMatchesRoute,
+  });
+
+  const {
+    inventoryItems,
+    loading,
+    loadingMore,
+    error,
+    pagination,
+  } = useInventoryItems({
     enabled: Boolean(storeMatchesRoute && store?.business_location_id),
     page: currentPage,
     limit: ITEMS_PER_PAGE,
@@ -127,7 +199,85 @@ const StorePage: React.FC = () => {
       : {}),
     anonymousOrigin: browserGeo,
     ...(foodMenu && { food_only: true }),
+    ...(debouncedSearch && { search: debouncedSearch }),
+    ...(categoryFilter && { category: categoryFilter }),
+    ...(collectionFilter && { collection: collectionFilter }),
+    ...(sortFilter === 'deals' && { sort: 'deals' }),
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    debouncedSearch,
+    categoryFilter,
+    collectionFilter,
+    sortFilter,
+    store?.business_location_id,
+    foodMenu,
+  ]);
+
+  const totalPages = pagination?.totalPages ?? 0;
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const pageAdvanceLockRef = useRef(false);
+
+  useEffect(() => {
+    if (!loadingMore) pageAdvanceLockRef.current = false;
+  }, [loadingMore]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (
+          entry?.isIntersecting &&
+          !loading &&
+          !loadingMore &&
+          !pageAdvanceLockRef.current &&
+          currentPage < totalPages
+        ) {
+          pageAdvanceLockRef.current = true;
+          setCurrentPage((p) => p + 1);
+        }
+      },
+      { root: null, rootMargin: '200px', threshold: 0 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loading, loadingMore, currentPage, totalPages]);
+
+  const suppressStops =
+    debouncedSearch.length > 0 ||
+    categoryFilter.length > 0 ||
+    collectionFilter.length > 0 ||
+    sortFilter === 'deals';
+
+  const feedRows = useMemo(
+    () =>
+      composeStoreFeed({
+        inventoryItems,
+        productsPerChunk,
+        suppressStops,
+        deals: browseContext?.deals ?? [],
+        popular: browseContext?.popular ?? [],
+        collections: browseContext?.collections ?? [],
+      }),
+    [inventoryItems, productsPerChunk, suppressStops, browseContext]
+  );
+
+  const setStoreQuery = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(searchParams);
+      Object.entries(patch).forEach(([key, value]) => {
+        if (!value) next.delete(key);
+        else next.set(key, value);
+      });
+      setCurrentPage(1);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
 
   const { trackView } = useTrackItemView(null);
   const trackAddToCart = useMetaAddToCartTrack();
@@ -516,31 +666,111 @@ const StorePage: React.FC = () => {
         {t('stores.catalogTitle', 'Products')}
       </Typography>
 
+      <TextField
+        fullWidth
+        size="small"
+        value={searchDraft}
+        onChange={(event) => setSearchDraft(event.target.value)}
+        placeholder={t(
+          'stores.catalogSearchPlaceholder',
+          'Search this store…'
+        )}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon fontSize="small" color="action" />
+            </InputAdornment>
+          ),
+        }}
+        sx={{ mb: 1.5 }}
+      />
+
+      {(browseContext?.categories.length ?? 0) > 0 ? (
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 1,
+            overflowX: 'auto',
+            pb: 1,
+            mb: 2,
+            scrollbarWidth: 'thin',
+          }}
+        >
+          <Chip
+            label={t('stores.allCategories', 'All')}
+            color={!categoryFilter ? 'primary' : 'default'}
+            variant={!categoryFilter ? 'filled' : 'outlined'}
+            onClick={() => setStoreQuery({ category: null })}
+          />
+          {browseContext?.categories.map((category) => {
+            const selected = categoryFilter === category.name;
+            return (
+              <Chip
+                key={category.id}
+                label={category.name}
+                color={selected ? 'primary' : 'default'}
+                variant={selected ? 'filled' : 'outlined'}
+                onClick={() =>
+                  setStoreQuery({
+                    category: selected ? null : category.name,
+                  })
+                }
+              />
+            );
+          })}
+        </Box>
+      ) : null}
+
       {error ? <Alert severity="error">{error}</Alert> : null}
 
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 2,
-          gridTemplateColumns: {
-            xs: '1fr',
-            sm: 'repeat(2, 1fr)',
-            md: 'repeat(3, 1fr)',
-          },
-        }}
-      >
-        {inventoryItems.map((item) => (
-          <DashboardItemCard
-            key={item.id}
-            item={item}
-            formatCurrency={formatCurrency}
-            onOrderClick={handleOrderClick}
-            onAddToCart={handleAddToCart}
-            isPublicView={!isAuthenticated}
-            canOrder={!isAuthenticated || isClientUser}
-            showCartButtons={isAuthenticated && isClientUser}
-          />
-        ))}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {feedRows.map((row) => {
+          if (row.type === 'stop') {
+            return (
+              <StoreFeedStop
+                key={row.stop.id}
+                stop={row.stop}
+                formatCurrency={formatCurrency}
+                onOrderClick={handleOrderClick}
+                onAddToCart={handleAddToCart}
+                onSeeAllDeals={() => setStoreQuery({ sort: 'deals' })}
+                onCollectionClick={(slug) =>
+                  setStoreQuery({ collection: slug })
+                }
+                isPublicView={!isAuthenticated}
+                canOrder={!isAuthenticated || isClientUser}
+                showCartButtons={isAuthenticated && isClientUser}
+              />
+            );
+          }
+          return (
+            <Box
+              key={row.id}
+              sx={{
+                display: 'grid',
+                gap: 2,
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, 1fr)',
+                  md: 'repeat(3, 1fr)',
+                },
+              }}
+            >
+              {row.items.map((item) => (
+                <DashboardItemCard
+                  key={item.id}
+                  item={item}
+                  formatCurrency={formatCurrency}
+                  onOrderClick={handleOrderClick}
+                  onAddToCart={handleAddToCart}
+                  isPublicView={!isAuthenticated}
+                  canOrder={!isAuthenticated || isClientUser}
+                  showCartButtons={isAuthenticated && isClientUser}
+                />
+              ))}
+            </Box>
+          );
+        })}
       </Box>
 
       {!catalogLoading && inventoryItems.length === 0 && !previewMode ? (
@@ -552,16 +782,13 @@ const StorePage: React.FC = () => {
         </Typography>
       ) : null}
 
-      {pagination && pagination.totalPages > 1 ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-          <Pagination
-            count={pagination.totalPages}
-            page={currentPage}
-            onChange={(_, p) => setCurrentPage(p)}
-            color="primary"
-          />
+      {loadingMore ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+          <CircularProgress size={28} />
         </Box>
       ) : null}
+      <Box ref={loadMoreSentinelRef} sx={{ height: 1, width: '100%' }} />
+
       <CatalogVariantPickerDialog
         open={variantFlow.pickerOpen}
         item={variantFlow.pickerItem}

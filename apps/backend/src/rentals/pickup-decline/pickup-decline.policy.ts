@@ -17,6 +17,7 @@ export type DeclineGuard = 'ok' | 'not_inspected' | 'closed' | 'version' | 'acce
 
 export const MAX_DECLINE_PHOTOS = 6;
 export const FINANCIAL_REFUNDS_PERMISSION = 'platform.financial.refunds';
+export const REFUND_OVERRIDE_PERMISSION = 'platform.financial.refunds.manual_override';
 
 /** Open inspected bookings only. An accepted pickup report uses Report a problem. */
 export function declineGuard(booking: DeclineGuardBooking, versionId: string): DeclineGuard {
@@ -38,6 +39,12 @@ export function declineGuard(booking: DeclineGuardBooking, versionId: string): D
 export function refundMarkAllowed(access: { isSuperuser?: boolean; permissions?: string[] }): boolean {
   if (access.isSuperuser) return true;
   return (access.permissions ?? []).includes(FINANCIAL_REFUNDS_PERMISSION);
+}
+
+/** Admins only. Finance and support refunds do not include this key. */
+export function refundOverrideAllowed(access: { isSuperuser?: boolean; permissions?: string[] }): boolean {
+  if (access.isSuperuser) return true;
+  return (access.permissions ?? []).includes(REFUND_OVERRIDE_PERMISSION);
 }
 
 /** A manual refund records either the provider reference or a written note. */

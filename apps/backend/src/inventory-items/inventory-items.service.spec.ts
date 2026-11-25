@@ -643,7 +643,128 @@ describe('InventoryItemsService.getInventoryItems export flags', () => {
     expect(result.page).toBe(2);
     expect(result.items).toHaveLength(1);
   });
+
+  it('pages exports with the clamped limit and does not fetch the whole catalog', async () => {
+    const { service } = createService();
+    jest.spyOn(service as any, 'countDistinctCatalogItemIds').mockResolvedValue(100);
+    const fetchAll = jest
+      .spyOn(service as any, 'fetchAllCatalogInventoryRows')
+      .mockResolvedValue([]);
+    const fetchPage = jest
+      .spyOn(service as any, 'fetchExportCatalogPage')
+      .mockResolvedValue([]);
+    stubExportHydration(service);
+    const cases: Array<[number | undefined, number]> = [
+      [undefined, 20],
+      [0, 20],
+      [-3, 20],
+      [Number.NaN, 20],
+      [Number.POSITIVE_INFINITY, 20],
+      [999, 50],
+      [24.9, 24],
+    ];
+
+    for (const [limit, expected] of cases) {
+      fetchPage.mockClear();
+      const result = await service.getInventoryItems({
+        export_only: true,
+        country_code: 'CM',
+        page: 2,
+        ...(limit === undefined ? {} : { limit }),
+      });
+      expect(fetchPage).toHaveBeenCalledWith(expect.anything(), expected, expected);
+      expect(result.limit).toBe(expected);
+      expect(result.page).toBe(2);
+      expect(result.totalPages).toBe(Math.ceil(100 / expected));
+    }
+    expect(fetchAll).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch an export page when nothing matches', async () => {
+    const { service } = createService();
+    const fetchAll = jest.spyOn(service as any, 'fetchAllCatalogInventoryRows');
+    const fetchPage = jest.spyOn(service as any, 'fetchExportCatalogPage');
+
+    const result = await service.getInventoryItems({
+      export_only: true,
+      country_code: 'CM',
+      page: 3,
+      limit: 24,
+    });
+
+    expect(fetchPage).not.toHaveBeenCalled();
+    expect(fetchAll).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ items: [], total: 0, page: 3, limit: 24, totalPages: 0 });
+  });
+
+  it('returns an empty later page without loading every export', async () => {
+    const { service } = createService();
+    jest.spyOn(service as any, 'countDistinctCatalogItemIds').mockResolvedValue(30);
+    const fetchAll = jest
+      .spyOn(service as any, 'fetchAllCatalogInventoryRows')
+      .mockResolvedValue([{ id: 'should-not-load' }]);
+    const fetchPage = jest.spyOn(service as any, 'fetchExportCatalogPage').mockResolvedValue([]);
+    stubExportHydration(service);
+
+    const result = await service.getInventoryItems({
+      export_only: true,
+      country_code: 'CM',
+      page: 5,
+      limit: 24,
+    });
+
+    expect(fetchAll).not.toHaveBeenCalled();
+    expect(fetchPage).toHaveBeenCalledWith(expect.anything(), 24, 96);
+    expect(result).toMatchObject({ items: [], total: 30, page: 5, limit: 24, totalPages: 2 });
+  });
+
+  it('keeps one listing and drops export items that have no inventory', () => {
+    const { service } = createService();
+    const rows = (service as any).flattenExportPageRows([
+      null,
+      {},
+      { business_inventories: [] },
+      { business_inventories: [null] },
+      { business_inventories: [{ id: 'inv-1' }, { id: 'inv-extra' }] },
+      { business_inventories: [{ id: 'inv-keep' }] },
+    ]);
+
+    expect(rows).toEqual([{ id: 'inv-1' }, { id: 'inv-keep' }]);
+  });
+
+  it('does not treat a blank location id as a store export rail', async () => {
+    const { service, buildWhere } = createService();
+
+    await service.getInventoryItems({
+      business_location_id: '   ',
+      country_code: 'CM',
+    });
+    await service.getInventoryItems({
+      business_location_id: '',
+      country_code: 'CM',
+    });
+
+    expect(buildWhere.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ includeExportListings: false, export_only: false })
+    );
+    expect(buildWhere.mock.calls[1][0]).toEqual(
+      expect.objectContaining({ includeExportListings: false })
+    );
+  });
 });
+
+function stubExportHydration(service: { [key: string]: unknown }): void {
+  const asAny = service as any;
+  jest
+    .spyOn(asAny, 'attachPaymentsEnabledToItemsAsync')
+    .mockImplementation(async (items: unknown[]) => items);
+  jest.spyOn(asAny, 'getViewCountsByInventoryIds').mockResolvedValue({});
+  jest.spyOn(asAny, 'getActiveDealsByInventoryIds').mockResolvedValue({});
+  jest
+    .spyOn(asAny, 'attachRatingAggregates')
+    .mockImplementation(async (items: unknown[]) => items);
+  jest.spyOn(asAny, 'attachLikeState').mockImplementation(async (items: unknown[]) => items);
+}
 
 describe('InventoryItemsService.getSimilarInventoryItems', () => {
   it('keeps similar suggestions in the same export vs local catalog', async () => {

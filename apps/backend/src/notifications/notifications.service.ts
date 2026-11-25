@@ -145,6 +145,7 @@ import {
   buildRentalRequestAcceptedPush,
   buildRentalRequestRejectedPush,
   buildConditionDeclinedNotice,
+  buildConditionRefundRenterNotice,
   buildConditionRefundSupportNotice,
 } from './rental-push.messages';
 import {
@@ -4448,19 +4449,68 @@ export class NotificationsService {
     }
   }
 
+  /** The renter hears once when a decline refund is in the wallet or confirmed sent. */
+  async notifyRenterConditionRefund(payload: {
+    clientUserId: string;
+    bookingId: string;
+    amount: number;
+    currency: string;
+    landed: 'wallet' | 'sent';
+  }): Promise<boolean> {
+    try {
+      await this.deliverRenterRefund(payload);
+      return true;
+    } catch (error: any) {
+      this.logger.error(`notifyRenterConditionRefund: ${error?.message ?? error}`);
+      return false;
+    }
+  }
+
   /** Support hears when a Mobile Money refund cannot be confirmed. */
   async notifySupportConditionRefund(payload: {
     bookingId: string;
     bookingNumber: string;
     rentalItemName: string;
     outcome: string;
-  }): Promise<void> {
+    externalId?: string;
+    walletCredited?: boolean;
+  }): Promise<boolean> {
     try {
       await this.emailSupportRefund(payload);
       await this.pushSupportRefund(payload);
+      return true;
     } catch (error: any) {
       this.logger.error(`notifySupportConditionRefund: ${error?.message ?? error}`);
+      return false;
     }
+  }
+
+  private async deliverRenterRefund(payload: {
+    clientUserId: string;
+    bookingId: string;
+    amount: number;
+    currency: string;
+    landed: 'wallet' | 'sent';
+  }): Promise<void> {
+    const lang = await this.languageFor(payload.clientUserId);
+    const msg = buildConditionRefundRenterNotice({ ...payload, preferredLanguage: lang });
+    const path = this.inspectionNoticeUrl(payload.bookingId, 'client');
+    const inserted = await this.insertRenterRefund(payload.clientUserId, payload.bookingId, msg.body, path);
+    if (!inserted || !this.rentalPushEnabled()) return;
+    await this.pushRenterRefund(payload.clientUserId, payload.bookingId, msg, path);
+  }
+
+  private async insertRenterRefund(userId: string, bookingId: string, body: string, path: string): Promise<boolean> {
+    return this.insertRentalUserMessage(userId, bookingId, 'CONDITION_REFUND', body, path, 'condition_refund');
+  }
+
+  private async pushRenterRefund(userId: string, bookingId: string, msg: { title: string; body: string }, path: string): Promise<void> {
+    await this.sendPushNotificationByUserId(userId, msg.title, msg.body, {
+      type: 'condition_refund',
+      rentalBookingId: bookingId,
+      persona: 'client',
+      url: path,
+    });
   }
 
   private async deliverConditionDeclined(
@@ -4501,6 +4551,8 @@ export class NotificationsService {
     bookingNumber: string;
     rentalItemName: string;
     outcome: string;
+    externalId?: string;
+    walletCredited?: boolean;
   }): Promise<void> {
     const msg = buildConditionRefundSupportNotice(payload);
     await this.sendSimpleLifecycleEmail({
@@ -4515,6 +4567,8 @@ export class NotificationsService {
     bookingNumber: string;
     rentalItemName: string;
     outcome: string;
+    externalId?: string;
+    walletCredited?: boolean;
   }): Promise<void> {
     if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
     const recipients = buildOrderRiskRecipients({

@@ -1,4 +1,6 @@
+import type { CollectionSummary } from '../types/collections';
 import type {
+  CatalogInventoryItem,
   DiscoveryRecoveryEnvelope,
   DiscoverySortMode,
   InventoryItemByIdEnvelope,
@@ -9,6 +11,37 @@ import type { CatalogStoreEnvelope, CatalogStoresEnvelope } from '../types/store
 import { FOOD_CATEGORY_NAME } from '../utils/foodAvailability';
 import { apiRequest } from './apiClient';
 import { publicApiGet } from './publicApiClient';
+
+export interface StoreBrowseCategory {
+  id: number;
+  name: string;
+  item_count: number;
+}
+
+export interface StorePopularGroup {
+  category_name: string;
+  items: CatalogInventoryItem[];
+}
+
+export interface StoreBrowseContext {
+  business_location_id: string;
+  categories: StoreBrowseCategory[];
+  deals: CatalogInventoryItem[];
+  popular: StorePopularGroup[];
+  collections: CollectionSummary[];
+}
+
+export interface StoreBrowseContextEnvelope {
+  success: boolean;
+  data: StoreBrowseContext;
+  message?: string;
+}
+
+export interface FetchStoreBrowseContextParams {
+  food_only?: boolean;
+  owner_preview?: boolean;
+  lang?: string;
+}
 
 export interface FetchInventoryItemsParams {
   page?: number;
@@ -200,6 +233,43 @@ export async function fetchAuthenticatedCatalogStoreById(
   const q = search.toString();
   const path = `/inventory-items/stores/${encodeURIComponent(locationOrBusinessId)}${q ? `?${q}` : ''}`;
   return apiRequest<CatalogStoreEnvelope>(path, { method: 'GET', signal: init?.signal });
+}
+
+function storeBrowseContextPath(
+  locationOrBusinessId: string,
+  params?: FetchStoreBrowseContextParams
+): string {
+  const search = new URLSearchParams();
+  if (params?.food_only === true) search.set('food_only', 'true');
+  if (params?.owner_preview === true) search.set('owner_preview', 'true');
+  if (params?.lang) search.set('lang', params.lang);
+  const q = search.toString();
+  return `/inventory-items/stores/${encodeURIComponent(locationOrBusinessId)}/browse-context${
+    q ? `?${q}` : ''
+  }`;
+}
+
+export async function fetchPublicStoreBrowseContext(
+  locationOrBusinessId: string,
+  params?: FetchStoreBrowseContextParams,
+  init?: { signal?: AbortSignal }
+): Promise<StoreBrowseContextEnvelope> {
+  return publicApiGet<StoreBrowseContextEnvelope>(
+    storeBrowseContextPath(locationOrBusinessId, params),
+    undefined,
+    init
+  );
+}
+
+export async function fetchAuthenticatedStoreBrowseContext(
+  locationOrBusinessId: string,
+  params?: FetchStoreBrowseContextParams,
+  init?: { signal?: AbortSignal }
+): Promise<StoreBrowseContextEnvelope> {
+  return apiRequest<StoreBrowseContextEnvelope>(
+    storeBrowseContextPath(locationOrBusinessId, params),
+    { method: 'GET', signal: init?.signal }
+  );
 }
 
 export type StockAvailabilityStatus = 'pending' | 'confirmed' | 'adjusted' | 'unavailable';

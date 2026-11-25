@@ -49,6 +49,16 @@ describe('decline ranking formula', () => {
     const floored = rankMultiplier({ ...base, n: 90, d: 10, p: 0 });
     expect(floored).toBeLessThan(1);
     expect(floored).toBeCloseTo(1 - 0.3 * (0.005 / 0.3), 5);
+    expect(platformRate([])).toBe(0.05);
+    expect(platformRate([{ n: 4, d: 1 }, { n: 6, d: 1 }])).toBe(0.2);
+  });
+
+  it('keeps a start that is still below the default full rate, and ignores a NaN weight', () => {
+    const equal = clampRankConfig({ w: 0.3, minSample: 1, start: 0.2, full: 0.2 });
+    expect(equal.warnings).toEqual(['full']);
+    expect(equal.start).toBe(0.2);
+    expect(equal.full).toBe(0.4);
+    expect(rankMultiplier({ n: 10, d: 10, p: 0.5, w: Number.NaN, start: 0.1, full: 0.4, minSample: 1 })).toBe(1);
   });
 });
 

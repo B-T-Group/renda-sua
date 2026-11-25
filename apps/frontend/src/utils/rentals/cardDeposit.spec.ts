@@ -18,4 +18,19 @@ describe('card deposit field', () => {
     expect(showsListingDeposit('')).toBe(false);
     expect(showsListingDeposit('CAD')).toBe(true);
   });
+
+  it('keeps a typed amount and does not store a negative mobile-money deposit', () => {
+    expect(depositOnSave('XAF', '-1', 40)).toBeUndefined();
+    expect(depositOnSave('XOF', '-0.01', 40)).toBeUndefined();
+    expect(depositOnSave('XAF', '12.5', 40)).toBe(12.5);
+    expect(depositOnSave('CAD', '12.5', 40)).toBe(12.5);
+    expect(depositOnSave('CAD', '0', 40)).toBe(0);
+    expect(depositOnSave('CAD', '', 10.126)).toBe(81.01);
+    expect(depositOnSave('CAD', '', Number.NaN)).toBeUndefined();
+    expect(depositOnSave('CAD', '', Number.POSITIVE_INFINITY)).toBeUndefined();
+    expect(depositInputError('CAD', '-0.01')).toBe(true);
+    expect(depositInputError('CAD', '0')).toBe(false);
+    expect(depositInputError('XOF', '-5')).toBe(false);
+    expect(showsListingDeposit(' xaf ')).toBe(false);
+  });
 });

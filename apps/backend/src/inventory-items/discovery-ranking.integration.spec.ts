@@ -121,6 +121,7 @@ describe('InventoryItemsController discovery flag', () => {
       items as unknown as InventoryItemsService,
       catalogCache as unknown as CatalogCacheService,
       hasura as unknown as HasuraUserService,
+      {} as any,
       recovery
     );
     return { controller, items, catalogCache, recovery };

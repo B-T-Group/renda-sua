@@ -125,12 +125,35 @@ export function fedapayChannel(phone: string | null, channel?: string | null): '
   return MOOV_PREFIXES.some((prefix) => national.startsWith(prefix)) ? 'moov_tg' : 'togocel';
 }
 
+/** Empty FedaPay lists stay untrusted for this long after the send-attempt marker. Same window as MTN. */
+export const FEDAPAY_LIST_LAG_MS = 10 * 60 * 1000;
+
+/** A second provable-empty list must arrive at least this long after the first. */
+export const FEDAPAY_CONFIRM_MS = 10 * 60 * 1000;
+
+/** Consecutive unknown lookups before one manual-check notice. */
+export const FEDAPAY_UNKNOWN_NOTICE_AFTER = 10;
+
+/** An exhausted FedaPay row with no provider ref is polled about hourly. */
+export const FEDAPAY_EXHAUSTED_POLL_MS = 60 * 60 * 1000;
+
+const UNKNOWN_RETRY_CAP_MS = 30 * 60 * 1000;
+
+/** Unknown lookups wait 60s, then double, and never wait more than 30 minutes. */
+export function unknownRetryAt(streak: number, now = Date.now()): string {
+  const shift = Math.min(Math.max(streak - 1, 0), 8);
+  const wait = Math.min(UNKNOWN_RETRY_CAP_MS, 60_000 * 2 ** shift);
+  return new Date(now + wait).toISOString();
+}
+
 export const REFUND_ATTEMPT_LIMIT = 5;
 const REFUND_BACKOFF_MINUTES = [1, 5, 15, 60, 360];
 
-/** Null once support should take the refund. Earlier attempts wait. */
-export function nextRefundAt(attempts: number, now = Date.now()): string | null {
-  if (attempts >= REFUND_ATTEMPT_LIMIT) return null;
+const SLOW_POLL_MS = 24 * 60 * 60_000;
+
+/** Past the send limit the cron still polls, once a day. Earlier attempts wait. */
+export function nextRefundAt(attempts: number, now = Date.now()): string {
+  if (attempts >= REFUND_ATTEMPT_LIMIT) return new Date(now + SLOW_POLL_MS).toISOString();
   const minutes = REFUND_BACKOFF_MINUTES[Math.max(0, attempts - 1)] ?? 360;
   return new Date(now + minutes * 60_000).toISOString();
 }

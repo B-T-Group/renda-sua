@@ -5,6 +5,7 @@ on:
     branches: [main, prod]
     paths:
       - 'apps/backend/**'
+      - 'apps/hasura/**'
       - 'package.json'
       - 'yarn.lock'
       - 'nx.json'
@@ -14,6 +15,7 @@ on:
     branches: [main, prod]
     paths:
       - 'apps/backend/**'
+      - 'apps/hasura/**'
       - 'package.json'
       - 'yarn.lock'
       - 'nx.json'
@@ -82,3 +84,128 @@ jobs:
           PGPASSWORD: postgres
           PGDATABASE: postgres
         run: npx nx test backend --testPathPattern=money.qa.pg --skip-nx-cache --verbose
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Decline refund and ranking unit specs
+        run: npx nx test backend --testPathPattern='rentals/(pickup-decline|decline-ranking)|notifications/rental-push.messages.spec' --testPathIgnorePatterns=money.qa.pg --testPathIgnorePatterns=pickup-decline.live-schema --skip-nx-cache
+
+  backend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Type-check backend
+        run: npx tsc -p apps/backend/tsconfig.app.json --noEmit
+
+      - name: Build backend
+        run: npx nx build backend
+
+  hasura-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Add order comes from git history. A shallow checkout cannot see it.
+          fetch-depth: 0
+
+      - name: Start Hasura v2.36
+        run: |
+          docker run -d --name hasura --network host \
+            -e HASURA_GRAPHQL_METADATA_DATABASE_URL=postgres://postgres:postgrespassword@127.0.0.1:5432/postgres \
+            -e PG_DATABASE_URL=postgres://postgres:postgrespassword@127.0.0.1:5432/postgres \
+            -e HASURA_GRAPHQL_ADMIN_SECRET=myadminsecretkey \
+            -e HASURA_GRAPHQL_ENABLE_CONSOLE=false \
+            hasura/graphql-engine:v2.36.0
+          for _ in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8080/healthz && exit 0
+            sleep 2
+          done
+          docker logs hasura
+          exit 1
+
+      - name: Install Hasura CLI v2.36.0
+        run: |
+          curl -L https://github.com/hasura/graphql-engine/raw/stable/cli/get.sh | VERSION=v2.36.0 bash
+          hasura version
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Apply migrations and metadata
+        working-directory: apps/hasura
+        env:
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgrespassword
+          PGDATABASE: postgres
+        run: |
+          set -euo pipefail
+          endpoint=http://127.0.0.1:8080
+          secret=myadminsecretkey
+          # Version order is not replayable: numbers mix unix-ms and calendar
+          # stamps, so hasura migrate apply alters tables that are not created yet.
+          python3 scripts/replay-migrations.py
+          curl -fsS -X POST "$endpoint/v1/metadata" \
+            -H "x-hasura-admin-secret: $secret" \
+            -H 'content-type: application/json' \
+            -d '{"type":"pg_add_source","args":{"name":"Rendasua","configuration":{"connection_info":{"database_url":{"from_env":"PG_DATABASE_URL"}}}}}'
+          hasura metadata apply --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
+          hasura metadata reload --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
+          hasura metadata inconsistency status --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
+          hasura metadata inconsistency list --endpoint "$endpoint" --admin-secret "$secret" --project . --skip-update-check
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Validate pickup-decline documents against Hasura
+        env:
+          HASURA_GRAPHQL_URL: http://127.0.0.1:8080/v1/graphql
+          HASURA_GRAPHQL_ADMIN_SECRET: myadminsecretkey
+        run: npx nx test backend --testPathPattern=pickup-decline.live-schema --skip-nx-cache

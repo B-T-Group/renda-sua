@@ -20,7 +20,7 @@ import {
 } from '../../apps/frontend/src/components/rentals/DeclinePickupScreens';
 import en from '../../apps/frontend/public/locales/en.json';
 import fr from '../../apps/frontend/public/locales/fr.json';
-import { ADMIN_ROWS, CARD, MOMO_PAID, MOMO_UNPAID, OTHER_TEXT, PHOTOS, RENTER_NOTE, RENTER_NOTE_FR, RENTER_PHOTOS, sceneName } from './fixtures';
+import { ADMIN_ROWS, CARD, CARD_XAF, MOMO_CHECKING, MOMO_NO_PHONE, MOMO_PAID, MOMO_UNPAID, OTHER_TEXT, PHOTOS, RENTER_NOTE, RENTER_NOTE_FR, RENTER_PHOTOS, sceneName, UNKNOWN_RAIL, WALLET_XAF } from './fixtures';
 
 const boot = new URLSearchParams(window.location.search).get('lang') === 'fr' ? 'fr' : 'en';
 
@@ -93,6 +93,13 @@ function CaptureApp() {
           ) : null}
           {scene === 'cancelled-card' ? <DeclineOutcomeCard money={CARD} refundStatus="none" /> : null}
           {scene === 'cancelled-momo-refund' ? <DeclineOutcomeCard money={MOMO_PAID} refundStatus="none" /> : null}
+          {scene === 'xaf-wallet' ? <DeclineOutcomeCard money={WALLET_XAF} refundStatus="none" /> : null}
+          {scene === 'xaf-card' ? <DeclineOutcomeCard money={CARD_XAF} refundStatus="none" /> : null}
+          {scene === 'xaf-unpaid' ? <DeclineOutcomeCard money={MOMO_UNPAID} refundStatus="none" /> : null}
+          {scene === 'refund-nophone' ? <DeclineOutcomeCard money={MOMO_NO_PHONE} refundStatus="none" /> : null}
+          {scene === 'refunded-nophone' ? <DeclineOutcomeCard money={MOMO_NO_PHONE} refundStatus="refunded" /> : null}
+          {scene === 'refund-checking' ? <DeclineOutcomeCard money={MOMO_CHECKING} refundStatus="refund_pending" /> : null}
+          {scene === 'neutral' ? <DeclineOutcomeCard money={UNKNOWN_RAIL} refundStatus="none" /> : null}
           {scene === 'business' ? (
             <BusinessDeclineBanner
               reason="damaged"
@@ -108,6 +115,8 @@ function CaptureApp() {
           {scene === 'lightbox' ? <ConditionPhotoLightbox photos={photos} index={0} timeZone={money.timeZone} onClose={() => undefined} /> : null}
           {scene === 'refund-progress' ? <DeclineOutcomeCard money={MOMO_PAID} refundStatus="refund_pending" /> : null}
           {scene === 'refunded' ? <DeclineOutcomeCard money={MOMO_PAID} refundStatus="refunded" /> : null}
+          {scene === 'refund-failed' ? <DeclineOutcomeCard money={MOMO_PAID} refundStatus="failed" /> : null}
+          {scene === 'refund-manual' ? <DeclineOutcomeCard money={MOMO_PAID} refundStatus="manual" /> : null}
           {scene === 'insights' ? <InsightsFrame /> : null}
           {scene === 'admin' ? <DeclineAdminTable rows={ADMIN_ROWS} timeZone="Africa/Douala" /> : null}
         </div>

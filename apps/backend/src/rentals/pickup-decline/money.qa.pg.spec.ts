@@ -15,12 +15,21 @@ import { Client, Pool } from 'pg';
 import { RentalMomoRefundService } from './rental-momo-refund.service';
 import { RentalPickupDeclineService } from './rental-pickup-decline.service';
 import { stableRefundReference } from './pickup-decline.money';
+import { REVERT_UNPAID_DECLINE } from './decline-revert';
+import { noticeMutationShape, CLAIM_NOTICE } from './pickup-decline.queries';
 import * as Q from './pickup-decline.queries';
 
 const TEMPLATE = process.env.DEDICATED_PG_TEMPLATE?.trim();
 const OPTED = process.env.DECLINE_REFUND_PG === '1';
 const HOST = (process.env.PGHOST ?? '').trim();
-const MIGRATION = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql');
+const HARDENING = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119160000_rentals_decline_refund_hardening/up.sql');
+const PREDEDUPE = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119135000_rentals_decline_history_prededupe/up.sql');
+const CLAIM_MIGRATION = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119140000_rentals_decline_refund_claim/up.sql');
+const NOTICE_TYPES = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119180000_condition_refund_message_types/up.sql');
+const SEND_ATTEMPT = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119190000_decline_refund_send_attempt/up.sql');
+const CLOSE_SETOF = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119200000_decline_refund_close_setof/up.sql');
+const NOTICE_TYPES_DOWN = join(__dirname, '../../../../hasura/migrations/Rendasua/20261119180000_condition_refund_message_types/down.sql');
+const MIGRATIONS = [PREDEDUPE, CLAIM_MIGRATION, HARDENING, NOTICE_TYPES, SEND_ATTEMPT, CLOSE_SETOF];
 
 describe('decline refund postgres job', () => {
   it('is configured when CI runs this workflow', () => {
@@ -57,7 +66,7 @@ suite('decline refund claim on real Postgres', () => {
     pool = new Pool({ database: dbName, max: 8 });
     pool.on('error', () => undefined);
     await pool.query(SCHEMA);
-    await pool.query(readFileSync(MIGRATION, 'utf8'));
+    for (const file of MIGRATIONS) await pool.query(readFileSync(file, 'utf8'));
   });
 
   afterAll(async () => {
@@ -66,6 +75,22 @@ suite('decline refund claim on real Postgres', () => {
     assertCanDrop(dbName, HOST, OPTED);
     await admin.query(`DROP DATABASE ${quoteIdent(dbName)}`);
     await admin.end();
+  });
+
+  it('restores an unpaid decline and leaves a debited decline in place', async () => {
+    const unpaid = await seedOpen(pool);
+    const declineId = await insertDecline(pool, unpaid);
+    const restored = await revertDecline(pool, unpaid, declineId);
+    expect(restored.rows).toEqual([{ id: unpaid }]);
+    expect(await bookingState(pool, unpaid)).toEqual({ status: 'reserved', payment_status: 'paid', condition_declined_at: null });
+    expect(await declineCount(pool, declineId)).toBe(0);
+    const paid = await seedOpen(pool);
+    const paidDecline = await insertDecline(pool, paid);
+    await pool.query(`INSERT INTO account_transactions (idempotency_key) VALUES ($1)`, [`rental:${paid}:decline:refund`]);
+    const kept = await revertDecline(pool, paid, paidDecline);
+    expect(kept.rows).toHaveLength(0);
+    expect((await bookingState(pool, paid)).status).toBe('cancelled');
+    expect(await declineCount(pool, paidDecline)).toBe(1);
   });
 
   it('claims a pending refund for one worker', async () => {
@@ -136,7 +161,7 @@ suite('decline refund claim on real Postgres', () => {
   });
 
   it('aborts the write and the credit when the claim token was taken', async () => {
-    const id = await seed(pool);
+    const id = await seed(pool, { refund_sent_at: new Date().toISOString() });
     const provider = fakeProvider();
     let release: (value: { status: string }) => void = () => undefined;
     provider.check = () => new Promise((resolve) => {
@@ -154,6 +179,49 @@ suite('decline refund claim on real Postgres', () => {
     expect(provider.withdraws).toHaveLength(0);
   });
 
+  it('sends one payout when the status lookup fails during the decline', async () => {
+    const id = await seed(pool, { refund_status: 'none', status: 'cancelled', refund_provider_ref: null, refund_provider: null });
+    const provider = fakeProvider();
+    provider.check = async () => {
+      throw new Error('socket hang up');
+    };
+    provider.withdraw = async (body: { externalId: string }) => {
+      provider.withdraws.push(body);
+      return { success: true, reference: 'FP-1', ambiguous: false };
+    };
+    const service = build(pool, provider, { credits: 0 });
+    await service.refundLateCollect(id, collect(id));
+    expect(provider.withdraws).toHaveLength(1);
+    provider.check = async () => ({ status: 'SUCCESS' });
+    await ageClaim(pool, id);
+    expect(await service.reconcilePending()).toBe(1);
+    expect(provider.withdraws).toHaveLength(1);
+    expect(await statusOf(pool, id)).toBe('refunded');
+    expect(await sentAt(pool, id)).toBeTruthy();
+  });
+
+  it('sends one payout when FreemoPay status returns 503 before acceptance', async () => {
+    const id = await seed(pool, { refund_status: 'none', status: 'cancelled', refund_provider_ref: null, refund_provider: null });
+    const provider = fakeProvider();
+    provider.check = async () => {
+      const error: any = new Error('unavailable');
+      error.status = 503;
+      throw error;
+    };
+    provider.withdraw = async (body: { externalId: string }) => {
+      provider.withdraws.push(body);
+      return { success: true, reference: 'FP-503', ambiguous: false };
+    };
+    const service = build(pool, provider, { credits: 0 });
+    await service.refundLateCollect(id, collect(id));
+    expect(provider.withdraws).toHaveLength(1);
+    provider.check = async () => ({ status: 'SUCCESS' });
+    await ageClaim(pool, id);
+    expect(await service.reconcilePending()).toBe(1);
+    expect(provider.withdraws).toHaveLength(1);
+    expect(await statusOf(pool, id)).toBe('refunded');
+  });
+
   it('does not resend FreemoPay when a stored reference is missing', async () => {
     const id = await seed(pool, { refund_provider: 'freemopay', refund_provider_ref: stableRefundReference('stored') });
     const provider = fakeProvider();
@@ -166,7 +234,151 @@ suite('decline refund claim on real Postgres', () => {
     expect(Q.KEEP_REFUND_CLAIM).toContain('refund_claim_token');
     expect(Q.STAMP_REFUND).toContain('refund_status');
   });
+
+  it('appends a jsonb notice the way Hasura _append does, and rejects a text array', async () => {
+    noticeMutationShape(CLAIM_NOTICE);
+    const textArray = CLAIM_NOTICE.replace('$outcome: jsonb!', '$outcome: String!').replace(
+      '_append: { refund_notices: $outcome }',
+      '_append: { refund_notices: [$outcome] }'
+    );
+    expect(() => noticeMutationShape(textArray)).toThrow('rental_bookings_append_input');
+    const column = await pool.query(
+      `SELECT data_type, is_nullable FROM information_schema.columns
+       WHERE table_name = 'rental_bookings' AND column_name = 'refund_notices'`
+    );
+    expect(column.rows[0]).toMatchObject({ data_type: 'jsonb', is_nullable: 'NO' });
+    expect(readFileSync(HARDENING, 'utf8')).toContain("to_jsonb(coalesce(refund_notices, '{}'::text[]))");
+    await expect(pool.query(`SELECT array_append('[]'::jsonb, 'failed')`)).rejects.toThrow();
+    const id = await seed(pool);
+    const hasura = sqlHasura(pool);
+    const first = await hasura.executeMutation(CLAIM_NOTICE, { id, outcome: ['failed'] });
+    const second = await hasura.executeMutation(CLAIM_NOTICE, { id, outcome: ['failed'] });
+    expect(first.update_rental_bookings.affected_rows).toBe(1);
+    expect(second.update_rental_bookings.affected_rows).toBe(0);
+    const stored = await pool.query(`SELECT refund_notices FROM rental_bookings WHERE id = $1`, [id]);
+    expect(stored.rows[0].refund_notices).toEqual(['failed']);
+  });
+
+  it('backfills refund_sent_at and polls that FreemoPay row before sending again', async () => {
+    const id = await seed(pool, { refund_provider_ref: 'FP-2', refund_attempts: 1, refund_sent_at: null });
+    await pool.query(`UPDATE rental_bookings SET refund_sent_at = NULL WHERE id = $1`, [id]);
+    await pool.query(
+      `UPDATE rental_bookings SET refund_next_at = now() + interval '1 day'
+       WHERE id <> $1 AND refund_status = 'refund_pending'`,
+      [id]
+    );
+    await pool.query(sentBackfill());
+    expect(await sentAt(pool, id)).toBeTruthy();
+    const provider = fakeProvider();
+    provider.check = async () => ({ status: 'SUCCESS' });
+    const service = build(pool, provider, { credits: 0 });
+    expect(await service.reconcilePending()).toBe(1);
+    expect(provider.withdraws).toHaveLength(0);
+    expect(await statusOf(pool, id)).toBe('refunded');
+  });
+
+  it('asks support when a stamped stable id is missing, and does not send again', async () => {
+    const id = await seed(pool);
+    await pool.query(`UPDATE rental_bookings SET refund_sent_at = now() WHERE id = $1`, [id]);
+    await pool.query(
+      `UPDATE rental_bookings SET refund_next_at = now() + interval '1 day'
+       WHERE id <> $1 AND refund_status = 'refund_pending'`,
+      [id]
+    );
+    const provider = fakeProvider();
+    const service = build(pool, provider, { credits: 0 }, [
+      { amount: 1000, currency: 'XAF', provider: 'freemopay', customer_phone: '237600000000', transaction_id: 'tx' },
+    ]);
+    expect(await service.reconcilePending()).toBe(0);
+    expect(provider.withdraws).toHaveLength(0);
+    expect(await statusOf(pool, id)).toBe('refund_pending');
+  });
+
+  it('does not resend an unstamped stable FreemoPay reference in either lookup mode', async () => {
+    const providerOnly = await seed(pool, { refund_sent_at: null });
+    const indexed = await seed(pool, { refund_sent_at: null });
+    await pool.query(
+      `UPDATE rental_bookings SET refund_next_at = now() + interval '1 day' WHERE id <> ALL($1::uuid[])`,
+      [[providerOnly, indexed]]
+    );
+    const provider = fakeProvider();
+    provider.check = async () => {
+      const error: any = new Error('not found');
+      error.status = 404;
+      throw error;
+    };
+    const hidden = build(pool, provider, { credits: 0 });
+    expect(await hidden.reconcilePending()).toBe(0);
+    expect(provider.withdraws).toHaveLength(0);
+    expect(await statusOf(pool, providerOnly)).toBe('refund_pending');
+    provider.check = async () => ({ status: 'SUCCESS' });
+    await pool.query(
+      `UPDATE rental_bookings SET refund_next_at = now() + interval '1 day' WHERE id = $1`,
+      [providerOnly]
+    );
+    await ageClaim(pool, indexed);
+    expect(await hidden.reconcilePending()).toBe(1);
+    expect(provider.withdraws).toHaveLength(0);
+    expect(await statusOf(pool, indexed)).toBe('refunded');
+  });
+
+  it('inserts the decline refund notice after the message type exists', async () => {
+    await pool.query(readFileSync(NOTICE_TYPES, 'utf8'));
+    const types = await pool.query(
+      `SELECT id FROM message_types WHERE id IN ('CONDITION_DECLINED', 'CONDITION_REFUND') ORDER BY id`
+    );
+    expect(types.rows.map((row) => row.id)).toEqual(['CONDITION_DECLINED', 'CONDITION_REFUND']);
+    const inserted = await pool.query(
+      `INSERT INTO user_messages (user_id, message_type, message, notice_idempotency_key)
+       VALUES (gen_random_uuid(), 'CONDITION_REFUND', 'refund', 'booking:condition_refund')
+       RETURNING id`
+    );
+    expect(inserted.rowCount).toBe(1);
+    await pool.query(readFileSync(NOTICE_TYPES_DOWN, 'utf8'));
+    const kept = await pool.query(`SELECT id FROM message_types WHERE id = 'CONDITION_REFUND'`);
+    expect(kept.rows).toHaveLength(1);
+    await pool.query(`DELETE FROM user_messages WHERE message_type = 'CONDITION_REFUND'`);
+    await pool.query(readFileSync(NOTICE_TYPES_DOWN, 'utf8'));
+    const dropped = await pool.query(`SELECT id FROM message_types WHERE id = 'CONDITION_REFUND'`);
+    expect(dropped.rows).toHaveLength(0);
+    await pool.query(readFileSync(NOTICE_TYPES, 'utf8'));
+  });
+
+  it('dedupes decline history without dropping the live unique index', async () => {
+    const sql = readFileSync(HARDENING, 'utf8');
+    expect(readFileSync(PREDEDUPE, 'utf8')).toContain('row_number()');
+    expect(readFileSync(CLAIM_MIGRATION, 'utf8')).not.toContain('row_number()');
+    expect(sql).not.toMatch(/DROP INDEX/i);
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS rental_status_history_one_decline');
+    const id = await seed(pool);
+    await pool.query('DROP INDEX IF EXISTS public.rental_status_history_one_decline');
+    await pool.query(
+      `INSERT INTO rental_status_history (rental_booking_id, notes) VALUES ($1, $2), ($1, $2)`,
+      [id, 'Renter declined the pickup condition']
+    );
+    await pool.query(historyDedupe(sql));
+    const left = await pool.query(`SELECT count(*)::int AS n FROM rental_status_history WHERE rental_booking_id = $1`, [id]);
+    expect(left.rows[0].n).toBe(1);
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS rental_status_history_one_decline
+       ON public.rental_status_history (rental_booking_id)
+       WHERE notes = 'Renter declined the pickup condition'`
+    );
+  });
 });
+
+function sentBackfill(): string {
+  const sql = readFileSync(HARDENING, 'utf8');
+  const match = sql.match(/UPDATE public\.rental_bookings[\s\S]*?refund_claim_at IS NOT NULL\s*\);/);
+  if (!match) throw new Error('missing refund_sent_at backfill');
+  return match[0];
+}
+
+function historyDedupe(sql: string): string {
+  const match = sql.match(/DELETE FROM public\.rental_status_history[\s\S]*?ranked\.n > 1\s*\);/);
+  if (!match) throw new Error('missing history dedupe');
+  return match[0];
+}
 
 function assertCanDrop(dbName: string, host: string, opted: boolean): void {
   const local = host === '127.0.0.1' || host === 'localhost' || host.startsWith('/');
@@ -242,11 +454,17 @@ async function waitFor(ready: () => boolean | Promise<boolean>): Promise<void> {
 
 const SCHEMA = `
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE TYPE public.rental_booking_status_enum AS ENUM (
+  'proposed', 'reserved', 'confirmed', 'active', 'awaiting_return', 'completed', 'cancelled'
+);
+CREATE TYPE public.rental_booking_payment_status_enum AS ENUM (
+  'pending', 'authorized', 'paid', 'cancelled'
+);
 CREATE TABLE rental_bookings (
   id uuid PRIMARY KEY,
   booking_number text,
-  status text,
-  payment_status text,
+  status public.rental_booking_status_enum,
+  payment_status public.rental_booking_payment_status_enum,
   contract_expires_at timestamptz,
   actual_start_at timestamptz,
   inspection_policy_version int,
@@ -255,6 +473,7 @@ CREATE TABLE rental_bookings (
   condition_declined_at timestamptz,
   refund_status text NOT NULL DEFAULT 'none',
   refund_attempts int NOT NULL DEFAULT 0,
+  refund_unknown_streak integer NOT NULL DEFAULT 0,
   refund_next_at timestamptz,
   refund_requested_at timestamptz,
   refund_status_at timestamptz,
@@ -277,9 +496,67 @@ CREATE TABLE rental_condition_declines (
 CREATE TABLE rental_status_history (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   rental_booking_id uuid,
-  notes text
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE account_transactions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  idempotency_key text
+);
+CREATE TABLE message_types (
+  id text PRIMARY KEY,
+  comment text
+);
+CREATE TABLE user_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid,
+  message_type text REFERENCES message_types(id),
+  message text,
+  notice_idempotency_key text
 );
 `;
+
+async function seedOpen(pool: Pool): Promise<string> {
+  return seed(pool, {
+    status: 'cancelled',
+    payment_status: 'cancelled',
+    refund_status: 'none',
+    refund_provider: null,
+    refund_provider_ref: null,
+    condition_declined_at: new Date().toISOString(),
+  });
+}
+
+async function insertDecline(pool: Pool, bookingId: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await pool.query(`INSERT INTO rental_condition_declines (id, rental_booking_id) VALUES ($1, $2)`, [id, bookingId]);
+  return id;
+}
+
+async function revertDecline(pool: Pool, bookingId: string, declineId: string) {
+  return pool.query(REVERT_UNPAID_DECLINE, [
+    `rental:${bookingId}:decline:refund`,
+    bookingId,
+    declineId,
+    'reserved',
+    'paid',
+    '2026-11-01T00:00:00.000Z',
+  ]);
+}
+
+async function bookingState(pool: Pool, id: string) {
+  const result = await pool.query(
+    `SELECT status::text AS status, payment_status::text AS payment_status, condition_declined_at
+     FROM rental_bookings WHERE id = $1`,
+    [id]
+  );
+  return result.rows[0];
+}
+
+async function declineCount(pool: Pool, id: string): Promise<number> {
+  const result = await pool.query(`SELECT id FROM rental_condition_declines WHERE id = $1`, [id]);
+  return result.rowCount ?? 0;
+}
 
 async function seed(pool: Pool, over: Record<string, unknown> = {}): Promise<string> {
   const id = crypto.randomUUID();
@@ -318,6 +595,11 @@ async function claim(pool: Pool, id: string, attempts: number): Promise<number> 
   return result.rowCount ?? 0;
 }
 
+async function sentAt(pool: Pool, id: string): Promise<string | null> {
+  const result = await pool.query(`SELECT refund_sent_at FROM rental_bookings WHERE id = $1`, [id]);
+  return result.rows[0].refund_sent_at;
+}
+
 async function statusOf(pool: Pool, id: string): Promise<string> {
   const result = await pool.query(`SELECT refund_status FROM rental_bookings WHERE id = $1`, [id]);
   return result.rows[0].refund_status;
@@ -337,20 +619,29 @@ async function ageClaim(pool: Pool, id: string): Promise<void> {
   );
 }
 
-function build(pool: Pool, provider: ReturnType<typeof fakeProvider>, wallet: { credits: number }) {
+function build(
+  pool: Pool,
+  provider: ReturnType<typeof fakeProvider>,
+  wallet: { credits: number },
+  collects: Array<Record<string, unknown>> = []
+) {
   const freemopay = {
     withdraw: (body: { externalId: string }) => provider.withdraw(body),
     checkTransactionStatus: () => provider.check(),
   };
   const momo = new RentalMomoRefundService(unused('mtn') as never, freemopay as never, unused('feda') as never, unused('mypvit') as never);
-  const hasura = sqlHasura(pool);
+  const hasura = sqlHasura(pool, collects);
   return new RentalPickupDeclineService(
     hasura as never,
     { getUser: async () => ({ id: 'user-1' }) } as never,
     {} as never,
     momo,
     {} as never,
-    { notifySupportConditionRefund: async () => undefined, sendConditionDeclinedNotice: async () => undefined } as never,
+    {
+      notifySupportConditionRefund: async () => true,
+      notifyRenterConditionRefund: async () => true,
+      sendConditionDeclinedNotice: async () => undefined,
+    } as never,
     { clearPinForOrder: async () => undefined } as never,
     {
       consumeDeclineHold: async () => undefined,
@@ -367,12 +658,12 @@ function unused(name: string) {
   return new Proxy({}, { get: () => () => Promise.reject(new Error(`${name} unused`)) });
 }
 
-function sqlHasura(pool: Pool) {
+function sqlHasura(pool: Pool, collects: Array<Record<string, unknown>> = []) {
   return {
     executeQuery: async (query: string, vars: Record<string, string> = {}) => {
       if (query.includes('DeclineBooking')) return { rental_bookings_by_pk: await shaped(pool, vars.id) };
-      if (query.includes('PendingDeclineRefunds')) return { rental_bookings: await pending(pool, vars.now, vars.stale) };
-      if (query.includes('DeclineCollects')) return { mobile_payment_transactions: [] };
+      if (query.includes('PendingDeclineRefunds')) return { rental_bookings: await pending(pool, query, vars.now, vars.stale) };
+      if (query.includes('DeclineCollects')) return { mobile_payment_transactions: collects };
       if (query.includes('DeclineHold')) return { rental_holds: [] };
       if (query.includes('FindConditionDecline') || query.includes('FindDeclineForBooking')) return { rental_condition_declines: [] };
       return {};
@@ -386,10 +677,11 @@ async function shaped(pool: Pool, id: string) {
   return shape(result.rows[0]);
 }
 
-async function pending(pool: Pool, now: string, stale: string) {
+async function pending(pool: Pool, query: string, now: string, stale: string) {
+  const capped = query.includes('refund_attempts: { _lt: 5 }') ? 'AND refund_attempts < 5' : '';
   const result = await pool.query(
     `SELECT * FROM rental_bookings
-     WHERE refund_status = 'refund_pending' AND condition_declined_at IS NOT NULL AND refund_attempts < 5
+     WHERE refund_status = 'refund_pending' AND condition_declined_at IS NOT NULL ${capped}
        AND (refund_next_at IS NULL OR refund_next_at <= $1)
        AND (refund_claim_at IS NULL OR refund_claim_at < $2)`,
     [now, stale]
@@ -408,11 +700,18 @@ function shape(row: Record<string, unknown> | undefined) {
 }
 
 async function applyMutation(pool: Pool, query: string, vars: Record<string, unknown>) {
+  if (query.includes('StampDeclineSendAttempt')) return { update_rental_bookings: { affected_rows: await stampAttempt(pool, vars) } };
+  if (query.includes('ClearDeclineSendAttempt')) return { update_rental_bookings: { affected_rows: await clearAttempt(pool, vars) } };
+  if (query.includes('StampDeclineRefundSent')) return { update_rental_bookings: { affected_rows: await stampSent(pool, vars) } };
   if (query.includes('StampDeclineRefund')) return { update_rental_bookings: { affected_rows: await stamp(pool, vars) } };
   if (query.includes('ClaimDeclineRefund')) return { update_rental_bookings: { affected_rows: await claimWork(pool, vars) } };
-  if (query.includes('RememberDeclineRefundRef')) return { update_rental_bookings: { affected_rows: await remember(pool, vars) } };
   if (query.includes('KeepDeclineRefundClaim')) return { update_rental_bookings: { affected_rows: await keep(pool, vars) } };
   if (query.includes('ApplyOwnedDeclineRefund')) return { update_rental_bookings: { affected_rows: await owned(pool, vars) } };
+  if (query.includes('KeepDeclineProviderRef')) return { update_rental_bookings: { affected_rows: await keepRef(pool, vars) } };
+  if (query.includes('NoteDeclineRefundOnce')) return { update_rental_bookings: { affected_rows: await claimNotice(pool, query, vars) } };
+  if (query.includes('ReleaseDeclineRefundNotice')) return { update_rental_bookings: { affected_rows: await releaseNotice(pool, vars) } };
+  if (query.includes('ClearDeclineRefundSent')) return { update_rental_bookings: { affected_rows: await clearSent(pool, vars) } };
+  if (query.includes('MarkDeclineWalletCredit')) return { update_rental_bookings: { affected_rows: await markCredited(pool, vars) } };
   return { update_rental_bookings: { affected_rows: 0 } };
 }
 
@@ -427,15 +726,6 @@ async function claimWork(pool: Pool, vars: Record<string, unknown>): Promise<num
     `id = $1 AND refund_status = 'refund_pending' AND refund_attempts = $2 AND (refund_claim_at IS NULL OR refund_claim_at < $3)`,
     [vars.id, vars.attempts, vars.stale]
   );
-}
-
-async function remember(pool: Pool, vars: Record<string, unknown>): Promise<number> {
-  const result = await pool.query(
-    `UPDATE rental_bookings SET refund_provider = $2, refund_provider_ref = $3
-     WHERE id = $1 AND refund_status = 'refund_pending' AND refund_provider_ref IS NULL`,
-    [vars.id, vars.provider, vars.ref]
-  );
-  return result.rowCount ?? 0;
 }
 
 async function keep(pool: Pool, vars: Record<string, unknown>): Promise<number> {
@@ -454,6 +744,89 @@ async function owned(pool: Pool, vars: Record<string, unknown>): Promise<number>
     `id = $1 AND refund_status = 'refund_pending' AND refund_claim_token = $2`,
     [vars.id, vars.token]
   );
+}
+
+async function stampAttempt(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_send_attempted_at = $3
+     WHERE id = $1 AND refund_claim_token = $2 AND refund_status = 'refund_pending'
+       AND refund_send_attempted_at IS NULL`,
+    [vars.id, vars.token, vars.at]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function clearAttempt(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_send_attempted_at = NULL
+     WHERE id = $1 AND refund_claim_token = $2 AND refund_status = 'refund_pending'`,
+    [vars.id, vars.token]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function stampSent(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings
+     SET refund_sent_at = $3, refund_provider = $4, refund_provider_ref = $5
+     WHERE id = $1 AND refund_status = 'refund_pending' AND refund_claim_token = $2
+       AND refund_sent_at IS NULL
+       AND (refund_provider_ref IS NULL OR refund_provider_ref = $5)`,
+    [vars.id, vars.token, vars.at, vars.provider, vars.ref]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function keepRef(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_provider_ref = $3
+     WHERE id = $1 AND refund_provider_ref = $2`,
+    [vars.id, vars.stableRef, vars.ref]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function claimNotice(pool: Pool, query: string, vars: Record<string, unknown>): Promise<number> {
+  noticeMutationShape(query);
+  const column = await pool.query(
+    `SELECT data_type FROM information_schema.columns
+     WHERE table_name = 'rental_bookings' AND column_name = 'refund_notices'`
+  );
+  if (column.rows[0]?.data_type !== 'jsonb') {
+    throw new Error("field 'refund_notices' not found in type: 'rental_bookings_append_input'");
+  }
+  const result = await pool.query(
+    `UPDATE rental_bookings
+     SET refund_notices = refund_notices || $2::jsonb
+     WHERE id = $1 AND NOT (refund_notices @> $2::jsonb)`,
+    [vars.id, JSON.stringify(vars.outcome)]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function releaseNotice(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_notices = refund_notices - $2 WHERE id = $1`,
+    [vars.id, vars.outcome]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function clearSent(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_sent_at = NULL
+     WHERE id = $1 AND refund_claim_token = $2 AND refund_status = 'refund_pending'`,
+    [vars.id, vars.token]
+  );
+  return result.rowCount ?? 0;
+}
+
+async function markCredited(pool: Pool, vars: Record<string, unknown>): Promise<number> {
+  const result = await pool.query(
+    `UPDATE rental_bookings SET refund_credited_at = $2 WHERE id = $1 AND refund_credited_at IS NULL`,
+    [vars.id, vars.at]
+  );
+  return result.rowCount ?? 0;
 }
 
 async function writeSet(pool: Pool, set: Record<string, unknown>, where: string, params: unknown[]): Promise<number> {

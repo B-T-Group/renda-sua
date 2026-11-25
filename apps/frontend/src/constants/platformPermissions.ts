@@ -9,6 +9,7 @@ export const PlatformPermissions = {
   OPS_USER_MESSAGES: 'platform.ops.user_messages',
   OPS_WHATSAPP_INBOX: 'platform.ops.whatsapp_inbox',
   FINANCIAL_REFUNDS: 'platform.financial.refunds',
+  FINANCIAL_REFUNDS_OVERRIDE: 'platform.financial.refunds.manual_override',
   FINANCIAL_COMMISSIONS: 'platform.financial.commissions',
   FINANCIAL_MOBILE_PAYMENTS: 'platform.financial.mobile_payments',
   LOCATIONS_COMMISSION: 'platform.locations.commission',
