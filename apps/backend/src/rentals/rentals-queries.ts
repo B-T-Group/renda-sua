@@ -1759,3 +1759,155 @@ export const GET_BUSINESS_LOCATION_OWNER = `
     }
   }
 `;
+
+export const GET_BUSINESS_RENTAL_ITEM_ACTIVITY_STATS = `
+  query GetBusinessRentalItemActivityStats(
+    $businessId: uuid!
+    $rentalItemId: uuid!
+  ) {
+    rental_items_by_pk(id: $rentalItemId) {
+      id
+      name
+      currency
+    }
+    completed: rental_bookings_aggregate(
+      where: {
+        status: { _eq: completed }
+        rental_location_listing: {
+          rental_item_id: { _eq: $rentalItemId }
+          rental_item: { business_id: { _eq: $businessId } }
+        }
+      }
+    ) {
+      aggregate {
+        count
+        sum {
+          total_amount
+          overtime_amount
+        }
+      }
+    }
+    currentlyOut: rental_bookings_aggregate(
+      where: {
+        status: { _in: [active, awaiting_return] }
+        rental_location_listing: {
+          rental_item_id: { _eq: $rentalItemId }
+          rental_item: { business_id: { _eq: $businessId } }
+        }
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
+    upcoming: rental_bookings_aggregate(
+      where: {
+        status: { _in: [proposed, reserved, confirmed, active, awaiting_return] }
+        rental_location_listing: {
+          rental_item_id: { _eq: $rentalItemId }
+          rental_item: { business_id: { _eq: $businessId } }
+        }
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
+    openRequests: rental_requests_aggregate(
+      where: {
+        status: { _eq: pending }
+        rental_location_listing: {
+          rental_item_id: { _eq: $rentalItemId }
+          rental_item: { business_id: { _eq: $businessId } }
+        }
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
+    lastCompleted: rental_bookings(
+      where: {
+        status: { _eq: completed }
+        rental_location_listing: {
+          rental_item_id: { _eq: $rentalItemId }
+          rental_item: { business_id: { _eq: $businessId } }
+        }
+      }
+      order_by: [{ actual_end_at: desc_nulls_last }, { end_at: desc }]
+      limit: 1
+    ) {
+      actual_end_at
+      end_at
+    }
+    nextStart: rental_bookings(
+      where: {
+        status: { _in: [proposed, reserved, confirmed, active, awaiting_return] }
+        rental_location_listing: {
+          rental_item_id: { _eq: $rentalItemId }
+          rental_item: { business_id: { _eq: $businessId } }
+        }
+      }
+      order_by: { start_at: asc }
+      limit: 1
+    ) {
+      start_at
+    }
+  }
+`;
+
+export const GET_BUSINESS_RENTAL_ITEM_ACTIVITY_BOOKINGS = `
+  query GetBusinessRentalItemActivityBookings(
+    $where: rental_bookings_bool_exp!
+    $limit: Int!
+    $offset: Int!
+    $orderBy: [rental_bookings_order_by!]!
+  ) {
+    rental_bookings(
+      where: $where
+      limit: $limit
+      offset: $offset
+      order_by: $orderBy
+    ) {
+      id
+      status
+      start_at
+      end_at
+      actual_start_at
+      actual_end_at
+      total_amount
+      overtime_amount
+      currency
+      settlement_completed_at
+      rental_location_listing {
+        id
+        business_location {
+          id
+          name
+        }
+        rental_item {
+          id
+          name
+        }
+      }
+      rental_request {
+        id
+        created_at
+        client {
+          id
+          user {
+            first_name
+            last_name
+            phone_number
+            email
+          }
+        }
+      }
+    }
+    rental_bookings_aggregate(where: $where) {
+      aggregate {
+        count
+      }
+    }
+  }
+`;

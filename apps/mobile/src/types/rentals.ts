@@ -568,6 +568,37 @@ export interface BusinessRentalScheduleRow {
   } | null;
 }
 
+export type BusinessRentalItemActivityScope = 'all' | 'upcoming' | 'past';
+
+export interface BusinessRentalItemActivityStats {
+  earnedTotal: number;
+  timesRented: number;
+  currentlyOut: number;
+  upcoming: number;
+  openRequests: number;
+  lastCompletedAt: string | null;
+  nextStartAt: string | null;
+  currency: string | null;
+}
+
+export interface BusinessRentalItemActivityBooking extends BusinessRentalScheduleRow {
+  actual_start_at?: string | null;
+  actual_end_at?: string | null;
+  overtime_amount?: number | null;
+  settlement_completed_at?: string | null;
+}
+
+export interface BusinessRentalItemActivity {
+  item: { id: string; name: string; currency: string | null };
+  stats: BusinessRentalItemActivityStats;
+  suggestedScope: BusinessRentalItemActivityScope;
+  scope: BusinessRentalItemActivityScope;
+  bookings: BusinessRentalItemActivityBooking[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface CreateRentalFromImagePayload {
   mode?: 'manual' | 'ai';
   imageId: string;

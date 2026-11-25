@@ -494,20 +494,22 @@ export default function BusinessRentalsStudioScreen() {
           renderItem={({ item }) => {
             if (flags.rentals_dashboard_requests_enabled && item.status === 'pending') {
               return (
-                <DashboardRentalRequestCard
-                  request={item}
-                  onOpen={(selected) =>
-                    navigation.navigate('BusinessRentalRequestDetail', { requestId: selected.id })
-                  }
-                  onAccept={(selected) => {
-                    setRespondReq(selected);
-                    setRespondMode('available');
-                  }}
-                  onDecline={(selected) => {
-                    setRespondReq(selected);
-                    setRespondMode('unavailable');
-                  }}
-                />
+                <View style={{ marginBottom: spacing.md }}>
+                  <DashboardRentalRequestCard
+                    request={item}
+                    onOpen={(selected) =>
+                      navigation.navigate('BusinessRentalRequestDetail', { requestId: selected.id })
+                    }
+                    onAccept={(selected) => {
+                      setRespondReq(selected);
+                      setRespondMode('available');
+                    }}
+                    onDecline={(selected) => {
+                      setRespondReq(selected);
+                      setRespondMode('unavailable');
+                    }}
+                  />
+                </View>
               );
             }
             const phase = resolveRentalPhase(

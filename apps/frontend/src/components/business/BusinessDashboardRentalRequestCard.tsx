@@ -27,10 +27,30 @@ export function BusinessDashboardRentalRequestCard({
   const hours = request.respond_by ? respondWithinHours(request.respond_by) : 0;
   const amber = request.respond_by ? respondWithinAmber(request.respond_by) : false;
   return (
-    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', p: 1.5, border: 1, borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
-      <ItemThumb request={request} />
-      <CardCopy model={model} hours={hours} amber={amber} open={open} onToggle={() => setOpen((value) => !value)} />
-      <DecisionButtons request={request} disabled={model.acceptDisabled} onAccept={onAccept} onDecline={onDecline} />
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
+        gap: 1.5,
+        alignItems: { xs: 'stretch', sm: 'flex-start' },
+        p: 1.5,
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 2,
+        bgcolor: 'background.paper',
+        overflow: 'hidden',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+      }}
+    >
+      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', minWidth: 0, flex: 1 }}>
+        <ItemThumb request={request} />
+        <CardCopy model={model} hours={hours} amber={amber} open={open} onToggle={() => setOpen((value) => !value)} />
+      </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0, alignSelf: { xs: 'flex-end', sm: 'flex-start' } }}>
+        <DecisionButtons request={request} disabled={model.acceptDisabled} onAccept={onAccept} onDecline={onDecline} />
+      </Box>
     </Box>
   );
 }

@@ -136,6 +136,16 @@ import {
 } from '../common/geo.utils';
 import { resolveRentalListingRejectionReasons } from '../common/moderation-rejection-reason';
 import * as Q from './rentals-queries';
+import {
+  activityOrderForScope,
+  activityPageLimit,
+  activityStatusesForScope,
+  defaultActivityScope,
+  earnedFromCompletedSums,
+  normalizeActivityScope,
+  type ItemActivityStatsQuery,
+  type RentalItemActivityScope,
+} from './rental-item-activity';
 
 const RENTAL_DISTANCE_CACHE_TTL = 7776000;
 
@@ -2056,6 +2066,93 @@ export class RentalsService {
       rental_bookings: any[];
     }>(Q.GET_BUSINESS_RENTAL_SCHEDULE, { businessId, rentalItemId });
     return r.rental_bookings ?? [];
+  }
+
+  async getBusinessRentalItemActivity(
+    itemId: string,
+    query: { scope?: string; page?: number; limit?: number } = {}
+  ) {
+    const businessId = await this.requireBusinessId();
+    await this.assertRentalItemForBusiness(itemId, businessId, { allowDeleted: true });
+    const scope = normalizeActivityScope(query.scope);
+    const page = activityPageLimit(query.page, query.limit);
+    const [stats, list] = await Promise.all([
+      this.loadItemActivityStats(businessId, itemId),
+      this.loadItemActivityBookings(businessId, itemId, scope, page),
+    ]);
+    return {
+      item: stats.item,
+      stats: stats.stats,
+      suggestedScope: defaultActivityScope(stats.stats),
+      scope,
+      bookings: list.bookings,
+      total: list.total,
+      page: page.page,
+      limit: page.limit,
+    };
+  }
+
+  private async loadItemActivityStats(businessId: string, rentalItemId: string) {
+    const r = await this.hasuraSystemService.executeQuery<ItemActivityStatsQuery>(
+      Q.GET_BUSINESS_RENTAL_ITEM_ACTIVITY_STATS,
+      { businessId, rentalItemId }
+    );
+    return this.mapItemActivityStats(r, rentalItemId);
+  }
+
+  private mapItemActivityStats(r: ItemActivityStatsQuery, rentalItemId: string) {
+    const completed = r.completed?.aggregate;
+    const currency = r.rental_items_by_pk?.currency ?? null;
+    return {
+      item: {
+        id: r.rental_items_by_pk?.id ?? rentalItemId,
+        name: r.rental_items_by_pk?.name ?? '',
+        currency,
+      },
+      stats: {
+        earnedTotal: earnedFromCompletedSums(
+          completed?.sum?.total_amount,
+          completed?.sum?.overtime_amount
+        ),
+        timesRented: completed?.count ?? 0,
+        currentlyOut: r.currentlyOut?.aggregate?.count ?? 0,
+        upcoming: r.upcoming?.aggregate?.count ?? 0,
+        openRequests: r.openRequests?.aggregate?.count ?? 0,
+        lastCompletedAt:
+          r.lastCompleted?.[0]?.actual_end_at ?? r.lastCompleted?.[0]?.end_at ?? null,
+        nextStartAt: r.nextStart?.[0]?.start_at ?? null,
+        currency,
+      },
+    };
+  }
+
+  private async loadItemActivityBookings(
+    businessId: string,
+    rentalItemId: string,
+    scope: RentalItemActivityScope,
+    page: { limit: number; offset: number }
+  ) {
+    const statuses = activityStatusesForScope(scope);
+    const where: Record<string, unknown> = {
+      rental_location_listing: {
+        rental_item_id: { _eq: rentalItemId },
+        rental_item: { business_id: { _eq: businessId } },
+      },
+    };
+    if (statuses) where.status = { _in: statuses };
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: any[];
+      rental_bookings_aggregate: { aggregate: { count: number } | null } | null;
+    }>(Q.GET_BUSINESS_RENTAL_ITEM_ACTIVITY_BOOKINGS, {
+      where,
+      limit: page.limit,
+      offset: page.offset,
+      orderBy: activityOrderForScope(scope),
+    });
+    return {
+      bookings: r.rental_bookings ?? [],
+      total: r.rental_bookings_aggregate?.aggregate?.count ?? 0,
+    };
   }
 
   async getRequestInspectionPolicy(requestId: string): Promise<number | null> {

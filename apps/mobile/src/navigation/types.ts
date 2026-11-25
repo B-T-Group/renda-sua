@@ -361,6 +361,7 @@ export type BusinessRootStackParamList = {
   BusinessProductInterest: undefined;
   BusinessAddRentalFromImage: { returnToDashboard?: boolean } | undefined;
   BusinessRentalItemDetail: { itemId: string };
+  BusinessRentalItemActivity: { itemId: string };
   BusinessRentalItemEdit: { itemId: string };
   BusinessRentalAddListing: { itemId: string };
   BusinessRentalAiProposal: { listingId: string };

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, useWindowDimensions, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,26 +10,23 @@ import type { BusinessRootStackParamList } from '../../navigation/types';
 import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRentalRequestRow } from '../../types/rentals';
 import { compareSoonestRequestStart } from '../../utils/rentals/dashboardRentalRequests';
+import { PagedCarousel } from '../common/PagedCarousel';
 import { BusinessRentalRespondDialog } from './rentals/BusinessRentalRespondDialog';
 import { DashboardRentalRequestCard } from './DashboardRentalRequestCard';
 
 type Notice = { id: string; itemName: string; renterName: string; window: 'sla' | 'start' };
-const GAP = 12;
 
 export function DashboardRentalRequests() {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
-  const { width } = useWindowDimensions();
   const { flags, loading } = useClientFlags();
   const navigation = useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
   const [requests, setRequests] = useState<BusinessRentalRequestRow[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
-  const [index, setIndex] = useState(0);
+  const [pageWidth, setPageWidth] = useState(0);
   const [target, setTarget] = useState<{ req: BusinessRentalRequestRow; mode: 'available' | 'unavailable' } | null>(null);
   const [snack, setSnack] = useState<string | null>(null);
-  const list = useRef<FlatList<BusinessRentalRequestRow>>(null);
   const enabled = !loading && flags.rentals_dashboard_requests_enabled;
-  const cardWidth = requests.length <= 1 ? width - spacing.md * 2 : Math.round(width * 0.85);
 
   const load = useCallback(async () => {
     const data = await rentalsApi.getDashboardRequests();
@@ -51,44 +48,65 @@ export function DashboardRentalRequests() {
     setSnack(t(key, fallback, { item }));
   }, [t, target]);
 
+  const renderCard = useCallback(
+    (request: BusinessRentalRequestRow, width: number) => (
+      <DashboardRentalRequestCard
+        request={request}
+        width={width}
+        onAccept={(req) => setTarget({ req, mode: 'available' })}
+        onDecline={(req) => setTarget({ req, mode: 'unavailable' })}
+      />
+    ),
+    []
+  );
+
   if (!enabled || (requests.length === 0 && notices.length === 0)) return null;
 
   return (
-    <View style={{ marginBottom: spacing.md }} accessibilityLabel={t('business.dashboard.rentalRequests.sectionA11y', 'Rental requests, {{count}}', { count: requests.length })}>
+    <View
+      style={{ marginBottom: spacing.md }}
+      onLayout={(event) => {
+        const next = event.nativeEvent.layout.width;
+        if (next > 0 && Math.abs(next - pageWidth) > 1) setPageWidth(next);
+      }}
+      accessibilityLabel={t('business.dashboard.rentalRequests.sectionA11y', 'Rental requests, {{count}}', { count: requests.length })}
+    >
       {notices[0] ? <ExpiryNotice notice={notices[0]} /> : null}
       {requests.length > 0 ? (
         <>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, marginBottom: spacing.sm }}>
-            <Text variant="labelLarge">{t('business.dashboard.rentalRequests.sectionTitle', 'Rental requests')} {requests.length}</Text>
-            <Text onPress={() => navigation.navigate('BusinessRentalsStudio', { tab: 'requests' })} style={{ color: colors.primary.main }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+            <Text variant="labelLarge">
+              {t('business.dashboard.rentalRequests.sectionTitle', 'Rental requests')} {requests.length}
+            </Text>
+            <Text
+              onPress={() => navigation.navigate('BusinessRentalsStudio', { tab: 'requests' })}
+              style={{ color: colors.primary.main }}
+            >
               {t('business.dashboard.rentalRequests.seeAll', 'See all')}
             </Text>
           </View>
-          <FlatList
-            ref={list}
-            horizontal
-            data={requests}
-            keyExtractor={(item) => item.id}
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={cardWidth + GAP}
-            decelerationRate="fast"
-            contentContainerStyle={{ paddingHorizontal: spacing.md }}
-            onMomentumScrollEnd={(event) => {
-              const next = Math.round(event.nativeEvent.contentOffset.x / (cardWidth + GAP));
-              setIndex(Math.min(Math.max(next, 0), requests.length - 1));
-            }}
-            renderItem={({ item }) => (
-              <DashboardRentalRequestCard request={item} width={cardWidth} onAccept={(req) => setTarget({ req, mode: 'available' })} onDecline={(req) => setTarget({ req, mode: 'unavailable' })} />
-            )}
-          />
-          <Text accessibilityLabel={t('business.dashboard.rentalRequests.pageA11y', 'Request {{current}} of {{total}}', { current: index + 1, total: requests.length })} style={{ textAlign: 'center', marginTop: 8, color: colors.text.secondary }}>
-            {index + 1}/{requests.length}
-          </Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 4 }}>
-            {requests.map((row, dot) => (
-              <View key={row.id} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot === index ? colors.primary.main : colors.divider }} />
-            ))}
-          </View>
+          {pageWidth > 0 ? (
+            requests.length === 1 ? (
+              renderCard(requests[0], pageWidth)
+            ) : (
+              <PagedCarousel
+                data={requests}
+                keyExtractor={(item) => item.id}
+                pageWidth={pageWidth}
+                autoAdvanceMs={null}
+                showDots
+                accessibilityLabelForIndex={(current, total) =>
+                  t('business.dashboard.rentalRequests.pageA11y', 'Request {{current}} of {{total}}', {
+                    current: current + 1,
+                    total,
+                  })
+                }
+                renderItem={({ item, width }) => renderCard(item, width)}
+              />
+            )
+          ) : (
+            <View style={{ minHeight: 180 }} />
+          )}
         </>
       ) : null}
       <BusinessRentalRespondDialog
@@ -98,7 +116,9 @@ export function DashboardRentalRequests() {
         onDismiss={() => setTarget(null)}
         onSuccess={onSuccess}
       />
-      <Snackbar visible={snack != null} onDismiss={() => setSnack(null)} duration={4000}>{snack ?? ''}</Snackbar>
+      <Snackbar visible={snack != null} onDismiss={() => setSnack(null)} duration={4000}>
+        {snack ?? ''}
+      </Snackbar>
     </View>
   );
 }
@@ -111,7 +131,7 @@ function ExpiryNotice({ notice }: { notice: Notice }) {
     : t('business.dashboard.rentalRequests.expiredSla', 'Request expired — no response in 24h');
   const who = [notice.itemName, notice.renterName].filter(Boolean).join(' · ');
   return (
-    <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.sm, padding: spacing.sm, borderRadius: 12, backgroundColor: colors.warning.light }}>
+    <View style={{ marginBottom: spacing.sm, padding: spacing.sm, borderRadius: 12, backgroundColor: colors.warning.light }}>
       <Text style={{ color: colors.warning.dark }}>{text}{who ? ` — ${who}` : ''}</Text>
     </View>
   );

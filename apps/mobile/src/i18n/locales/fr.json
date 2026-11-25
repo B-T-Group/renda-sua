@@ -2692,7 +2692,23 @@
           "backToStudio": "Retour aux locations"
         }
       },
-      "authorizedAmount": "Réservé sur la carte du locataire : {{amount}}"
+      "authorizedAmount": "Réservé sur la carte du locataire : {{amount}}",
+      "activity": {
+        "title": "Activité de location",
+        "seeRentals": "Voir les locations",
+        "backToItem": "Retour à la location",
+        "earned": "Gains",
+        "timesRented": "Fois loué",
+        "currentlyOut": "En cours",
+        "upcoming": "À venir",
+        "openRequests": "{{count}} demande(s) ouverte(s)",
+        "scopeUpcoming": "À venir",
+        "scopePast": "Passées",
+        "scopeAll": "Toutes",
+        "scopeA11y": "Filtrer les locations",
+        "empty": "Aucune location dans ce filtre.",
+        "loadError": "Impossible de charger l’activité de location"
+      }
     },
     "orders": {
       "title": "Commandes",
@@ -6309,7 +6325,6 @@
       "bookConfirmLabelAcceptBy": "Offre valable jusqu’au",
       "contractExpiredBookError": "Cette offre a expiré. Envoyez une nouvelle demande depuis l’annonce.",
       "priceChangeUnseenError": "L’entreprise a modifié le prix. Vérifiez le nouveau total de votre demande, puis réessayez.",
-      "browseRentals": "Parcourir les locations",
       "bookSuccess": "Réservation créée",
       "bookError": "Impossible de finaliser la réservation",
       "cancelSuccess": "Demande annulée",

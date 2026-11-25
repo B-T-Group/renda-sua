@@ -14,9 +14,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useRentalApi, type BusinessRentalItemDetail } from '../../hooks/useRentalApi';
+import {
+  useRentalApi,
+  type BusinessRentalItemActivityStats,
+  type BusinessRentalItemDetail,
+} from '../../hooks/useRentalApi';
 import { renderRichTextToHtml } from '../../utils/richText';
 import LoadingPage from '../common/LoadingPage';
+import { RentalItemActivityStatsStrip } from '../rentals/RentalItemActivityStatsStrip';
 import RentalListingModerationStatusChip from '../rentals/RentalListingModerationStatusChip';
 import SEOHead from '../seo/SEOHead';
 
@@ -27,16 +32,22 @@ const BusinessRentalItemViewPage: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
-  const { fetchBusinessRentalItem, publishBusinessRentalListing } = useRentalApi();
+  const { fetchBusinessRentalItem, fetchBusinessRentalItemActivity, publishBusinessRentalListing } =
+    useRentalApi();
   const [item, setItem] = useState<BusinessRentalItemDetail | null>(null);
+  const [stats, setStats] = useState<BusinessRentalItemActivityStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!itemId) return;
-    const next = await fetchBusinessRentalItem(itemId);
+    const [next, activity] = await Promise.all([
+      fetchBusinessRentalItem(itemId),
+      fetchBusinessRentalItemActivity(itemId, { scope: 'all', limit: 1 }),
+    ]);
     setItem(next);
-  }, [fetchBusinessRentalItem, itemId]);
+    setStats(activity?.stats ?? null);
+  }, [fetchBusinessRentalItem, fetchBusinessRentalItemActivity, itemId]);
 
   useEffect(() => {
     if (!businessId || !itemId) {
@@ -124,6 +135,12 @@ const BusinessRentalItemViewPage: React.FC = () => {
             {t('business.rentals.backToCatalog', 'Back to rentals')}
           </Button>
           <Button
+            variant="outlined"
+            onClick={() => navigate(`/business/rentals/items/${item.id}/activity`)}
+          >
+            {t('business.rentals.activity.seeRentals', 'See rentals')}
+          </Button>
+          <Button
             variant="contained"
             startIcon={<EditIcon />}
             disabled={!!item.deleted_at}
@@ -201,6 +218,18 @@ const BusinessRentalItemViewPage: React.FC = () => {
                 color={item.is_active ? 'success' : 'default'}
               />
             </Stack>
+
+            {stats ? (
+              <Box sx={{ mb: 2 }}>
+                <RentalItemActivityStatsStrip stats={stats} />
+                <Button
+                  sx={{ mt: 1 }}
+                  onClick={() => navigate(`/business/rentals/items/${item.id}/activity`)}
+                >
+                  {t('business.rentals.activity.seeRentals', 'See rentals')}
+                </Button>
+              </Box>
+            ) : null}
 
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
               {t('common.description', 'Description')}

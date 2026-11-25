@@ -303,6 +303,37 @@ export interface BusinessRentalScheduleRow {
   } | null;
 }
 
+export type BusinessRentalItemActivityScope = 'all' | 'upcoming' | 'past';
+
+export interface BusinessRentalItemActivityStats {
+  earnedTotal: number;
+  timesRented: number;
+  currentlyOut: number;
+  upcoming: number;
+  openRequests: number;
+  lastCompletedAt: string | null;
+  nextStartAt: string | null;
+  currency: string | null;
+}
+
+export interface BusinessRentalItemActivityBooking extends BusinessRentalScheduleRow {
+  actual_start_at?: string | null;
+  actual_end_at?: string | null;
+  overtime_amount?: number | null;
+  settlement_completed_at?: string | null;
+}
+
+export interface BusinessRentalItemActivity {
+  item: { id: string; name: string; currency: string | null };
+  stats: BusinessRentalItemActivityStats;
+  suggestedScope: BusinessRentalItemActivityScope;
+  scope: BusinessRentalItemActivityScope;
+  bookings: BusinessRentalItemActivityBooking[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export type RentalPaymentRail = 'wallet' | 'stripe' | 'mobile_money';
 
 export interface RentalBookingActionResult {
@@ -545,6 +576,28 @@ export function useRentalApi() {
       });
       if (!data.success) return [];
       return data.data.schedule ?? [];
+    },
+    [api]
+  );
+
+  const fetchBusinessRentalItemActivity = useCallback(
+    async (
+      itemId: string,
+      opts?: { scope?: BusinessRentalItemActivityScope; page?: number; limit?: number }
+    ): Promise<BusinessRentalItemActivity | null> => {
+      if (!itemId) return null;
+      const { data } = await api.get<{
+        success: boolean;
+        data: BusinessRentalItemActivity;
+      }>(`/rentals/business/items/${encodeURIComponent(itemId)}/activity`, {
+        params: {
+          scope: opts?.scope,
+          page: opts?.page,
+          limit: opts?.limit,
+        },
+      });
+      if (!data.success) return null;
+      return data.data ?? null;
     },
     [api]
   );
@@ -873,6 +926,7 @@ export function useRentalApi() {
     fetchDashboardRentalRequests,
     fetchClientRentalRequests,
     fetchBusinessRentalSchedule,
+    fetchBusinessRentalItemActivity,
     createBusinessRentalItem,
     createBusinessRentalListing,
     publishBusinessRentalListing,

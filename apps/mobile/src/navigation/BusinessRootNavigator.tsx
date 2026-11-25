@@ -38,6 +38,7 @@ import BusinessRentalsStudioScreen from '../screens/business/BusinessRentalsStud
 import BusinessProductInterestScreen from '../screens/business/BusinessProductInterestScreen';
 import BusinessAddRentalFromImageScreen from '../screens/business/BusinessAddRentalFromImageScreen';
 import BusinessRentalItemDetailScreen from '../screens/business/BusinessRentalItemDetailScreen';
+import BusinessRentalItemActivityScreen from '../screens/business/BusinessRentalItemActivityScreen';
 import BusinessRentalItemEditScreen from '../screens/business/BusinessRentalItemEditScreen';
 import BusinessRentalAddListingScreen from '../screens/business/BusinessRentalAddListingScreen';
 import BusinessRentalBookingDetailScreen from '../screens/business/BusinessRentalBookingDetailScreen';
@@ -513,6 +514,14 @@ export function BusinessRootNavigator() {
           options={{
             title: t('business.rentals.detailTitle', 'Rental'),
             headerBackTitle: t('business.rentals.studioTitle', 'Rentals'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessRentalItemActivity"
+          component={BusinessRentalItemActivityScreen}
+          options={{
+            title: t('business.rentals.activity.title', 'Rental activity'),
+            headerBackTitle: t('business.rentals.detailTitle', 'Rental'),
           }}
         />
         <RootStack.Screen

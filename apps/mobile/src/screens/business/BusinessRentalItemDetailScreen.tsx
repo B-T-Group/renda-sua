@@ -24,10 +24,14 @@ import {
 } from 'react-native-paper';
 import { ImageLightbox } from '../../components/common/ImageLightbox';
 import { StatusPill } from '../../components/common/StatusPill';
+import { RentalItemActivityStatsStrip } from '../../components/business/rentals/RentalItemActivityStatsStrip';
 import { useTheme } from '../../contexts/ThemeContext';
 import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
-import type { BusinessRentalItemDetail } from '../../types/rentals';
+import type {
+  BusinessRentalItemActivityStats,
+  BusinessRentalItemDetail,
+} from '../../types/rentals';
 import { formatRentalMoney, rentalListingModerationColors, rentalListingModerationLabelKey, aggregateListingModerationStatus, findFirstProposalPendingListingId } from '../../utils/rentals';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalItemDetail'>;
@@ -41,6 +45,7 @@ export default function BusinessRentalItemDetailScreen() {
   const itemId = route.params.itemId;
 
   const [item, setItem] = useState<BusinessRentalItemDetail | null>(null);
+  const [stats, setStats] = useState<BusinessRentalItemActivityStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -51,8 +56,12 @@ export default function BusinessRentalItemDetailScreen() {
   const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (!opts?.soft) setLoading(true);
     try {
-      const data = await rentalsApi.getBusinessItem(itemId);
+      const [data, activity] = await Promise.all([
+        rentalsApi.getBusinessItem(itemId),
+        rentalsApi.getBusinessItemActivity(itemId, { scope: 'all', limit: 1 }),
+      ]);
       setItem(data);
+      setStats(activity?.stats ?? null);
     } finally {
       setLoading(false);
     }
@@ -292,6 +301,30 @@ export default function BusinessRentalItemDetailScreen() {
           {item.description}
         </Text>
       ) : null}
+
+      {stats ? (
+        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          <RentalItemActivityStatsStrip stats={stats} />
+          <Button
+            mode="contained-tonal"
+            onPress={() =>
+              navigation.navigate('BusinessRentalItemActivity', { itemId })
+            }
+          >
+            {t('business.rentals.activity.seeRentals', 'See rentals')}
+          </Button>
+        </View>
+      ) : (
+        <Button
+          mode="outlined"
+          style={{ marginTop: spacing.md }}
+          onPress={() =>
+            navigation.navigate('BusinessRentalItemActivity', { itemId })
+          }
+        >
+          {t('business.rentals.activity.seeRentals', 'See rentals')}
+        </Button>
+      )}
 
       {firstProposalListingId ? (
         <>

@@ -2763,7 +2763,23 @@
           "backToStudio": "Back to rentals"
         }
       },
-      "authorizedAmount": "Held on the renter's card: {{amount}}"
+      "authorizedAmount": "Held on the renter's card: {{amount}}",
+      "activity": {
+        "title": "Rental activity",
+        "seeRentals": "See rentals",
+        "backToItem": "Back to rental",
+        "earned": "Earned",
+        "timesRented": "Times rented",
+        "currentlyOut": "Out now",
+        "upcoming": "Upcoming",
+        "openRequests": "{{count}} open request(s)",
+        "scopeUpcoming": "Upcoming",
+        "scopePast": "Past",
+        "scopeAll": "All",
+        "scopeA11y": "Filter rentals",
+        "empty": "No rentals in this filter yet.",
+        "loadError": "Could not load rental activity"
+      }
     },
     "orders": {
       "title": "Orders",
@@ -6363,7 +6379,6 @@
       "bookConfirmLabelAcceptBy": "Offer valid until",
       "contractExpiredBookError": "This offer has expired. Send a new request from the listing.",
       "priceChangeUnseenError": "The business changed the price. Check the new total on your request, then try again.",
-      "browseRentals": "Browse rentals",
       "bookSuccess": "Booking created",
       "bookError": "Could not complete booking",
       "cancelSuccess": "Request cancelled",

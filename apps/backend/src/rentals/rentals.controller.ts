@@ -51,6 +51,7 @@ import { RentalsService } from './rentals.service';
 import { DeclineConditionDto, DeclinePhotoPresignDto } from './pickup-decline/pickup-decline.dto';
 import { RentalConditionPhotosService } from './pickup-decline/rental-condition-photos.service';
 import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
+import { BusinessRentalItemActivityQueryDto } from './dto/business-rental-item-activity.dto';
 
 @ApiTags('rentals')
 @ApiBearerAuth('access-token')
@@ -420,6 +421,26 @@ export class RentalsController {
   async getBusinessItemById(@Param('itemId') itemId: string) {
     const item = await this.rentalsService.getBusinessRentalItemById(itemId);
     return { success: true, data: { item } };
+  }
+
+  @Get('business/items/:itemId/activity')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary: 'Rental activity and stats for one business catalog item',
+  })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiQuery({ name: 'scope', required: false, enum: ['all', 'upcoming', 'past'] })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (1-based)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size (default 20, max 100)' })
+  @ApiResponse({ status: 200, description: 'Activity returned' })
+  @ApiResponse({ status: 403, description: 'Not a business user' })
+  @ApiResponse({ status: 404, description: 'Item not found' })
+  async getBusinessItemActivity(
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Query() query: BusinessRentalItemActivityQueryDto
+  ) {
+    const data = await this.rentalsService.getBusinessRentalItemActivity(itemId, query);
+    return { success: true, data };
   }
 
   @Patch('business/items/:itemId')

@@ -3396,7 +3396,26 @@
       "securityDeposit": "Caution",
       "depositInvalid": "Saisissez une caution valide.",
       "securityDepositHelper": "Retenue sur les locations par carte pour couvrir les heures supplémentaires. Par défaut : 8× le tarif horaire.",
-      "securityDepositCreateHint": "Laissez vide pour utiliser 8 × le tarif horaire. Retenue sur les locations par carte pour couvrir les heures supplémentaires."
+      "securityDepositCreateHint": "Laissez vide pour utiliser 8 × le tarif horaire. Retenue sur les locations par carte pour couvrir les heures supplémentaires.",
+      "activity": {
+        "title": "Activité de location",
+        "seeRentals": "Voir les locations",
+        "backToItem": "Retour à la location",
+        "earned": "Gains",
+        "timesRented": "Fois loué",
+        "currentlyOut": "En cours",
+        "upcoming": "À venir",
+        "openRequests": "{{count}} demande(s) ouverte(s)",
+        "scopeUpcoming": "À venir",
+        "scopePast": "Passées",
+        "scopeAll": "Toutes",
+        "scopeA11y": "Filtrer les locations",
+        "empty": "Aucune location dans ce filtre.",
+        "loadError": "Impossible de charger l’activité de location"
+      },
+      "schedule": {
+        "client": "Client"
+      }
     },
     "failedDeliveries": {
       "title": "Livraisons échouées",
@@ -4687,15 +4706,26 @@
   },
   "client": {
     "home": {
+      "liveOrders": {
+        "title": "En cours",
+        "seeAll": "Voir les {{count}} commandes",
+        "ctaTrack": "Suivre la commande",
+        "ctaView": "Voir la commande",
+        "openDetail": "Ouvrez la commande pour plus de détails."
+      },
       "lane": {
-        "rentals": "Locations",
-        "exports": "Exportations",
         "shop": "Boutique",
-        "food": "Repas"
-      }
+        "food": "Repas",
+        "rentals": "Locations"
+      },
+      "forYou": "Pour vous",
+      "buyAgain": "Racheter"
     },
     "search": {
-      "placeholder": "Rechercher des produits et des boutiques"
+      "placeholder": "Rechercher un produit, un magasin, un repas",
+      "emptyTitle": "Aucun résultat",
+      "emptyBody": "Essayez un produit, un magasin ou une catégorie.",
+      "recent": "Recherches récentes"
     },
     "orders": {
       "agentAssigned": "🚚 Excellent! An agent has claimed your order and will pick it up shortly. Your delivery is now in progress!",
@@ -4736,28 +4766,6 @@
       "refundedNotice": "💰 Votre remboursement de {{orderTotal}} a été traité et devrait apparaître dans votre compte dans les 3 à 5 jours ouvrables. Merci pour votre patience.",
       "subtitle": "Suivez le statut et l'historique de vos commandes",
       "title": "Mes commandes"
-    },
-    "home": {
-      "liveOrders": {
-        "title": "En cours",
-        "seeAll": "Voir les {{count}} commandes",
-        "ctaTrack": "Suivre la commande",
-        "ctaView": "Voir la commande",
-        "openDetail": "Ouvrez la commande pour plus de détails."
-      },
-      "lane": {
-        "shop": "Boutique",
-        "food": "Repas",
-        "rentals": "Locations"
-      },
-      "forYou": "Pour vous",
-      "buyAgain": "Racheter"
-    },
-    "search": {
-      "placeholder": "Rechercher un produit, un magasin, un repas",
-      "emptyTitle": "Aucun résultat",
-      "emptyBody": "Essayez un produit, un magasin ou une catégorie.",
-      "recent": "Recherches récentes"
     },
     "following": {
       "title": "Abonnements",
@@ -7027,7 +7035,6 @@
       "bookConfirmLabelAcceptBy": "Offre valable jusqu’au",
       "contractExpiredBookError": "Cette offre a expiré. Envoyez une nouvelle demande depuis l’annonce.",
       "priceChangeUnseenError": "L’entreprise a modifié le prix. Vérifiez le nouveau total de votre demande, puis réessayez.",
-      "browseRentals": "Parcourir les locations",
       "bookSuccess": "Réservation créée",
       "bookError": "Impossible de finaliser la réservation",
       "cancelSuccess": "Demande annulée",
@@ -7187,7 +7194,7 @@
     },
     "business": {
       "waitingTitle": "En attente que {{name}} démarre",
-      "waitingBody": "Remettez l'article seulement après «\u00a0Location démarrée\u00a0». Aucun code PIN n'est nécessaire.",
+      "waitingBody": "Remettez l'article seulement après « Location démarrée ». Aucun code PIN n'est nécessaire.",
       "startedLine": "Démarrée à {{time}} · remettez l'article",
       "photosAsked": "{{name}} a demandé de nouvelles photos avant le démarrage.",
       "sendPhotos": "Envoyer les photos mises à jour",

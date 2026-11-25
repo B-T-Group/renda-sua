@@ -3702,7 +3702,26 @@
       "securityDeposit": "Security deposit",
       "depositInvalid": "Enter a valid security deposit.",
       "securityDepositHelper": "Held on card rentals to cover extra hours. Default is 8× the hourly rate.",
-      "securityDepositCreateHint": "Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours."
+      "securityDepositCreateHint": "Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours.",
+      "activity": {
+        "title": "Rental activity",
+        "seeRentals": "See rentals",
+        "backToItem": "Back to rental",
+        "earned": "Earned",
+        "timesRented": "Times rented",
+        "currentlyOut": "Out now",
+        "upcoming": "Upcoming",
+        "openRequests": "{{count}} open request(s)",
+        "scopeUpcoming": "Upcoming",
+        "scopePast": "Past",
+        "scopeAll": "All",
+        "scopeA11y": "Filter rentals",
+        "empty": "No rentals in this filter yet.",
+        "loadError": "Could not load rental activity"
+      },
+      "schedule": {
+        "client": "Client"
+      }
     },
     "failedDeliveries": {
       "title": "Failed Deliveries",
@@ -4965,15 +4984,26 @@
   },
   "client": {
     "home": {
+      "liveOrders": {
+        "title": "In progress",
+        "seeAll": "View all {{count}} orders",
+        "ctaTrack": "Track order",
+        "ctaView": "View order",
+        "openDetail": "Open the order for details."
+      },
       "lane": {
-        "rentals": "Rentals",
-        "exports": "Exports",
         "shop": "Shop",
-        "food": "Food"
-      }
+        "food": "Food",
+        "rentals": "Rentals"
+      },
+      "forYou": "For you",
+      "buyAgain": "Buy again"
     },
     "search": {
-      "placeholder": "Search products and stores"
+      "placeholder": "Search products, stores, food",
+      "emptyTitle": "No matches",
+      "emptyBody": "Try a product, a store, or a category.",
+      "recent": "Recent searches"
     },
     "orders": {
       "agentAssigned": "🚚 Excellent! An agent has claimed your order and will pick it up shortly. Your delivery is now in progress!",
@@ -5014,28 +5044,6 @@
       "refundedNotice": "💰 Your {{orderTotal}} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.",
       "subtitle": "Track your order status and history",
       "title": "My Orders"
-    },
-    "home": {
-      "liveOrders": {
-        "title": "In progress",
-        "seeAll": "View all {{count}} orders",
-        "ctaTrack": "Track order",
-        "ctaView": "View order",
-        "openDetail": "Open the order for details."
-      },
-      "lane": {
-        "shop": "Shop",
-        "food": "Food",
-        "rentals": "Rentals"
-      },
-      "forYou": "For you",
-      "buyAgain": "Buy again"
-    },
-    "search": {
-      "placeholder": "Search products, stores, food",
-      "emptyTitle": "No matches",
-      "emptyBody": "Try a product, a store, or a category.",
-      "recent": "Recent searches"
     },
     "following": {
       "title": "Following",
@@ -7307,7 +7315,6 @@
       "bookConfirmLabelAcceptBy": "Offer valid until",
       "contractExpiredBookError": "This offer has expired. Send a new request from the listing.",
       "priceChangeUnseenError": "The business changed the price. Check the new total on your request, then try again.",
-      "browseRentals": "Browse rentals",
       "bookSuccess": "Booking created",
       "bookError": "Could not complete booking",
       "cancelSuccess": "Request cancelled",
