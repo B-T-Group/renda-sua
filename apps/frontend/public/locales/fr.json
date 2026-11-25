@@ -3239,6 +3239,7 @@
       "weeklyHoursPreview": "{{count}} jours ouverts / semaine"
     },
     "rentals": {
+      "clientDetails": "Coordonnées du locataire",
       "pageTitle": "Locations",
       "pageSubtitle": "Gérez les articles de location, les annonces et les demandes de réservation au même endroit.",
       "catalogPageTitle": "Catalogue de location",
@@ -7138,7 +7139,7 @@
     },
     "business": {
       "waitingTitle": "En attente que {{name}} démarre",
-      "waitingBody": "Remettez l'article seulement après « Location démarrée ». Aucun code PIN n'est nécessaire.",
+      "waitingBody": "Remettez l'article seulement après «\u00a0Location démarrée\u00a0». Aucun code PIN n'est nécessaire.",
       "startedLine": "Démarrée à {{time}} · remettez l'article",
       "photosAsked": "{{name}} a demandé de nouvelles photos avant le démarrage.",
       "sendPhotos": "Envoyer les photos mises à jour",

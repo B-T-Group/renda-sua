@@ -1092,22 +1092,23 @@ const RentalBookingDetailPage: React.FC = () => {
                 }}
               >
                 <Typography variant="h6" fontWeight={900} sx={{ mb: 1 }}>
-                  {t('business.rentals.clientDetails', 'Client details')}
+                  {t('business.rentals.clientDetails', 'Renter details')}
                 </Typography>
                 <Stack spacing={0.4}>
                   <Typography variant="body2">
                     <strong>{t('common.name', 'Name')}:</strong>{' '}
-                    {`${booking.client.user.first_name ?? ''} ${booking.client.user.last_name ?? ''}`.trim() ||
-                      '—'}
+                    {renterName(booking) || '—'}
                   </Typography>
-                  <Typography variant="body2">
-                    <strong>{t('common.phone', 'Phone')}:</strong>{' '}
-                    {booking.client.user.phone_number || '—'}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>{t('common.email', 'Email')}:</strong>{' '}
-                    {booking.client.user.email || '—'}
-                  </Typography>
+                  {renterPhone(booking) ? (
+                    <Typography variant="body2">
+                      <strong>{t('common.phone', 'Phone')}:</strong> {renterPhone(booking)}
+                    </Typography>
+                  ) : null}
+                  {renterEmail(booking) ? (
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>{t('common.email', 'Email')}:</strong> {renterEmail(booking)}
+                    </Typography>
+                  ) : null}
                 </Stack>
               </Paper>
             ) : null}
@@ -1125,8 +1126,9 @@ const RentalBookingDetailPage: React.FC = () => {
 
                 {isClient && cancellableBeforeStart ? (
                   <Button
-                    color="warning"
+                    color="error"
                     variant="outlined"
+                    startIcon={<Cancel />}
                     onClick={() => void handleCancelBooking()}
                   >
                     {t('rentals.cancelBooking', 'Cancel booking')}
@@ -1372,6 +1374,19 @@ function BookingConfirmation({
       </Container>
     </Box>
   );
+}
+
+function renterName(booking: RentalBookingDetail): string {
+  const user = booking.client?.user;
+  return `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim();
+}
+
+function renterPhone(booking: RentalBookingDetail): string {
+  return booking.client?.user?.phone_number?.trim() ?? '';
+}
+
+function renterEmail(booking: RentalBookingDetail): string {
+  return booking.client?.user?.email?.trim() ?? '';
 }
 
 function SummaryMoney(props: {

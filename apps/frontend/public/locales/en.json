@@ -3545,6 +3545,7 @@
       "weeklyHoursPreview": "{{count}} open days/week"
     },
     "rentals": {
+      "clientDetails": "Renter details",
       "pageTitle": "Rentals",
       "pageSubtitle": "Manage rental items, listings, and booking requests in one place.",
       "catalogPageTitle": "Rental catalog",
