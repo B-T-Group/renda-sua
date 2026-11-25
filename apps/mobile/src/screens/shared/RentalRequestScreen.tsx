@@ -10,6 +10,8 @@ import { RentalSlotPicker } from '../../components/rentals/RentalSlotPicker';
 import { CardWindowDateSheet } from '../../components/rentals/request/CardWindowDateSheet';
 import { CardWindowNotice } from '../../components/rentals/request/CardWindowNotice';
 import { RentalSearchDateSheet } from '../../components/rentals/search/RentalSearchDateSheet';
+import { RentalDayHoursSheet } from '../../components/rentals/dayHours/RentalDayHoursSheet';
+import { useDayHoursPicker } from '../../components/rentals/dayHours/useDayHoursPicker';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
@@ -39,18 +41,30 @@ export default function RentalRequestScreen() {
   const listingId = route.params?.listingId;
   const { listing, bookedWindows, loading, error, refetch } = useRentalListingDetail(listingId);
   const dates = useRentalRequestDates(listing, route.params?.startDate, route.params?.endDate);
+  const picker = useDayHoursPicker({
+    enabled: flags.rentals_day_hours_picker_enabled === true,
+    listing,
+    booked: bookedWindows,
+    seed: dates.presetSelections,
+    language: i18n.language,
+    openOnStart: true,
+  });
   const guardOn = flags.rentals_card_window_guard_enabled;
   const [payingByCard, setPayingByCard] = useState<boolean | null>(null);
   const cardOn = payingByCard ?? listing?.payment_rail === 'stripe';
   const latest = guardOn ? effectiveCardEnd(listing, cardOn) : null;
-  const endIso = selectionEndIso(dates.presetSelections);
+  const endIso = selectionEndIso(picker.rows ?? dates.presetSelections);
   const unfit = cardEndMisses(endIso, latest);
   const zone = listing?.timezone || dates.timeZone || 'Africa/Douala';
   const cutoff = latest ? formatCardCutoff(latest, zone, i18n.language) : '';
   const openDates = useCallback(() => {
     if (guardOn) void refetch();
+    if (picker.enabled) {
+      picker.setOpen(true);
+      return;
+    }
     dates.openDateEditor();
-  }, [dates, guardOn, refetch]);
+  }, [dates, guardOn, picker, refetch]);
   const onLoginRequired = useLoginRequired(navigation);
   const onSubmitted = useCallback(
     (requestId: string) => {
@@ -82,7 +96,10 @@ export default function RentalRequestScreen() {
 
   const item = listing.rental_item;
   const image = item.rental_item_images?.[0];
-  const selectionKey = dates.presetSelections.map((row) => `${row.id}:${row.startMs}`).join('|') || 'request';
+  const selectionKey = picker.enabled
+    ? `dh:${picker.selectionKey}`
+    : dates.presetSelections.map((row) => `${row.id}:${row.startMs}`).join('|') || 'request';
+  const picked = picker.enabled ? picker.rows : null;
 
   return (
     <View style={[styles.fill, { backgroundColor: colors.pageBackground }]}>
@@ -106,17 +123,18 @@ export default function RentalRequestScreen() {
           currency={item.currency || 'XAF'}
           onLoginRequired={onLoginRequired}
           onSubmitted={auth.isAuthenticated ? onSubmitted : undefined}
-          initialSelections={dates.presetSelections}
-          datesFilled={Boolean(dates.stay)}
-          requestBlocked={dates.requestBlocked}
+          initialSelections={picked ?? dates.presetSelections}
+          datesFilled={picked ? picked.length > 0 : Boolean(dates.stay)}
+          requestBlocked={picked ? false : dates.requestBlocked}
+          dayHoursPicker={picker.enabled}
           requestBusy={dates.checkingStay}
           onSeeDates={openDates}
           itemName={item.name}
           itemMeta={itemMeta(item.business?.name, toNumber(listing.base_price_per_day), toNumber(listing.base_price_per_hour), item.currency || 'XAF', i18n.language, t)}
           imageUrl={image?.display_url || image?.image_url || null}
-          dateLine={dates.dateLine}
+          dateLine={picked ? picker.dateLine : dates.dateLine}
           onEditDates={openDates}
-          unavailableLabel={dates.unavailableLabel}
+          unavailableLabel={picked ? undefined : dates.unavailableLabel}
           cardSendDisabled={unfit}
           blockedReason={unfit ? t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language)) : undefined}
           notice={
@@ -131,7 +149,19 @@ export default function RentalRequestScreen() {
           }
         />
       </KeyboardAvoidingView>
-      {guardOn ? (
+      {picker.enabled && picker.model ? (
+        <RentalDayHoursSheet
+          visible={picker.open}
+          listing={picker.model}
+          currency={item.currency || 'XAF'}
+          language={i18n.language}
+          timeZone={zone}
+          city={listing.business_location?.address?.city}
+          initialDays={picker.initialDays}
+          onClose={() => picker.setOpen(false)}
+          onContinue={picker.onContinue}
+        />
+      ) : guardOn ? (
         <CardWindowDateSheet
           visible={dates.editOpen}
           locale={i18n.language}

@@ -14,6 +14,8 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { ListingPreviewSheet } from '../ListingPreviewSheet';
 import { RentalWeeklyHoursSummary } from './RentalWeeklyHoursSummary';
 import { depositInputError, showsListingDeposit } from '../../../utils/rentals/cardDeposit';
+import { RentalModeSwitches, type RentalModes } from '../rentals/RentalModeSwitches';
+import { useClientFlags } from '../../../contexts/ClientFlagsContext';
 
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
 
@@ -44,6 +46,9 @@ export function AddRentalLocationStep({
   const [menuOpen, setMenuOpen] = useState(false);
   const [loadingLoc, setLoadingLoc] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const { flags } = useClientFlags();
+  const modesOn = flags.rentals_day_hours_picker_enabled === true;
+  const [modes, setModes] = useState<RentalModes>({ offersDaily: true, offersHourly: true });
 
   const loadLocations = useCallback(async () => {
     setLoadingLoc(true);
@@ -66,8 +71,13 @@ export function AddRentalLocationStep({
   );
 
   const selected = locations.find((l) => l.id === locationId);
-  const hourlyNum = parseFloat(hourly);
-  const dailyNum = daily.trim() ? parseFloat(daily) : hourlyNum * 12;
+  const hourlyOff = modesOn && !modes.offersHourly;
+  const dailyOff = modesOn && !modes.offersDaily;
+  const hourlyNum = hourlyOff ? 0 : parseFloat(hourly);
+  const dailyNum = dailyOff ? 0 : daily.trim() ? parseFloat(daily) : modesOn ? NaN : hourlyNum * 12;
+  const modePricesOk =
+    !modesOn ||
+    ((!modes.offersHourly || hourlyNum > 0) && (!modes.offersDaily || dailyNum > 0));
   const depositInvalid = depositInputError(item.currency, deposit);
   const depositNum = deposit.trim() ? Number(deposit) : undefined;
   const unitsNum = Math.floor(Number(units));
@@ -77,6 +87,7 @@ export function AddRentalLocationStep({
     !!locationId &&
     Number.isFinite(hourlyNum) &&
     hourlyNum >= 0 &&
+    modePricesOk &&
     !depositInvalid &&
     (depositNum === undefined || (Number.isFinite(depositNum) && depositNum >= 0)) &&
     Number.isInteger(unitsNum) &&
@@ -87,6 +98,7 @@ export function AddRentalLocationStep({
     locationName: selected?.name,
     base_price_per_hour: hourlyNum,
     base_price_per_day: Number.isFinite(dailyNum) ? dailyNum : hourlyNum * 12,
+    ...(modesOn ? { offers_daily: modes.offersDaily, offers_hourly: modes.offersHourly } : {}),
     security_deposit_amount: depositNum,
     units_available: unitsNum,
     pickup_instructions: pickup,
@@ -211,27 +223,37 @@ export function AddRentalLocationStep({
         </>
       )}
 
-      <TextInput
-        label={t('business.rentals.wizard.location.hourly', 'Hourly rate')}
-        value={hourly}
-        onChangeText={setHourly}
-        keyboardType="decimal-pad"
-        mode="outlined"
-        disabled={busy}
-        style={styles.field}
-      />
-      <TextInput
-        label={t(
-          'business.rentals.wizard.location.daily',
-          'Daily rate (optional)'
-        )}
-        value={daily}
-        onChangeText={setDaily}
-        keyboardType="decimal-pad"
-        mode="outlined"
-        disabled={busy}
-        style={styles.field}
-      />
+      {modesOn ? <RentalModeSwitches value={modes} onChange={setModes} /> : null}
+      {hourlyOff ? null : (
+        <TextInput
+          label={
+            modesOn
+              ? t('business.rentals.rentBy.hourPrice', 'Price per hour')
+              : t('business.rentals.wizard.location.hourly', 'Hourly rate')
+          }
+          value={hourly}
+          onChangeText={setHourly}
+          keyboardType="decimal-pad"
+          mode="outlined"
+          disabled={busy}
+          style={styles.field}
+        />
+      )}
+      {dailyOff ? null : (
+        <TextInput
+          label={
+            modesOn
+              ? t('business.rentals.rentBy.dayPrice', 'Price per day')
+              : t('business.rentals.wizard.location.daily', 'Daily rate (optional)')
+          }
+          value={daily}
+          onChangeText={setDaily}
+          keyboardType="decimal-pad"
+          mode="outlined"
+          disabled={busy}
+          style={styles.field}
+        />
+      )}
       {showsListingDeposit(item.currency) ? (
         <>
           <TextInput

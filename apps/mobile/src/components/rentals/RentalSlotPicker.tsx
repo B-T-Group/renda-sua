@@ -154,6 +154,12 @@ export interface RentalSlotPickerProps {
   previousTotal?: number;
   /** Selections the request was opened with, when the draft already differs. */
   savedSelections?: SelectionRange[];
+  /**
+   * Day-and-hours picker on (rentals_day_hours_picker_enabled): selections come from
+   * the picker sheet, the hidden builder is replaced by "Change days and hours", and
+   * min/max hours apply per hour block (full days exempt), matching the server.
+   */
+  dayHoursPicker?: boolean;
   onModifySave?: (body: {
     rentalLocationListingId: string;
     requestedStartAt: string;
@@ -204,6 +210,7 @@ export function RentalSlotPicker({
   initialNotes = '',
   previousTotal,
   savedSelections,
+  dayHoursPicker = false,
   onModifySave,
 }: RentalSlotPickerProps) {
   const { t, i18n } = useTranslation();
@@ -504,11 +511,22 @@ export function RentalSlotPicker({
     if (effectiveSelections.length === 0) {
       return t('rentals.requestForm.addOneRange', 'Add at least one time range.');
     }
-    if (hoursTotal < minRentalHours) {
-      return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
-    }
-    if (maxRentalHours != null && hoursTotal > maxRentalHours) {
-      return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
+    if (dayHoursPicker) {
+      const blocks = effectiveSelections.filter((r) => r.billing !== 'all_day');
+      const hoursOf = (r: SelectionRange) => Math.max(1, Math.ceil((r.endMs - r.startMs) / 3600000));
+      if (blocks.some((r) => hoursOf(r) < minRentalHours)) {
+        return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
+      }
+      if (maxRentalHours != null && blocks.some((r) => hoursOf(r) > maxRentalHours)) {
+        return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
+      }
+    } else {
+      if (hoursTotal < minRentalHours) {
+        return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
+      }
+      if (maxRentalHours != null && hoursTotal > maxRentalHours) {
+        return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
+      }
     }
     if (unitsRequested < 1 || unitsRequested > remainingForSelection) {
       return t(
@@ -517,6 +535,8 @@ export function RentalSlotPicker({
       );
     }
     for (const r of effectiveSelections) {
+      // The picker sheet already checked lead time and free hours in listing time.
+      if (dayHoursPicker) continue;
       if (r.startMs < minStartMs) {
         return t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.');
       }
@@ -539,6 +559,7 @@ export function RentalSlotPicker({
     stock,
     t,
     unitsRequested,
+    dayHoursPicker,
   ]);
 
   const openConfirm = () => {
@@ -736,6 +757,7 @@ export function RentalSlotPicker({
             }),
           }))}
           onRemove={(id) => setSelections((prev) => prev.filter((row) => row.id !== id))}
+          dayHoursPicker={dayHoursPicker}
           builderOpen={builderOpen}
           onToggleBuilder={() => {
             setBuilderOpen((open) => !open);

@@ -26,7 +26,8 @@ export type ClientFlagKey =
   | 'rentals_inspection_optin_enabled'
   | 'rentals_pickup_decline_enabled'
   | 'rentals_default_list_enabled'
-  | 'rentals_dashboard_requests_enabled';
+  | 'rentals_dashboard_requests_enabled'
+  | 'rentals_day_hours_picker_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -74,6 +75,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_default_list_enabled: false,
   /** Business home rental requests and the 24h auto-decline. Off until a config row turns it on. */
   rentals_dashboard_requests_enabled: false,
+  /** Day-and-hours picker and listing day/hour switches. Off until a config row turns it on. */
+  rentals_day_hours_picker_enabled: false,
 };
 
 type ClientFlagsResponse = {

@@ -6,6 +6,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RentalSlotPicker } from '../../components/rentals/RentalSlotPicker';
 import { RentalModifyBlockedSheet } from '../../components/rentals/RentalModifySheets';
 import { RentalSearchDateSheet } from '../../components/rentals/search/RentalSearchDateSheet';
+import { RentalDayHoursSheet } from '../../components/rentals/dayHours/RentalDayHoursSheet';
+import { useDayHoursPicker } from '../../components/rentals/dayHours/useDayHoursPicker';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
 import { useRentalRequestDates } from '../../hooks/useRentalRequestDates';
@@ -144,6 +147,16 @@ function ModifyRequestForm({
   const previousTotal = Number.isFinite(previous) ? previous : dayRate * Math.max(savedSelections.length, 1);
   const draft = draftSelections(dates.stay, openedRange, listing, dayRate, savedSelections);
   const image = listing?.rental_item?.rental_item_images?.[0];
+  const { flags } = useClientFlags();
+  const picker = useDayHoursPicker({
+    enabled: flags.rentals_day_hours_picker_enabled === true,
+    listing,
+    booked: bookedWindows,
+    seed: savedSelections,
+    language: i18n.language,
+  });
+  const picked = picker.enabled ? picker.rows : null;
+  const openDates = picker.enabled ? () => picker.setOpen(true) : dates.openDateEditor;
 
   return (
     <>
@@ -154,7 +167,7 @@ function ModifyRequestForm({
       />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <RentalSlotPicker
-          key={`${request.id}:${dates.stay?.startDate ?? ''}:${dates.stay?.endDate ?? ''}`}
+          key={`${request.id}:${dates.stay?.startDate ?? ''}:${dates.stay?.endDate ?? ''}:${picker.enabled ? picker.selectionKey : ''}`}
           layout="screen"
           submitMode="modify"
           listingId={listing?.id ?? request.rental_location_listing?.id ?? ''}
@@ -165,13 +178,16 @@ function ModifyRequestForm({
           basePricePerDay={dayRate}
           basePricePerHour={Number(listing?.base_price_per_hour) || 0}
           currency={item?.currency || 'XAF'}
-          initialSelections={draft}
+          initialSelections={picked ?? draft}
+          dayHoursPicker={picker.enabled}
+          minRentalHours={picker.enabled ? listing?.min_rental_hours : undefined}
+          maxRentalHours={picker.enabled ? listing?.max_rental_hours : undefined}
           savedSelections={savedSelections}
           initialUnits={request.units_requested ?? 1}
           initialNotes={request.client_request_note ?? ''}
           previousTotal={previousTotal}
           datesFilled
-          dateLine={dates.dateLine}
+          dateLine={picked ? picker.dateLine : dates.dateLine}
           itemName={item?.name}
           itemMeta={itemMeta(request, dayRate, i18n.language, t)}
           imageUrl={image?.display_url || image?.image_url || null}
@@ -180,14 +196,30 @@ function ModifyRequestForm({
           unavailableLabel={blocked ?? dates.unavailableLabel}
           onSeeDates={() => {
             onClearBlocked();
-            dates.openDateEditor();
+            openDates();
           }}
-          onEditDates={dates.openDateEditor}
+          onEditDates={openDates}
           onModifySave={onSave}
         />
       </KeyboardAvoidingView>
+      {picker.enabled && picker.model ? (
+        <RentalDayHoursSheet
+          visible={picker.open}
+          listing={picker.model}
+          currency={item?.currency || 'XAF'}
+          language={i18n.language}
+          timeZone={listing?.timezone}
+          city={listing?.business_location?.address?.city}
+          initialDays={picker.initialDays}
+          onClose={() => picker.setOpen(false)}
+          onContinue={(rows, days) => {
+            onClearBlocked();
+            picker.onContinue(rows, days);
+          }}
+        />
+      ) : null}
       <RentalSearchDateSheet
-        visible={dates.editOpen}
+        visible={!picker.enabled && dates.editOpen}
         value={dates.draftStay}
         timeZone={dates.timeZone}
         onChange={dates.setDraftStay}

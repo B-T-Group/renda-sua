@@ -2709,6 +2709,16 @@
         "scopeA11y": "Filtrer les locations",
         "empty": "Aucune location dans ce filtre.",
         "loadError": "Impossible de charger l’activité de location"
+      },
+      "rentBy": {
+        "byDay": "Louer à la journée",
+        "byDayHint": "Les clients peuvent réserver une journée entière.",
+        "byHour": "Louer à l’heure",
+        "byHourHint": "Les clients peuvent réserver quelques heures.",
+        "atLeastOne": "Gardez au moins une option activée.",
+        "priceNeeded": "Indiquez un prix pour chaque option activée.",
+        "hourPrice": "Prix par heure",
+        "dayPrice": "Prix par jour"
       }
     },
     "orders": {
@@ -6656,6 +6666,9 @@
       "acceptUnavailable": "Accepter indisponible — dates prises",
       "chargedAfterAccept": "Le locataire est débité après votre acceptation",
       "notFound": "Cette demande n’est plus là."
+    },
+    "dayHours": {
+      "changeDays": "Modifier les jours et les heures"
     }
   },
   "admin": {
