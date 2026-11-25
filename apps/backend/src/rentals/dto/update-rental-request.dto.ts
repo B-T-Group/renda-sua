@@ -4,6 +4,7 @@ import {
   IsArray,
   IsInt,
   IsISO8601,
+  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
@@ -11,6 +12,19 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { RentalRequestWindowDto } from './rental-request-window.dto';
+
+export class ConfirmedRentalTotalDto {
+  @ApiProperty({ description: 'New quoted total the renter confirmed' })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  amount!: number;
+
+  @ApiProperty({ example: 'XAF' })
+  @IsString()
+  @MaxLength(8)
+  currency!: string;
+}
 
 export class UpdateRentalRequestDto {
   @ApiProperty({ minimum: 1, description: 'edit_version the renter last loaded' })
@@ -48,4 +62,10 @@ export class UpdateRentalRequestDto {
   @IsString()
   @MaxLength(2000)
   clientRequestNote?: string;
+
+  @ApiProperty({ required: false, type: ConfirmedRentalTotalDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ConfirmedRentalTotalDto)
+  confirmedTotal?: ConfirmedRentalTotalDto;
 }

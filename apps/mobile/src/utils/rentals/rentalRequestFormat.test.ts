@@ -24,6 +24,7 @@ import {
   rentalEditWindowOpen,
   rentalSelectionFingerprint,
   RENTAL_EDIT_LEAD_MS,
+  readPriceConfirmQuote,
 } from './rentalRequestFormat';
 
 const NBSP = '\u00A0';
@@ -253,6 +254,12 @@ describe('formatRentalPeriod', () => {
     expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201316 Nov · 2 days');
     expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201316 nov. · 2 jours');
     expect(formatRentalPeriod(daily, 'en', days)).not.toMatch(/PM|AM|2026/);
+    const threeDays = [
+      ...daily,
+      { billing: 'all_day', calendar_date: '2026-11-17', start_at: '2026-11-17T00:00:00.000Z', end_at: '2026-11-18T00:00:00.000Z' },
+    ];
+    expect(formatRentalPeriod(threeDays, 'en', days)).toBe('15\u201317 Nov · 3 days');
+    expect(formatRentalPeriod([daily[0]], 'en', days)).toBe('15 Nov · 1 day');
   });
 
   it('treats a same-clock end the next day as one booked day', () => {
@@ -489,5 +496,15 @@ describe('bookingRequestedPeriodLines', () => {
   it('returns nothing when the booking has neither windows nor a span', () => {
     expect(bookingPeriodWindows([], null)).toEqual([]);
     expect(bookingRequestedPeriodLines([], { start_at: '', end_at: '' }, 'en', days)).toEqual([]);
+  });
+});
+
+describe('readPriceConfirmQuote', () => {
+  it('reads the server quote only from PRICE_CONFIRM_REQUIRED', () => {
+    expect(readPriceConfirmQuote({
+      code: 'PRICE_CONFIRM_REQUIRED',
+      data: { quote: { total: 1140, currency: 'XAF', previousTotal: 760 } },
+    })).toEqual({ total: 1140, currency: 'XAF', previousTotal: 760 });
+    expect(readPriceConfirmQuote({ code: 'RENTAL_REQUEST_UNAVAILABLE' })).toBeNull();
   });
 });
