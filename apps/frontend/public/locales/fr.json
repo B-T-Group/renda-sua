@@ -3260,6 +3260,7 @@
     },
     "rentals": {
       "clientDetails": "Coordonnées du locataire",
+      "openRequestCardA11y": "Ouvrir {{item}}, {{status}}",
       "pageTitle": "Locations",
       "pageSubtitle": "Gérez les articles de location, les annonces et les demandes de réservation au même endroit.",
       "catalogPageTitle": "Catalogue de location",
@@ -7234,6 +7235,7 @@
       "collectPayment": "Encaisser le paiement",
       "confirmReturn": "Confirmer le retour",
       "openBooking": "Ouvrir la réservation",
+      "viewRequest": "Voir la demande",
       "rate": "Noter la location",
       "accept": "Accepter",
       "decline": "Refuser"

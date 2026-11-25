@@ -3566,6 +3566,7 @@
     },
     "rentals": {
       "clientDetails": "Renter details",
+      "openRequestCardA11y": "Open {{item}}, {{status}}",
       "pageTitle": "Rentals",
       "pageSubtitle": "Manage rental items, listings, and booking requests in one place.",
       "catalogPageTitle": "Rental catalog",
@@ -7514,6 +7515,7 @@
       "collectPayment": "Collect payment",
       "confirmReturn": "Confirm return",
       "openBooking": "Open booking",
+      "viewRequest": "View request",
       "rate": "Rate rental",
       "accept": "Accept",
       "decline": "Decline"

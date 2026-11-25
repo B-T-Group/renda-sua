@@ -527,8 +527,31 @@ export default function BusinessRentalsStudioScreen() {
             const bookingId = item.rental_booking?.id;
             const primaryQueue = phase.businessQueue;
             const place = businessPlace(item);
+            const itemName = item.rental_location_listing.rental_item.name;
+            const openDetails = () => {
+              if (bookingId) {
+                navigation.navigate('BusinessRentalBookingDetail', { bookingId });
+                return;
+              }
+              navigation.navigate('BusinessRentalRequestDetail', { requestId: item.id });
+            };
+            const actionQueue =
+              primaryQueue === 'return' ||
+              primaryQueue === 'collect_pay' ||
+              primaryQueue === 'start';
+            const canOpenDetails = item.status !== 'pending';
             return (
-              <View
+              <Pressable
+                accessibilityRole={canOpenDetails ? 'button' : undefined}
+                accessibilityLabel={
+                  canOpenDetails
+                    ? t('business.rentals.openRequestCardA11y', 'Open {{item}}, {{status}}', {
+                        item: itemName,
+                        status: t(phase.labelKey, item.status),
+                      })
+                    : undefined
+                }
+                onPress={canOpenDetails ? openDetails : undefined}
                 style={[
                   styles.reqCard,
                   {
@@ -561,7 +584,7 @@ export default function BusinessRentalsStudioScreen() {
                   <ListingThumb item={item} />
                   <View style={{ flex: 1 }}>
                     <Text style={[typography.subtitle2, { color: colors.text.primary }]}>
-                      {item.rental_location_listing.rental_item.name}
+                      {itemName}
                     </Text>
                     {place ? (
                       <View style={styles.metaRow}>
@@ -619,20 +642,20 @@ export default function BusinessRentalsStudioScreen() {
                   </View>
                 ) : bookingId ? (
                   <Button
-                    mode="contained"
+                    mode={actionQueue ? 'contained' : 'outlined'}
                     style={{ marginTop: 8 }}
-                    onPress={() =>
-                      navigation.navigate('BusinessRentalBookingDetail', {
-                        bookingId,
-                      })
-                    }
+                    onPress={openDetails}
                   >
                     {primaryQueue === 'return'
-                          ? t('rentals.actions.confirmReturn', 'Confirm return')
-                          : t('rentals.actions.openBooking', 'Open booking')}
+                      ? t('rentals.actions.confirmReturn', 'Confirm return')
+                      : t('rentals.actions.openBooking', 'Open booking')}
                   </Button>
-                ) : null}
-              </View>
+                ) : (
+                  <Button mode="outlined" style={{ marginTop: 8 }} onPress={openDetails}>
+                    {t('rentals.actions.viewRequest', 'View request')}
+                  </Button>
+                )}
+              </Pressable>
             );
           }}
         />
