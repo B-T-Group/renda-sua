@@ -359,13 +359,14 @@ export default function ClientMyRentalsScreen({
         }}
         onCancel={(id) => setCancelId(id)}
         onViewListing={(listingId) => navigation.navigate('RentalListingDetail', { listingId })}
+        onBrowseRentals={() => openRentalsLane('empty_cta')}
         onViewBooking={(bookingId) => navigation.navigate('RentalBookingDetail', { bookingId })}
         modifyState={modifyStateFor(item, flags.rentals_modify_request_enabled)}
         onModify={(id) => navigation.navigate('ModifyRentalRequest', { requestId: id })}
         onContact={(bookingId) => navigation.navigate('RentalBookingDetail', { bookingId })}
       />
     ),
-    [bookRow?.id, bookingLoading, cancellingId, flags.rentals_modify_request_enabled, navigation, requests]
+    [bookRow?.id, bookingLoading, cancellingId, flags.rentals_modify_request_enabled, navigation, openRentalsLane, requests]
   );
 
   const renderBooking = useCallback(

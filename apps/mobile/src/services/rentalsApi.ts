@@ -515,11 +515,29 @@ export async function deleteBusinessListing(
   );
 }
 
+export async function getDashboardRequests(
+  init?: Init
+): Promise<{
+  requests: BusinessRentalRequestRow[];
+  expiryNotices: Array<{ id: string; itemName: string; renterName: string; window: 'sla' | 'start' }>;
+}> {
+  const res = await apiRequest<{
+    success: boolean;
+    data: {
+      requests: BusinessRentalRequestRow[];
+      expiryNotices?: Array<{ id: string; itemName: string; renterName: string; window: 'sla' | 'start' }>;
+    };
+  }>('/rentals/business/requests?status=pending&limit=100', { method: 'GET', signal: init?.signal });
+  if (!res.success) return { requests: [], expiryNotices: [] };
+  return { requests: res.data?.requests ?? [], expiryNotices: res.data?.expiryNotices ?? [] };
+}
+
 export async function getBusinessRequests(
-  init?: Init & { status?: string }
+  init?: Init & { status?: string; id?: string }
 ): Promise<BusinessRentalRequestRow[]> {
   const search = new URLSearchParams();
   if (init?.status) search.set('status', init.status);
+  if (init?.id) search.set('id', init.id);
   const q = search.toString();
   const path = q
     ? `/rentals/business/requests?${q}`
@@ -657,6 +675,7 @@ export const rentalsApi = {
   updateBusinessListing,
   deleteBusinessListing,
   getBusinessRequests,
+  getDashboardRequests,
   respondToRequest,
   getBusinessSchedule,
   confirmReturn,

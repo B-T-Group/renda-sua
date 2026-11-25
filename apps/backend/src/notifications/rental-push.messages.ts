@@ -77,6 +77,46 @@ export function buildRentalRequestAcceptedPush(params: {
   };
 }
 
+export function buildRentalRequestNoResponsePush(params: {
+  businessName: string;
+  window: 'sla' | 'start';
+  preferredLanguage?: string | null;
+}): { title: string; body: string; viewListing: string; browseRentals: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const body = fr ? noResponseBodyFr(params) : noResponseBodyEn(params);
+  return {
+    title: fr ? 'Demande de location refusée' : 'Rental request declined',
+    body,
+    viewListing: fr ? 'Voir l’annonce' : 'View listing',
+    browseRentals: fr ? 'Parcourir les locations' : 'Browse rentals',
+  };
+}
+
+function noResponseBodyEn(params: { businessName: string; window: 'sla' | 'start' }): string {
+  const why = params.window === 'start'
+    ? `${params.businessName} didn’t respond before the start time.`
+    : `${params.businessName} didn’t respond within 24 hours.`;
+  return `${why} You can send a new request from the listing, or browse other rentals.`;
+}
+
+function noResponseBodyFr(params: { businessName: string; window: 'sla' | 'start' }): string {
+  const why = params.window === 'start'
+    ? `${params.businessName} n’a pas répondu avant le début.`
+    : `${params.businessName} n’a pas répondu sous 24 h.`;
+  return `${why} Vous pouvez envoyer une nouvelle demande depuis l’annonce, ou parcourir d’autres locations.`;
+}
+
+export function buildBusinessRentalRequestExpiredPush(params: {
+  window: 'sla' | 'start';
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const body = params.window === 'start'
+    ? (fr ? 'Demande expirée — aucune réponse avant le début' : 'Request expired — no response before the start time')
+    : (fr ? 'Demande expirée — aucune réponse en 24 h' : 'Request expired — no response in 24h');
+  return { title: body, body };
+}
+
 export function buildRentalRequestRejectedPush(params: {
   rentalItemName: string;
   preferredLanguage?: string | null;

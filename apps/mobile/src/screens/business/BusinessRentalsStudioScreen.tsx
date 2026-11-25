@@ -4,6 +4,7 @@ import {
   Image,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -20,12 +21,14 @@ import {
 } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DashboardRentalRequestCard } from '../../components/business/DashboardRentalRequestCard';
 import { BusinessRentalCatalogCard } from '../../components/business/rentals/BusinessRentalCatalogCard';
 import { BusinessRentalRespondDialog } from '../../components/business/rentals/BusinessRentalRespondDialog';
 import { ModerationFilterBanner } from '../../components/common/ModerationFilterBanner';
 import { StatusPill } from '../../components/common/StatusPill';
 import { RentalPhaseStatusPill } from '../../components/common/RentalPhaseStatusPill';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import {
@@ -38,6 +41,7 @@ import type {
   BusinessRentalScheduleRow,
 } from '../../types/rentals';
 import { formatChangeDetail } from '../../utils/rentals/rentalRequestFormat';
+import { compareSoonestRequestStart } from '../../utils/rentals/dashboardRentalRequests';
 import {
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
@@ -72,8 +76,71 @@ const QUEUE_FILTERS: BusinessActionQueue[] = [
   'all',
 ];
 
+const QUEUE_COPY: Record<BusinessActionQueue, [string, string]> = {
+  respond: ['rentals.queue.respond', 'Respond'],
+  collect_pay: ['rentals.queue.collectPay', 'Collect pay'],
+  start: ['rentals.queue.start', 'Start'],
+  return: ['rentals.queue.return', 'Return'],
+  all: ['rentals.queue.all', 'All'],
+};
+
+const QUEUE_ICONS: Record<BusinessActionQueue, React.ComponentProps<typeof MaterialCommunityIcons>['name']> = {
+  respond: 'reply',
+  collect_pay: 'credit-card-outline',
+  start: 'play',
+  return: 'clipboard-arrow-left-outline',
+  all: 'apps',
+};
+
+function RequestQueueFilters({
+  value,
+  onChange,
+}: {
+  value: BusinessActionQueue;
+  onChange: (queue: BusinessActionQueue) => void;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.queueRow}>
+      {QUEUE_FILTERS.map((queue) => (
+        <QueueChip key={queue} queue={queue} selected={value === queue} onPress={() => onChange(queue)} t={t} colors={colors} />
+      ))}
+    </ScrollView>
+  );
+}
+
+function QueueChip({
+  queue,
+  selected,
+  onPress,
+  t,
+  colors,
+}: {
+  queue: BusinessActionQueue;
+  selected: boolean;
+  onPress: () => void;
+  t: (key: string, fallback: string) => string;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  const [key, fallback] = QUEUE_COPY[queue];
+  const color = selected ? colors.primary.main : colors.text.primary;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.queueChip, { borderColor: selected ? colors.primary.main : colors.divider, backgroundColor: selected ? colors.primaryTint : colors.surface }]}
+    >
+      <MaterialCommunityIcons name={QUEUE_ICONS[queue]} size={16} color={color} />
+      <Text style={{ color, fontSize: 13, fontWeight: '600' }}>{t(key, fallback)}</Text>
+    </Pressable>
+  );
+}
+
 export default function BusinessRentalsStudioScreen() {
   const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
   const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const listBottomPadding = useMainTabContentBottomPadding(88);
@@ -187,10 +254,19 @@ export default function BusinessRentalsStudioScreen() {
     setRefreshing(false);
   }, [loadAll]);
 
-  const [queueFilter, setQueueFilter] = useState<BusinessActionQueue>('all');
+  const [queueFilter, setQueueFilter] = useState<BusinessActionQueue>('respond');
+  const [queueTouched, setQueueTouched] = useState(false);
+
+  useEffect(() => {
+    if (queueTouched || loading || requests.length === 0) return;
+    if (!requests.some((row) => row.status === 'pending')) setQueueFilter('all');
+  }, [loading, queueTouched, requests]);
 
   const queuedRequests = useMemo(() => {
-    return requests.filter((r) => {
+    const ordered = flags.rentals_dashboard_requests_enabled
+      ? [...requests].sort(compareSoonestRequestStart)
+      : requests;
+    return ordered.filter((r) => {
       if (r.status === 'unavailable') return queueFilter === 'all';
       const info = resolveRentalPhase(
         {
@@ -201,7 +277,7 @@ export default function BusinessRentalsStudioScreen() {
       );
       return matchesBusinessQueue(info, queueFilter);
     });
-  }, [queueFilter, requests]);
+  }, [flags.rentals_dashboard_requests_enabled, queueFilter, requests]);
 
   const filteredCatalogItems = useMemo(() => {
     const list = items.filter((item) => {
@@ -406,50 +482,34 @@ export default function BusinessRentalsStudioScreen() {
                   </Text>
                 </View>
               ) : null}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {QUEUE_FILTERS.map((q) => {
-                  const selected = queueFilter === q;
-                  const labelKey =
-                    q === 'collect_pay'
-                      ? 'rentals.queue.collectPay'
-                      : `rentals.queue.${q === 'respond' ? 'respond' : q === 'start' ? 'start' : q === 'return' ? 'return' : 'all'}`;
-                  const defaults: Record<string, string> = {
-                    'rentals.queue.respond': 'Respond',
-                    'rentals.queue.collectPay': 'Collect pay',
-                    'rentals.queue.start': 'Start',
-                    'rentals.queue.return': 'Return',
-                    'rentals.queue.all': 'All',
-                  };
-                  return (
-                    <Pressable
-                      key={q}
-                      onPress={() => setQueueFilter(q)}
-                      style={[
-                        styles.chip,
-                        {
-                          borderColor: selected ? colors.primary.main : colors.divider,
-                          backgroundColor: selected
-                            ? colors.primaryTint
-                            : colors.surface,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: selected ? colors.primary.main : colors.text.primary,
-                          fontSize: 13,
-                          fontWeight: '600',
-                        }}
-                      >
-                        {t(labelKey, defaults[labelKey] ?? q)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <RequestQueueFilters
+                value={queueFilter}
+                onChange={(queue) => {
+                  setQueueTouched(true);
+                  setQueueFilter(queue);
+                }}
+              />
             </View>
           }
           renderItem={({ item }) => {
+            if (flags.rentals_dashboard_requests_enabled && item.status === 'pending') {
+              return (
+                <DashboardRentalRequestCard
+                  request={item}
+                  onOpen={(selected) =>
+                    navigation.navigate('BusinessRentalRequestDetail', { requestId: selected.id })
+                  }
+                  onAccept={(selected) => {
+                    setRespondReq(selected);
+                    setRespondMode('available');
+                  }}
+                  onDecline={(selected) => {
+                    setRespondReq(selected);
+                    setRespondMode('unavailable');
+                  }}
+                />
+              );
+            }
             const phase = resolveRentalPhase(
               {
                 requestStatus: item.status,
@@ -741,5 +801,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     maxWidth: '100%',
+  },
+  queueRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 },
+  queueChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
 });

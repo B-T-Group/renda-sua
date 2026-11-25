@@ -86,6 +86,17 @@ describe('computeRentalPricingLines', () => {
     ).toThrow('all_day window missing calendar_date');
   });
 
+  it('H2 multiplies a 2-unit hourly request', () => {
+    const startAt = new Date('2026-11-18T12:00:00.000Z');
+    const priced = computeRentalPricingLines(
+      [{ start: startAt, end: new Date(startAt.getTime() + 3 * 60 * 60 * 1000), billing: 'hourly' }],
+      2500,
+      0,
+      2
+    );
+    expect(priced.total).toBe(15000);
+  });
+
   it('bills a partial hour as one hour', () => {
     const priced = computeRentalPricingLines(
       [

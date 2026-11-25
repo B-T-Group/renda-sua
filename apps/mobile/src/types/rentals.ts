@@ -175,7 +175,12 @@ export interface ClientRentalRequestRow {
     base_price_per_hour: number | string;
     base_price_per_day?: number | string;
     business_location?: { name: string; address?: { city?: string | null } | null } | null;
-    rental_item: { name: string; currency: string; business?: { name?: string | null } | null };
+    rental_item: {
+      name: string;
+      currency: string;
+      business?: { name?: string | null } | null;
+      rental_category?: { name?: string | null } | null;
+    };
   } | null;
   rental_booking?: {
     id: string;
@@ -464,6 +469,7 @@ export type UnavailableRentalReasonCode =
 export interface RespondRentalRequestBody {
   status: 'available' | 'unavailable';
   rentalPricingSnapshot?: RentalPricingSnapshotBody;
+  totalOverride?: number;
   contractExpiryHours?: number;
   unavailableReasonCode?: UnavailableRentalReasonCode;
   businessResponseNote?: string;
@@ -481,6 +487,13 @@ export interface BusinessRentalRequestRow {
   units_requested?: number | null;
   edit_version?: number | null;
   quoted_total?: number | string | null;
+  requested_start_at?: string | null;
+  respond_by?: string | null;
+  respond_window?: 'sla' | 'start' | null;
+  listing_timezone?: string | null;
+  dates_available?: boolean | null;
+  payment_rail?: string | null;
+  total_override_ceiling?: number | null;
   change_summary?: {
     fields?: string[];
     dates?: { from: RentalSelectionWindow[]; to: RentalSelectionWindow[] };
@@ -493,12 +506,14 @@ export interface BusinessRentalRequestRow {
     id: string;
     base_price_per_hour: number;
     base_price_per_day: number;
+    security_deposit_amount?: number | string | null;
     weekly_availability?: RentalWeeklyAvailabilityRow[];
     business_location?: { name?: string | null; address?: { city?: string | null } | null } | null;
     rental_item: {
       name: string;
       currency: string;
       business?: { name?: string | null } | null;
+      rental_category?: { name?: string | null } | null;
       rental_item_images?: Array<{
         id: string;
         image_url: string;

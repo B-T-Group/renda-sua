@@ -101,6 +101,7 @@ export class FedapayMonitoringStack extends cdk.Stack {
     const snsAction = new cloudwatch_actions.SnsAction(alarmTopic);
     alarm.addAlarmAction(snsAction);
     alarm.addOkAction(snsAction);
+    addRentalSideEffectDeadAlarm(this, logGroup, alarmTopic, environment);
 
     // Outputs
     new cdk.CfnOutput(this, `SnsTopicArn-${environment}`, {
@@ -108,4 +109,52 @@ export class FedapayMonitoringStack extends cdk.Stack {
       description: `SNS topic ARN for FedaPay monitoring alerts in ${environment}`,
     });
   }
+}
+
+function addRentalSideEffectDeadAlarm(
+  stack: cdk.Stack,
+  logGroup: logs.ILogGroup,
+  topic: sns.ITopic,
+  environment: string
+): void {
+  const metricName = `RentalSideEffectDead-${environment}`;
+  const metric = rentalDeadMetric(stack, logGroup, metricName, environment);
+  const alarm = deadLetterAlarm(stack, environment, metric);
+  const action = new cloudwatch_actions.SnsAction(topic);
+  alarm.addAlarmAction(action);
+  alarm.addOkAction(action);
+}
+
+function deadLetterAlarm(stack: cdk.Stack, environment: string, metric: cloudwatch.Metric): cloudwatch.Alarm {
+  return new cloudwatch.Alarm(stack, `RentalSideEffectDeadAlarm-${environment}`, {
+    alarmName: `rental-side-effect-dead-${environment}`,
+    alarmDescription: `Alert when code=RENTAL_SIDE_EFFECT_DEAD is logged (${environment})`,
+    metric,
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+  });
+}
+
+function rentalDeadMetric(
+  stack: cdk.Stack,
+  logGroup: logs.ILogGroup,
+  metricName: string,
+  environment: string
+): cloudwatch.Metric {
+  new logs.MetricFilter(stack, `RentalSideEffectDeadFilter-${environment}`, {
+    logGroup,
+    metricNamespace: 'Rendasua/Backend',
+    metricName,
+    filterPattern: logs.FilterPattern.literal('{ $.message = "*code=RENTAL_SIDE_EFFECT_DEAD*" }'),
+    metricValue: '1',
+    defaultValue: 0,
+  });
+  return new cloudwatch.Metric({
+    namespace: 'Rendasua/Backend',
+    metricName,
+    statistic: cloudwatch.Stats.SUM,
+    period: cdk.Duration.hours(1),
+  });
 }

@@ -209,3 +209,40 @@ jobs:
           HASURA_GRAPHQL_URL: http://127.0.0.1:8080/v1/graphql
           HASURA_GRAPHQL_ADMIN_SECRET: myadminsecretkey
         run: npx nx test backend --testPathPattern=pickup-decline.live-schema --skip-nx-cache
+
+  rentals:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: rental_qa
+          POSTGRES_USER: rental_qa
+          POSTGRES_DB: rental_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rental_qa"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Rentals unit tests
+        env:
+          RENTAL_QA_DATABASE_URL: postgres://rental_qa:rental_qa@localhost:5432/rental_qa
+          RENTAL_QA_ALLOW_DROP: '1'
+        # money.qa.pg runs only in money-pg, and pickup-decline.live-schema only
+        # in hasura-metadata. Both assert their own job env, so skip them here.
+        run: npx nx test backend --testPathPattern='src/rentals/' --testPathIgnorePatterns=money.qa.pg --testPathIgnorePatterns=live-schema --skip-nx-cache
