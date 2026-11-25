@@ -5066,6 +5066,13 @@
     "empty": "No store locations to show yet.",
     "catalogTitle": "Products",
     "catalogEmpty": "No products available at this location right now.",
+    "catalogSearchPlaceholder": "Search this store…",
+    "allCategories": "All",
+    "feed": {
+      "deals": "Deals in this store",
+      "popularIn": "Popular in {{category}}",
+      "collections": "Collections in this store"
+    },
     "viewStore": "View store",
     "openStoreA11y": "Open store {{name}}",
     "share": "Share store",

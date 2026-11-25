@@ -3,6 +3,7 @@ import {
   FlatList,
   Image,
   RefreshControl,
+  ScrollView,
   Share,
   StyleSheet,
   View,
@@ -11,8 +12,9 @@ import {
   ActivityIndicator,
   Banner,
   Button,
+  Chip,
   Menu,
-  Snackbar,
+  Searchbar,
   Text,
 } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
@@ -24,22 +26,23 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useInventoryCatalog } from '../../hooks/useInventoryCatalog';
 import { useInventoryStore } from '../../hooks/useInventoryStore';
 import { useCatalogOrigin } from '../../hooks/useCatalogOrigin';
+import { useStoreBrowseContext } from '../../hooks/useStoreBrowseContext';
+import { useStoreFeedComposition } from '../../hooks/useStoreFeedComposition';
+import type { CatalogFeedRow } from '../../hooks/useCatalogFeedComposition';
 import { formatDistanceKm } from '../../utils/formatDistanceKm';
 import { useGuestCatalogCountry } from '../../hooks/useGuestCatalogCountry';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { BrowseCartFab } from '../../components/browse/BrowseCartFab';
 import { BusinessFollowButton } from '../../components/browse/BusinessFollowButton';
-import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
-import { InventoryCatalogCard } from '../../components/browse/InventoryCatalogCard';
+import { CatalogFeedStop } from '../../components/browse/CatalogFeedStop';
+import { InventoryCatalogGridTile } from '../../components/browse/InventoryCatalogGridTile';
 import { StatusPill } from '../../components/common/StatusPill';
 import { StoreDefaultAvatar } from '../../components/illustrations/StoreDefaultAvatar';
-import { placeOrderParamsFromCatalog, useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
-import { useStockAvailabilityChecks } from '../../hooks/useStockAvailabilityChecks';
 import { businessApi } from '../../services/businessApi';
 import { shadows } from '../../theme';
 import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
 import type { BusinessLocation } from '../../types/business/locations';
-import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
+import type { InventorySortMode } from '../../types/inventoryCatalog';
 import type {
   BusinessRootStackParamList,
   ClientRootStackParamList,
@@ -48,6 +51,8 @@ import type {
 import { useStore } from '../../stores/RootStore';
 import { getEnv } from '../../config/auth0';
 import { storeWebUrl } from '../../utils/storeWebUrl';
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 type Props =
   | NativeStackScreenProps<GuestRootStackParamList, 'StoreDetail'>
@@ -58,15 +63,26 @@ function StoreDetailScreen({ route, navigation }: Props) {
   const { businessId: locationOrBusinessId, previewMode, foodOnly } = route.params;
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
-  const { auth, persona, cart } = useStore();
+  const { auth, persona } = useStore();
   const [refreshing, setRefreshing] = useState(false);
-  const [snack, setSnack] = useState<string | null>(null);
   const [previewLocations, setPreviewLocations] = useState<BusinessLocation[]>(
     []
   );
   const [locationMenuOpen, setLocationMenuOpen] = useState(false);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [collectionFilter, setCollectionFilter] = useState('');
+  const [sortFilter, setSortFilter] = useState<InventorySortMode>('relevance');
   const { trackView } = useTrackItemView();
   const canAddToCart = !previewMode;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchDraft.trim());
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchDraft]);
 
   useEffect(() => {
     if (!previewMode || persona.activePersona !== 'business') {
@@ -84,22 +100,6 @@ function StoreDetailScreen({ route, navigation }: Props) {
       cancelled = true;
     };
   }, [previewMode, persona.activePersona]);
-
-  const {
-    requestCheck,
-    isPending: isAvailabilityPending,
-    isSending: isAvailabilitySending,
-    snack: availabilitySnack,
-    clearSnack: clearAvailabilitySnack,
-  } = useStockAvailabilityChecks({
-    isAuthenticated: auth.isAuthenticated,
-    onLoginRequired: () => {
-      (navigation as { navigate: (name: string, params?: object) => void }).navigate(
-        'GuestTabs',
-        { screen: 'GuestAuth', params: { screen: 'Login' } }
-      );
-    },
-  });
 
   const guestCountry = useGuestCatalogCountry();
   const withAuth = auth.isAuthenticated;
@@ -123,8 +123,8 @@ function StoreDetailScreen({ route, navigation }: Props) {
       store?.business_id === locationOrBusinessId);
 
   const catalog = useInventoryCatalog({
-    search: '',
-    sort: 'relevance',
+    search: debouncedSearch,
+    sort: sortFilter,
     business_location_id: storeMatchesRoute
       ? store?.business_location_id
       : undefined,
@@ -137,7 +137,31 @@ function StoreDetailScreen({ route, navigation }: Props) {
     owner_preview: !!previewMode,
     origin,
     food_only: foodOnly === true || undefined,
+    ...(categoryFilter ? { category: categoryFilter } : {}),
+    ...(collectionFilter ? { collection: collectionFilter } : {}),
     enabled: catalogReady && storeMatchesRoute && Boolean(store?.business_location_id),
+  });
+
+  const browse = useStoreBrowseContext({
+    businessId: storeMatchesRoute ? locationOrBusinessId : undefined,
+    foodOnly: foodOnly === true,
+    ownerPreview: !!previewMode,
+    withAuth: withAuth || !!previewMode,
+    enabled: catalogReady && storeMatchesRoute,
+  });
+
+  const suppressStops =
+    debouncedSearch.length > 0 ||
+    categoryFilter.length > 0 ||
+    collectionFilter.length > 0 ||
+    sortFilter === 'deals';
+
+  const feedRows = useStoreFeedComposition({
+    inventoryItems: catalog.items,
+    suppressStops,
+    dealsItems: browse.context?.deals ?? [],
+    popular: browse.context?.popular ?? [],
+    collections: browse.context?.collections ?? [],
   });
 
   const openItem = useCallback(
@@ -160,51 +184,15 @@ function StoreDetailScreen({ route, navigation }: Props) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([storeQuery.refetch(), catalog.refetch()]);
+      await Promise.all([
+        storeQuery.refetch(),
+        catalog.refetch(),
+        browse.refetch(),
+      ]);
     } finally {
       setRefreshing(false);
     }
-  }, [catalog, storeQuery]);
-
-  const {
-    pickerItem,
-    pickerOpen,
-    closePicker,
-    onPickerConfirm,
-    requestBuy,
-    requestAddToCart,
-    confirmLabel,
-  } = useCatalogVariantFlow({
-    onPlaceOrder: (item, cartVariantId, quantity) => {
-      trackView(item.id);
-      const nav = navigation as {
-        navigate: (name: string, params: object) => void;
-      };
-      if (persona.activePersona === 'client') {
-        nav.navigate(
-          'PlaceOrder',
-          placeOrderParamsFromCatalog(item, cartVariantId, quantity)
-        );
-        return;
-      }
-      openItem(item.id);
-    },
-    onCartResult: (result) => {
-      setSnack(
-        result === 'added'
-          ? t('cart.itemAdded', 'Added to cart')
-          : t('cart.itemUpdated', 'Cart updated')
-      );
-    },
-  });
-
-  const onAddToCart = useCallback(
-    (catalogItem: CatalogInventoryItem, selectionId?: string | null) => {
-      if (!canAddToCart) return;
-      requestAddToCart(catalogItem, selectionId);
-    },
-    [canAddToCart, requestAddToCart]
-  );
+  }, [browse, catalog, storeQuery]);
 
   const onShare = useCallback(async () => {
     const shareId =
@@ -538,48 +526,103 @@ function StoreDetailScreen({ route, navigation }: Props) {
       >
         {t('stores.catalogTitle', 'Products')}
       </Text>
+
+      <Searchbar
+        placeholder={t('stores.catalogSearchPlaceholder', 'Search this store…')}
+        value={searchDraft}
+        onChangeText={setSearchDraft}
+        style={{ marginBottom: spacing.sm }}
+        inputStyle={{ minHeight: 0 }}
+      />
+
+      {(browse.context?.categories.length ?? 0) > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingBottom: spacing.sm }}
+        >
+          <Chip
+            selected={!categoryFilter}
+            onPress={() => setCategoryFilter('')}
+            compact
+          >
+            {t('stores.allCategories', 'All')}
+          </Chip>
+          {browse.context?.categories.map((category) => {
+            const selected = categoryFilter === category.name;
+            return (
+              <Chip
+                key={category.id}
+                selected={selected}
+                onPress={() =>
+                  setCategoryFilter(selected ? '' : category.name)
+                }
+                compact
+              >
+                {category.name}
+              </Chip>
+            );
+          })}
+        </ScrollView>
+      ) : null}
     </View>
   );
 
-  const renderItem = useCallback(
-    ({ item }: { item: CatalogInventoryItem }) => (
-      <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.sm }}>
-        <InventoryCatalogCard
-          item={item}
-          primaryLabel={t('public.items.buyNow', 'Buy')}
-          onPrimaryPress={(selectionId) => {
-            requestBuy(item, selectionId);
-          }}
-          onItemPress={(id) => openItem(id)}
-          onAddToCart={
-            canAddToCart
-              ? (selectionId) => onAddToCart(item, selectionId)
-              : undefined
-          }
-          inCartQuantity={cart.quantityForListing(item.id)}
-          onCheckAvailability={
-            previewMode ? undefined : () => void requestCheck(item.id)
-          }
-          availabilityPending={isAvailabilityPending(item.id)}
-          availabilitySending={isAvailabilitySending(item.id)}
-        />
-      </View>
-    ),
-    [
-      canAddToCart,
-      cart.items,
-      isAvailabilityPending,
-      isAvailabilitySending,
-      onAddToCart,
-      openItem,
-      previewMode,
-      requestBuy,
-      requestCheck,
-      spacing.md,
-      spacing.sm,
-      t,
-    ]
+  const renderFeedRow = useCallback(
+    ({ item: row }: { item: CatalogFeedRow }) => {
+      if (row.type === 'stop') {
+        return (
+          <View style={{ width: '100%', paddingHorizontal: spacing.md }}>
+            <CatalogFeedStop
+              stop={row.stop}
+              onItemPress={(id) => openItem(id)}
+              onCollectionPress={(slug) => {
+                setCollectionFilter(slug);
+                setSortFilter('relevance');
+              }}
+              onSeeAllDeals={() => {
+                setSortFilter('deals');
+                setCategoryFilter('');
+                setCollectionFilter('');
+              }}
+            />
+          </View>
+        );
+      }
+
+      return (
+        <View
+          style={[
+            styles.productRow,
+            { gap: spacing.xs, paddingHorizontal: spacing.md },
+          ]}
+        >
+          <View style={styles.productColumn}>
+            <InventoryCatalogGridTile
+              item={row.left}
+              onPress={(id) => openItem(id)}
+            />
+          </View>
+          {row.right ? (
+            <View style={styles.productColumn}>
+              <InventoryCatalogGridTile
+                item={row.right}
+                onPress={(id) => openItem(id)}
+              />
+            </View>
+          ) : (
+            <View style={styles.productColumn} />
+          )}
+        </View>
+      );
+    },
+    [openItem, spacing.md, spacing.xs]
   );
+
+  const keyExtractorRow = useCallback((row: CatalogFeedRow) => {
+    if (row.type === 'stop') return row.stop.id;
+    return row.id;
+  }, []);
 
   if (storeQuery.loading && !store) {
     return (
@@ -629,9 +672,9 @@ function StoreDetailScreen({ route, navigation }: Props) {
         />
       ) : (
         <FlatList
-          data={catalog.items}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
+          data={feedRows}
+          keyExtractor={keyExtractorRow}
+          renderItem={renderFeedRow}
           ListHeaderComponent={listHeader}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -660,23 +703,6 @@ function StoreDetailScreen({ route, navigation }: Props) {
         />
       )}
       {canAddToCart ? <BrowseCartFab /> : null}
-      <CatalogVariantPickerDialog
-        open={pickerOpen}
-        item={pickerItem}
-        onDismiss={closePicker}
-        onConfirm={onPickerConfirm}
-        confirmLabel={confirmLabel}
-      />
-      <Snackbar
-        visible={!!(availabilitySnack ?? snack)}
-        onDismiss={() => {
-          clearAvailabilitySnack();
-          setSnack(null);
-        }}
-        duration={2500}
-      >
-        {availabilitySnack ?? snack}
-      </Snackbar>
     </SafeAreaView>
   );
 }
@@ -717,4 +743,6 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   coachCard: { borderWidth: 1 },
   stateWrap: { alignItems: 'center', justifyContent: 'center', padding: 24 },
+  productRow: { flexDirection: 'row', width: '100%', marginBottom: 8 },
+  productColumn: { flex: 1, minWidth: 0 },
 });

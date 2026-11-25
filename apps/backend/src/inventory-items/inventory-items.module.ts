@@ -11,6 +11,7 @@ import { DiscoverySignalsService } from './discovery/discovery-signals.service';
 import { InventoryItemsService } from './inventory-items.service';
 import { StockAvailabilityController } from './stock-availability.controller';
 import { StockAvailabilityService } from './stock-availability.service';
+import { StoreBrowseContextService } from './store-browse-context.service';
 
 @Global()
 @Module({
@@ -28,6 +29,7 @@ import { StockAvailabilityService } from './stock-availability.service';
     StockAvailabilityService,
     DiscoverySignalsService,
     DiscoveryRecoveryService,
+    StoreBrowseContextService,
   ],
   exports: [InventoryItemsService, StockAvailabilityService],
 })

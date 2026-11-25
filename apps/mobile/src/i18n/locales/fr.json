@@ -46,6 +46,13 @@
     "empty": "Aucun emplacement à afficher pour le moment.",
     "catalogTitle": "Produits",
     "catalogEmpty": "Aucun produit disponible à cet emplacement pour le moment.",
+    "catalogSearchPlaceholder": "Rechercher dans ce magasin…",
+    "allCategories": "Tous",
+    "feed": {
+      "deals": "Promotions de ce magasin",
+      "popularIn": "Populaire dans {{category}}",
+      "collections": "Collections de ce magasin"
+    },
     "viewStore": "Voir le magasin",
     "openStoreA11y": "Ouvrir le magasin {{name}}",
     "share": "Partager le magasin",

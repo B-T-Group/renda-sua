@@ -40,6 +40,10 @@ import type {
 import { InventoryItemsService } from './inventory-items.service';
 import { DiscoveryRecoveryService } from './discovery/discovery-recovery.service';
 import { resolveDiscoverySort } from './discovery/discovery-sort.util';
+import {
+  StoreBrowseContextService,
+  type StoreBrowseContext,
+} from './store-browse-context.service';
 
 // Interface for query parameters as they come from HTTP requests (all strings)
 interface GetInventoryItemsQueryParams {
@@ -81,6 +85,7 @@ export class InventoryItemsController {
     private readonly inventoryItemsService: InventoryItemsService,
     private readonly catalogCacheService: CatalogCacheService,
     private readonly hasuraUserService: HasuraUserService,
+    private readonly storeBrowseContextService: StoreBrowseContextService,
     @Optional()
     private readonly discoveryRecovery?: DiscoveryRecoveryService
   ) {}
@@ -416,6 +421,69 @@ export class InventoryItemsController {
       success: true,
       data: { store },
       message: 'Store retrieved successfully',
+    };
+  }
+
+  @Public()
+  @Get('stores/:businessId/browse-context')
+  @ApiOperation({
+    summary:
+      'Store-scoped browse context: categories, deals, popular rails, and collections for the store feed',
+  })
+  @ApiParam({ name: 'businessId', format: 'uuid' })
+  @ApiQuery({
+    name: 'food_only',
+    required: false,
+    type: Boolean,
+    description: 'Limit categories and rails to the cooked-food category',
+  })
+  @ApiQuery({
+    name: 'owner_preview',
+    required: false,
+    type: Boolean,
+    description:
+      'When true and caller is the verified business owner, resolve hidden stores',
+  })
+  @ApiQuery({
+    name: 'lang',
+    required: false,
+    type: String,
+    description: 'Collection name language (en|fr)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Store browse context for search chips and mid-feed rails',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid store id (must be a UUID)' })
+  @ApiResponse({ status: 404, description: 'Store not found or not visible' })
+  async getStoreBrowseContext(
+    @Param('businessId', ParseUUIDPipe) businessId: string,
+    @Query('food_only') food_only?: string,
+    @Query('owner_preview') owner_preview?: string,
+    @Query('lang') lang?: string
+  ): Promise<{
+    success: boolean;
+    data: StoreBrowseContext;
+    message: string;
+  }> {
+    const context = await this.storeBrowseContextService.getBrowseContext(
+      businessId,
+      {
+        food_only: food_only === 'true',
+        owner_preview: owner_preview === 'true',
+        lang,
+      }
+    );
+    if (!context) {
+      throw new HttpException(
+        { success: false, message: 'Store not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return {
+      success: true,
+      data: context,
+      message: 'Store browse context retrieved successfully',
     };
   }
 
