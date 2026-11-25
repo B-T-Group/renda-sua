@@ -344,29 +344,14 @@ describe('wallet confirm and hold', () => {
     expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
   });
 
-  it('does not hold a pickup payment that lost the reserved claim', async () => {
-    svc.hasuraUserService = {
-      getUser: jest.fn().mockResolvedValue({
-        id: 'business-user',
-        active_persona: 'business',
-        business: { id: 'biz' },
-      }),
-    };
-    svc.hasuraSystemService.getAccount = jest
-      .fn()
-      .mockResolvedValue({ id: 'acc', available_balance: 1000 });
-    svc.fetchBooking = jest
-      .fn()
-      .mockResolvedValueOnce(
-        booking({ status: 'reserved', payment_status: 'pending', actual_start_at: null })
-      )
-      .mockResolvedValueOnce(booking({ status: 'cancelled' }));
-    svc.casBooking = jest.fn().mockResolvedValue(false);
-    await expect(svc.initiateRentalPickupPayment('b1')).rejects.toBeInstanceOf(
-      HttpException
-    );
+  it('rejects business pickup payment before it can place a hold', async () => {
+    jest.clearAllMocks();
+    await expect(svc.initiateRentalPickupPayment('b1')).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      message: 'Update the app to start this rental',
+    });
     expect(svc.placeHoldForBooking).not.toHaveBeenCalled();
-    expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
+    expect(svc.fetchBooking).not.toHaveBeenCalled();
   });
 
   it('reactivates a cancelled hold row instead of inserting another', async () => {
@@ -506,45 +491,14 @@ describe('wallet confirm and hold', () => {
     );
   });
 
-  it('returns 409 when cancel wins after confirm and before the hold is kept', async () => {
-    svc.hasuraUserService = {
-      getUser: jest.fn().mockResolvedValue({
-        id: 'business-user',
-        active_persona: 'business',
-        business: { id: 'biz' },
-      }),
-    };
-    svc.hasuraSystemService.getAccount = jest
-      .fn()
-      .mockResolvedValue({ id: 'acc', available_balance: 1000 });
-    const reserved = booking({
-      status: 'reserved',
-      payment_status: 'pending',
-      actual_start_at: null,
-      rental_request_id: 'req',
-    });
-    svc.fetchBooking = jest
-      .fn()
-      .mockResolvedValueOnce(reserved)
-      .mockResolvedValue(booking({ status: 'confirmed', payment_status: 'pending' }));
-    svc.casBooking = jest
-      .fn()
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(false);
-    svc.placeHoldForBooking = jest.fn().mockResolvedValue('own');
+  it('rejects business pickup payment before a confirm or a hold', async () => {
+    jest.clearAllMocks();
     const error = await svc.initiateRentalPickupPayment('b1').catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(HttpException);
     expect((error as HttpException).getStatus()).toBe(HttpStatus.CONFLICT);
-    expect(svc.placeHoldForBooking).toHaveBeenCalledWith('b1', 'c1', 160, 'XAF');
-    expect(svc.releaseHoldIfNeeded).toHaveBeenCalledWith('b1', reserved);
-    expect(svc.casBooking).toHaveBeenCalledWith('b1', ['confirmed', 'active'], {
-      payment_status: 'paid',
-    });
-    expect(svc.casBooking).not.toHaveBeenCalledWith(
-      'b1',
-      ['confirmed'],
-      expect.objectContaining({ status: 'reserved' })
-    );
+    expect((error as HttpException).message).toBe('Update the app to start this rental');
+    expect(svc.placeHoldForBooking).not.toHaveBeenCalled();
+    expect(svc.casBooking).not.toHaveBeenCalled();
   });
 
   it('returns 409 when a wallet retry loses the booking before the hold is kept', async () => {

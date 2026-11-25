@@ -37,7 +37,6 @@ import {
 } from './dto/rental-pricing-snapshot.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { isRequestUuid, requestPolicyNotFound } from './rental-request-policy';
-import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { peakConcurrentUnits as sweepPeakUnits } from './rental-capacity';
 import {
   buildChangeSummary,
@@ -86,6 +85,15 @@ import {
   type PickupGateBooking,
   type SettlementGateBooking,
 } from './inspection/rental-inspection.policy';
+import { pinRetired, startWindowClosed } from './simple-start/simple-start.errors';
+import {
+  isNoShow,
+  listingZoneFor,
+  reservedUnpaidDue,
+  START_WINDOW_CODE,
+  startOpensAt,
+  startWindowState,
+} from './simple-start/simple-start.policy';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import {
   fetchStripeEnabledCountries,
@@ -456,7 +464,6 @@ export class RentalsService {
     private readonly stripeService: StripeService,
     private readonly stripeCaptureService: StripeCaptureService,
     private readonly rentalListingAiReviewService: RentalListingAiReviewService,
-    private readonly rentalStartPinShare: RentalStartPinShareService,
     private readonly inspectionFlags: RentalInspectionFlags,
     private readonly inspectionOptIn: InspectionOptInService,
     private readonly cardWindow: RentalCardWindowService
@@ -2869,14 +2876,12 @@ export class RentalsService {
       status: 'confirmed',
       contract_expires_at: null,
     });
-    if (!won && !(await this.confirmedBookingNeedsPin(bookingId))) return false;
+    if (!won) return false;
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
       id: requestId,
       status: 'booked',
     });
     const policy = await this.readInspectionPolicy(bookingId);
-    if (policy == null) await this.ensureStartPinOnce(bookingId);
-    if (!won) return true;
     await this.logHistory(bookingId, 'confirmed', previousStatus, clientUserId, 'client', notes);
     try {
       const booking = await this.fetchBooking(bookingId);
@@ -3542,27 +3547,9 @@ export class RentalsService {
     }
   }
 
-  async getStartPinForClient(bookingId: string) {
-    const user = await this.hasuraUserService.getUser();
-    if (!isActivePersona(user, 'client') || !user.client?.id) {
-      throw new HttpException('Only clients can get the start PIN', HttpStatus.FORBIDDEN);
-    }
-    const booking = await this.fetchBooking(bookingId);
-    if (!booking || booking.client_id !== user.client.id) {
-      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
-    }
-    if (booking.status !== 'confirmed') {
-      throw new HttpException('PIN only for confirmed bookings', HttpStatus.GONE);
-    }
-    await this.rejectEnrolledLegacyStart(bookingId);
-    const pin = await this.deliveryPinService.getPinForClient(bookingId);
-    if (!pin) {
-      throw new HttpException(
-        'Delivery PIN is temporarily unavailable. Please try again in a moment.',
-        HttpStatus.SERVICE_UNAVAILABLE
-      );
-    }
-    return { pin };
+  async getStartPinForClient(bookingId: string): Promise<never> {
+    this.logger?.debug?.(`start pin retired ${bookingId}`);
+    throw pinRetired();
   }
 
   async getBookingDetailForViewer(bookingId: string) {
@@ -3581,6 +3568,97 @@ export class RentalsService {
     ) {
       await this.attachAcceptStartPreview(booking);
     }
+    this.attachStartOpens(booking);
+    return booking;
+  }
+
+  /** Renter start for every booking. Pays Mobile Money first, then marks started. */
+  async startRental(bookingId: string): Promise<AcceptAndStartResult> {
+    const actor = await this.requireStartClient(bookingId);
+    this.assertBookingStartWindow(actor.booking);
+    if (this.rentalAlreadyRunning(actor.booking)) return this.replayAcceptStart(actor.booking);
+    const gate = await this.readInspectionStart(bookingId);
+    this.assertPickupReady(gate);
+    const result = await this.payAndStartAccepted(actor.booking);
+    return this.withStartOpens(actor.booking, result);
+  }
+
+  private async requireStartClient(bookingId: string) {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
+      throw new HttpException('Only the renter can start this rental', HttpStatus.FORBIDDEN);
+    }
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || booking.client_id !== user.client.id) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+    return { booking };
+  }
+
+  private rentalAlreadyRunning(booking: { status?: string }): boolean {
+    return ['active', 'awaiting_return', 'completed'].includes(booking.status ?? '');
+  }
+
+  private assertPickupReady(gate: PickupGateBooking): void {
+    if (gate.inspectionPolicyVersion == null || pickupStartAllowed(gate)) return;
+    throw new HttpException('Check the item before starting this rental.', HttpStatus.CONFLICT);
+  }
+
+  private assertBookingStartWindow(booking: any): void {
+    const zone = listingZoneFor(this.bookingCountry(booking));
+    const startAt = new Date(booking?.start_at);
+    const state = startWindowState({
+      now: new Date(),
+      startAt,
+      endAt: new Date(booking?.end_at),
+      timeZone: zone,
+    });
+    if (state === 'open' || state === 'unknown') return;
+    throw startWindowClosed(startOpensAt(startAt, zone), state);
+  }
+
+  private withStartOpens(booking: any, result: AcceptAndStartResult): AcceptAndStartResult {
+    const opens = this.opensAt(booking);
+    return opens ? { ...result, start_opens_at: opens } : result;
+  }
+
+  private attachStartOpens(booking: any): void {
+    const opens = this.opensAt(booking);
+    if (opens) booking.start_opens_at = opens;
+  }
+
+  private opensAt(booking: any): string | null {
+    const opens = startOpensAt(new Date(booking?.start_at), listingZoneFor(this.bookingCountry(booking)));
+    return Number.isNaN(opens.getTime()) ? null : opens.toISOString();
+  }
+
+  private bookingCountry(booking: any): string | null | undefined {
+    return booking?.rental_location_listing?.business_location?.address?.country;
+  }
+
+  async reportItemNotCollected(bookingId: string): Promise<{ success: true; alreadyReported: boolean }> {
+    const booking = await this.requireCollectReport(bookingId);
+    const first = await this.notificationsService.recordItemNotCollected({
+      businessUserId: booking.business.user_id,
+      bookingId,
+      bookingNumber: booking.booking_number ?? '',
+      rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+    });
+    return { success: true, alreadyReported: !first };
+  }
+
+  private async requireCollectReport(bookingId: string) {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
+      throw new HttpException('Only the business can report this', HttpStatus.FORBIDDEN);
+    }
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || booking.business_id !== user.business.id) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+    if (booking.status !== 'confirmed' && booking.status !== 'active') {
+      throw new HttpException('This rental is not waiting for pickup', HttpStatus.CONFLICT);
+    }
     return booking;
   }
 
@@ -3589,6 +3667,7 @@ export class RentalsService {
     versionId: string
   ): Promise<AcceptAndStartResult> {
     const actor = await this.requireAcceptStartClient(bookingId);
+    this.assertBookingStartWindow(actor.booking);
     const gate = await this.readInspectionStart(bookingId);
     this.assertAcceptStartOpen(actor.booking, gate, versionId);
     if (this.acceptStartFinished(actor.booking, gate, versionId)) {
@@ -3842,7 +3921,6 @@ export class RentalsService {
     if (!userId) return;
     try {
       const country = booking.rental_location_listing?.business_location?.address?.country;
-      if (!(await this.inspectionFlags.confirmationsEnabled(country))) return;
       await this.notificationsService.sendBusinessRentalStarted({
         businessUserId: userId,
         rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
@@ -3905,21 +3983,29 @@ export class RentalsService {
     }
   }
 
-  private async rejectEnrolledLegacyStart(bookingId: string): Promise<void> {
-    const policy = await this.readInspectionPolicy(bookingId);
-    if (policy != null) throw inspectionUpdateRequired();
-  }
-
   private async startEnrolledAfterPickupPayment(booking: any): Promise<void> {
     if (booking.status !== 'reserved' && booking.payment_timing !== 'pay_at_pickup') return;
     const gate = await this.readInspectionStart(booking.id);
-    if (gate.inspectionPolicyVersion == null || !pickupStartAllowed(gate)) return;
+    if (gate.inspectionPolicyVersion != null && !pickupStartAllowed(gate)) return;
     const fresh = await this.fetchBooking(booking.id);
     if (fresh?.status !== 'confirmed') return;
-    const won = await this.markInspectionOrLegacyStart(booking.id);
-    if (!won) return;
+    await this.finishPaymentStart(fresh);
+  }
+
+  private async finishPaymentStart(fresh: any): Promise<void> {
+    try {
+      const won = await this.markInspectionOrLegacyStart(fresh.id);
+      if (!won) return;
+      await this.notePaymentStart(fresh);
+    } catch (error: any) {
+      if (!this.isStartWindowError(error)) throw error;
+      this.logger?.warn(`start window closed after payment ${fresh.id}`);
+    }
+  }
+
+  private async notePaymentStart(fresh: any): Promise<void> {
     await this.logHistory(
-      booking.id,
+      fresh.id,
       'active',
       'confirmed',
       fresh.client?.user_id ?? null,
@@ -3929,99 +4015,30 @@ export class RentalsService {
     await this.notifyRentalActivated(fresh);
   }
 
-  async verifyRentalStartPin(bookingId: string, body: VerifyRentalStartPinDto) {
-    const user = await this.hasuraUserService.getUser();
-    if (!isActivePersona(user, 'business') || !user.business?.id) {
-      throw new HttpException('Only businesses can verify', HttpStatus.FORBIDDEN);
-    }
-    const booking = await this.fetchBooking(bookingId);
-    if (!booking || booking.business_id !== user.business.id) {
-      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
-    }
-    if (booking.status !== 'confirmed') {
-      throw new HttpException('Invalid booking status', HttpStatus.BAD_REQUEST);
-    }
-    await this.rejectEnrolledLegacyStart(bookingId);
-    const hasOw = !!body.overwriteCode?.trim();
-    let pin = body.pin?.trim() || '';
-    if (!hasOw && !pin && (body.useLatestSharedPin || body.pinMessageId)) {
-      const shared = await this.rentalStartPinShare.resolvePinForVerify(
-        bookingId,
-        user.id,
-        {
-          useLatestSharedPin: body.useLatestSharedPin,
-          pinMessageId: body.pinMessageId,
-        }
-      );
-      if (!shared) {
-        throw new HttpException(
-          'No active shared start PIN found in chat',
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      pin = shared;
-    }
-    const hasPin = !!pin;
-    if (!hasPin && !hasOw) {
-      throw new HttpException('pin or overwriteCode required', HttpStatus.BAD_REQUEST);
-    }
-    if (hasOw) {
-      await this.verifyOverwrite(bookingId, booking, body.overwriteCode!.trim());
-    } else {
-      await this.verifyPinAttempt(bookingId, booking, pin);
-    }
-    let won = false;
-    try {
-      won = await this.markInspectionOrLegacyStart(bookingId);
-    } catch (error) {
-      if (!hasOw) await this.refundRentalPinAttempt(bookingId);
-      throw error;
-    }
-    if (!won) {
-      if (!hasOw) await this.refundRentalPinAttempt(bookingId);
-      return this.startBlockedOrConflict(bookingId);
-    }
-    await this.logHistory(bookingId, 'active', 'confirmed', user.id, 'business', 'Start PIN verified');
-    return { success: true };
+  private isStartWindowError(error: any): boolean {
+    if (!(error instanceof HttpException)) return false;
+    const body = error.getResponse() as { code?: string };
+    return body?.code === START_WINDOW_CODE;
   }
 
-  async generateStartOverwriteCode(_bookingId: string): Promise<never> {
-    throw new HttpException(
-      RENTAL_OVERWRITE_BUSINESS_FORBIDDEN,
-      HttpStatus.FORBIDDEN
-    );
+  async verifyRentalStartPin(bookingId: string, body: VerifyRentalStartPinDto): Promise<never> {
+    this.logger?.debug?.(`start pin retired ${bookingId} ${body?.pin ? 'pin' : 'code'}`);
+    throw pinRetired();
   }
 
-  /** Support-only exception when the client cannot show the start PIN. */
+  async generateStartOverwriteCode(bookingId: string): Promise<never> {
+    this.logger?.debug?.(`start overwrite retired ${bookingId}`);
+    throw pinRetired();
+  }
+
+  /** Old support PIN codes are retired. The renter starts the rental. */
   async issueStartOverwriteCodeForSupport(
     bookingId: string,
     actorUserId: string,
     reason: string
-  ): Promise<{ overwriteCode: string }> {
-    const note = reason?.trim();
-    if (!note) {
-      throw new HttpException('A written reason is required', HttpStatus.BAD_REQUEST);
-    }
-    const booking = await this.fetchBooking(bookingId);
-    if (!booking) {
-      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
-    }
-    if (booking.status !== 'confirmed') {
-      throw new HttpException('Invalid status', HttpStatus.BAD_REQUEST);
-    }
-    await this.rejectEnrolledLegacyStart(bookingId);
-    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
-    const hash = this.deliveryPinService.hashOverwriteCode(bookingId, code);
-    await this.patchBooking(bookingId, { rental_start_overwrite_code_hash: hash });
-    await this.logHistory(
-      bookingId,
-      'confirmed',
-      'confirmed',
-      actorUserId || null,
-      'system',
-      `Support issued a rental start code. ${note}`
-    );
-    return { overwriteCode: code };
+  ): Promise<never> {
+    this.logger?.debug?.(`support start code retired ${bookingId} ${actorUserId} ${reason}`);
+    throw pinRetired();
   }
 
   /**
@@ -4527,6 +4544,8 @@ export class RentalsService {
    * is not installed yet.
    */
   private async markInspectionOrLegacyStart(bookingId: string): Promise<boolean> {
+    const current = await this.fetchBooking(bookingId);
+    if (current) this.assertBookingStartWindow(current);
     const policy = await this.readInspectionPolicy(bookingId);
     const at = new Date().toISOString();
     try {
@@ -4581,21 +4600,6 @@ export class RentalsService {
     throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
   }
 
-  private async confirmedBookingNeedsPin(bookingId: string): Promise<boolean> {
-    const fresh = await this.fetchBooking(bookingId);
-    return fresh?.status === 'confirmed' && !fresh.rental_start_pin_hash;
-  }
-
-  private async ensureStartPinOnce(bookingId: string): Promise<void> {
-    const pin = this.deliveryPinService.generatePin();
-    const hash = this.deliveryPinService.hashPin(bookingId, pin);
-    const result = await this.hasuraSystemService.executeMutation<{
-      update_rental_bookings: { affected_rows: number } | null;
-    }>(Q.SET_RENTAL_PIN_IF_ABSENT, { id: bookingId, pinHash: hash });
-    if ((result.update_rental_bookings?.affected_rows ?? 0) !== 1) return;
-    await this.deliveryPinService.setPinForClient(bookingId, pin);
-  }
-
   private async cancelProposedBooking(
     bookingId: string,
     userId: string
@@ -4648,48 +4652,10 @@ export class RentalsService {
     return r.users_by_pk ?? null;
   }
 
-  /**
-   * Business-initiated payment of the contract at pickup for a `reserved`
-   * booking: wallet when the client balance covers it, otherwise a
-   * mobile-money push to the client's phone. PIN start stays gated on payment.
-   */
-  async initiateRentalPickupPayment(
-    bookingId: string
-  ): Promise<RentalBookingActionResult> {
-    const user = await this.hasuraUserService.getUser();
-    if (!isActivePersona(user, 'business') || !user.business?.id) {
-      throw new HttpException('Only businesses', HttpStatus.FORBIDDEN);
-    }
-    const booking = await this.fetchBooking(bookingId);
-    if (!booking || booking.business_id !== user.business.id) {
-      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
-    }
-    if (booking.status !== 'reserved') {
-      throw new HttpException(
-        'Pickup payment applies to reserved bookings only',
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    await this.rejectEnrolledLegacyStart(bookingId);
-    const total = Number(booking.total_amount);
-    const clientUserId = booking.client.user_id as string;
-    const clientAccount = await this.hasuraSystemService.getAccount(
-      clientUserId,
-      booking.currency
-    );
-    if (Number(clientAccount?.available_balance ?? 0) >= total) {
-      const confirmed = await this.confirmWalletContract({
-        booking,
-        previousStatus: 'reserved',
-        clientUserId,
-        notes: 'Contract paid at pickup (wallet)',
-      });
-      if (!confirmed) {
-        throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
-      }
-      return { success: true, bookingId, payment_rail: 'wallet', confirmed: true };
-    }
-    return this.pushMomoPickupPayment(booking, clientAccount.id, clientUserId);
+  /** Business pickup payment is retired. The renter starts the rental. */
+  async initiateRentalPickupPayment(bookingId: string): Promise<never> {
+    this.logger?.debug?.(`pickup payment retired ${bookingId}`);
+    throw pinRetired();
   }
 
   private async pushMomoPickupPayment(
@@ -6126,86 +6092,6 @@ export class RentalsService {
     );
   }
 
-  private async verifyPinAttempt(bookingId: string, booking: any, pin: string) {
-    const hash = booking.rental_start_pin_hash as string | undefined;
-    if (!hash) {
-      throw new HttpException('PIN not set', HttpStatus.BAD_REQUEST);
-    }
-    this.assertRentalPinNotLocked(booking.rental_start_pin_attempts);
-    const claimed = await this.claimRentalPinAttempt(bookingId);
-    if (claimed == null) {
-      throw new HttpException('Too many attempts', HttpStatus.FORBIDDEN);
-    }
-    if (!this.deliveryPinService.verifyPin(bookingId, pin, hash)) {
-      throw new HttpException(
-        claimed >= this.deliveryPinService.getMaxPinAttempts()
-          ? 'Too many attempts'
-          : 'Invalid PIN',
-        HttpStatus.FORBIDDEN
-      );
-    }
-    await this.upgradeLegacyRentalPinHash(bookingId, pin, hash);
-  }
-
-  /** Take one attempt before the PIN is checked so parallel guesses share one counter. */
-  private async claimRentalPinAttempt(bookingId: string): Promise<number | null> {
-    const max = this.deliveryPinService.getMaxPinAttempts();
-    const result = await this.hasuraSystemService.executeMutation<{
-      update_rental_bookings: {
-        affected_rows: number;
-        returning: Array<{ rental_start_pin_attempts: number }>;
-      } | null;
-    }>(Q.INCREMENT_RENTAL_PIN_ATTEMPTS, { id: bookingId, max });
-    const row = result.update_rental_bookings;
-    if (!row?.affected_rows) return null;
-    return row.returning?.[0]?.rental_start_pin_attempts ?? max;
-  }
-
-  /** Give back an attempt when a correct PIN's start failed for another reason. */
-  private async refundRentalPinAttempt(bookingId: string): Promise<void> {
-    try {
-      await this.hasuraSystemService.executeMutation(
-        `mutation RefundRentalPinAttempt($id: uuid!) {
-          update_rental_bookings(
-            where: {
-              id: { _eq: $id }
-              rental_start_pin_attempts: { _gt: 0 }
-            }
-            _inc: { rental_start_pin_attempts: -1 }
-          ) { affected_rows }
-        }`,
-        { id: bookingId }
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `refundRentalPinAttempt ${bookingId}: ${error?.message ?? error}`
-      );
-    }
-  }
-
-  private assertRentalPinNotLocked(attempts: number | null | undefined): void {
-    const max = this.deliveryPinService.getMaxPinAttempts();
-    if ((attempts ?? 0) >= max) {
-      throw new HttpException('Too many attempts', HttpStatus.FORBIDDEN);
-    }
-  }
-
-  private async upgradeLegacyRentalPinHash(
-    bookingId: string,
-    pin: string,
-    hash: string
-  ): Promise<void> {
-    if (!this.deliveryPinService.isLegacyHash(hash)) return;
-    try {
-      const next = this.deliveryPinService.hashPin(bookingId, pin);
-      await this.patchBooking(bookingId, { rental_start_pin_hash: next });
-    } catch (error: any) {
-      this.logger.warn(
-        `Could not upgrade rental PIN hash for ${bookingId}: ${error?.message}`
-      );
-    }
-  }
-
   /** Resolved market for the search cache. Listings keep the uncanonical profile fallback. */
   async resolveSearchMarket(country?: string, state?: string): Promise<SearchMarket> {
     const profile = await this.profileSearchGeo(country, state);
@@ -6603,22 +6489,111 @@ export class RentalsService {
     );
   }
 
-  private async verifyOverwrite(bookingId: string, booking: any, code: string) {
-    const hash = booking.rental_start_overwrite_code_hash as string | undefined;
-    if (!hash) {
-      throw new HttpException('No overwrite code', HttpStatus.BAD_REQUEST);
-    }
-    const ok = this.deliveryPinService.verifyOverwriteCode(bookingId, code, hash);
-    if (!ok) {
-      throw new HttpException('Invalid overwrite code', HttpStatus.FORBIDDEN);
-    }
-    const nextHash = this.deliveryPinService.isLegacyHash(hash)
-      ? this.deliveryPinService.hashOverwriteCode(bookingId, code)
-      : hash;
-    await this.patchBooking(bookingId, {
-      rental_start_overwrite_code_hash: nextHash,
-      rental_start_overwrite_code_used_at: new Date().toISOString(),
+  /** Confirmed booking that nobody started by end_at. Free cancel. */
+  async cancelNoShowBooking(bookingId: string): Promise<boolean> {
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || !this.bookingIsNoShow(booking)) return false;
+    const won = await this.claimNoShow(booking);
+    if (!won) return false;
+    return this.finishNoShow(booking);
+  }
+
+  unpaidReservationDue(booking: any, now = new Date()): boolean {
+    return reservedUnpaidDue({
+      now,
+      startAt: new Date(booking?.start_at),
+      timeZone: listingZoneFor(this.bookingCountry(booking)),
+      policyVersion: booking?.inspection_policy_version ?? null,
+      pickupInspectionPending: !!booking?.pickup_inspection_pending,
     });
+  }
+
+  private bookingIsNoShow(booking: any): boolean {
+    return isNoShow({
+      status: booking.status,
+      actualStartAt: booking.actual_start_at,
+      endAt: new Date(booking.end_at),
+      now: new Date(),
+    });
+  }
+
+  private async claimNoShow(booking: any): Promise<boolean> {
+    return this.casBooking(booking.id, ['confirmed'], {
+      status: 'cancelled',
+      payment_status: 'cancelled',
+      contract_expires_at: null,
+    });
+  }
+
+  private async finishNoShow(booking: any): Promise<boolean> {
+    try {
+      await this.releaseNoShowFunds(booking);
+    } catch (error) {
+      await this.restoreConfirmed(booking);
+      throw error;
+    }
+    await this.recordNoShow(booking);
+    return true;
+  }
+
+  private async restoreConfirmed(booking: any): Promise<void> {
+    await this.casBooking(booking.id, ['cancelled'], {
+      status: 'confirmed',
+      payment_status: booking.payment_status,
+      contract_expires_at: booking.contract_expires_at ?? null,
+    });
+  }
+
+  private async releaseNoShowFunds(booking: any): Promise<void> {
+    await this.releaseFreeCancelFunds(booking);
+    if (!(await this.momoWasCollected(booking))) return;
+    this.logger?.log(`no-show ${booking.id}: Mobile Money returned to the renter wallet`);
+  }
+
+  private async momoWasCollected(booking: any): Promise<boolean> {
+    const number = booking.booking_number as string | undefined;
+    const check = this.mobilePaymentsDatabaseService?.hasSuccessfulRentalBookingPayment;
+    if (!number || !check) return false;
+    try {
+      return await check.call(this.mobilePaymentsDatabaseService, number);
+    } catch (error: any) {
+      this.logger?.warn(`no-show momo ${booking.id}: ${error?.message ?? error}`);
+      return false;
+    }
+  }
+
+  private async recordNoShow(booking: any): Promise<void> {
+    await this.logHistory(
+      booking.id,
+      'cancelled',
+      'confirmed',
+      null,
+      'system',
+      'No-show: not started by the rental end'
+    );
+    await this.deliveryPinService.clearPinForOrder(booking.id);
+    await this.notifyNoShow(booking);
+  }
+
+  private async notifyNoShow(booking: any): Promise<void> {
+    const item = booking.rental_location_listing?.rental_item?.name ?? 'Rental';
+    const number = booking.booking_number ?? '';
+    await this.pushNoShow(booking, booking.client?.user_id, item, number);
+    await this.pushNoShow(booking, booking.business?.user_id, item, number);
+  }
+
+  private async pushNoShow(booking: any, userId: string | undefined, item: string, number: string) {
+    if (!userId) return;
+    try {
+      await this.notificationsService.sendRentalNoShowNotice({
+        recipientUserId: userId,
+        rentalItemName: item,
+        bookingId: booking.id,
+        bookingNumber: number,
+      });
+    } catch (error: any) {
+      this.logger?.warn(`notifyNoShow ${booking.id}: ${error?.message ?? error}`);
+    }
   }
 
   private async logHistory(

@@ -326,10 +326,19 @@ describe('damage collected when the client agrees', () => {
 describe('reserved auto-cancel while pickup inspection is pending', () => {
   const startAt = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
 
-  it('still cancels a legacy reservation 60 minutes after the start', () => {
+  it('does not cancel a legacy reservation until the end of the start day', () => {
     expect(
       reservedBookingExpired({
         now: NOW,
+        startAt,
+        policyVersion: null,
+        pickupInspectionPending: false,
+        reservedCancelAfter: null,
+      })
+    ).toBe(false);
+    expect(
+      reservedBookingExpired({
+        now: new Date('2026-11-09T23:00:00.000Z'),
         startAt,
         policyVersion: null,
         pickupInspectionPending: false,
@@ -350,10 +359,10 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
     ).toBe(false);
   });
 
-  it('keeps an early accept open until start plus 60 minutes', () => {
+  it('keeps an early accept open until the end of the start day', () => {
     const acceptedAt = new Date(startAt.getTime() - 3 * 60 * 60 * 1000);
     const deadline = extendedReservedDeadline(startAt, acceptedAt);
-    expect(deadline.toISOString()).toBe(new Date(startAt.getTime() + 60 * 60 * 1000).toISOString());
+    expect(deadline.toISOString()).toBe('2026-11-09T23:00:00.000Z');
     expect(
       reservedBookingExpired({
         now: new Date(acceptedAt.getTime() + 30 * 60 * 1000),
@@ -365,10 +374,10 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
     ).toBe(false);
   });
 
-  it('starts a late accept 60 minutes after accept', () => {
+  it('keeps a late accept open until the end of the start day', () => {
     const acceptedAt = new Date(startAt.getTime() + 2 * 60 * 60 * 1000);
     const deadline = extendedReservedDeadline(startAt, acceptedAt);
-    expect(deadline.toISOString()).toBe(new Date(acceptedAt.getTime() + 60 * 60 * 1000).toISOString());
+    expect(deadline.toISOString()).toBe('2026-11-09T23:00:00.000Z');
     expect(deadline.getTime()).toBeGreaterThan(startAt.getTime() + 60 * 60 * 1000);
   });
 });

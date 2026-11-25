@@ -86,58 +86,31 @@ describe('enrolled rental gates', () => {
         pickup_current_version_id: 'v1',
       },
     });
-    svc.verifyPinAttempt = jest.fn().mockResolvedValue(undefined);
     const error = await svc.verifyRentalStartPin('b1', { pin }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(HttpException);
-    expect((error as HttpException).getStatus()).toBe(426);
+    expect((error as HttpException).getStatus()).toBe(409);
+    expect((error as HttpException).message).toBe('Update the app to start this rental');
     expect(svc.casBooking).not.toHaveBeenCalled();
-    expect(svc.verifyPinAttempt).not.toHaveBeenCalled();
+    expect(svc.hasuraSystemService.executeQuery).not.toHaveBeenCalled();
   });
 
-  it('returns 426 for an enrolled booking even after the report is accepted', async () => {
-    svc.fetchBooking.mockResolvedValue({
-      id: 'b1',
-      business_id: 'biz',
-      status: 'confirmed',
-      rental_start_pin_hash: 'hash',
-      rental_start_pin_attempts: 0,
-    });
-    svc.verifyPinAttempt = jest.fn().mockResolvedValue(undefined);
-    svc.hasuraSystemService.executeQuery.mockResolvedValue({
-      rental_bookings_by_pk: {
-        inspection_policy_version: 1,
-        pickup_ack_current: true,
-        pickup_accepted_version_id: 'v1',
-        pickup_current_version_id: 'v1',
-      },
-    });
+  it('returns 409 for an enrolled booking even after the report is accepted', async () => {
     await expect(svc.verifyRentalStartPin('b1', { pin: '1234' })).rejects.toMatchObject({
-      status: 426,
+      status: 409,
+      message: 'Update the app to start this rental',
     });
-    expect(svc.verifyPinAttempt).not.toHaveBeenCalled();
     expect(svc.hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    expect(svc.hasuraSystemService.executeQuery).not.toHaveBeenCalled();
   });
 
-  it('collects pickup payment only after the client accepted the report', async () => {
-    svc.fetchBooking.mockResolvedValue({
-      id: 'b1',
-      business_id: 'biz',
-      status: 'reserved',
-      client: { user_id: 'c' },
-      currency: 'XAF',
-      total_amount: 100,
-    });
-    svc.hasuraSystemService.executeQuery.mockResolvedValue({
-      rental_bookings_by_pk: {
-        inspection_policy_version: 1,
-        pickup_ack_current: false,
-      },
-    });
+  it('rejects business pickup payment before any booking read', async () => {
     svc.hasuraSystemService.getAccount = jest.fn();
     await expect(svc.initiateRentalPickupPayment('b1')).rejects.toMatchObject({
-      status: 426,
+      status: 409,
+      message: 'Update the app to start this rental',
     });
     expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
+    expect(svc.fetchBooking).not.toHaveBeenCalled();
   });
 
   it('sends an enrolled overtime callback to the inspection settlement, not the legacy one', async () => {
@@ -285,64 +258,28 @@ describe('enrolled rental gates', () => {
     expect(svc.runCompletion).not.toHaveBeenCalled();
   });
 
-  it('refuses pickup payment when the inspection gate cannot be read', async () => {
-    svc.fetchBooking.mockResolvedValue({
-      id: 'b1',
-      business_id: 'biz',
-      status: 'reserved',
-      client: { user_id: 'c' },
-      currency: 'XAF',
-      total_amount: 100,
-    });
+  it('rejects pickup payment before the inspection gate is read', async () => {
     svc.hasuraSystemService.executeQuery.mockRejectedValue(new Error('column missing'));
     svc.hasuraSystemService.getAccount = jest.fn();
-    await expect(svc.initiateRentalPickupPayment('b1')).rejects.toMatchObject({ status: 503 });
+    await expect(svc.initiateRentalPickupPayment('b1')).rejects.toMatchObject({ status: 409 });
     expect(svc.hasuraSystemService.getAccount).not.toHaveBeenCalled();
+    expect(svc.hasuraSystemService.executeQuery).not.toHaveBeenCalled();
   });
 
-  it('does not start an enrolled booking from the legacy PIN path when the start function is missing', async () => {
-    svc.fetchBooking.mockResolvedValue({
-      id: 'b1',
-      business_id: 'biz',
-      status: 'confirmed',
-    });
-    svc.verifyPinAttempt = jest.fn();
-    svc.hasuraSystemService.executeQuery.mockResolvedValue({
-      rental_bookings_by_pk: { inspection_policy_version: 1 },
-    });
+  it('does not start an enrolled booking from the retired PIN path', async () => {
     await expect(svc.verifyRentalStartPin('b1', { pin: '1234' })).rejects.toMatchObject({
-      status: 426,
+      status: 409,
     });
     expect(svc.casBooking).not.toHaveBeenCalled();
-    expect(svc.verifyPinAttempt).not.toHaveBeenCalled();
+    expect(svc.hasuraSystemService.executeQuery).not.toHaveBeenCalled();
   });
 
-  it('still uses the legacy start claim when the policy is null and the function is not installed', async () => {
-    svc.fetchBooking.mockResolvedValue({
-      id: 'b1',
-      business_id: 'biz',
-      status: 'confirmed',
+  it('does not use the legacy start claim from the retired PIN path', async () => {
+    await expect(svc.verifyRentalStartPin('b1', { pin: '1234' })).rejects.toMatchObject({
+      status: 409,
+      message: 'Update the app to start this rental',
     });
-    svc.verifyPinAttempt = jest.fn().mockResolvedValue(undefined);
-    svc.hasuraSystemService.executeQuery.mockResolvedValue({
-      rental_bookings_by_pk: {
-        inspection_policy_version: null,
-        pickup_ack_current: false,
-        pickup_accepted_version_id: null,
-        pickup_current_version_id: null,
-      },
-    });
-    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
-      if (String(query).includes('rental_mark_started')) {
-        throw new Error("field 'rental_mark_started' not found in type mutation_root");
-      }
-      return { update_rental_bookings: { affected_rows: 1 } };
-    });
-    svc.casBooking.mockResolvedValue(true);
-    await expect(svc.verifyRentalStartPin('b1', { pin: '1234' })).resolves.toEqual({ success: true });
-    expect(svc.casBooking).toHaveBeenCalledWith('b1', ['confirmed'], expect.objectContaining({
-      status: 'active',
-    }));
+    expect(svc.casBooking).not.toHaveBeenCalled();
   });
 
   it('does not send another overtime prompt while the backoff is open', async () => {
