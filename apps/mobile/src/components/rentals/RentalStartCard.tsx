@@ -8,6 +8,7 @@ import {
   formatZonedDay,
   formatZonedTime,
   formatZonedWeekday,
+  formatZonedWhen,
   pickupPhase,
   type PickupPhase,
 } from '../../utils/rentals/rentalStartWindow';
@@ -75,16 +76,18 @@ function StartBody(props: Props & { phase: PickupPhase }) {
   const time = formatZonedTime(props.booking.start_at, props.timeZone);
   const pill = pillText(props.phase, day, t);
   const momo = isMomoDue(props.booking);
+  const tone = props.phase === 'late' ? colors.warning : colors.success;
   return (
-    <View style={[styles.card, { backgroundColor: colors.success.main + '14', borderColor: colors.success.main + '44', borderRadius: borderRadius.lg, padding: spacing.md, gap: spacing.sm }]}>
+    <View style={[styles.card, { backgroundColor: tone.main + '14', borderColor: tone.main + '44', borderRadius: borderRadius.lg, padding: spacing.md, gap: spacing.sm }]}>
       <View style={styles.row}>
-        <View style={[styles.pill, { backgroundColor: colors.success.main + '22' }]}>
-          <Text style={[typography.caption, { color: colors.success.dark ?? colors.success.main, fontWeight: '700' }]}>{pill}</Text>
+        <View style={[styles.pill, { backgroundColor: tone.main + '22' }]}>
+          <Text style={[typography.caption, { color: tone.dark ?? tone.main, fontWeight: '700' }]}>{pill}</Text>
         </View>
         <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8 }]}>{t('rentals.nextStep.label', 'NEXT STEP')}</Text>
       </View>
       <Text style={[typography.h6, { color: colors.text.primary }]}>{titleFor(props.phase, when, time, props, t)}</Text>
       <Text style={[typography.body2, { color: colors.text.secondary }]}>{bodyFor(props, momo, t)}</Text>
+      <LateLine {...props} />
       <MoneyLine {...props} momo={momo} />
       <Text style={[typography.body2, { color: colors.text.primary }]}>
         {t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
@@ -135,9 +138,38 @@ function NotCollected(props: Props & { phase: PickupPhase }) {
   const { colors } = useTheme();
   if (props.role !== 'business' || props.phase !== 'started' || !props.onNotCollected) return null;
   return (
-    <Button textColor={colors.error.main} onPress={props.onNotCollected}>
+    <Button icon="help-circle-outline" textColor={colors.error.main} onPress={props.onNotCollected}>
       {t('rentals.business.notCollected', 'Item not collected?')}
     </Button>
+  );
+}
+
+function SheetRow({ icon, label }: { icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; label: string }) {
+  const { colors, typography } = useTheme();
+  if (!label) return null;
+  return (
+    <View style={styles.row}>
+      <MaterialCommunityIcons name={icon} size={18} color={colors.text.secondary} />
+      <Text style={[typography.body2, { color: colors.text.primary, marginLeft: 8, flex: 1 }]}>{label}</Text>
+    </View>
+  );
+}
+
+function sheetMoney(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
+  if (isMomoDue(props.booking)) return t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: props.money });
+  return t('rentals.start.held', '{{amount}} held on your card', { amount: props.money });
+}
+
+function LateLine(props: Props & { phase: PickupPhase }) {
+  const { t, i18n } = useTranslation();
+  const { colors, typography } = useTheme();
+  if (props.phase !== 'late') return null;
+  const booked = formatZonedTime(props.booking.start_at, props.timeZone);
+  const until = formatZonedWhen(props.booking.end_at, props.timeZone, i18n.language);
+  return (
+    <Text style={[typography.body2, { color: colors.text.primary }]}>
+      {t('rentals.start.lateStill', 'Booked for {{time}} · you can still start until {{until}}', { time: booked, until })}
+    </Text>
   );
 }
 
@@ -153,9 +185,9 @@ function ConfirmSheet(props: Props) {
           <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center', marginTop: 8 }]}>
             {t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
           </Text>
-          <Text style={[typography.body2, { color: colors.text.primary, marginTop: 12 }]}>{props.place}</Text>
-          <Text style={[typography.body2, { color: colors.text.primary }]}>{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Text>
-          <Text style={[typography.body2, { color: colors.text.primary }]}>{props.money}</Text>
+          <SheetRow icon="store" label={props.place} />
+          <SheetRow icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
+          <SheetRow icon="credit-card-outline" label={sheetMoney(props, t)} />
           <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 8 }]}>
             {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30 minutes.")}
           </Text>

@@ -329,6 +329,24 @@ export function normalizeAccessories(value: unknown): InspectionAccessory[] {
     .filter((row) => row.name.length > 0 && Number.isInteger(row.count) && row.count >= 1);
 }
 
+export function splitCorrectionReason(
+  text: string | null | undefined,
+  labels: Record<string, string>
+): { chips: string[]; note: string } {
+  const raw = (text ?? '').trim();
+  const chips = Object.values(labels).filter((label) => raw.toLowerCase().includes(label.toLowerCase()));
+  return { chips, note: stripLabels(raw, chips) };
+}
+
+function stripLabels(raw: string, chips: string[]): string {
+  const note = chips.reduce((left, label) => left.replace(new RegExp(escapeLabel(label), 'ig'), ''), raw);
+  return note.replace(/^[\s.]+|[\s.]+$/g, '').replace(/\s{2,}/g, ' ');
+}
+
+function escapeLabel(label: string): string {
+  return label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function correctionReasonText(
   codes: string[],
   details: string,

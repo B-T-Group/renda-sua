@@ -58,7 +58,7 @@ import {
   showLegacyReturnPicker,
 } from '../../utils/rentals/rentalInspection';
 import { RentalHandoverNotice } from '../../components/rentals/RentalHandoverNotice';
-import { formatZonedDay, formatZonedWhen, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalBookingDetail'>;
 
@@ -332,9 +332,9 @@ export default function BusinessRentalBookingDetailScreen() {
           <StatusPill
             compact
             label={handoverPill(booking.status, photosAsked, startPhase, pickupDay, reviewReady, phaseInfo.labelKey, t)}
-            backgroundColor={reviewReady ? '#B4530918' : sc.backgroundColor}
-            textColor={reviewReady ? '#B45309' : sc.textColor}
-            borderColor={reviewReady ? '#B4530944' : sc.borderColor}
+            backgroundColor={reviewReady ? '#B4530918' : phaseTone(startPhase, colors)?.backgroundColor ?? sc.backgroundColor}
+            textColor={reviewReady ? '#B45309' : phaseTone(startPhase, colors)?.textColor ?? sc.textColor}
+            borderColor={reviewReady ? '#B4530944' : phaseTone(startPhase, colors)?.borderColor ?? sc.borderColor}
           />
         </View>
         {booking.booking_number ? (
@@ -424,10 +424,16 @@ export default function BusinessRentalBookingDetailScreen() {
           ]}
         >
           <Text style={{ color: colors.text.primary }}>
-            {t(
-              'rentals.bookingDetail.reservedBusinessHint',
-              'Reserved without payment. The renter starts this rental on the pickup day and pays then if it is still due.'
-            )}
+            {booking.currency === 'XAF' || booking.currency === 'XOF'
+              ? t(
+                  'rentals.bookingDetail.reservedBusinessMomo',
+                  '{{name}} pays {{amount}} by Mobile Money when they tap Start. You don\'t collect anything.',
+                  { name: clientName || t('rentals.renter', 'The renter'), amount: detailMoney(Number(booking.total_amount) || 0) }
+                )
+              : t(
+                  'rentals.bookingDetail.reservedBusinessHint',
+                  'Reserved without payment. The renter starts this rental on the pickup day and pays then if it is still due.'
+                )}
           </Text>
         </View>
       ) : null}
@@ -529,6 +535,7 @@ export default function BusinessRentalBookingDetailScreen() {
             unitId: snapshot.pickup?.units[0]?.unitId ?? '',
           }))}
           timeZone={listingZone}
+          askedAt={snapshot.pickup?.submittedAt}
           onSent={() => void load({ soft: true })}
         />
       ) : null}
@@ -570,6 +577,12 @@ export default function BusinessRentalBookingDetailScreen() {
               hideTitle
               status={booking.status}
               payAtPickup={booking.payment_timing === 'pay_at_pickup'}
+              paidAside={
+                (booking.payment_status === 'paid' || booking.payment_status === 'authorized') && (booking.paid_at || booking.created_at)
+                  ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
+                  : undefined
+              }
+              pickupAside={`${formatZonedDay(booking.actual_start_at || booking.start_at, listingZone, i18n.language)} ${formatZonedTime(booking.actual_start_at || booking.start_at, listingZone)}`}
               paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
               accent={colors.success.main}
             />
@@ -861,6 +874,19 @@ function combineLocalDateTime(date: string, time: string): string | null {
   const d = new Date(y, mo, day, h, mi, 0, 0);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+function phaseTone(
+  phase: PickupPhase,
+  colors: { warning: { main: string; dark?: string }; success: { main: string; dark?: string } }
+) {
+  const tone = phase === 'late' ? colors.warning : phase === 'today' || phase === 'before' ? colors.success : null;
+  if (!tone) return null;
+  return {
+    backgroundColor: tone.main + '18',
+    textColor: tone.dark ?? tone.main,
+    borderColor: tone.main + '44',
+  };
 }
 
 function handoverPill(

@@ -329,6 +329,8 @@ export interface RentalBookingDetail {
   payment_timing?: 'pay_now' | 'pay_at_pickup' | null;
   payment_status?: 'pending' | 'authorized' | 'paid' | 'cancelled' | null;
   actual_start_at?: string | null;
+  paid_at?: string | null;
+  created_at?: string | null;
   actual_end_at?: string | null;
   units_booked?: number | null;
   inspection_policy_version?: number | null;

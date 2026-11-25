@@ -25,7 +25,6 @@ import { DeclineOutcomeCard, declineCardView } from '../../components/rentals/De
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { RentalStartCard } from '../../components/rentals/RentalStartCard';
 import { RentalJourneyList } from '../../components/rentals/RentalJourneyList';
-import { MobileMoneyConfirmIllustration } from '../../components/illustrations/MobileMoneyConfirmIllustration';
 import { RenterReturnCard } from '../../components/rentals/RenterReturnCard';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -62,7 +61,10 @@ import {
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
 import { renterReturnPhase } from '../../utils/rentals/renterReturnPhase';
-import { formatZonedDay, formatZonedWhen, pickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { RentalMomoWaiting } from '../../components/rentals/RentalMomoWaiting';
+import { BookingQuickActions } from '../../components/rentals/BookingQuickActions';
+import { maskPhoneE164 } from '../../utils/maskPhoneE164';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
@@ -268,6 +270,14 @@ export default function RentalBookingDetailScreen() {
       })
     : null;
   const pickupDay = booking ? formatZonedDay(booking.start_at, startZone, i18n.language) : '';
+  const paidSource = booking?.paid_at || booking?.created_at;
+  const paidAside = paidSource && (booking?.payment_status === 'paid' || booking?.payment_status === 'authorized')
+    ? formatZonedDay(paidSource, startZone, i18n.language)
+    : undefined;
+  const pickupSource = booking?.actual_start_at || booking?.start_at;
+  const pickupAside = pickupSource
+    ? `${formatZonedDay(pickupSource, startZone, i18n.language)} ${formatZonedTime(pickupSource, startZone)}`
+    : undefined;
   const pillLabel = headerOverdue
     ? t('rentals.returnReport.overdue', 'Overdue')
     : startPhase === 'before'
@@ -277,13 +287,20 @@ export default function RentalBookingDetailScreen() {
         : startPhase === 'late'
           ? t('rentals.start.latePickup', 'Late pickup')
           : statusLabel;
+  const phaseTone = startPhase === 'late' ? colors.warning : startPhase === 'today' || startPhase === 'before' ? colors.success : null;
   const pillColors = headerOverdue
     ? {
         backgroundColor: colors.error.main + '18',
         textColor: colors.error.main,
         borderColor: colors.error.main + '44',
       }
-    : statusColors;
+    : phaseTone
+      ? {
+          backgroundColor: phaseTone.main + '18',
+          textColor: phaseTone.dark ?? phaseTone.main,
+          borderColor: phaseTone.main + '44',
+        }
+      : statusColors;
   const returnLocation =
     booking?.return_place?.name ||
     booking?.rental_location_listing?.business_location?.name ||
@@ -407,15 +424,12 @@ export default function RentalBookingDetailScreen() {
 
   if (momoWaiting) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.pageBackground, padding: spacing.lg, gap: spacing.md }]}>
-        <MobileMoneyConfirmIllustration />
-        <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center' }]}>
-          {t('rentals.start.momoWaitingTitle', 'Approve on your phone')}
-        </Text>
-        <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
-          {t('rentals.start.momoWaitingBody', 'Approve the request on your phone. This page updates when the payment goes through.')}
-        </Text>
-      </View>
+      <RentalMomoWaiting
+        amount={formatConfirmationMoney(Number(booking?.total_amount) || 0, booking?.currency || 'XAF', i18n.language)}
+        item={booking?.rental_location_listing?.rental_item?.name ?? ''}
+        phone={maskPhoneE164(booking?.client?.user?.phone_number || '')}
+        onBack={() => setMomoWaiting(false)}
+      />
     );
   }
 
@@ -627,7 +641,7 @@ export default function RentalBookingDetailScreen() {
             onMessage={() => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true })}
           />
         ) : null}
-        {!showReturnReport && (booking.status === 'active' || booking.status === 'awaiting_return') ? (
+        {!showReturnReport && booking.status === 'awaiting_return' ? (
           <View
             style={[
               styles.card,
@@ -702,6 +716,8 @@ export default function RentalBookingDetailScreen() {
               status={booking.status}
               payAtPickup={booking.payment_timing === 'pay_at_pickup' || booking.currency === 'XAF' || booking.currency === 'XOF'}
               paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
+              paidAside={paidAside}
+              pickupAside={pickupAside}
             />
           ) : (
             timelineSteps.map((step, idx) => {
@@ -879,18 +895,15 @@ export default function RentalBookingDetailScreen() {
           </View>
         ) : null}
 
-        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-          {canCancel ? (
-            <Button
-              mode="outlined"
-              textColor={colors.error.main}
-              loading={actionLoading}
-              onPress={() => setCancelOpen(true)}
-            >
-              {t('rentals.cancelBooking', 'Cancel booking')}
-            </Button>
-          ) : null}
-        </View>
+        <BookingQuickActions
+          title={title}
+          start={booking.start_at}
+          end={booking.end_at}
+          location={booking.rental_location_listing?.business_location?.name}
+          showCancel={canCancel}
+          onMessage={() => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true })}
+          onCancel={() => setCancelOpen(true)}
+        />
 
         {booking.status !== 'cancelled' ? (
           <View

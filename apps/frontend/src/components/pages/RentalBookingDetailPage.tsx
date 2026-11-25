@@ -72,7 +72,7 @@ import {
   formatConfirmationDue,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
-import { formatZonedDay, formatZonedWhen, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
+import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 
 const PAYMENT_POLL_MS = 4000;
@@ -558,7 +558,7 @@ const RentalBookingDetailPage: React.FC = () => {
     }
   };
 
-  if (momoWaiting) {
+  if (momoWaiting && booking) {
     return (
       <Box sx={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
         <Stack spacing={2} alignItems="center" sx={{ maxWidth: 420 }}>
@@ -567,6 +567,10 @@ const RentalBookingDetailPage: React.FC = () => {
           <Typography variant="body2" color="text.secondary" textAlign="center">
             {t('rentals.start.momoWaitingBody', 'Approve the request on your phone. This page updates when the payment goes through.')}
           </Typography>
+          <Typography variant="h6">{formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}</Typography>
+          <Typography>{booking.rental_location_listing?.rental_item?.name}</Typography>
+          <Typography color="text.secondary">{booking.client?.user?.phone_number || ''}</Typography>
+          <Button onClick={() => setMomoWaiting(false)}>{t('common.back', 'Back')}</Button>
         </Stack>
       </Box>
     );
@@ -637,7 +641,7 @@ const RentalBookingDetailPage: React.FC = () => {
                         ? t('rentals.phases.reservedShort', 'Reserved')
                         : `${t('rentals.status', 'Status')}: ${t(`rentals.bookingStatus.${status}`, status)}`
               }
-              color={reviewReady ? undefined : statusChipColor}
+              color={reviewReady ? undefined : windowLabel ? (windowPhase === 'late' ? 'warning' : 'success') : statusChipColor}
               sx={{
                 fontWeight: 800,
                 ...(reviewReady
@@ -909,7 +913,9 @@ const RentalBookingDetailPage: React.FC = () => {
             <BusinessPhotoRequest
               bookingId={bookingId}
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ') || t('rentals.renter', 'The renter')}
-              reason={inspection.pickup.correctionReason}
+              reason={inspection.pickup?.correctionReason}
+              timeZone={listingZone}
+              askedAt={inspection.pickup?.submittedAt}
               photos={(inspection.pickup.units[0]?.photos ?? []).map((photo) => ({
                 ...photo,
                 unitId: inspection.pickup?.units[0]?.unitId ?? photo.id,
@@ -928,6 +934,12 @@ const RentalBookingDetailPage: React.FC = () => {
                   status={status}
                   payAtPickup={booking.payment_timing === 'pay_at_pickup' || booking.currency === 'XAF' || booking.currency === 'XOF'}
                   paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
+                  paidAside={
+                    (booking.payment_status === 'paid' || booking.payment_status === 'authorized') && (booking.paid_at || booking.created_at)
+                      ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
+                      : undefined
+                  }
+                  pickupAside={`${formatZonedDay(booking.actual_start_at || booking.start_at, listingZone, i18n.language)} ${formatZonedTime(booking.actual_start_at || booking.start_at, listingZone)}`}
                   accent={isBusiness ? '#0B7A3B' : undefined}
                 />
               ) : (

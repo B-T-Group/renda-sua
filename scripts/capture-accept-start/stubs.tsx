@@ -91,11 +91,12 @@ function bookingFor(current: Scene) {
       inspection_policy_version: current === 'bizPhotos' ? 1 : null,
       authorized_amount: momo ? 0 : 180,
       security_deposit_amount: momo ? 0 : 180,
+      created_at: '2026-11-20T15:00:00.000Z',
+      client: { user: { first_name: 'Amina', last_name: 'K.', phone_number: momo ? '+237699001221' : null } },
       rental_location_listing: {
         rental_item: { name: 'JBL PartyBox 310', rental_item_images: [{ id: 'img', image_url: '/hero-jbl.png' }] },
         business_location: { name: momo ? 'Akwa Sound' : "Stripe Rail · L'Assomption", address: { country: momo ? 'CM' : 'CA' } },
       },
-      client: { user: { first_name: 'Amina', last_name: 'K.' } },
     };
   }
   if (current === 'clientReview' || current === 'businessWait') return reviewBooking(current);
@@ -467,7 +468,7 @@ export function useRentalInspection() {
   const pickup = current === 'legacy'
     ? null
     : current === 'bizPhotos'
-      ? { ...full, status: 'correction_requested', correctionReason: french ? "La rayure sur la grille gauche n'est pas visible." : "Scratch on the left grille isn't shown.", units: [full.units[0]] }
+      ? { ...full, status: 'correction_requested', submittedAt: '2026-11-24T15:06:00.000Z', correctionReason: french ? "Usure non montrée. La rayure sur la grille gauche n'est pas visible." : "Wear not shown. Scratch on the left grille isn't shown.", units: [full.units[0]] }
     : one
       ? { ...full, units: [full.units[0]], submittedAt: '2026-11-17T15:32:00.000Z' }
       : full;

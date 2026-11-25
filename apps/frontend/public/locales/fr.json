@@ -7125,7 +7125,8 @@
       "momoWaitingTitle": "Approuvez sur votre téléphone",
       "momoWaitingBody": "Approuvez la demande sur votre téléphone. Cette page se met à jour quand le paiement est accepté.",
       "held": "{{amount}} retenus sur votre carte",
-      "returnBy": "Retour le {{when}}",
+      "returnBy": "Retournez avant le {{when}}",
+      "lateStill": "Réservé pour {{time}} · vous pouvez encore démarrer jusqu'au {{until}}",
       "locked": "Démarrer · dès le {{day}}",
       "button": "Démarrer la location{{amount}}",
       "confirmTitle": "Démarrer la location ?",
@@ -7145,6 +7146,7 @@
       "pushStartedBody": "{{name}} a démarré la location de {{item}}. Vous pouvez remettre l'article.",
       "notCollected": "Article non récupéré ?",
       "notCollectedSent": "Le support a été prévenu que l'article n'a pas été récupéré.",
+      "askedAt": "Demandé le {{when}} (heure de {{zone}})",
       "photosPill": "Nouvelles photos demandées"
     },
     "journey": {
@@ -7280,6 +7282,7 @@
       "overtimeDue": "Heures supplémentaires : {{amount}} {{currency}}",
       "reservedClientHint": "Votre réservation est conservée gratuitement. Le jour du retrait, touchez Démarrer la location. Payez à ce moment si le paiement est encore dû.",
       "reservedBusinessHint": "Réservé sans paiement. Le locataire démarre la location le jour du retrait et paie à ce moment si le paiement est encore dû.",
+      "reservedBusinessMomo": "{{name}} paie {{amount}} par Mobile Money en touchant Démarrer. Vous n'encaissez rien.",
       "collectPickupPayment": "Encaisser le paiement",
       "pickupPaid": "Paiement encaissé — location confirmée",
       "pickupPaymentSent": "Demande mobile money envoyée au client. La réservation sera confirmée dès réception du paiement.",
@@ -9702,6 +9705,7 @@
     "waitingBeforeCode": "Le client vérifie le constat avant qu’un code d’assistance puisse démarrer la location.",
     "reasonMissingAccessory": "Accessoire manquant",
     "reasonPhotoMismatch": "La photo ne correspond pas à l’article",
+    "youAskedAt": "Vous avez demandé à {{time}}",
     "reasonWearHidden": "Usure non montrée",
     "reasonWrongUnit": "Mauvaise unité / numéro de série",
     "mustReviewAll": "Vérifiez chaque unité avant d’accepter. Cela fige l’état des lieux de départ.",

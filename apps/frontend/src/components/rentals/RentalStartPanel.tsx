@@ -1,9 +1,9 @@
-import { Lock, PlayArrow, Storefront } from '@mui/icons-material';
+import { CalendarMonth, CreditCard, HelpOutline, Lock, PlayArrow, Storefront } from '@mui/icons-material';
 import { Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatZonedDay, formatZonedTime, formatZonedWeekday, pickupPhase } from '../../utils/rentalStartWindow';
+import { formatZonedDay, formatZonedTime, formatZonedWeekday, formatZonedWhen, pickupPhase } from '../../utils/rentalStartWindow';
 
 export interface StartPanelBooking {
   status: string;
@@ -46,6 +46,8 @@ export function RentalStartPanel(props: Props) {
   const time = formatZonedTime(props.booking.start_at, props.timeZone);
   const locked = phase === 'before' || phase === 'closed';
   const momo = (props.booking.currency === 'XAF' || props.booking.currency === 'XOF') && props.booking.payment_status !== 'paid';
+  const late = phase === 'late';
+  const tone = late ? 'warning.main' : 'success.main';
   const pill = phase === 'before'
     ? t('rentals.start.pillDay', 'Pickup {{day}}', { day })
     : phase === 'late'
@@ -55,13 +57,21 @@ export function RentalStartPanel(props: Props) {
         : t('rentals.start.pickupToday', 'Pickup today');
   const title = titleText(phase, props.role, props.renterName, when, time, props.booking.actual_start_at, props.timeZone, t);
   return (
-    <Box sx={{ p: 2, borderRadius: 2, bgcolor: (theme) => alpha(theme.palette.success.main, 0.12), border: 1, borderColor: 'success.main', color: 'text.primary' }}>
+    <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: (theme) => alpha(late ? theme.palette.warning.main : theme.palette.success.main, 0.12), border: 1, borderColor: tone, color: 'text.primary' }}>
       <Stack direction="row" spacing={1} alignItems="center">
-        <Typography variant="caption" sx={{ bgcolor: 'success.main', color: 'common.white', px: 1, py: 0.25, borderRadius: 999 }}>{pill}</Typography>
+        <Typography variant="caption" sx={{ bgcolor: tone, color: 'common.white', px: 1, py: 0.25, borderRadius: 999 }}>{pill}</Typography>
         <Typography variant="caption">{t('rentals.nextStep.label', 'NEXT STEP')}</Typography>
       </Stack>
       <Typography variant="h6" sx={{ mt: 1 }}>{title}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{bodyText(phase, props.role, momo, t)}</Typography>
+      {late ? (
+        <Typography variant="body2" sx={{ mt: 0.5 }}>
+          {t('rentals.start.lateStill', 'Booked for {{time}} · you can still start until {{until}}', {
+            time,
+            until: formatZonedWhen(props.booking.end_at, props.timeZone, i18n.language),
+          })}
+        </Typography>
+      ) : null}
       {phase !== 'started' && props.role === 'client' ? (
         <Typography variant="body2" sx={{ mt: 1 }}>
           {momo
@@ -84,7 +94,7 @@ export function RentalStartPanel(props: Props) {
         </Button>
       ) : null}
       {props.role === 'business' && phase === 'started' && props.onNotCollected ? (
-        <Button color="error" onClick={props.onNotCollected} sx={{ mt: 1 }}>
+        <Button color="error" startIcon={<HelpOutline />} onClick={props.onNotCollected} sx={{ mt: 1 }}>
           {t('rentals.business.notCollected', 'Item not collected?')}
         </Button>
       ) : null}
@@ -98,9 +108,11 @@ export function RentalStartPanel(props: Props) {
               {t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
             </Typography>
           </Stack>
-          <Typography sx={{ mt: 2 }}>{props.place}</Typography>
-          <Typography>{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Typography>
-          <Typography>{props.money}</Typography>
+          <Stack spacing={1} sx={{ mt: 2 }}>
+            <Stack direction="row" spacing={1}><Storefront fontSize="small" color="action" /><Typography>{props.place}</Typography></Stack>
+            <Stack direction="row" spacing={1}><CalendarMonth fontSize="small" color="action" /><Typography>{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Typography></Stack>
+            <Stack direction="row" spacing={1}><CreditCard fontSize="small" color="action" /><Typography>{momo ? t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: props.money }) : t('rentals.start.held', '{{amount}} held on your card', { amount: props.money })}</Typography></Stack>
+          </Stack>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30 minutes.")}
           </Typography>

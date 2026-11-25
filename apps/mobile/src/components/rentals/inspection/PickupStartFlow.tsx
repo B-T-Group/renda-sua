@@ -5,7 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../contexts/ThemeContext';
 import type { InspectionPhoto, InspectionView } from '../../../utils/rentals/rentalInspection';
-import { formatPhotoStamp, pickupPhase } from '../../../utils/rentals/rentalStartWindow';
+import { listingCity } from '../../../utils/rentals/pickupPhotoTime';
+import { splitCorrectionReason } from '../../../utils/rentals/rentalInspection';
+import { formatPhotoStamp, formatZonedTime, pickupPhase } from '../../../utils/rentals/rentalStartWindow';
 
 const REASON_ORDER = ['photo_mismatch', 'wear_hidden', 'missing_accessory', 'wrong_unit'] as const;
 
@@ -22,6 +24,8 @@ interface Props {
   busy: boolean;
   starting: boolean;
   showDecline: boolean;
+  itemName?: string;
+  bookingNumber?: string;
   onMatch: () => void;
   onAsk: (reasons: string[], note: string) => void;
   onDecline: () => void;
@@ -34,7 +38,7 @@ export function PickupStartFlow(props: Props) {
   const checked = props.view.yourDecision === 'accept';
   const step = waiting ? 'wait' : checked ? 'start' : 'check';
   return (
-    <FlowFrame step={step}>
+    <FlowFrame step={step} name={props.itemName} number={props.bookingNumber} business={props.place}>
       {step === 'wait' ? <Waiting {...props} /> : null}
       {step !== 'wait' ? <PhotoRow photos={props.photos} timeZone={props.timeZone} /> : null}
       {step === 'check' ? <CheckActions {...props} /> : null}
@@ -45,13 +49,14 @@ export function PickupStartFlow(props: Props) {
   );
 }
 
-function FlowFrame({ step, children }: { step: string; children: React.ReactNode }) {
+function FlowFrame({ step, name, number, business, children }: { step: string; name?: string; number?: string; business?: string; children: React.ReactNode }) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
       <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24, gap: spacing.md }}>
+        <ItemHeader name={name} number={number} business={business} />
         <Stepper step={step} />
         {step === 'check' ? (
           <Text style={{ color: colors.text.primary, fontWeight: '700', fontSize: 18 }}>
@@ -64,20 +69,39 @@ function FlowFrame({ step, children }: { step: string; children: React.ReactNode
   );
 }
 
+function ItemHeader(props: { name?: string; number?: string; business?: string }) {
+  const { colors } = useTheme();
+  if (!props.name) return null;
+  const meta = [props.number, props.business].filter(Boolean).join(' · ');
+  return (
+    <View>
+      <Text style={{ color: colors.text.primary, fontWeight: '700', fontSize: 18 }}>{props.name}</Text>
+      {meta ? <Text style={{ color: colors.text.secondary }}>{meta}</Text> : null}
+    </View>
+  );
+}
+
 function Stepper({ step }: { step: string }) {
   const { t } = useTranslation();
-  const { colors } = useTheme();
-  const checkDone = step === 'start';
+  const current = step === 'start' ? 2 : 1;
   return (
     <View style={styles.stepper}>
-      <Text style={{ color: checkDone ? colors.success.main : colors.primary.main, fontWeight: '700' }}>
-        {checkDone ? '✓ ' : '1 '}
-        {t('rentalInspection.stepCheck', 'Check the item')}
-      </Text>
-      <Text style={{ color: colors.text.disabled }}>{'  —  '}</Text>
-      <Text style={{ color: step === 'start' ? colors.primary.main : colors.text.disabled, fontWeight: '700' }}>
-        {`2 ${t('rentalInspection.stepStart', 'Start rental')}`}
-      </Text>
+      <StepDot n={1} label={t('rentalInspection.stepCheck', 'Check the item')} on={current === 1} done={step === 'start'} />
+      <View style={styles.stepLine} />
+      <StepDot n={2} label={t('rentalInspection.stepStart', 'Start rental')} on={current === 2} done={false} />
+    </View>
+  );
+}
+
+function StepDot({ n, label, on, done }: { n: number; label: string; on: boolean; done: boolean }) {
+  const { colors } = useTheme();
+  const tone = done ? colors.success.main : on ? colors.primary.main : colors.text.disabled;
+  return (
+    <View style={styles.stepDot}>
+      <View style={[styles.circle, { borderColor: tone, backgroundColor: done || on ? tone : 'transparent' }]}>
+        <Text style={{ color: done || on ? '#fff' : tone, fontWeight: '700' }}>{done ? '✓' : String(n)}</Text>
+      </View>
+      <Text style={{ color: tone, fontWeight: '700', fontSize: 12 }}>{label}</Text>
     </View>
   );
 }
@@ -138,7 +162,7 @@ function ReuseNote({ photos, timeZone }: { photos: InspectionPhoto[]; timeZone: 
   if (!photos.some((photo) => photo.reused)) return null;
   return (
     <Text style={{ color: colors.text.secondary }}>
-      {t('rentalInspection.reuseDated', 'Some photos are from an earlier rental. Each shows the date it was taken ({{zone}} time).', { zone: timeZone.split('/').pop() })}
+      {t('rentalInspection.reuseDated', 'Some photos are from an earlier rental. Each shows the date it was taken ({{zone}} time).', { zone: listingCity(timeZone) })}
     </Text>
   );
 }
@@ -201,14 +225,39 @@ function ReasonChips({ selected, onToggle }: { selected: string[]; onToggle: (co
 function Waiting(props: Props) {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const parts = splitCorrectionReason(props.view.correctionReason, reasonLabels(t));
+  const asked = props.view.submittedAt ? formatZonedTime(props.view.submittedAt, props.timeZone) : '';
   return (
     <View style={{ gap: 8 }}>
       <Text style={{ color: colors.warning.dark ?? colors.warning.main }}>
-        {t('rentalInspection.waitingPhotos', "Waiting for new photos. We'll notify you when they're ready.")}
+        {`⏱ ${t('rentalInspection.waitingPhotos', "Waiting for new photos. We'll notify you when they're ready.")}`}
       </Text>
-      {props.view.correctionReason ? (
-        <Text style={{ color: colors.text.primary }}>{props.view.correctionReason}</Text>
+      <ChipRow chips={parts.chips} />
+      {parts.note ? <Text style={{ color: colors.text.primary }}>{parts.note}</Text> : null}
+      {asked ? (
+        <Text style={{ color: colors.text.secondary }}>
+          {t('rentalInspection.youAskedAt', 'You asked at {{time}}', { time: asked })}
+        </Text>
       ) : null}
+      {props.showDecline ? (
+        <Button textColor={colors.error.main} onPress={props.onDecline}>
+          {t('pickupDecline.cta', 'Not as described? Decline')}
+        </Button>
+      ) : null}
+    </View>
+  );
+}
+
+function ChipRow({ chips }: { chips: string[] }) {
+  const { colors } = useTheme();
+  if (!chips.length) return null;
+  return (
+    <View style={styles.chips}>
+      {chips.map((chip) => (
+        <View key={chip} style={[styles.chip, { borderColor: colors.warning.main, backgroundColor: colors.warning.main + '22' }]}>
+          <Text style={{ color: colors.text.primary }}>{chip}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -272,7 +321,10 @@ function reasonLabels(t: (key: string, fallback: string) => string): Record<stri
 }
 
 const styles = StyleSheet.create({
-  stepper: { flexDirection: 'row', alignItems: 'center' },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stepLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
+  stepDot: { alignItems: 'center', gap: 4, maxWidth: 120 },
+  circle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tile: { width: '31%' },
   frame: { height: 96, borderRadius: 12, overflow: 'hidden' },

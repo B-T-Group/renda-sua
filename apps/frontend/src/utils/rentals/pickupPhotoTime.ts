@@ -1,5 +1,5 @@
 const CITY_BY_ZONE: Record<string, string> = {
-  'America/Toronto': 'Toronto',
+  'America/Toronto': 'Montréal',
   'America/New_York': 'New York',
   'Africa/Douala': 'Douala',
   'Africa/Libreville': 'Libreville',

@@ -7,6 +7,8 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { submitInspection, uploadInspectionPhoto } from '../../../services/rentalInspectionApi';
 import type { InspectionPhoto } from '../../../utils/rentals/rentalInspection';
+import { formatListingStamp, listingCity, slotTileLabel } from '../../../utils/rentals/pickupPhotoTime';
+import { splitCorrectionReason } from '../../../utils/rentals/rentalInspection';
 import { formatPhotoStamp } from '../../../utils/rentals/rentalStartWindow';
 import { filterSupportedImageAssets, IMAGE_LIBRARY_PICKER_OPTIONS } from '../../../utils/supportedImageFormats';
 
@@ -16,21 +18,24 @@ interface Props {
   reason?: string | null;
   photos: Array<InspectionPhoto & { unitId: string }>;
   timeZone: string;
+  askedAt?: string | null;
   onSent: () => void;
 }
 
 export function BusinessPhotoRequest(props: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const parts = splitCorrectionReason(props.reason, reasonLabels(t));
+  const asked = props.askedAt ? formatListingStamp(props.askedAt, props.timeZone, i18n.language) : '';
   return (
     <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
       <View style={[styles.banner, { backgroundColor: colors.warning.main + '22', borderRadius: borderRadius.md, padding: spacing.md }]}>
         <Text style={{ color: colors.text.primary }}>
           {t('rentals.business.photosAsked', '{{name}} asked for new photos before starting.', { name: props.renterName })}
         </Text>
-        {props.reason ? <Text style={{ color: colors.text.primary, marginTop: 8 }}>{props.reason}</Text> : null}
+        <ReasonLine chips={parts.chips} note={parts.note} asked={asked} zone={listingCity(props.timeZone)} />
       </View>
       <View style={styles.photos}>
         {props.photos.map((photo) => (
@@ -65,6 +70,7 @@ function RetakeTile({
       <View style={[styles.frame, { backgroundColor: colors.surfaceInput }]}>
         {photo.url ? <Image source={{ uri: photo.url }} style={styles.image} /> : null}
       </View>
+      <Text style={{ textAlign: 'center', color: colors.text.primary, fontSize: 12 }}>{slotTileLabel(photo.role, i18n.language)}</Text>
       <Text style={{ textAlign: 'center', color: colors.text.secondary, fontSize: 11 }}>{`${badge}${when ? ` · ${when}` : ''}`}</Text>
       <View style={styles.tools}>
         <Pressable accessibilityRole="button" onPress={() => void pick(photo, bookingId, 'camera', onError)}>
@@ -76,6 +82,37 @@ function RetakeTile({
       </View>
     </View>
   );
+}
+
+function ReasonLine(props: { chips: string[]; note: string; asked: string; zone: string }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <View style={{ gap: 6, marginTop: 8 }}>
+      <View style={styles.chips}>
+        {props.chips.map((chip) => (
+          <View key={chip} style={[styles.chip, { borderColor: colors.warning.main }]}>
+            <Text>{chip}</Text>
+          </View>
+        ))}
+      </View>
+      {props.note ? <Text style={{ color: colors.text.primary }}>{props.note}</Text> : null}
+      {props.asked ? (
+        <Text style={{ color: colors.text.secondary }}>
+          {t('rentals.business.askedAt', 'Asked {{when}} ({{zone}} time)', { when: props.asked, zone: props.zone })}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function reasonLabels(t: (key: string, fallback: string) => string): Record<string, string> {
+  return {
+    wear_hidden: t('rentalInspection.reasonWearHidden', 'Wear not shown'),
+    photo_mismatch: t('rentalInspection.reasonPhotoMismatch', "Photo doesn't match"),
+    missing_accessory: t('rentalInspection.reasonMissingAccessory', 'Missing accessory'),
+    wrong_unit: t('rentalInspection.reasonWrongUnit', 'Wrong unit'),
+  };
 }
 
 async function pick(
@@ -130,6 +167,8 @@ async function send(
 const styles = StyleSheet.create({
   banner: {},
   photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   tile: { width: '31%' },
   frame: { height: 96, borderRadius: 12, overflow: 'hidden' },
   image: { width: '100%', height: 96 },

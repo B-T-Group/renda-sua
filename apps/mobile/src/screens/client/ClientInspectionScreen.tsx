@@ -246,6 +246,8 @@ export default function ClientInspectionScreen() {
           view={model.view}
           photos={unit.photos}
           timeZone={photoZone}
+          itemName={model.booking?.rental_location_listing?.rental_item?.name ?? ''}
+          bookingNumber={model.booking?.booking_number ?? ''}
           place={model.booking?.rental_location_listing?.business_location?.name ?? ''}
           returnLabel={dueLabel}
           money={amountLabel}

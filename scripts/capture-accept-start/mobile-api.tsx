@@ -149,7 +149,8 @@ function simpleBooking(current: Scene) {
     inspection_policy_version: enrolled ? 1 : null,
     client_id: 'client',
     business_id: 'biz',
-    client: { user: { first_name: 'Amina', last_name: 'K.' } },
+    client: { user: { first_name: 'Amina', last_name: 'K.', phone_number: momo ? '+237699001221' : null } },
+    created_at: '2026-11-20T15:00:00.000Z',
     rental_location_listing: {
       rental_item: {
         name: 'JBL PartyBox 310',
@@ -193,9 +194,13 @@ function inspectionFor() {
   return {
     status: (current === 'waitingPhotos' || current === 'bizPhotos' ? 'correction_requested' : 'submitted') as 'submitted' | 'correction_requested',
     correctionReason: current === 'waitingPhotos' || current === 'bizPhotos'
-      ? (french ? "La rayure sur la grille gauche n'est pas visible." : "Scratch on the left grille isn't shown.")
+      ? (french
+        ? "Usure non montrée. La rayure sur la grille gauche n'est pas visible."
+        : "Wear not shown. Scratch on the left grille isn't shown.")
       : null,
-    submittedAt: one ? '2026-11-17T15:32:00.000Z' : '2026-11-12T15:12:00.000Z',
+    submittedAt: current === 'waitingPhotos' || current === 'bizPhotos'
+      ? '2026-11-24T15:06:00.000Z'
+      : one ? '2026-11-17T15:32:00.000Z' : '2026-11-12T15:12:00.000Z',
     yourDecision: accepted ? ('accept' as const) : null,
     versionId: 'ver-1',
     versionNo: 1,

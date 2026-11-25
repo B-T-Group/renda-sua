@@ -16,6 +16,7 @@ import {
   notReceivedFailure,
   didntReceiveMinutesLeft,
   showDidntReceiveLink,
+  splitCorrectionReason,
   showLegacyReturnPicker,
   unitPhotosMeetMinimum,
   type InspectionUnit,
@@ -197,6 +198,14 @@ describe('client review and money copy', () => {
     expect(didntReceiveMinutesLeft(start, at)).toBe(30);
     expect(didntReceiveMinutesLeft(start, at + 60000)).toBe(29);
     expect(didntReceiveMinutesLeft(start, late)).toBe(0);
+  });
+
+  it('splits a photo-request reason into a chip and a note', () => {
+    const parts = splitCorrectionReason('Wear not shown. Scratch on the left grille isn\'t shown.', {
+      wear_hidden: 'Wear not shown',
+    });
+    expect(parts.chips).toEqual(['Wear not shown']);
+    expect(parts.note).toContain('Scratch');
   });
 
   it('maps a not-received rejection to its message', () => {

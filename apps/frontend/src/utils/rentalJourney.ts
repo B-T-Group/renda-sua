@@ -48,9 +48,15 @@ export function rentalJourney(input: JourneyInput): JourneyStep[] {
       labelKey: label[0],
       label: label[1],
       state,
-      aside: key === 'paid' ? input.paidAside : key === 'pickup' && state === 'done' ? input.pickupAside : undefined,
+      aside: journeyAside(key, state, input),
     };
   });
+}
+
+function journeyAside(key: JourneyKey, state: JourneyStep['state'], input: JourneyInput): string | undefined {
+  if (key === 'paid') return input.paidAside;
+  if (key === 'pickup' && state !== 'upcoming') return input.pickupAside;
+  return undefined;
 }
 
 function currentKey(status: string): JourneyKey {
