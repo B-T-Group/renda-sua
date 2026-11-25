@@ -49,6 +49,7 @@ import {
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
 import { formatDoualaStamp } from '../../utils/rentals/renterReturnPhase';
+import { cardHoldLines } from '../../utils/rentals/cardDeposit';
 import {
   businessCanReplaceReport,
   reportReadyToReview,
@@ -286,6 +287,11 @@ export default function BusinessRentalBookingDetailScreen() {
     (booking.status === 'confirmed' || isReserved) && !booking.actual_start_at;
   const depositAmount = Math.max(0, Number(booking.security_deposit_amount) || 0);
   const authorizedAmount = Math.max(0, Number(booking.authorized_amount) || 0);
+  const hold = cardHoldLines({
+    total: Number(booking.total_amount) || 0,
+    deposit: depositAmount,
+    authorized: authorizedAmount,
+  });
 
   return (
     <ScrollView
@@ -355,7 +361,7 @@ export default function BusinessRentalBookingDetailScreen() {
         <Text style={{ color: colors.text.primary, marginTop: 8, fontWeight: '600' }}>
           {detailMoney(Number(booking.total_amount) || 0)}
         </Text>
-        {depositAmount > 0 ? (
+        {hold.showDeposit ? (
           <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
             {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
             {': '}
@@ -535,7 +541,7 @@ export default function BusinessRentalBookingDetailScreen() {
             unitId: snapshot.pickup?.units[0]?.unitId ?? '',
           }))}
           timeZone={listingZone}
-          askedAt={snapshot.pickup?.submittedAt}
+          askedAt={snapshot.pickup?.askedAt || snapshot.pickup?.submittedAt}
           onSent={() => void load({ soft: true })}
         />
       ) : null}

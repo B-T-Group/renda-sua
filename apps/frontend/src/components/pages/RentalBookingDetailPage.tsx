@@ -915,7 +915,7 @@ const RentalBookingDetailPage: React.FC = () => {
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ') || t('rentals.renter', 'The renter')}
               reason={inspection.pickup?.correctionReason}
               timeZone={listingZone}
-              askedAt={inspection.pickup?.submittedAt}
+              askedAt={inspection.pickup?.askedAt || inspection.pickup?.submittedAt}
               photos={(inspection.pickup.units[0]?.photos ?? []).map((photo) => ({
                 ...photo,
                 unitId: inspection.pickup?.units[0]?.unitId ?? photo.id,

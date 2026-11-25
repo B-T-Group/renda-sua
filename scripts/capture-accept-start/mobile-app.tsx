@@ -15,6 +15,7 @@ import RentalRequestSubmittedScreen from '../../apps/mobile/src/screens/client/R
 import BusinessRentalBookingDetailScreen from '../../apps/mobile/src/screens/business/BusinessRentalBookingDetailScreen';
 import { ReportSentConfirmation } from '../../apps/mobile/src/components/rentals/inspection/ReportSentConfirmation';
 import { RentalStartedConfirmation } from '../../apps/mobile/src/components/rentals/inspection/RentalStartedConfirmation';
+import { RentalHandoverNotice } from '../../apps/mobile/src/components/rentals/RentalHandoverNotice';
 import { formatConfirmationDue, formatConfirmationMoney } from '../../apps/mobile/src/utils/rentals/confirmationFormat';
 import en from '../../apps/mobile/src/i18n/locales/en.json';
 import fr from '../../apps/mobile/src/i18n/locales/fr.json';
@@ -35,7 +36,7 @@ function CaptureScreen() {
   (window as Window & { __scene?: string }).__scene = scene;
   document.documentElement.lang = language;
   if (i18n.language !== language) void i18n.changeLanguage(language);
-  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush';
+  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush' || scene === 'bizPush';
   const submitted = scene === 'requestSubmitted';
   const inspection = scene === 'review' || scene === 'momo' || scene === 'conflict';
   const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait' || scene === 'bizWait' || scene === 'bizMomo' || scene === 'bizStarted' || scene === 'bizPhotos';
@@ -109,6 +110,7 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
     );
   }
   if (scene === 'push' || scene === 'clientPush') return <StartedNotice language={language} due={due} zone={zone} kind={scene} />;
+  if (scene === 'bizPush') return <HandoverPair />;
   return (
     <RentalStartedConfirmation
       momo={scene === 'momoStarted'}
@@ -123,6 +125,15 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
       location={scene === 'momoStarted' ? 'Sono Akwa – Akwa, Douala' : 'Atelier Nord, Toronto'}
       onBack={() => undefined}
     />
+  );
+}
+
+function HandoverPair() {
+  return (
+    <View style={{ padding: 16, gap: 12 }}>
+      <RentalHandoverNotice mode="push" renterName="Amina K." itemName="JBL PartyBox 310" />
+      <RentalHandoverNotice mode="banner" renterName="Amina K." itemName="JBL PartyBox 310" />
+    </View>
   );
 }
 

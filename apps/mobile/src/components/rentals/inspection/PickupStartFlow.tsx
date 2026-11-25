@@ -226,7 +226,8 @@ function Waiting(props: Props) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const parts = splitCorrectionReason(props.view.correctionReason, reasonLabels(t));
-  const asked = props.view.submittedAt ? formatZonedTime(props.view.submittedAt, props.timeZone) : '';
+  const askedAt = props.view.askedAt || props.view.submittedAt;
+  const asked = askedAt ? formatZonedTime(askedAt, props.timeZone) : '';
   return (
     <View style={{ gap: 8 }}>
       <Text style={{ color: colors.warning.dark ?? colors.warning.main }}>

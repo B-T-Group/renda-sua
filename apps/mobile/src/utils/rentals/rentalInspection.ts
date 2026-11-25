@@ -43,6 +43,7 @@ export interface InspectionView {
   allocationVersion?: number | null;
   minPhotos?: number;
   correctionReason?: string | null;
+  askedAt?: string | null;
   claimedDamageAmount?: number | null;
   slotSkips?: Array<{ unitId: string; slotKey: string; reason: string }>;
   pickupPhotoRules?: PickupPhotoRules | null;
