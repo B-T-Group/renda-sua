@@ -78,13 +78,11 @@ export function MessageRenderer({ message, compact }: MessageRendererProps) {
     );
   }
 
-  if (message.message_type === 'RENTAL_START_PIN' && message.structured_content) {
+  if (message.message_type === 'RENTAL_START_PIN') {
     return (
-      <DeliveryPinMessageCard
-        content={message.structured_content as any}
-        compact={compact}
-        variant="rentalStart"
-      />
+      <Typography variant="body2">
+        {t('rentals.messaging.startPin.retired', 'Start this rental from the booking. There is no start PIN.')}
+      </Typography>
     );
   }
 

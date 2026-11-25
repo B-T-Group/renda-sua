@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +9,7 @@ import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { reportNotReceived } from '../../services/rentalsApi';
 import {
+  didntReceiveMinutesLeft,
   notReceivedErrorKey,
   notReceivedFailure,
   showDidntReceiveLink,
@@ -46,11 +48,13 @@ export function useDidntReceiveWindow(
 export function DidntReceiveReportButton({
   bookingId,
   reported = false,
+  startedAt,
   onReported,
   onWindowClosed,
 }: {
   bookingId: string;
   reported?: boolean;
+  startedAt?: string | null;
   onReported?: () => void;
   onWindowClosed?: () => void;
 }) {
@@ -139,13 +143,10 @@ export function DidntReceiveReportButton({
 
   return (
     <>
-      <Button
-        mode="text"
-        textColor={colors.primary.main}
+      <MissingLink
+        label={linkText(startedAt, t)}
         onPress={() => (enabled ? setStep('confirm') : navigation.navigate('SupportTickets'))}
-      >
-        {t('rentalInspection.didntReceive', "Didn't receive the item? Tell us")}
-      </Button>
+      />
       <Modal visible={step != null} transparent animationType="fade" onRequestClose={close} statusBarTranslucent>
         <Pressable style={styles.scrim} onPress={close}>
           <Pressable
@@ -204,6 +205,28 @@ export function DidntReceiveReportButton({
         </Pressable>
       </Modal>
     </>
+  );
+}
+
+function linkText(startedAt: string | null | undefined, t: ReturnType<typeof useTranslation>['t']): string {
+  const minutes = didntReceiveMinutesLeft(startedAt);
+  if (!minutes) return t('rentalInspection.didntReceive', "Didn't receive the item? Tell us");
+  return t('rentals.start.didntReceiveLeft', "Didn't receive the item? · {{minutes}} min", {
+    minutes: String(minutes),
+  });
+}
+
+function MissingLink(props: { label: string; onPress: () => void }) {
+  const { colors, spacing } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={props.onPress}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 48 }}
+    >
+      <MaterialCommunityIcons name="help-circle-outline" size={18} color={colors.error.main} />
+      <Text style={{ color: colors.error.main, flexShrink: 1 }}>{props.label}</Text>
+    </Pressable>
   );
 }
 

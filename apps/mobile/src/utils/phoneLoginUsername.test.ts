@@ -1,5 +1,11 @@
 import type { CountryCode } from 'libphonenumber-js';
-import { seedPhoneInputFromE164 } from './phoneLoginUsername';
+import { formatStoredPhone, seedPhoneInputFromE164 } from './phoneLoginUsername';
+
+describe('formatStoredPhone', () => {
+  it('uses the international grouping', () => {
+    expect(formatStoredPhone('+237699001221')).toBe('+237 6 99 00 12 21');
+  });
+});
 
 describe('seedPhoneInputFromE164', () => {
   it('parses E.164 without a fallback region', () => {

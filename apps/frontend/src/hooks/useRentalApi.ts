@@ -316,6 +316,7 @@ export interface RentalBookingDetail {
   status: string;
   start_at: string;
   end_at: string;
+  start_opens_at?: string | null;
   total_amount: number;
   currency: string;
   security_deposit_amount?: number | string | null;
@@ -328,6 +329,8 @@ export interface RentalBookingDetail {
   payment_timing?: 'pay_now' | 'pay_at_pickup' | null;
   payment_status?: 'pending' | 'authorized' | 'paid' | 'cancelled' | null;
   actual_start_at?: string | null;
+  paid_at?: string | null;
+  created_at?: string | null;
   actual_end_at?: string | null;
   units_booked?: number | null;
   inspection_policy_version?: number | null;
@@ -746,14 +749,6 @@ export function useRentalApi() {
     [api]
   );
 
-  const getStartPin = useCallback(
-    async (bookingId: string) => {
-      const { data } = await api.get(`/rentals/bookings/${bookingId}/start-pin`);
-      return data as { pin: string };
-    },
-    [api]
-  );
-
   const fetchBookingDetail = useCallback(
     async (bookingId: string): Promise<RentalBookingDetail | null> => {
       try {
@@ -770,50 +765,19 @@ export function useRentalApi() {
     [api]
   );
 
-  const verifyStartPin = useCallback(
-    async (
-      bookingId: string,
-      body: {
-        pin?: string;
-        overwriteCode?: string;
-        useLatestSharedPin?: boolean;
-        pinMessageId?: string;
-      }
-    ) => {
-      const { data } = await api.post(
-        `/rentals/bookings/${bookingId}/verify-start-pin`,
-        body
-      );
-      return data as { success: boolean };
-    },
-    [api]
-  );
+  const startRental = useCallback(async (bookingId: string) => {
+    const { data } = await api.post(`/rentals/bookings/${bookingId}/start`);
+    return data as {
+      started: boolean;
+      paymentPending: boolean;
+      start_opens_at?: string;
+    };
+  }, [api]);
 
-  const shareStartPin = useCallback(
-    async (bookingId: string) => {
-      const { data } = await api.post(
-        `/rentals/bookings/${bookingId}/messages/start-pin`
-      );
-      return data as { success: boolean; message?: unknown };
-    },
-    [api]
-  );
-
-  const getActiveStartPin = useCallback(
-    async (bookingId: string) => {
-      const { data } = await api.get<{
-        success: boolean;
-        activePin?: {
-          messageId: string;
-          pin: string;
-          pinVersion: number;
-          sharedAt: string;
-        } | null;
-      }>(`/rentals/bookings/${bookingId}/messages/active-start-pin`);
-      return data.activePin ?? null;
-    },
-    [api]
-  );
+  const reportItemNotCollected = useCallback(async (bookingId: string) => {
+    const { data } = await api.post(`/rentals/bookings/${bookingId}/item-not-collected`);
+    return data as { success: boolean };
+  }, [api]);
 
   const confirmReturn = useCallback(
     async (bookingId: string, body?: { actualEndAt?: string }) => {
@@ -892,11 +856,9 @@ export function useRentalApi() {
     acceptAndStart,
     reportNotReceived,
     reportReturned,
-    getStartPin,
+    startRental,
+    reportItemNotCollected,
     fetchBookingDetail,
-    verifyStartPin,
-    shareStartPin,
-    getActiveStartPin,
     confirmReturn,
     deleteBusinessRentalListing,
     deleteBusinessRentalItem,

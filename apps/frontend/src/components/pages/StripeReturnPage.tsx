@@ -117,7 +117,7 @@ const StripeReturnPage: React.FC = () => {
                     : policy === 'legacy'
                       ? t(
                           'stripe.return.rentalSuccessBody',
-                          'Your rental payment was received. You can open your booking to see confirmation and your start PIN.'
+                          'Your rental payment was received. Open your booking and tap Start rental on the pickup day.'
                         )
                       : t(
                           'stripe.return.rentalSuccessBodyNeutral',

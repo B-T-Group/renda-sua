@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Text } from 'react-native';
 
 type Scene =
   | 'review'
@@ -13,7 +14,19 @@ type Scene =
   | 'reportSent'
   | 'rentalStarted'
   | 'momoStarted'
-  | 'push';
+  | 'push'
+  | 'before'
+  | 'today'
+  | 'momoDay'
+  | 'late'
+  | 'startedSimple'
+  | 'inspect'
+  | 'waitingPhotos'
+  | 'inspectStart'
+  | 'bizWait'
+  | 'bizMomo'
+  | 'bizStarted'
+  | 'bizPhotos';
 
 function scene(): Scene {
   return ((window as Window & { __scene?: Scene }).__scene ?? 'review') as Scene;
@@ -65,6 +78,7 @@ function reviewBooking() {
 }
 
 function bookingFor(current: Scene) {
+  if (SIMPLE.has(current)) return simpleBooking(current);
   if (current === 'clientReview' || current === 'businessWait') return reviewBooking();
   const active = current === 'started' || current === 'handed';
   const legacy = current === 'legacy';
@@ -110,6 +124,50 @@ function bookingFor(current: Scene) {
   };
 }
 
+const SIMPLE = new Set<Scene>([
+  'before', 'today', 'momoDay', 'late', 'startedSimple', 'inspect', 'waitingPhotos', 'inspectStart', 'bizWait', 'bizMomo', 'bizStarted', 'bizPhotos',
+]);
+
+function simpleBooking(current: Scene) {
+  const momo = current === 'momoDay' || current === 'bizMomo';
+  const started = current === 'startedSimple' || current === 'bizStarted';
+  const enrolled = current === 'inspect' || current === 'waitingPhotos' || current === 'inspectStart' || current === 'bizPhotos';
+  return {
+    id: 'b1',
+    booking_number: momo ? 'RB-38140211' : 'RB-38138754',
+    status: started ? 'active' : momo ? 'reserved' : 'confirmed',
+    start_at: momo ? '2026-11-24T08:00:00.000Z' : '2026-11-24T15:00:00.000Z',
+    end_at: momo ? '2026-11-29T17:00:00.000Z' : '2026-11-26T23:00:00.000Z',
+    start_opens_at: momo ? '2026-11-23T23:00:00.000Z' : '2026-11-24T05:00:00.000Z',
+    total_amount: momo ? 45000 : 180,
+    currency: momo ? 'XAF' : 'CAD',
+    payment_timing: momo ? 'pay_at_pickup' : 'pay_now',
+    payment_status: momo ? 'pending' : 'authorized',
+    actual_start_at: started ? '2026-11-24T15:04:00.000Z' : null,
+    not_received_report: null,
+    units_booked: 1,
+    inspection_policy_version: enrolled ? 1 : null,
+    client_id: 'client',
+    business_id: 'biz',
+    client: { user: { first_name: 'Amina', last_name: 'K.', phone_number: momo ? '+237699001221' : null } },
+    created_at: '2026-11-20T15:00:00.000Z',
+    rental_location_listing: {
+      rental_item: {
+        name: 'JBL PartyBox 310',
+        rental_item_images: [{ id: 'img', image_url: '/hero-jbl.png', alt_text: 'JBL PartyBox 310' }],
+      },
+      business_location: {
+        name: momo ? 'Akwa Sound' : "Stripe Rail · L'Assomption",
+        address: { country: momo ? 'CM' : 'CA' },
+      },
+    },
+    accept_start_preview: momo ? { payment_rail: 'mobile_money' as const, amount_due_at_pickup: 45000 } : { payment_rail: 'card' as const, amount_due_at_pickup: 0 },
+    security_deposit_amount: momo ? 0 : 180,
+    authorized_amount: momo ? 0 : 180,
+    overtime_amount: 0,
+  };
+}
+
 const unit = (id: string, label: string) => ({
   unitId: id,
   slotIndex: id === 'u1' ? 1 : 2,
@@ -119,23 +177,30 @@ const unit = (id: string, label: string) => ({
   wear: 'none',
   accessories: id === 'u2' ? [{ name: 'Battery + charger', count: 2 }] : [],
   photos: [
-    { id: `${id}-1`, role: 'overview' as const, url: '/hero-jbl.png' },
-    { id: `${id}-2`, role: 'other_side' as const, url: '/hero-jbl.png' },
-    { id: `${id}-3`, role: 'accessories' as const, url: '/hero-jbl.png' },
+    { id: `${id}-1`, role: 'overview' as const, url: '/hero-jbl.png', capturedAt: '2026-11-24T14:51:00.000Z', reused: false },
+    { id: `${id}-2`, role: 'other_side' as const, url: '/hero-jbl.png', capturedAt: '2026-11-02T15:00:00.000Z', reused: true },
+    { id: `${id}-3`, role: 'accessories' as const, url: '/hero-jbl.png', capturedAt: '2026-11-02T15:00:00.000Z', reused: true },
   ],
 });
 
 function inspectionFor() {
   const current = scene();
   const french = document.documentElement.lang === 'fr';
-  const accepted = current === 'started' || current === 'handed';
+  const accepted = current === 'started' || current === 'handed' || current === 'inspectStart';
   const one = current === 'clientReview' || current === 'businessWait';
   const units = one
     ? [unit('u1', french ? 'Unité 1' : 'Unit 1')]
     : [unit('u1', french ? 'Unité 1' : 'Unit 1'), unit('u2', french ? 'Unité 2' : 'Unit 2')];
   return {
-    status: 'submitted' as const,
-    submittedAt: one ? '2026-11-17T15:32:00.000Z' : '2026-11-12T15:12:00.000Z',
+    status: (current === 'waitingPhotos' || current === 'bizPhotos' ? 'correction_requested' : 'submitted') as 'submitted' | 'correction_requested',
+    correctionReason: current === 'waitingPhotos' || current === 'bizPhotos'
+      ? (french
+        ? "Usure non montrée. La rayure sur la grille gauche n'est pas visible."
+        : "Wear not shown. Scratch on the left grille isn't shown.")
+      : null,
+    submittedAt: current === 'waitingPhotos' || current === 'bizPhotos'
+      ? '2026-11-24T15:06:00.000Z'
+      : one ? '2026-11-17T15:32:00.000Z' : '2026-11-12T15:12:00.000Z',
     yourDecision: accepted ? ('accept' as const) : null,
     versionId: 'ver-1',
     versionNo: 1,
@@ -172,6 +237,37 @@ function applyReturn<T extends Record<string, unknown>>(row: T): T {
       business_location: { name: "Atelier Nord, Toronto" },
     },
   };
+}
+
+export function MaterialCommunityIcons({ name, size, color }: { name?: string; size?: number; color?: string }) {
+  const mark: Record<string, string> = {
+    camera: 'Cam',
+    image: 'Lib',
+    play: '▶',
+    lock: 'Lock',
+    send: 'Send',
+    store: 'Store',
+    'check-circle': '✓',
+    'circle-outline': '○',
+    'circle-slice-8': '●',
+  };
+  return <Text style={{ color, fontSize: Math.max(11, Math.round((size ?? 18) * 0.55)) }}>{mark[name ?? ''] ?? '•'}</Text>;
+}
+
+export async function startRental() {
+  return { started: scene() !== 'momoDay', paymentPending: scene() === 'momoDay', payment_rail: 'mobile_money' };
+}
+
+export async function submitInspection() {
+  return { versionId: 'ver-1' };
+}
+
+export async function uploadInspectionPhoto() {
+  return { mediaId: 'media-1' };
+}
+
+export async function getPickupPhotoRules() {
+  return { enabled: true, pickupDay: true, timezone: 'America/Toronto', startAt: null, guideMode: null, guide: null };
 }
 
 export async function getRequestInspectionPolicy(): Promise<number | null> {
@@ -266,10 +362,6 @@ export async function hydrateInspectionPhotos(_bookingId: string, units: unknown
 
 export async function acknowledgeInspection() {
   return { success: true };
-}
-
-export async function uploadInspectionPhoto() {
-  return { url: pixel };
 }
 
 export function useIsStripeRail() {
@@ -382,6 +474,7 @@ export function useClientFlags() {
         rentals_not_received_report_enabled: reportEnabled(),
         rentals_renter_return_report_enabled: Boolean(captureParams().get('return')),
         rentals_inspection_confirmations_enabled: confirmationsScene(),
+        rentals_pickup_decline_enabled: true,
       },
     }),
     []

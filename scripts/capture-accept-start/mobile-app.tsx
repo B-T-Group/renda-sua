@@ -8,12 +8,15 @@ import { I18nextProvider, useTranslation } from 'react-i18next';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { ThemeProvider } from '../../apps/mobile/src/contexts/ThemeContext';
+import { paperTheme } from '../../apps/mobile/src/theme/paperTheme';
 import ClientInspectionScreen from '../../apps/mobile/src/screens/client/ClientInspectionScreen';
 import RentalBookingDetailScreen from '../../apps/mobile/src/screens/client/RentalBookingDetailScreen';
 import RentalRequestSubmittedScreen from '../../apps/mobile/src/screens/client/RentalRequestSubmittedScreen';
 import BusinessRentalBookingDetailScreen from '../../apps/mobile/src/screens/business/BusinessRentalBookingDetailScreen';
 import { ReportSentConfirmation } from '../../apps/mobile/src/components/rentals/inspection/ReportSentConfirmation';
 import { RentalStartedConfirmation } from '../../apps/mobile/src/components/rentals/inspection/RentalStartedConfirmation';
+import { RentalHandoverNotice } from '../../apps/mobile/src/components/rentals/RentalHandoverNotice';
+import { buildRentalStartedBusinessNotice } from '../../apps/backend/src/notifications/rental-push.messages';
 import { formatConfirmationDue, formatConfirmationMoney } from '../../apps/mobile/src/utils/rentals/confirmationFormat';
 import en from '../../apps/mobile/src/i18n/locales/en.json';
 import fr from '../../apps/mobile/src/i18n/locales/fr.json';
@@ -34,17 +37,19 @@ function CaptureScreen() {
   (window as Window & { __scene?: string }).__scene = scene;
   document.documentElement.lang = language;
   if (i18n.language !== language) void i18n.changeLanguage(language);
-  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush';
+  const direct = scene === 'reportSent' || scene === 'rentalStarted' || scene === 'momoStarted' || scene === 'push' || scene === 'clientPush' || scene === 'bizPush' || scene === 'bizOsPush';
   const submitted = scene === 'requestSubmitted';
   const inspection = scene === 'review' || scene === 'momo' || scene === 'conflict';
-  const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait';
+  const business = scene === 'waiting' || scene === 'handed' || scene === 'businessWait' || scene === 'bizWait' || scene === 'bizMomo' || scene === 'bizStarted' || scene === 'bizPhotos';
+  const simpleInspect = scene === 'inspect' || scene === 'waitingPhotos' || scene === 'inspectStart';
+  freezeClock(scene);
   return (
     <View style={{ flex: 1, minHeight: '100vh', backgroundColor: '#FAF9F7' }}>
       {direct ? (
         <DirectConfirmation scene={scene} language={language} />
       ) : submitted ? (
         <RentalRequestSubmittedScreen />
-      ) : inspection ? (
+      ) : inspection || simpleInspect ? (
         <ClientInspectionScreen />
       ) : business ? (
         <BusinessRentalBookingDetailScreen />
@@ -53,6 +58,28 @@ function CaptureScreen() {
       )}
     </View>
   );
+}
+
+const CLOCK: Record<string, string> = {
+  before: '2026-11-23T16:00:00.000Z',
+  today: '2026-11-24T14:00:00.000Z',
+  momoDay: '2026-11-24T07:00:00.000Z',
+  late: '2026-11-24T16:00:00.000Z',
+  startedSimple: '2026-11-24T15:05:00.000Z',
+  inspect: '2026-11-24T14:30:00.000Z',
+  waitingPhotos: '2026-11-24T15:06:00.000Z',
+  inspectStart: '2026-11-24T15:12:00.000Z',
+  bizWait: '2026-11-24T14:00:00.000Z',
+  bizMomo: '2026-11-24T07:00:00.000Z',
+  bizStarted: '2026-11-24T15:10:00.000Z',
+  bizPhotos: '2026-11-24T15:06:00.000Z',
+};
+
+function freezeClock(scene: string) {
+  const iso = CLOCK[scene];
+  if (!iso) return;
+  const fixed = Date.parse(iso);
+  Date.now = () => fixed;
 }
 
 const PHOTOS = [
@@ -84,6 +111,8 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
     );
   }
   if (scene === 'push' || scene === 'clientPush') return <StartedNotice language={language} due={due} zone={zone} kind={scene} />;
+  if (scene === 'bizPush') return <RentalHandoverNotice mode="banner" renterName="Amina K." itemName="JBL PartyBox 310" />;
+  if (scene === 'bizOsPush') return <OsPush language={language} />;
   return (
     <RentalStartedConfirmation
       momo={scene === 'momoStarted'}
@@ -98,6 +127,22 @@ function DirectConfirmation({ scene, language }: { scene: string; language: stri
       location={scene === 'momoStarted' ? 'Sono Akwa – Akwa, Douala' : 'Atelier Nord, Toronto'}
       onBack={() => undefined}
     />
+  );
+}
+
+function OsPush({ language }: { language: string }) {
+  const notice = buildRentalStartedBusinessNotice({
+    rentalItemName: 'JBL PartyBox 310',
+    renterName: 'Amina K.',
+    preferredLanguage: language,
+  });
+  return (
+    <View style={{ padding: 20 }}>
+      <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E6E1D8' }}>
+        <Text variant="titleMedium" style={{ fontWeight: '800' }}>{notice.title}</Text>
+        <Text variant="bodyMedium" style={{ marginTop: 6 }}>{notice.body}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -132,7 +177,7 @@ function CaptureApp() {
         }}
       >
         <ThemeProvider>
-          <PaperProvider>
+          <PaperProvider theme={paperTheme}>
             <CaptureScreen />
           </PaperProvider>
         </ThemeProvider>

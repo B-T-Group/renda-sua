@@ -1,4 +1,4 @@
-import { CheckCircle, Lens, RadioButtonUnchecked } from '@mui/icons-material';
+import { Cancel, CheckCircle, Lens, RadioButtonUnchecked } from '@mui/icons-material';
 import {
   Alert,
   Avatar,
@@ -38,6 +38,10 @@ import { RentalPhaseBanner } from '../rentals/RentalPhaseBanner';
 import { RenterReturnPanel } from '../rentals/RenterReturnPanel';
 import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import { BusinessDeclineBanner, DeclineOutcomeCard, declineCardView } from '../rentals/DeclinePickupScreens';
+import { RentalJourneyList } from '../rentals/RentalJourneyList';
+import { RentalStartPanel } from '../rentals/RentalStartPanel';
+import { BusinessPhotoRequest } from '../rentals/BusinessPhotoRequest';
+import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
 import { ReportSentConfirmation } from '../rentals/ReportSentConfirmation';
 import { RentalStartedConfirmation } from '../rentals/RentalStartedConfirmation';
 import SEOHead from '../seo/SEOHead';
@@ -46,7 +50,7 @@ import {
   formatRequestAmount,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
-import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { cardHoldLines, holdPresentation, showsCardDeposit, type HoldPresentation } from '../../utils/rentals/cardDeposit';
 import { bookingRequestedPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
 import { formatDoualaStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
 import {
@@ -57,7 +61,8 @@ import {
   bookingDetailTimelineIndex,
   messagesDefaultExpanded,
 } from '../../utils/rentalPhase';
-import { businessCanReplaceReport, reportReadyToReview, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { businessCanReplaceReport, didntReceiveWindowOpen, reportReadyToReview, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { RentalHandoverNotice } from '../rentals/RentalHandoverNotice';
 import {
   confirmationDepositHeld,
   confirmationTimeZone,
@@ -67,6 +72,7 @@ import {
   formatConfirmationDue,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
+import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 
 const PAYMENT_POLL_MS = 4000;
@@ -212,12 +218,10 @@ const RentalBookingDetailPage: React.FC = () => {
   const { isStripeRail } = useIsStripeRail();
   const {
     fetchBookingDetail,
-    getStartPin,
+    startRental,
+    reportItemNotCollected,
     cancelBooking,
     initiatePickupPayment,
-    verifyStartPin,
-    shareStartPin,
-    getActiveStartPin,
     confirmReturn,
     getBookingPaymentStatus,
     retryBookingPayment,
@@ -230,21 +234,15 @@ const RentalBookingDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [retryingPayment, setRetryingPayment] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pin, setPin] = useState('');
-  const [ow, setOw] = useState('');
   const [info, setInfo] = useState<string | null>(null);
-  const [pinModalOpen, setPinModalOpen] = useState(false);
-  const [pinValue, setPinValue] = useState<string | null>(null);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returnAtLocal, setReturnAtLocal] = useState(() =>
     toDateTimeLocalValue(new Date())
   );
   const [returning, setReturning] = useState(false);
   const [sharingPin, setSharingPin] = useState(false);
-  const [sharedPin, setSharedPin] = useState<string | null>(null);
-  const [sharedPinMessageId, setSharedPinMessageId] = useState<string | null>(
-    null
-  );
+  const [momoWaiting, setMomoWaiting] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
   const [confirmView, setConfirmView] = useState<ConfirmView | null>(null);
   const inspection = useRentalInspection(bookingId, booking);
 
@@ -290,38 +288,18 @@ const RentalBookingDetailPage: React.FC = () => {
   }, [load, isAuthenticated, personaReady]);
 
   useEffect(() => {
-    if (!bookingId || !isAuthenticated || booking?.status !== 'confirmed') {
-      setSharedPin(null);
-      setSharedPinMessageId(null);
-      return;
+    if (!momoWaiting || !bookingId) return undefined;
+    if (booking?.status === 'active' || booking?.actual_start_at) {
+      setMomoWaiting(false);
+      return undefined;
     }
-    if (profile?.business?.id && booking.business_id === profile.business.id) {
-      if (booking.inspection_policy_version != null) return;
-      void getActiveStartPin(bookingId)
-        .then((active) => {
-          if (active?.pin) {
-            setSharedPin(active.pin);
-            setSharedPinMessageId(active.messageId);
-            setPin(active.pin);
-          } else {
-            setSharedPin(null);
-            setSharedPinMessageId(null);
-          }
-        })
-        .catch(() => {
-          setSharedPin(null);
-          setSharedPinMessageId(null);
-        });
-    }
-  }, [
-    booking?.business_id,
-    booking?.inspection_policy_version,
-    booking?.status,
-    bookingId,
-    getActiveStartPin,
-    isAuthenticated,
-    profile?.business?.id,
-  ]);
+    const timer = setInterval(() => {
+      void fetchBookingDetail(bookingId).then((next) => {
+        if (next) setBooking(next);
+      }).catch(() => undefined);
+    }, PAYMENT_POLL_MS);
+    return () => clearInterval(timer);
+  }, [booking?.actual_start_at, booking?.status, bookingId, fetchBookingDetail, momoWaiting]);
 
   useEffect(() => {
     if (!bookingId || booking?.status !== 'proposed') return;
@@ -378,10 +356,7 @@ const RentalBookingDetailPage: React.FC = () => {
     }
   };
 
-  const didntWindowOpen = useDidntReceiveWindow(
-    booking?.inspection_policy_version != null,
-    booking?.actual_start_at
-  );
+  const didntWindowOpen = useDidntReceiveWindow(true, booking?.actual_start_at);
   const reportedMissingItem = reportedNow || Boolean(booking?.not_received_report);
   useEffect(() => {
     setReportedNow(false);
@@ -390,9 +365,10 @@ const RentalBookingDetailPage: React.FC = () => {
 
   const isClient = profile?.client?.id === booking?.client_id;
   const isBusiness = profile?.business?.id === booking?.business_id;
-  const showClientPin = isClient && inspection.gate.showStart && !inspection.loading;
+  const showClientStart = isClient && inspection.gate.showRenterStart && !inspection.loading;
+  const photosRequested = Boolean(isBusiness && inspection.pickup?.status === 'correction_requested');
+  const showStartPanel = !photosRequested && (showClientStart || Boolean(isBusiness && (booking?.status === 'reserved' || booking?.status === 'confirmed' || booking?.status === 'active')));
   const showCollect = isBusiness && inspection.gate.showCollectPayment && !inspection.loading;
-  const showVerify = isBusiness && inspection.gate.showStart && !inspection.loading;
   const showReturnPicker =
     isBusiness &&
     inspection.showLegacyReturn &&
@@ -504,6 +480,22 @@ const RentalBookingDetailPage: React.FC = () => {
     return formatRequestAmount(amount, currency, i18n.language);
   };
 
+  const listingZone = confirmationTimeZone(listingCountry, booking.currency);
+  const windowPhase = pickupPhase({
+    now: Date.now(),
+    startAt: booking.start_at,
+    endAt: booking.end_at,
+    startOpensAt: booking.start_opens_at,
+    timeZone: listingZone,
+    started: status === 'active' || Boolean(booking.actual_start_at),
+  });
+  const windowLabel = windowStatusLabel({
+    phase: windowPhase,
+    photosAsked: photosRequested,
+    day: formatZonedDay(booking.start_at, listingZone, i18n.language),
+    t,
+  });
+
   const statusChipColor =
     status === 'confirmed'
       ? ('success' as const)
@@ -523,6 +515,11 @@ const RentalBookingDetailPage: React.FC = () => {
     ? Number(booking.security_deposit_amount) || 0
     : 0;
   const authorizedAmount = Number(booking.authorized_amount) || 0;
+  const presentation = holdPresentation({
+    total: Number(booking.total_amount) || 0,
+    deposit: depositAmount,
+    authorized: authorizedAmount,
+  });
   const overtimeAmount = Number(booking.overtime_amount) || 0;
   const cancellableBeforeStart =
     (status === 'confirmed' || status === 'reserved') && !booking.actual_start_at;
@@ -561,6 +558,24 @@ const RentalBookingDetailPage: React.FC = () => {
       );
     }
   };
+
+  if (momoWaiting && booking) {
+    return (
+      <Box sx={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
+        <Stack spacing={2} alignItems="center" sx={{ maxWidth: 420 }}>
+          <MobileMoneyConfirmIllustration />
+          <Typography variant="h5" textAlign="center">{t('rentals.start.momoWaitingTitle', 'Approve on your phone')}</Typography>
+          <Typography variant="body2" color="text.secondary" textAlign="center">
+            {t('rentals.start.momoWaitingBody', 'Approve the request on your phone. This page updates when the payment goes through.')}
+          </Typography>
+          <Typography variant="h6">{formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}</Typography>
+          <Typography>{booking.rental_location_listing?.rental_item?.name}</Typography>
+          <Typography color="text.secondary">{booking.client?.user?.phone_number || ''}</Typography>
+          <Button onClick={() => setMomoWaiting(false)}>{t('common.back', 'Back')}</Button>
+        </Stack>
+      </Box>
+    );
+  }
 
   if (confirmView) {
     return (
@@ -617,15 +632,17 @@ const RentalBookingDetailPage: React.FC = () => {
             </Box>
             <Chip
               label={
-                reviewReady
-                  ? detailStatusLabel
-                  : status === 'awaiting_return'
-                    ? t(detailStatusKey, 'Return due')
-                    : status === 'reserved'
-                      ? t('rentals.phases.reservedShort', 'Reserved')
-                      : `${t('rentals.status', 'Status')}: ${t(`rentals.bookingStatus.${status}`, status)}`
+                windowLabel
+                  ? windowLabel
+                  : reviewReady
+                    ? detailStatusLabel
+                    : status === 'awaiting_return'
+                      ? t(detailStatusKey, 'Return due')
+                      : status === 'reserved'
+                        ? t('rentals.phases.reservedShort', 'Reserved')
+                        : `${t('rentals.status', 'Status')}: ${t(`rentals.bookingStatus.${status}`, status)}`
               }
-              color={reviewReady ? undefined : statusChipColor}
+              color={reviewReady ? undefined : windowLabel ? (windowPhase === 'late' ? 'warning' : 'success') : statusChipColor}
               sx={{
                 fontWeight: 800,
                 ...(reviewReady
@@ -648,7 +665,7 @@ const RentalBookingDetailPage: React.FC = () => {
             </Alert>
           ) : null}
 
-          {showReturnReport || showBusinessReport ? null : (
+          {showReturnReport || showBusinessReport || showStartPanel || photosRequested ? null : (
           <Box sx={{ mb: 2 }}>
             <RentalPhaseBanner
               bookingStatus={status}
@@ -684,55 +701,6 @@ const RentalBookingDetailPage: React.FC = () => {
                       {t('rentals.actions.completePayment', 'Complete payment')}
                     </Button>
                   </Stack>
-                ) : showClientPin ? (
-                  <Stack spacing={1}>
-                    <Button
-                      variant="contained"
-                      disabled={sharingPin}
-                      onClick={async () => {
-                        if (!bookingId) return;
-                        setSharingPin(true);
-                        try {
-                          await shareStartPin(bookingId);
-                          setInfo(
-                            t(
-                              'rentals.messaging.startPin.sentConfirmation',
-                              'PIN shared in booking chat. The business will be notified.'
-                            )
-                          );
-                          setError(null);
-                        } catch (e: unknown) {
-                          setError(
-                            e instanceof Error
-                              ? e.message
-                              : t(
-                                  'rentals.messaging.startPin.unavailable',
-                                  'Start PIN is not available. Try again in a moment.'
-                                )
-                          );
-                        } finally {
-                          setSharingPin(false);
-                        }
-                      }}
-                    >
-                      {t('rentals.actions.sendStartPin', 'Send start PIN')}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={async () => {
-                        try {
-                          const r = await getStartPin(bookingId);
-                          setPinValue(r.pin);
-                          setPinModalOpen(true);
-                          setError(null);
-                        } catch (e: unknown) {
-                          setError(e instanceof Error ? e.message : 'Error');
-                        }
-                      }}
-                    >
-                      {t('rentals.actions.showStartPin', 'Show PIN on screen')}
-                    </Button>
-                  </Stack>
                 ) : showCollect ? (
                   <Stack spacing={1}>
                     {inspection.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (
@@ -749,16 +717,6 @@ const RentalBookingDetailPage: React.FC = () => {
                       {t('rentals.actions.collectPayment', 'Collect payment')}
                     </Button>
                   </Stack>
-                ) : showVerify ? (
-                  <Button
-                    variant="contained"
-                    onClick={() => {
-                      const el = document.getElementById('rental-verify-start');
-                      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }}
-                  >
-                    {t('rentals.actions.verifyStartPin', 'Verify start PIN')}
-                  </Button>
                 ) : showReturnPicker ? (
                   <Button
                     variant="contained"
@@ -800,7 +758,7 @@ const RentalBookingDetailPage: React.FC = () => {
               onContactSupport={() => navigate(`/support?booking=${encodeURIComponent(booking.booking_number ?? '')}`)}
             />
           ) : null}
-          {bookingId && inspection.enrolled ? (
+          {bookingId && inspection.enrolled && !photosRequested ? (
             <Box id="rental-inspection">
               <RentalInspectionPanel
                 bookingId={bookingId}
@@ -892,12 +850,78 @@ const RentalBookingDetailPage: React.FC = () => {
 
           {isClient &&
           bookingId &&
+          !showStartPanel &&
           (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
             <DidntReceiveReportButton
               bookingId={bookingId}
+              startedAt={booking.actual_start_at}
               reported={reportedMissingItem}
               onReported={() => setReportedNow(true)}
               onWindowClosed={() => setWindowForcedClosed(true)}
+            />
+          ) : null}
+
+          {isBusiness && status === 'active' && didntReceiveWindowOpen(booking.actual_start_at) ? (
+            <RentalHandoverNotice
+              mode="banner"
+              renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ') || t('rentals.renter', 'The renter')}
+              itemName={booking.rental_location_listing?.rental_item?.name ?? ''}
+            />
+          ) : null}
+          {showStartPanel ? (
+            <RentalStartPanel
+              booking={booking}
+              timeZone={confirmationTimeZone(booking.rental_location_listing?.business_location?.address?.country, booking.currency)}
+              role={isBusiness ? 'business' : 'client'}
+              renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ')}
+              place={booking.rental_location_listing?.business_location?.name ?? ''}
+              money={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+              returnLabel={formatZonedWhen(booking.end_at, confirmationTimeZone(booking.rental_location_listing?.business_location?.address?.country, booking.currency), i18n.language)}
+              starting={sharingPin}
+              onNotCollected={isBusiness && status === 'active' && bookingId ? () => {
+                void reportItemNotCollected(bookingId).then(() => {
+                  setInfo(t('rentals.business.notCollectedSent', 'Support was notified that the item was not collected.'));
+                }).catch((e: unknown) => {
+                  setError(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
+                });
+              } : undefined}
+              missing={
+                isClient && bookingId && (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
+                  <DidntReceiveReportButton
+                    bookingId={bookingId}
+                    startedAt={booking.actual_start_at}
+                    reported={reportedMissingItem}
+                    onReported={() => setReportedNow(true)}
+                    onWindowClosed={() => setWindowForcedClosed(true)}
+                  />
+                ) : undefined
+              }
+              onConfirm={() => {
+                if (!bookingId) return;
+                void startRental(bookingId).then((res) => {
+                  if (res.paymentPending) {
+                    setMomoWaiting(true);
+                    return;
+                  }
+                  void load();
+                }).catch((e: unknown) => {
+                  setError(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
+                });
+              }}
+            />
+          ) : null}
+          {photosRequested && bookingId ? (
+            <BusinessPhotoRequest
+              bookingId={bookingId}
+              renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ') || t('rentals.renter', 'The renter')}
+              reason={inspection.pickup?.correctionReason}
+              timeZone={listingZone}
+              askedAt={inspection.pickup?.askedAt || inspection.pickup?.submittedAt}
+              photos={(inspection.pickup.units[0]?.photos ?? []).map((photo) => ({
+                ...photo,
+                unitId: inspection.pickup?.units[0]?.unitId ?? photo.id,
+              }))}
+              onSent={() => void inspection.reload()}
             />
           ) : null}
 
@@ -906,6 +930,20 @@ const RentalBookingDetailPage: React.FC = () => {
               <Typography variant="h6" fontWeight={900}>
                 {t('rentals.status', 'Status')}
               </Typography>
+              {(status === 'reserved' || status === 'confirmed' || status === 'active' || status === 'awaiting_return' || status === 'completed') ? (
+                <RentalJourneyList
+                  status={status}
+                  payAtPickup={booking.payment_timing === 'pay_at_pickup' || booking.currency === 'XAF' || booking.currency === 'XOF'}
+                  paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
+                  paidAside={
+                    (booking.payment_status === 'paid' || booking.payment_status === 'authorized') && (booking.paid_at || booking.created_at)
+                      ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
+                      : undefined
+                  }
+                  pickupAside={`${formatZonedDay(booking.actual_start_at || booking.start_at, listingZone, i18n.language)} ${formatZonedTime(booking.actual_start_at || booking.start_at, listingZone)}`}
+                  accent={theme.palette.success.main}
+                />
+              ) : (
               <BookingStatusSteps
                 status={status}
                 includeReview={reviewReady}
@@ -922,6 +960,7 @@ const RentalBookingDetailPage: React.FC = () => {
                         : undefined
                 }
               />
+              )}
             </Paper>
             <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, border: 1, borderColor: 'divider' }}>
               <Stack spacing={1.25}>
@@ -1003,34 +1042,14 @@ const RentalBookingDetailPage: React.FC = () => {
                     bgcolor: alpha(theme.palette.success.main, 0.06),
                   }}
                 >
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    {t('rentals.clientRequests.bookConfirmLabelTotal', 'Quoted total')}
-                  </Typography>
-                  <Typography variant="h5" fontWeight={900} color="success.dark">
-                    {formatDetailMoney(Number(booking.total_amount) || 0)}
-                  </Typography>
+                  <SummaryMoney
+                    presentation={presentation}
+                    business={Boolean(isBusiness)}
+                    total={formatDetailMoney(Number(booking.total_amount) || 0)}
+                    deposit={formatDetailMoney(depositAmount)}
+                    held={formatDetailMoney(presentation.mode === 'sentence' ? presentation.amount : 0)}
+                  />
                   <Stack spacing={0.5} sx={{ mt: 1 }}>
-                    {depositAmount > 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}:{' '}
-                        <strong>
-                          {formatDetailMoney(depositAmount)}
-                        </strong>
-                      </Typography>
-                    ) : null}
-                    {booking.payment_status === 'authorized' && authorizedAmount > 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        {t(
-                          booking.inspection_policy_version != null
-                            ? 'rentals.bookingDetail.authorizedOnCardInspected'
-                            : 'rentals.bookingDetail.authorizedOnCard',
-                          booking.inspection_policy_version != null
-                            ? 'Held on your card: {{amount}} (rental + deposit). The rental is charged at return. The deposit is released unless there\'s damage or a late return.'
-                            : 'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
-                          { amount: formatDetailMoney(authorizedAmount) }
-                        )}
-                      </Typography>
-                    ) : null}
                     {booking.payment_timing === 'pay_at_pickup' &&
                     booking.payment_status === 'pending' ? (
                       <Typography variant="body2" color="text.secondary">
@@ -1073,22 +1092,23 @@ const RentalBookingDetailPage: React.FC = () => {
                 }}
               >
                 <Typography variant="h6" fontWeight={900} sx={{ mb: 1 }}>
-                  {t('business.rentals.clientDetails', 'Client details')}
+                  {t('business.rentals.clientDetails', 'Renter details')}
                 </Typography>
                 <Stack spacing={0.4}>
                   <Typography variant="body2">
                     <strong>{t('common.name', 'Name')}:</strong>{' '}
-                    {`${booking.client.user.first_name ?? ''} ${booking.client.user.last_name ?? ''}`.trim() ||
-                      '—'}
+                    {renterName(booking) || '—'}
                   </Typography>
-                  <Typography variant="body2">
-                    <strong>{t('common.phone', 'Phone')}:</strong>{' '}
-                    {booking.client.user.phone_number || '—'}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>{t('common.email', 'Email')}:</strong>{' '}
-                    {booking.client.user.email || '—'}
-                  </Typography>
+                  {renterPhone(booking) ? (
+                    <Typography variant="body2">
+                      <strong>{t('common.phone', 'Phone')}:</strong> {renterPhone(booking)}
+                    </Typography>
+                  ) : null}
+                  {renterEmail(booking) ? (
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>{t('common.email', 'Email')}:</strong> {renterEmail(booking)}
+                    </Typography>
+                  ) : null}
                 </Stack>
               </Paper>
             ) : null}
@@ -1106,106 +1126,46 @@ const RentalBookingDetailPage: React.FC = () => {
 
                 {isClient && cancellableBeforeStart ? (
                   <Button
-                    color="warning"
+                    color="error"
                     variant="outlined"
+                    startIcon={<Cancel />}
                     onClick={() => void handleCancelBooking()}
                   >
                     {t('rentals.cancelBooking', 'Cancel booking')}
                   </Button>
                 ) : null}
 
-                {isBusiness && booking.status === 'reserved' && cancellableBeforeStart ? (
+                {isBusiness && cancellableBeforeStart ? (
                   <Button
-                    color="warning"
+                    color="error"
                     variant="outlined"
-                    onClick={() => void handleCancelBooking()}
+                    startIcon={<Cancel />}
+                    onClick={() => setCancelConfirm(true)}
                   >
                     {t('rentals.cancelBooking', 'Cancel booking')}
                   </Button>
-                ) : null}
-
-                {showVerify ? (
-                  <Box id="rental-verify-start" sx={{ mt: isClient ? 2 : 0 }}>
-                    <Stack spacing={1.25}>
-                      {sharedPin ? (
-                        <Alert severity="info">
-                          {t(
-                            'rentals.messaging.startPin.usingShared',
-                            'Using the start PIN shared by the client in chat.'
-                          )}{' '}
-                          <Typography
-                            component="span"
-                            sx={{ fontFamily: 'monospace', letterSpacing: 2, fontWeight: 700 }}
-                          >
-                            {sharedPin}
-                          </Typography>
-                        </Alert>
-                      ) : null}
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                        <TextField
-                          fullWidth
-                          label={t('rentals.clientPin', 'Client PIN')}
-                          value={pin}
-                          onChange={(e) => setPin(e.target.value)}
-                        />
-                        {inspection.enrolled ? (
-                          <Typography color="text.secondary">
-                            {t('rentalInspection.overwriteSupportOnly', 'Overwrite codes are issued by Rendasua support only — not shown here.')}
-                          </Typography>
-                        ) : (
-                        <TextField
-                          fullWidth
-                          label={t('rentals.overwriteCode', 'Overwrite code')}
-                          value={ow}
-                          onChange={(e) => setOw(e.target.value)}
-                          helperText={t(
-                            'rentals.supportCodeHint',
-                            'Ask the client for their start PIN. A support code is only for when the client cannot share it, and only support can issue one.'
-                          )}
-                        />
-                        )}
-                      </Stack>
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                        <Button
-                          variant="contained"
-                          onClick={async () => {
-                            try {
-                              if (sharedPin && pin === sharedPin && !ow) {
-                                await verifyStartPin(bookingId, {
-                                  useLatestSharedPin: true,
-                                  pinMessageId: sharedPinMessageId || undefined,
-                                });
-                              } else {
-                                await verifyStartPin(bookingId, {
-                                  pin: pin || undefined,
-                                  overwriteCode: inspection.enrolled ? undefined : ow || undefined,
-                                });
-                              }
-                              setInfo(t('rentals.started', 'Rental started'));
-                              void load();
-                            } catch (e: unknown) {
-                              setError(apiErrorMessage(e, e instanceof Error ? e.message : 'Error', t));
-                            }
-                          }}
-                        >
-                          {t('rentals.verifyStart', 'Verify start')}
-                        </Button>
-                        {cancellableBeforeStart ? (
-                          <Button
-                            color="warning"
-                            variant="outlined"
-                            onClick={() => void handleCancelBooking()}
-                          >
-                            {t('rentals.cancelBooking', 'Cancel booking')}
-                          </Button>
-                        ) : null}
-                      </Stack>
-                    </Stack>
-                  </Box>
                 ) : null}
 
               </Paper>
             ) : null}
+
+            <Dialog open={cancelConfirm} onClose={() => setCancelConfirm(false)}>
+              <DialogTitle>{t('rentals.cancelBooking', 'Cancel booking')}</DialogTitle>
+              <DialogContent>
+                <Typography>
+                  {t(
+                    'rentals.bookingDetail.cancelBeforeStartMessage',
+                    'This booking has not started, so cancellation is free. Any card hold or wallet hold is released.'
+                  )}
+                </Typography>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setCancelConfirm(false)}>{t('common.cancel', 'Cancel')}</Button>
+                <Button color="error" onClick={() => { setCancelConfirm(false); void handleCancelBooking(); }}>
+                  {t('rentals.cancelBooking', 'Cancel booking')}
+                </Button>
+              </DialogActions>
+            </Dialog>
 
             {bookingId && booking.status !== 'cancelled' ? (
               <Box id="rental-messages">
@@ -1222,7 +1182,7 @@ const RentalBookingDetailPage: React.FC = () => {
         </Container>
       </Box>
 
-      {(showPaymentPending || showCollect || showVerify || showReturnPicker) && (
+      {(showPaymentPending || showCollect || showReturnPicker) && (
         <Box
           sx={{
             display: { xs: 'block', md: 'none' },
@@ -1256,17 +1216,6 @@ const RentalBookingDetailPage: React.FC = () => {
             >
               {t('rentals.actions.collectPayment', 'Collect payment')}
             </Button>
-          ) : showVerify ? (
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={() => {
-                const el = document.getElementById('rental-verify-start');
-                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }}
-            >
-              {t('rentals.actions.verifyStartPin', 'Verify start PIN')}
-            </Button>
           ) : showReturnPicker ? (
             <Button
               fullWidth
@@ -1283,45 +1232,6 @@ const RentalBookingDetailPage: React.FC = () => {
         </Box>
       )}
 
-      <Dialog
-        open={pinModalOpen}
-        onClose={() => setPinModalOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>{t('rentals.showStartPin', 'Show start PIN')}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            {t('rentals.yourPin', 'Your start PIN')}
-          </Typography>
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 900,
-              letterSpacing: 4,
-              textAlign: 'center',
-              py: 1,
-              borderRadius: 2,
-              border: 1,
-              borderColor: 'divider',
-              bgcolor: alpha(theme.palette.info.main, 0.06),
-            }}
-          >
-            {pinValue ?? '—'}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.25 }}>
-            {t(
-              'rentals.pinShareHint',
-              'Share this code with the owner to start the rental.'
-            )}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPinModalOpen(false)}>
-            {t('common.close', 'Close')}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Dialog
         open={returnDialogOpen}
@@ -1466,10 +1376,69 @@ function BookingConfirmation({
   );
 }
 
+function renterName(booking: RentalBookingDetail): string {
+  const user = booking.client?.user;
+  return `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim();
+}
+
+function renterPhone(booking: RentalBookingDetail): string {
+  return booking.client?.user?.phone_number?.trim() ?? '';
+}
+
+function renterEmail(booking: RentalBookingDetail): string {
+  return booking.client?.user?.email?.trim() ?? '';
+}
+
+function SummaryMoney(props: {
+  presentation: HoldPresentation;
+  business: boolean;
+  total: string;
+  deposit: string;
+  held: string;
+}) {
+  if (props.presentation.mode === 'sentence') {
+    return <HeldSentence business={props.business} held={props.held} />;
+  }
+  return <TotalAndDeposit total={props.total} deposit={props.deposit} split={props.presentation.mode === 'split'} />;
+}
+
+function HeldSentence({ business, held }: { business: boolean; held: string }) {
+  const { t } = useTranslation();
+  const key = business ? 'rentals.bookingDetail.heldOnRenterCard' : 'rentals.start.held';
+  const fallback = business ? "{{amount}} held on the renter's card" : '{{amount}} held on your card';
+  return (
+    <Typography variant="h6" fontWeight={800} color="success.dark">
+      {t(key, fallback, { amount: held })}
+    </Typography>
+  );
+}
+
+function TotalAndDeposit({ total, deposit, split }: { total: string; deposit: string; split: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Typography variant="caption" color="text.secondary" display="block">
+        {t('rentals.clientRequests.bookConfirmLabelTotal', 'Quoted total')}
+      </Typography>
+      <Typography variant="h5" fontWeight={900} color="success.dark">{total}</Typography>
+      {split ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}: <strong>{deposit}</strong>
+        </Typography>
+      ) : null}
+    </>
+  );
+}
+
 function depositLabel(booking: RentalBookingDetail, language: string): string {
   if (!showsCardDeposit(booking.currency)) return '';
   const amount = Number(booking.security_deposit_amount) || 0;
-  if (amount <= 0) return '';
+  const lines = cardHoldLines({
+    total: Number(booking.total_amount) || 0,
+    deposit: amount,
+    authorized: Number(booking.authorized_amount) || 0,
+  });
+  if (!lines.showDeposit) return '';
   return formatConfirmationMoney(amount, booking.currency, language);
 }
 

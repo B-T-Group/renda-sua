@@ -369,11 +369,11 @@ const HowItWorksNotes: React.FC<{ inspected?: boolean }> = ({ inspected }) => {
     inspected
       ? t(
           'rentals.detail.howItWorksStep3Inspected',
-          'At pickup, review and accept the condition report to start. Return by the booked end time.'
+          'At pickup, check the item, then tap Start rental. Return by the booked end time.'
         )
       : t(
           'rentals.detail.howItWorksStep3',
-          'At pickup, send your start PIN in chat. Return by the booked end time.'
+          'On the pickup day, tap Start rental when you are with the business. Return by the booked end time.'
         ),
   ];
 

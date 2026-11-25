@@ -272,15 +272,14 @@ export function messagesDefaultExpanded(bookingStatus: string): boolean {
 export type ClientPrimaryAction =
   | 'book'
   | 'pay'
-  | 'send_pin'
+  | 'start'
   | 'wait'
   | 'rate'
   | 'none';
 
 export type BusinessPrimaryAction =
   | 'respond'
-  | 'collect_pay'
-  | 'verify_pin'
+  | 'wait_start'
   | 'confirm_return'
   | 'wait'
   | 'none';
@@ -291,7 +290,7 @@ export function clientPrimaryAction(
 ): ClientPrimaryAction {
   if (phase === 'offer_ready') return bookingStatus === 'proposed' ? 'pay' : 'book';
   if (phase === 'reserved') return 'wait';
-  if (phase === 'ready_for_pickup') return 'send_pin';
+  if (phase === 'ready_for_pickup') return 'start';
   if (phase === 'done' && bookingStatus === 'completed') return 'rate';
   return 'none';
 }
@@ -300,8 +299,7 @@ export function businessPrimaryAction(
   phase: RentalPhase
 ): BusinessPrimaryAction {
   if (phase === 'requested') return 'respond';
-  if (phase === 'reserved') return 'collect_pay';
-  if (phase === 'ready_for_pickup') return 'verify_pin';
+  if (phase === 'reserved' || phase === 'ready_for_pickup') return 'wait_start';
   if (phase === 'in_progress') return 'confirm_return';
   if (phase === 'offer_ready') return 'wait';
   return 'none';
