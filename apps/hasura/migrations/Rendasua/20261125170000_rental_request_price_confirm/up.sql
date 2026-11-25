@@ -79,7 +79,7 @@ BEGIN
   END IF;
 
   SELECT l.units_available, l.base_price_per_day, l.base_price_per_hour,
-         COALESCE(NULLIF(btrim(i.currency), ''), 'XAF')
+         COALESCE(NULLIF(btrim(i.currency::text), ''), 'XAF')
     INTO v_units_available, v_day, v_hour, v_currency
     FROM public.rental_location_listings l
     LEFT JOIN public.rental_items i ON i.id = l.rental_item_id
