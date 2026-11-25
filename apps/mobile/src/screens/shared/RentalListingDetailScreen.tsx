@@ -30,6 +30,7 @@ import { formatRentalMoney } from '../../utils/rentals';
 import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import { confirmationTimeZone } from '../../utils/rentals/confirmationFormat';
 import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
+import { listingRentModes } from '../../utils/rentals/listingRentModes';
 
 type DetailParams = {
   RentalListingDetail: { listingId: string; startDate?: string; endDate?: string; openRequest?: boolean };
@@ -195,18 +196,19 @@ export default function RentalListingDetailScreen() {
   const acceptsOrders = merchantCanAcceptOrders(item.business);
   const hourlyPrice = toNumber(listing.base_price_per_hour);
   const dailyPrice = toNumber(listing.base_price_per_day);
+  const modes = listingRentModes(listing);
   const depositAmount = showsCardDeposit(currency)
     ? toNumber(listing.security_deposit_amount ?? 0)
     : 0;
   const closeToday = todayCloseLabel(weeklySorted);
   const priceSnapshotParts = [
-    t('rentals.detail.fromHourly', 'From {{price}}/h', {
-      price: formatRentalMoney(hourlyPrice, currency),
-    }),
+    modes.hourly
+      ? t('rentals.detail.fromHourly', 'From {{price}}/h', { price: formatRentalMoney(hourlyPrice, currency) })
+      : t('rentals.detail.fromDaily', 'From {{price}}/day', { price: formatRentalMoney(dailyPrice, currency) }),
     closeToday
       ? t('rentals.detail.openTodayUntil', 'Open today until {{time}}', { time: closeToday })
       : null,
-    t('rentals.detail.minHoursSnapshot', '{{h}}h minimum', { h: listing.min_rental_hours }),
+    modes.hourly ? t('rentals.detail.minHoursSnapshot', '{{h}}h minimum', { h: listing.min_rental_hours }) : null,
   ].filter(Boolean);
 
   return (
@@ -401,18 +403,22 @@ export default function RentalListingDetailScreen() {
           <Text style={[typography.subtitle2, { color: colors.text.primary }]}>
             {t('rentals.detail.pricing', 'Pricing')}
           </Text>
-          <Text style={[typography.body2, { color: colors.text.primary, marginTop: spacing.xs }]}>
-            {t('rentals.detail.hourlyRate', 'Hourly rate')}:{' '}
-            <Text style={{ fontWeight: '700' }}>
-              {formatRentalMoney(toNumber(listing.base_price_per_hour), currency)}
+          {modes.hourly ? (
+            <Text style={[typography.body2, { color: colors.text.primary, marginTop: spacing.xs }]}>
+              {t('rentals.detail.hourlyRate', 'Hourly rate')}:{' '}
+              <Text style={{ fontWeight: '700' }}>
+                {formatRentalMoney(toNumber(listing.base_price_per_hour), currency)}
+              </Text>
             </Text>
-          </Text>
-          <Text style={[typography.body2, { color: colors.text.primary, marginTop: 4 }]}>
-            {t('rentals.detail.fullDayRate', 'Full day (daily rate)')}:{' '}
-            <Text style={{ fontWeight: '700' }}>
-              {formatRentalMoney(toNumber(listing.base_price_per_day), currency)}
+          ) : null}
+          {modes.daily ? (
+            <Text style={[typography.body2, { color: colors.text.primary, marginTop: 4 }]}>
+              {t('rentals.detail.fullDayRate', 'Full day (daily rate)')}:{' '}
+              <Text style={{ fontWeight: '700' }}>
+                {formatRentalMoney(toNumber(listing.base_price_per_day), currency)}
+              </Text>
             </Text>
-          </Text>
+          ) : null}
           {toNumber(listing.security_deposit_amount ?? 0) > 0 ? (
             <>
               <Text style={[typography.body2, { color: colors.text.primary, marginTop: 4 }]}>
@@ -622,13 +628,12 @@ export default function RentalListingDetailScreen() {
     >
       <View style={{ alignItems: 'center', marginBottom: spacing.sm }}>
         <Text style={[typography.subtitle1, { color: colors.text.primary, fontWeight: '700' }]}>
-          {t('rentals.detail.fromHourly', 'From {{price}}/h', {
-            price: formatRentalMoney(hourlyPrice, currency),
-          })}
-          {' · '}
-          {t('rentals.detail.fromDaily', 'From {{price}}/day', {
-            price: formatRentalMoney(dailyPrice, currency),
-          })}
+          {[
+            modes.hourly ? t('rentals.detail.fromHourly', 'From {{price}}/h', { price: formatRentalMoney(hourlyPrice, currency) }) : null,
+            modes.daily ? t('rentals.detail.fromDaily', 'From {{price}}/day', { price: formatRentalMoney(dailyPrice, currency) }) : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </Text>
         <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, textAlign: 'center' }]}>
           {!acceptsOrders

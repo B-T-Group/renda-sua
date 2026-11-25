@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -11,7 +12,7 @@ export interface RentalModes {
 
 /**
  * "Rent by the day" / "Rent by the hour" (rentals_day_hours_picker_enabled).
- * At least one stays on: the last one that is on can't be switched off.
+ * At least one stays on: switching off the last one is refused with "Keep at least one on." in red.
  */
 export function RentalModeSwitches({
   value,
@@ -24,6 +25,7 @@ export function RentalModeSwitches({
 }) {
   const { t } = useTranslation();
   const { colors, borderRadius } = useTheme();
+  const [refused, setRefused] = useState(false);
   const row = (
     key: keyof RentalModes,
     icon: 'white-balance-sunny' | 'clock-outline',
@@ -32,7 +34,6 @@ export function RentalModeSwitches({
   ) => {
     const on = value[key];
     const other = key === 'offersDaily' ? value.offersHourly : value.offersDaily;
-    const locked = on && !other;
     return (
       <View style={styles.row}>
         <View style={[styles.icon, { backgroundColor: colors.primaryTint, borderRadius: borderRadius.sm }]}>
@@ -45,9 +46,15 @@ export function RentalModeSwitches({
         <Switch
           testID={`${testID}-${key}`}
           value={on}
-          disabled={locked}
           color={colors.primary.main}
-          onValueChange={(next) => onChange({ ...value, [key]: next })}
+          onValueChange={(next) => {
+            if (!next && !other) {
+              setRefused(true);
+              return;
+            }
+            setRefused(false);
+            onChange({ ...value, [key]: next });
+          }}
         />
       </View>
     );
@@ -66,9 +73,16 @@ export function RentalModeSwitches({
         t('business.rentals.rentBy.byHour', 'Rent by the hour'),
         t('business.rentals.rentBy.byHourHint', 'Renters can book a few hours.')
       )}
-      <Text style={{ color: colors.text.secondary, fontSize: 12 }}>
-        {t('business.rentals.rentBy.atLeastOne', 'Keep at least one on.')}
-      </Text>
+      <View testID={`${testID}-hint`} style={styles.hint}>
+        <MaterialCommunityIcons
+          name={refused ? 'alert-circle-outline' : 'information-outline'}
+          size={15}
+          color={refused ? colors.error.main : colors.text.secondary}
+        />
+        <Text style={{ color: refused ? colors.error.main : colors.text.secondary, fontSize: 12, fontWeight: refused ? '700' : '400', flex: 1 }}>
+          {t('business.rentals.rentBy.atLeastOne', 'Keep at least one on.')}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -79,4 +93,5 @@ const styles = StyleSheet.create({
   icon: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   text: { flex: 1, minWidth: 0 },
   label: { fontSize: 15, fontWeight: '700' },
+  hint: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });

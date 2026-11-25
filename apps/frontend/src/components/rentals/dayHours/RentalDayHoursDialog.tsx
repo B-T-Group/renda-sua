@@ -16,7 +16,6 @@ import {
   Dialog,
   IconButton,
   Stack,
-  Switch,
   Typography,
   useMediaQuery,
   useTheme,
@@ -26,6 +25,7 @@ import {
   applyToAll,
   blockHours,
   blockIsFree,
+  canRemoveDay,
   dayInfo,
   dayPrice,
   defaultBlock,
@@ -50,6 +50,7 @@ import {
   dayLabel,
   footerDetail,
   hourLabel,
+  lockReason,
   minuteLabel,
   monthTitle,
   noteText,
@@ -57,6 +58,7 @@ import {
   pickerMoney,
   pickerText,
   rangeLabel,
+  sharedLockReason,
   summaryLine,
   weekStart,
   weekdayHeads,
@@ -265,7 +267,7 @@ function DialogBody({
                   <ButtonBase data-testid="day-hours-same-for-all" role="switch" aria-checked={sharedOn} onClick={toggleShared} sx={{ gap: 0.75, borderRadius: '8px', px: 0.5 }}>
                     <ContentCopyIcon sx={{ fontSize: 16, color: BLUE }} />
                     <Typography sx={{ fontSize: 13, fontWeight: 600, color: BLUE }}>{pickerText(lang, 'sameForAll')}</Typography>
-                    <Switch size="small" checked={sharedOn} tabIndex={-1} sx={switchSx} />
+                    <Toggle on={sharedOn} />
                   </ButtonBase>
                 ) : null}
               </Stack>
@@ -304,6 +306,7 @@ function DialogBody({
                       onMode={(mode) => setMode(d.key, mode)}
                       onHour={(h) => onHour(d.key, h)}
                       onRemove={() => onDayTap(d.key)}
+                      removable={canRemoveDay(days, d.key)}
                     />
                   ))}
                 </Stack>
@@ -320,7 +323,9 @@ function DialogBody({
           <Typography sx={{ fontSize: 12.5, color: MUTED }}>
             {!listing.offersHourly && days.length
               ? pickerText(lang, 'dailyOnly')
-              : footerDetail(days, infos, lang, timeZone, { shared: sharedOn, todayKey, cityLabel: lang === 'fr' ? `heure de ${zoneCity}` : `${zoneCity} time` })}
+              : !listing.offersDaily && days.length
+                ? pickerText(lang, 'hourlyOnly')
+                : footerDetail(days, infos, lang, timeZone, { shared: sharedOn, todayKey, cityLabel: lang === 'fr' ? `heure de ${zoneCity}` : `${zoneCity} time` })}
           </Typography>
         </Box>
         {days.length ? (
@@ -350,10 +355,14 @@ function lastHoursKey(days: PickedDay[]): string | null {
   return hours.length ? hours[hours.length - 1].key : null;
 }
 
-const switchSx = {
-  '& .MuiSwitch-switchBase.Mui-checked': { color: '#fff' },
-  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: BLUE, opacity: 1 },
-};
+/** Same track as the mobile toggle: #D5DCE6 off, blue on, white knob. */
+function Toggle({ on }: { on: boolean }) {
+  return (
+    <Box sx={{ width: 38, height: 22, borderRadius: '11px', p: '2px', bgcolor: on ? BLUE : '#D5DCE6', display: 'flex', justifyContent: on ? 'flex-end' : 'flex-start', transition: 'background-color 120ms' }}>
+      <Box sx={{ width: 18, height: 18, borderRadius: '9px', bgcolor: '#fff', boxShadow: '0 1px 2px rgba(15,23,42,0.25)' }} />
+    </Box>
+  );
+}
 
 function PriceChips({ listing, currency, lang }: { listing: DayHoursListing; currency: string; lang: PickerLang }) {
   return (
@@ -498,10 +507,14 @@ function Segment({ lang, mode, fullLocked, onMode, testPrefix }: { lang: PickerL
           boxShadow: active ? '0 1px 3px rgba(15,23,42,0.15)' : 'none',
           border: active ? `1px solid ${TINT}` : '1px solid transparent',
           color: disabled ? FAINT : active ? BLUE : MUTED,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          '&.Mui-disabled': { color: FAINT, opacity: 1 },
         }}
       >
         {disabled ? <LockOutlinedIcon sx={{ fontSize: 15 }} /> : icon}
-        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{label}</Typography>
+        <Typography color="inherit" sx={{ fontSize: 13, fontWeight: active ? 700 : 600, textDecoration: disabled ? 'none' : undefined }}>
+          {label}
+        </Typography>
       </ButtonBase>
     );
   };
@@ -595,6 +608,7 @@ function DayRow({
   onMode,
   onHour,
   onRemove,
+  removable,
 }: {
   lang: PickerLang;
   day: PickedDay;
@@ -609,16 +623,15 @@ function DayRow({
   onMode: (m: DayMode) => void;
   onHour: (h: number) => void;
   onRemove: () => void;
+  /** False for middle days: removing one would break the run of days. */
+  removable: boolean;
 }) {
   const both = showModeSwitch(listing);
   const isHours = day.mode === 'hours';
   const open = isHours && (expanded || !listing.offersDaily);
   const prefix = `day-hours-row-${day.key}`;
   const sub = info.isToday && info.fromHour != null ? pickerText(lang, 'todayFrom', { time: hourLabel(info.fromHour, lang, timeZone) }) : null;
-  const lockText =
-    isHours && info.fullDayLock === 'booked' && info.bookedRun && listing.offersDaily
-      ? pickerText(lang, 'lockBooked', { range: rangeLabel(info.bookedRun.from, info.bookedRun.to, lang, timeZone) })
-      : null;
+  const lockText = isHours && listing.offersDaily ? lockReason(info, lang, timeZone) : null;
   const hoursText = info.openMin != null && info.closeMin != null ? `${minuteLabel(info.openMin, lang, timeZone)} – ${minuteLabel(info.closeMin, lang, timeZone)}` : '';
   return (
     <RowShell testId={prefix} active={open}>
@@ -632,16 +645,20 @@ function DayRow({
         ) : !listing.offersHourly ? (
           <Chip icon={<WbSunnyOutlinedIcon sx={{ fontSize: 14 }} />} text={pickerText(lang, 'fullDay')} />
         ) : null}
-        <IconButton data-testid={`${prefix}-remove`} aria-label={pickerText(lang, 'remove', { day: dayLabel(day.key, lang) })} onClick={onRemove} size="small">
-          <DeleteOutlineIcon fontSize="small" />
-        </IconButton>
+        {removable ? (
+          <IconButton data-testid={`${prefix}-remove`} aria-label={pickerText(lang, 'remove', { day: dayLabel(day.key, lang) })} onClick={onRemove} size="small">
+            <DeleteOutlineIcon fontSize="small" />
+          </IconButton>
+        ) : (
+          <Box sx={{ width: 34 }} />
+        )}
       </Stack>
       {open ? <HourBar cells={info.cells} start={day.start} end={day.end} onHour={onHour} testPrefix={prefix} lang={lang} timeZone={timeZone} /> : null}
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
         {isHours ? (
           <>
             <TimeChip testId={`${prefix}-chip`} text={rangeLabel(day.start, day.end, lang, timeZone)} onClick={open ? undefined : onExpand} />
-            <Typography sx={{ fontSize: 13, color: MUTED }}>{blockHours(day)} h</Typography>
+            <Typography sx={{ fontSize: 13, color: MUTED }}>{blockHours(day)}{'\u00A0'}h</Typography>
           </>
         ) : (
           <Typography sx={{ fontSize: 13, color: MUTED }}>{hoursText}</Typography>
@@ -701,7 +718,7 @@ function SharedCard({
         {isHours ? (
           <>
             <TimeChip text={rangeLabel(first.start, first.end, lang, timeZone)} />
-            <Typography sx={{ fontSize: 13, color: MUTED }}>{days.length} × {blockHours(first)} h</Typography>
+            <Typography sx={{ fontSize: 13, color: MUTED }}>{days.length} × {blockHours(first)}{'\u00A0'}h</Typography>
           </>
         ) : (
           <Typography sx={{ fontSize: 13, color: MUTED }}>{pickerText(lang, 'fullDays')}</Typography>
@@ -711,6 +728,8 @@ function SharedCard({
       </Stack>
       {note ? (
         <Note icon="alert" color={RED} text={noteText(note, lang, timeZone, listing.minHours, listing.maxHours)} />
+      ) : locked && listing.offersDaily && sharedLockReason(infos, lang) ? (
+        <Note testId="day-hours-shared-lock" icon="lock" color={AMBER} text={sharedLockReason(infos, lang) as string} />
       ) : (
         <Note icon="info" color={MUTED} text={pickerText(lang, isHours ? (awaitingEnd ? 'tapEnd' : 'sharedHint') : 'oneSetting')} />
       )}
@@ -718,9 +737,13 @@ function SharedCard({
         {days.map((d) => (
           <Box key={d.key} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, pl: 1.25, pr: 0.25, borderRadius: '999px', bgcolor: SOFT }}>
             <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: BLUE }}>{dayLabel(d.key, lang)}</Typography>
-            <IconButton data-testid={`day-hours-shared-remove-${d.key}`} aria-label={pickerText(lang, 'remove', { day: dayLabel(d.key, lang) })} onClick={() => onRemove(d.key)} size="small">
-              <CloseIcon sx={{ fontSize: 14 }} />
-            </IconButton>
+            {canRemoveDay(days, d.key) ? (
+              <IconButton data-testid={`day-hours-shared-remove-${d.key}`} aria-label={pickerText(lang, 'remove', { day: dayLabel(d.key, lang) })} onClick={() => onRemove(d.key)} size="small">
+                <CloseIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            ) : (
+              <Box sx={{ width: 10, height: 30 }} />
+            )}
           </Box>
         ))}
       </Stack>

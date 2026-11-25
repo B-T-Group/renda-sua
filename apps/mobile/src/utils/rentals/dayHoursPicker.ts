@@ -57,6 +57,8 @@ export interface DayInfo {
   cells: DayCell[];
   /** Why Full day can't be picked; null when it can. */
   fullDayLock: null | 'booked' | 'today';
+  /** With fullDayLock 'today': true once the day has opened, false when it opens in under the lead time. */
+  todayStarted: boolean;
   /** First booked run on the day, for the lock reason. */
   bookedRun: { from: number; to: number } | null;
   /** First hour a block may start today (now + lead, rounded up). */
@@ -163,6 +165,7 @@ export function dayInfo(key: string, listing: DayHoursListing, nowWallMs: number
     closeMin: null,
     cells: [],
     fullDayLock: null,
+    todayStarted: false,
     bookedRun: null,
     fromHour: null,
   };
@@ -192,7 +195,7 @@ export function dayInfo(key: string, listing: DayHoursListing, nowWallMs: number
   let status: DayStatus = free.length === 0 ? (isToday ? 'past' : 'unavailable') : anyBooked ? 'partial' : 'free';
   // Daily-only: a day Full day can't take is not pickable at all.
   if (!listing.offersHourly && fullDayLock) status = fullDayLock === 'today' ? 'past' : 'unavailable';
-  return { ...base, status, openMin: open.openMin, closeMin: open.closeMin, cells, fullDayLock, bookedRun, fromHour };
+  return { ...base, status, openMin: open.openMin, closeMin: open.closeMin, cells, fullDayLock, todayStarted: openMs <= nowWallMs, bookedRun, fromHour };
 }
 
 function firstBookedRun(cells: DayCell[]): { from: number; to: number } | null {
@@ -444,6 +447,13 @@ export function monthGrid(year: number, month0: number, weekStart: 0 | 1 = 0): A
 }
 
 /** The Full day | Hours switch shows only when the listing rents both ways. */
+/** First and last picked days can be removed; middle ones can't (days stay in a row). */
+export function canRemoveDay(days: PickedDay[], key: string): boolean {
+  if (days.length < 3) return true;
+  const keys = days.map((d) => d.key).sort();
+  return key === keys[0] || key === keys[keys.length - 1];
+}
+
 export function showModeSwitch(listing: Pick<DayHoursListing, 'offersDaily' | 'offersHourly'>): boolean {
   return listing.offersDaily && listing.offersHourly;
 }

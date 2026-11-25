@@ -1,4 +1,5 @@
 import {
+  canRemoveDay,
   dayInfo,
   daysInARow,
   defaultBlock,
@@ -13,7 +14,18 @@ import {
   type DayInfo,
   type PickedDay,
 } from './rentalDayHoursPicker';
-import { footerDetail, pickerMoney, rangeLabel, summaryLine, dayLabel } from './rentalDayHoursCopy';
+import {
+  dayLabel,
+  footerDetail,
+  fromHourlyPrice,
+  lockReason,
+  pickerMoney,
+  rangeLabel,
+  serverRuleCode,
+  serverRuleText,
+  sharedLockReason,
+  summaryLine,
+} from './rentalDayHoursCopy';
 
 const WEEKLY = [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
   weekday,
@@ -138,10 +150,10 @@ describe('day-hours picker model', () => {
       { requestedStartAt: '2026-11-30T14:00:00.000Z', requestedEndAt: '2026-11-30T17:00:00.000Z', billing: 'hourly' },
     ]);
     expect(totalPrice(days, l)).toBe(45000);
-    expect(summaryLine(days, 'en')).toBe('3 days · 1 full, 2 × 3 h');
-    expect(summaryLine(days, 'fr')).toBe('3 jours · 1 journée, 2 × 3 h');
-    expect(footerDetail(days, infos, 'en', 'Africa/Libreville')).toBe('Pickup Fri 27 Nov, 08:00');
-    expect(footerDetail(days, infos, 'fr', 'Africa/Libreville')).toBe('Retrait ven. 27 nov., 08:00');
+    expect(summaryLine(days, 'en')).toBe('3 days · 1 full, 2 × 3\u00A0h');
+    expect(summaryLine(days, 'fr')).toBe('3 jours · 1 journée, 2 × 3\u00A0h');
+    expect(footerDetail(days, infos, 'en', 'Africa/Libreville')).toBe('Pickup Fri\u00A027\u00A0Nov, 08:00');
+    expect(footerDetail(days, infos, 'fr', 'Africa/Libreville')).toBe('Retrait ven.\u00A027\u00A0nov., 08:00');
   });
 
   it('formats money with NBSP and times per market', () => {
@@ -151,7 +163,13 @@ describe('day-hours picker model', () => {
     expect(rangeLabel(10, 13, 'en', 'America/Toronto')).toBe('10 AM – 1 PM');
     expect(rangeLabel(14, 17, 'en', 'America/Toronto')).toBe('2 PM – 5 PM');
     expect(rangeLabel(8, 10, 'en', 'Africa/Libreville')).toBe('08:00 – 10:00');
-    expect(dayLabel('2026-11-27', 'en')).toBe('Fri 27 Nov');
+    expect(dayLabel('2026-11-27', 'en')).toBe('Fri\u00A027\u00A0Nov');
+    expect(dayLabel('2026-11-30', 'fr')).toBe('lun.\u00A030\u00A0nov.');
+    expect(fromHourlyPrice(3000, 'XAF', 'en')).toBe('from 3\u00A0000\u00A0FCFA / h');
+    expect(fromHourlyPrice(3000, 'XAF', 'fr')).toBe('dès 3\u00A0000\u00A0FCFA / h');
+    expect(serverRuleText('RENTAL_LEAD_TIME', 'fr')).toBe('Ce début est maintenant dans moins de 2\u00A0h. Choisissez une heure plus tard.');
+    expect(serverRuleText('SOMETHING_ELSE', 'en')).toBeNull();
+    expect(serverRuleCode({ response: { data: { code: 'RENTAL_LEAD_TIME' } } })).toBe('RENTAL_LEAD_TIME');
   });
 
   it('builds Sunday-first and Monday-first grids and reads listing time', () => {
@@ -160,5 +178,19 @@ describe('day-hours picker model', () => {
     expect(new Date(listingNowMs(Date.UTC(2026, 10, 25, 9, 20), 'Africa/Libreville')).toISOString()).toBe(
       '2026-11-25T10:20:00.000Z'
     );
+  });
+
+  it('gives a reason for every Full day lock and only lets the ends be removed', () => {
+    const l = listing();
+    const today = dayInfo('2026-11-25', l, NOW);
+    expect(lockReason(today, 'en')).toBe('Full day isn’t possible today: it has already started.');
+    const early = dayInfo('2026-11-25', l, Date.UTC(2026, 10, 25, 7, 0));
+    expect(early.fullDayLock).toBe('today');
+    expect(lockReason(early, 'fr')).toBe('Journée impossible aujourd’hui\u00A0: elle commence dans moins de 2\u00A0h.');
+    const sat = dayInfo('2026-11-28', l, NOW);
+    expect(sharedLockReason([dayInfo('2026-11-27', l, NOW), sat], 'en')).toBe('Full day isn’t possible: Sat\u00A028\u00A0Nov is partly booked.');
+    const days = ['2026-11-27', '2026-11-28', '2026-11-30', '2026-12-01'].map((key) => ({ key, mode: 'full' as const, start: 8, end: 18 }));
+    expect(days.map((d) => canRemoveDay(days, d.key))).toEqual([true, false, false, true]);
+    expect(canRemoveDay(days.slice(0, 2), '2026-11-28')).toBe(true);
   });
 });

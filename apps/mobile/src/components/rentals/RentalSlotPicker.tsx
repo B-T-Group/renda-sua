@@ -16,6 +16,7 @@ import type { RentalTakenWindow } from '../../types/rentals';
 import { RentalTimeOptionSheet } from './RentalTimeOptionSheet';
 import { RentalRequestScreenForm } from './request/RentalRequestScreenForm';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
+import { pickerLang, serverRuleCode, serverRuleText } from '../../utils/rentals/dayHoursCopy';
 import { CardWindowNotice } from './request/CardWindowNotice';
 import {
   bookedSegmentsForLocalDay,
@@ -627,12 +628,27 @@ export function RentalSlotPicker({
         navigation as unknown as NativeStackNavigationProp<ClientRootStackParamList>
       ).navigate('RentalRequestSubmitted', { requestId: res.requestId });
     } catch (e: unknown) {
+      if (dayHoursRuleError(e)) {
+        setConfirmOpen(false);
+        return;
+      }
       const friendly = cardWindowErrorMessage(e, i18n.language);
       setCardFallback(friendly);
       setMsg(friendly ?? (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed')));
       setConfirmOpen(false);
     }
   };
+
+  /** Day-and-hours server rules: say why in EN/FR and send the renter back to the sheet. */
+  function dayHoursRuleError(e: unknown): boolean {
+    if (!dayHoursPicker) return false;
+    const text = serverRuleText(serverRuleCode(e), pickerLang(i18n.language));
+    if (!text) return false;
+    setCardFallback(null);
+    setMsg(text);
+    onEditDates?.();
+    return true;
+  }
 
   const cardStyle = embedded
     ? undefined
@@ -687,6 +703,7 @@ export function RentalSlotPicker({
         setPriceUpOpen(true);
         return;
       }
+      if (dayHoursRuleError(e)) return;
       const friendly = cardWindowErrorMessage(e, i18n.language);
       setCardFallback(friendly);
       setMsg(friendly ?? (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed')));

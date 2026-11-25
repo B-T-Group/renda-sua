@@ -16,7 +16,7 @@ const EN = {
   subtitle: 'Tap the days you need. Times are {{city}} time.',
   perDay: '{{amount}} / day',
   perHour: '{{amount}} / h',
-  minHours: 'Min {{count}} h',
+  minHours: 'Min {{count}}\u00A0h',
   someBooked: 'Some hours booked',
   unavailable: 'Unavailable',
   empty: 'Tap one or more days on the calendar.',
@@ -31,8 +31,11 @@ const EN = {
   sharedHint: 'Hours booked on any of these days are greyed out.',
   lockBooked: 'Full day isn’t possible: {{range}} is already booked.',
   lockToday: 'Full day isn’t possible today: it has already started.',
-  stretched: 'Minimum {{count}} h, so the end moved to {{time}}.',
-  capped: 'Maximum {{count}} h, so the end moved to {{time}}.',
+  lockTodaySoon: 'Full day isn’t possible today: it starts in less than 2\u00A0h.',
+  sharedLockBooked: 'Full day isn’t possible: {{day}} is partly booked.',
+  fromPerHour: 'from {{amount}} / h',
+  stretched: 'Minimum {{count}}\u00A0h, so the end moved to {{time}}.',
+  capped: 'Maximum {{count}}\u00A0h, so the end moved to {{time}}.',
   tooShort: 'Not enough free hours from {{time}}. Pick another start.',
   notInARow: 'Pick days in a row.',
   notInARowRemove: 'Remove days from the start or the end, so the rest stay in a row.',
@@ -55,15 +58,15 @@ const EN = {
   full1: '1 full',
   fullN: '{{count}} full',
   fullDays: 'Full days',
-  hourBlock: '{{count}} h',
+  hourBlock: '{{count}}\u00A0h',
 } as const;
 
 const FR: Record<keyof typeof EN, string> = {
-  title: 'Quand en avez-vous besoin ?',
+  title: 'Quand en avez-vous besoin\u00A0?',
   subtitle: 'Touchez les jours voulus. Heures de {{city}}.',
   perDay: '{{amount}} / jour',
   perHour: '{{amount}} / h',
-  minHours: 'Min. {{count}} h',
+  minHours: 'Min.\u00A0{{count}}\u00A0h',
   someBooked: 'Quelques heures prises',
   unavailable: 'Indisponible',
   empty: 'Touchez un ou plusieurs jours du calendrier.',
@@ -76,17 +79,20 @@ const FR: Record<keyof typeof EN, string> = {
   tapHint: 'Touchez l’heure de début, puis l’heure de fin.',
   tapEnd: 'Touchez maintenant l’heure de fin.',
   sharedHint: 'Les heures prises sur l’un de ces jours sont grisées.',
-  lockBooked: 'Journée impossible : {{range}} est déjà réservé.',
-  lockToday: 'Journée impossible aujourd’hui : elle a déjà commencé.',
-  stretched: 'Minimum {{count}} h : la fin passe à {{time}}.',
-  capped: 'Maximum {{count}} h : la fin passe à {{time}}.',
+  lockBooked: 'Journée impossible\u00A0: {{range}} est déjà réservé.',
+  lockToday: 'Journée impossible aujourd’hui\u00A0: elle a déjà commencé.',
+  lockTodaySoon: 'Journée impossible aujourd’hui\u00A0: elle commence dans moins de 2\u00A0h.',
+  sharedLockBooked: 'Journée impossible\u00A0: {{day}} est en partie réservé.',
+  fromPerHour: 'dès {{amount}} / h',
+  stretched: 'Minimum {{count}}\u00A0h\u00A0: la fin passe à {{time}}.',
+  capped: 'Maximum {{count}}\u00A0h\u00A0: la fin passe à {{time}}.',
   tooShort: 'Pas assez d’heures libres à partir de {{time}}. Choisissez un autre début.',
   notInARow: 'Choisissez des jours qui se suivent.',
   notInARowRemove: 'Retirez plutôt le premier ou le dernier jour, pour que les autres se suivent.',
   todayFrom: 'Aujourd’hui · dès {{time}}',
   daysChanged: '{{count}} jours · touchez pour modifier',
   noDays: 'Aucun jour pour l’instant',
-  noDaysSub: 'Journée ou heures : vous choisissez pour chaque jour.',
+  noDaysSub: 'Journée ou heures\u00A0: vous choisissez pour chaque jour.',
   dailyOnly: 'Se loue à la journée uniquement',
   hourlyOnly: 'Se loue à l’heure uniquement',
   pickup: 'Retrait {{when}}',
@@ -102,7 +108,7 @@ const FR: Record<keyof typeof EN, string> = {
   full1: '1 journée',
   fullN: '{{count}} journées',
   fullDays: 'Journées',
-  hourBlock: '{{count}} h',
+  hourBlock: '{{count}}\u00A0h',
 };
 
 export type PickerCopyKey = keyof typeof EN;
@@ -165,7 +171,7 @@ export function dayLabel(key: string, lang: PickerLang): string {
   const d = new Date(`${key}T00:00:00.000Z`);
   const wd = (lang === 'fr' ? FR_WD : EN_WD)[d.getUTCDay()];
   const mo = (lang === 'fr' ? FR_MO : EN_MO)[d.getUTCMonth()];
-  return `${wd} ${d.getUTCDate()} ${mo}`;
+  return `${wd}\u00A0${d.getUTCDate()}\u00A0${mo}`;
 }
 
 export function monthTitle(year: number, month0: number, lang: PickerLang): string {
@@ -198,9 +204,9 @@ export function summaryLine(days: PickedDay[], lang: PickerLang): string {
   }
   if (blocks.length) {
     const same = blocks.every((b) => b === blocks[0]);
-    if (blocks.length === 1) parts.push(`${blocks[0]} h`);
-    else if (same) parts.push(`${blocks.length} × ${blocks[0]} h`);
-    else parts.push(blocks.map((b) => `${b} h`).join(' + '));
+    if (blocks.length === 1) parts.push(`${blocks[0]}\u00A0h`);
+    else if (same) parts.push(`${blocks.length} × ${blocks[0]}\u00A0h`);
+    else parts.push(blocks.map((b) => `${b}\u00A0h`).join(' + '));
   }
   return [head, parts.join(', ')].filter(Boolean).join(' · ');
 }
@@ -247,4 +253,69 @@ export function cityName(city?: string | null, timeZone?: string | null): string
   if (c) return c;
   const tail = (timeZone ?? '').split('/').pop() ?? '';
   return tail.replace(/_/g, ' ') || 'local';
+}
+
+/** Amber lock line for a single day; null when Full day is open. */
+export function lockReason(info: DayInfo, lang: PickerLang, timeZone?: string | null): string | null {
+  if (info.fullDayLock === 'booked' && info.bookedRun) {
+    return pickerText(lang, 'lockBooked', { range: rangeLabel(info.bookedRun.from, info.bookedRun.to, lang, timeZone) });
+  }
+  if (info.fullDayLock === 'today') return pickerText(lang, info.todayStarted ? 'lockToday' : 'lockTodaySoon');
+  return null;
+}
+
+/** Same for all days: why Full day is locked, naming the first day that locks it. */
+export function sharedLockReason(infos: DayInfo[], lang: PickerLang): string | null {
+  const booked = infos.find((i) => i.fullDayLock === 'booked');
+  if (booked) return pickerText(lang, 'sharedLockBooked', { day: dayLabel(booked.key, lang) });
+  const today = infos.find((i) => i.fullDayLock === 'today');
+  if (today) return pickerText(lang, today.todayStarted ? 'lockToday' : 'lockTodaySoon');
+  return null;
+}
+
+/** Hourly-only listings never show a day price: "from 3 000 FCFA / h". */
+export function fromHourlyPrice(hourRate: number, currency: string, lang: PickerLang): string {
+  return pickerText(lang, 'fromPerHour', { amount: pickerMoney(hourRate, currency, lang) });
+}
+
+const SERVER_RULES: Record<string, { en: string; fr: string }> = {
+  RENTAL_LEAD_TIME: {
+    en: 'That start is now less than 2\u00A0h away. Pick a later time.',
+    fr: 'Ce début est maintenant dans moins de 2\u00A0h. Choisissez une heure plus tard.',
+  },
+  RENTAL_DAYS_NOT_IN_A_ROW: { en: 'Pick days in a row.', fr: 'Choisissez des jours qui se suivent.' },
+  RENTAL_ONE_BLOCK_PER_DAY: {
+    en: 'Pick one time range per day.',
+    fr: 'Choisissez une seule plage horaire par jour.',
+  },
+  RENTAL_BLOCK_BELOW_MIN_HOURS: {
+    en: 'Each time range must meet the minimum hours.',
+    fr: 'Chaque plage horaire doit atteindre le minimum d’heures.',
+  },
+  RENTAL_BLOCK_ABOVE_MAX_HOURS: {
+    en: 'A time range is longer than the maximum hours.',
+    fr: 'Une plage horaire dépasse le maximum d’heures.',
+  },
+  RENTAL_DAILY_NOT_OFFERED: {
+    en: 'This listing doesn’t rent by the day. Pick hours instead.',
+    fr: 'Cette annonce ne se loue pas à la journée. Choisissez des heures.',
+  },
+  RENTAL_HOURLY_NOT_OFFERED: {
+    en: 'This listing rents by the day only. Pick full days instead.',
+    fr: 'Cette annonce se loue à la journée uniquement. Choisissez des journées.',
+  },
+};
+
+/** EN/FR text for a server day-and-hours rule code; null when the code isn't one of them. */
+export function serverRuleText(code: unknown, lang: PickerLang): string | null {
+  if (typeof code !== 'string') return null;
+  const hit = SERVER_RULES[code];
+  return hit ? hit[lang] : null;
+}
+
+/** Reads `code` from an API error (axios-style body, or the app's ApiError). */
+export function serverRuleCode(error: unknown): string | null {
+  const e = error as { code?: unknown; data?: { code?: unknown }; response?: { data?: { code?: unknown } } };
+  const code = e?.response?.data?.code ?? e?.data?.code ?? e?.code;
+  return typeof code === 'string' ? code : null;
 }

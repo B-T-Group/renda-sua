@@ -20,6 +20,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RentalListingRow } from '../../hooks/useRentalListings';
 import { formatCatalogMoney } from '../../utils/rentalRequestDisplay';
+import { fromHourlyPrice, pickerLang } from '../../utils/rentalDayHoursCopy';
 import { formatRentalDay } from '../../utils/rentalRequestFormat';
 
 function formatListingPrice(amount: string | number, currency: string): string {
@@ -97,7 +98,8 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
   const imgUrl = firstImg?.image_url;
   const addr = listing.business_location.address;
   const { line1, line2 } = formatLocationAddressLines(addr);
-  const price = formatListingPrice(listing.base_price_per_hour, item.currency);
+  const dailyOnly = listing.offers_hourly === false && listing.offers_daily !== false;
+  const price = formatListingPrice(dailyOnly ? listing.base_price_per_day : listing.base_price_per_hour, item.currency);
   const hasRoute =
     Boolean(listing.distance_text?.trim()) &&
     Boolean(listing.duration_text?.trim());
@@ -193,7 +195,7 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
               fontWeight={600}
               sx={{ ml: 0.5 }}
             >
-              {t('rentals.perHour', '/ hour')}
+              {dailyOnly ? t('rentals.catalog.perDayShort', '/ day') : t('rentals.perHour', '/ hour')}
             </Typography>
           </Typography>
         </Box>
@@ -349,9 +351,14 @@ function DailyRentalCard({
 }) {
   const item = listing.rental_item;
   const image = item.rental_item_images?.[0]?.image_url;
-  const price = `${formatCatalogMoney(Number(listing.base_price_per_day) || 0, item.currency, locale)} ${perDay}`;
+  // Hourly-only listings have no day price: show "from 3 000 FCFA / h" and no day total.
+  const hourlyOnly = listing.offers_daily === false;
+  const price = hourlyOnly
+    ? fromHourlyPrice(Number(listing.base_price_per_hour) || 0, item.currency, pickerLang(locale))
+    : `${formatCatalogMoney(Number(listing.base_price_per_day) || 0, item.currency, locale)} ${perDay}`;
   const place = catalogPlace(listing);
   const total =
+    !hourlyOnly &&
     availability?.available && availability.totalForDates != null && availability.dayCount
       ? totalLabel(formatCatalogMoney(availability.totalForDates, item.currency, locale), availability.dayCount)
       : null;

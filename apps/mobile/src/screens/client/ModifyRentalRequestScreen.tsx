@@ -18,6 +18,7 @@ import type { ClientRentalRequestRow, RentalListingRow, RentalSelectionWindow, R
 import type { SelectionRange } from '../../utils/rentals';
 import { allDaySelectionsForRange } from '../../utils/rentals/rentalSearchPreset';
 import type { RentalDateRange } from '../../utils/rentals/rentalSearchDates';
+import { fromHourlyPrice, pickerLang } from '../../utils/rentals/dayHoursCopy';
 import { RequestAppBar } from '../shared/RentalRequestScreen';
 
 type Route = { ModifyRentalRequest: { requestId: string } };
@@ -189,7 +190,7 @@ function ModifyRequestForm({
           datesFilled
           dateLine={picked ? picker.dateLine : dates.dateLine}
           itemName={item?.name}
-          itemMeta={itemMeta(request, dayRate, i18n.language, t)}
+          itemMeta={itemMeta(request, dayRate, i18n.language, t, listing ?? request.rental_location_listing)}
           imageUrl={image?.display_url || image?.image_url || null}
           requestBlocked={Boolean(blocked) || dates.requestBlocked}
           requestBusy={dates.checkingStay}
@@ -267,9 +268,14 @@ function itemMeta(
   request: ClientRentalRequestRow,
   dayRate: number,
   language: string,
-  t: (key: string, fallback: string, options?: Record<string, unknown>) => string
+  t: (key: string, fallback: string, options?: Record<string, unknown>) => string,
+  rates?: { offers_daily?: boolean | null; base_price_per_hour?: number | string | null; rental_item?: { currency?: string | null } | null } | null
 ): string {
   const place = request.rental_location_listing?.business_location?.name ?? '';
+  if (rates?.offers_daily === false) {
+    const currency = rates.rental_item?.currency || 'XAF';
+    return [place, fromHourlyPrice(Number(rates.base_price_per_hour) || 0, currency, pickerLang(language))].filter(Boolean).join(' · ');
+  }
   const rate = t('rentals.modify.perDay', '{{amount}} / day', {
     amount: `${dayRate} FCFA`,
   });

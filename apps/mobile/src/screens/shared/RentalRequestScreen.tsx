@@ -27,6 +27,7 @@ import {
 } from '../../utils/rentals/cardWindow';
 import { requestWindowIso } from '../../utils/rentals/rentalSearchPreset';
 import { formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
+import { fromHourlyPrice, pickerLang } from '../../utils/rentals/dayHoursCopy';
 
 type RequestRoute = { RentalRequest: RentalRequestParams };
 
@@ -130,7 +131,7 @@ export default function RentalRequestScreen() {
           requestBusy={dates.checkingStay}
           onSeeDates={openDates}
           itemName={item.name}
-          itemMeta={itemMeta(item.business?.name, toNumber(listing.base_price_per_day), toNumber(listing.base_price_per_hour), item.currency || 'XAF', i18n.language, t)}
+          itemMeta={itemMeta(item.business?.name, listing.offers_daily === false ? 0 : toNumber(listing.base_price_per_day), toNumber(listing.base_price_per_hour), item.currency || 'XAF', i18n.language, t)}
           imageUrl={image?.display_url || image?.image_url || null}
           dateLine={picked ? picker.dateLine : dates.dateLine}
           onEditDates={openDates}
@@ -213,9 +214,9 @@ function itemMeta(
   language: string,
   t: (key: string, fallback: string) => string
 ): string {
-  const amount = formatRequestAmount(daily > 0 ? daily : hourly, currency, language);
-  const unit = daily > 0 ? t('rentals.searchFirst.perDay', '/ day') : t('rentals.requestForm.perHour', '/ hour');
-  return [businessName, `${amount} ${unit}`].filter(Boolean).join(' · ');
+  if (daily <= 0) return [businessName, fromHourlyPrice(hourly, currency, pickerLang(language))].filter(Boolean).join(' · ');
+  const amount = formatRequestAmount(daily, currency, language);
+  return [businessName, `${amount} ${t('rentals.searchFirst.perDay', '/ day')}`].filter(Boolean).join(' · ');
 }
 
 function selectionEndIso(rows: Array<{ startMs: number; endMs: number; billing?: string; calendarDate?: string }>): string | null {

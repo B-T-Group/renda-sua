@@ -9,6 +9,7 @@ import {
   applyToAll,
   blockHours,
   blockIsFree,
+  canRemoveDay,
   dayInfo,
   dayPrice,
   defaultBlock,
@@ -33,6 +34,7 @@ import {
   dayLabel,
   footerDetail,
   hourLabel,
+  lockReason,
   minuteLabel,
   monthTitle,
   noteText,
@@ -40,6 +42,7 @@ import {
   pickerMoney,
   pickerText,
   rangeLabel,
+  sharedLockReason,
   summaryLine,
   weekStart,
   weekdayHeads,
@@ -311,6 +314,7 @@ function SheetBody({
                   onMode={(mode) => setMode(d.key, mode)}
                   onHour={(h) => onHour(d.key, h)}
                   onRemove={() => onDayTap(d.key)}
+                  removable={canRemoveDay(days, d.key)}
                 />
               ))
             )}
@@ -326,7 +330,9 @@ function SheetBody({
             <Text style={[styles.detail, { color: colors.text.secondary }]} numberOfLines={2}>
               {!listing.offersHourly && days.length
                 ? pickerText(lang, 'dailyOnly')
-                : footerDetail(days, infos, lang, timeZone, { shared: sharedOn, todayKey })}
+                : !listing.offersDaily && days.length
+                  ? pickerText(lang, 'hourlyOnly')
+                  : footerDetail(days, infos, lang, timeZone, { shared: sharedOn, todayKey })}
             </Text>
           </View>
           {days.length ? (
@@ -651,6 +657,7 @@ function DayRow({
   onMode,
   onHour,
   onRemove,
+  removable,
 }: {
   lang: PickerLang;
   day: PickedDay;
@@ -665,6 +672,8 @@ function DayRow({
   onMode: (mode: DayMode) => void;
   onHour: (hour: number) => void;
   onRemove: () => void;
+  /** False for middle days: removing one would break the run of days. */
+  removable: boolean;
 }) {
   const { colors } = useTheme();
   const both = showModeSwitch(listing);
@@ -675,10 +684,7 @@ function DayRow({
     ? pickerText(lang, 'todayFrom', { time: hourLabel(info.fromHour, lang, timeZone) })
     : null;
   const prefix = `day-hours-row-${day.key}`;
-  const lockText =
-    isHours && info.fullDayLock === 'booked' && info.bookedRun && listing.offersDaily
-      ? pickerText(lang, 'lockBooked', { range: rangeLabel(info.bookedRun.from, info.bookedRun.to, lang, timeZone) })
-      : null;
+  const lockText = isHours && listing.offersDaily ? lockReason(info, lang, timeZone) : null;
   return (
     <RowShell testID={prefix} active={open}>
       <View style={styles.rowHead}>
@@ -696,9 +702,13 @@ function DayRow({
         ) : !listing.offersHourly ? (
           <FullTag lang={lang} />
         ) : null}
-        <Pressable testID={`${prefix}-remove`} accessibilityRole="button" accessibilityLabel={pickerText(lang, 'remove', { day: dayLabel(day.key, lang) })} onPress={onRemove} hitSlop={8} style={styles.bin}>
-          <MaterialCommunityIcons name="trash-can-outline" size={22} color={colors.text.secondary} />
-        </Pressable>
+        {removable ? (
+          <Pressable testID={`${prefix}-remove`} accessibilityRole="button" accessibilityLabel={pickerText(lang, 'remove', { day: dayLabel(day.key, lang) })} onPress={onRemove} hitSlop={8} style={styles.bin}>
+            <MaterialCommunityIcons name="trash-can-outline" size={22} color={colors.text.secondary} />
+          </Pressable>
+        ) : (
+          <View style={styles.bin} />
+        )}
       </View>
       {open ? (
         <HourBar cells={info.cells} start={day.start} end={day.end} selected onHour={onHour} testPrefix={prefix} lang={lang} timeZone={timeZone} />
@@ -707,7 +717,7 @@ function DayRow({
         {isHours ? (
           <>
             <TimeChip testID={`${prefix}-chip`} text={rangeLabel(day.start, day.end, lang, timeZone)} onPress={open ? undefined : onExpand} />
-            <Text style={[styles.hours, { color: colors.text.secondary }]}>{blockHours(day)} h</Text>
+            <Text style={[styles.hours, { color: colors.text.secondary }]}>{blockHours(day)}{'\u00A0'}h</Text>
           </>
         ) : both && info.openMin != null && info.closeMin != null ? (
           <Text style={{ color: colors.text.secondary, fontSize: 13 }}>
@@ -774,7 +784,7 @@ function SharedCard({
         {isHours ? (
           <>
             <TimeChip text={rangeLabel(first.start, first.end, lang, timeZone)} />
-            <Text style={[styles.hours, { color: colors.text.secondary }]}>{blockHours(first)} h × {days.length}</Text>
+            <Text style={[styles.hours, { color: colors.text.secondary }]}>{blockHours(first)}{'\u00A0'}h × {days.length}</Text>
           </>
         ) : null}
         <View style={styles.flex} />
@@ -782,6 +792,8 @@ function SharedCard({
       </View>
       {note ? (
         <Banner icon="alert-outline" color={colors.error.main} text={noteText(note, lang, timeZone, listing.minHours, listing.maxHours)} />
+      ) : locked && listing.offersDaily && sharedLockReason(infos, lang) ? (
+        <Banner testID="day-hours-shared-lock" icon="lock-outline" color={AMBER} text={sharedLockReason(infos, lang) as string} />
       ) : (
         <Banner icon="information-outline" color={colors.text.secondary} text={pickerText(lang, isHours ? (awaitingEnd ? 'tapEnd' : 'sharedHint') : 'oneSetting')} />
       )}
@@ -789,9 +801,11 @@ function SharedCard({
         {days.map((d) => (
           <View key={d.key} style={[styles.dayChip, { backgroundColor: '#EAF1FB' }]}>
             <Text style={[styles.dayChipText, { color: BLUE }]}>{dayLabel(d.key, lang)}</Text>
-            <Pressable testID={`day-hours-shared-remove-${d.key}`} accessibilityRole="button" accessibilityLabel={pickerText(lang, 'remove', { day: dayLabel(d.key, lang) })} onPress={() => onRemove(d.key)} hitSlop={8} style={styles.dayChipX}>
-              <MaterialCommunityIcons name="close" size={14} color={colors.text.secondary} />
-            </Pressable>
+            {canRemoveDay(days, d.key) ? (
+              <Pressable testID={`day-hours-shared-remove-${d.key}`} accessibilityRole="button" accessibilityLabel={pickerText(lang, 'remove', { day: dayLabel(d.key, lang) })} onPress={() => onRemove(d.key)} hitSlop={8} style={styles.dayChipX}>
+                <MaterialCommunityIcons name="close" size={14} color={colors.text.secondary} />
+              </Pressable>
+            ) : null}
           </View>
         ))}
       </View>

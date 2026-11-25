@@ -382,7 +382,8 @@ function toCard(
   const image = hit.listing?.rental_item?.rental_item_images?.[0];
   const pricePerDay = Number(hit.pricePerDay) || Number(hit.listing.base_price_per_day) || 0;
   const pricePerHour = Number(hit.listing.base_price_per_hour) || 0;
-  const windows = range
+  const hourlyOnly = hit.listing.offers_daily === false;
+  const windows = range && !hourlyOnly
     ? allDaySelectionsForRange(range, hit.listing.weekly_availability ?? [], pricePerDay)
     : [];
   const quote = windows.length ? quoteRentalSelections(windows, pricePerHour, pricePerDay) : null;
@@ -391,9 +392,11 @@ function toCard(
     name: hit.listing.rental_item?.name ?? '',
     imageUrl: image?.display_url ?? image?.image_url,
     pricePerDay,
+    hourlyOnly,
+    pricePerHour,
     currency: hit.listing.rental_item?.currency || 'XAF',
     available: hit.available,
-    totalForDates: quote == null ? hit.totalForDates : quote,
+    totalForDates: hourlyOnly ? null : quote == null ? hit.totalForDates : quote,
     totalIsEstimate: dailyTotalDiffersFromQuote(hit.totalForDates, quote),
     dayCount: hit.dayCount,
     nextAvailableDate: hit.nextAvailableDate,

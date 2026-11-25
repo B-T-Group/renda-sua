@@ -64,6 +64,7 @@ import {
 import { RentalDayHoursDialog } from './dayHours/RentalDayHoursDialog';
 import { dayHoursBlockError, dayHoursListingModel } from './dayHours/dayHoursListingModel';
 import { fromSelectionRanges, listingNowMs } from '../../utils/rentalDayHoursPicker';
+import { pickerLang, serverRuleCode, serverRuleText } from '../../utils/rentalDayHoursCopy';
 
 export const RENTAL_REQUEST_SECTION_ID = 'rental-request-section';
 const RENTAL_MIN_START_BUFFER_MS = 2 * 60 * 60 * 1000;
@@ -480,6 +481,15 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         state: { inspectionPolicyVersion: version, requestId: created.requestId },
       });
     } catch (e: unknown) {
+      const ruleText = pickerOn ? serverRuleText(serverRuleCode(e), pickerLang(i18n.language)) : null;
+      if (ruleText) {
+        // Day-and-hours rule (for example the 2 h lead time): say why and reopen the picker.
+        setConfirmOpen(false);
+        setCardFallback(null);
+        setMsg(ruleText);
+        setPickerOpen(true);
+        return;
+      }
       const friendly = cardWindowErrorMessage(e, i18n.language);
       setCardFallback(friendly);
       const http = e as { response?: { data?: { message?: string } } };

@@ -6,12 +6,16 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { formatSearchMoney } from '../../../utils/rentals';
 import { formatCatalogMoney } from '../../../utils/rentals/rentalRequestFormat';
 import { formatRentalDay } from '../../../utils/rentals/rentalRequestFormat';
+import { fromHourlyPrice, pickerLang } from '../../../utils/rentals/dayHoursCopy';
 
 export interface RentalSearchCardModel {
   id: string;
   name: string;
   imageUrl?: string | null;
   pricePerDay: number;
+  /** Hourly-only listings show "from 3 000 FCFA / h" and no day total. */
+  hourlyOnly?: boolean;
+  pricePerHour?: number;
   currency: string;
   available: boolean | null;
   totalForDates: number | null;
@@ -83,10 +87,12 @@ export function RentalSearchResultCard({
             })}
           </Text>
         ) : null}
-        <Text style={{ color: colors.text.primary, fontWeight: '700', marginTop: 6 }}>
-          {daily} {t('rentals.searchFirst.perDay', '/ day')}
+        <Text testID={`rental-search-price-${card.id}`} style={{ color: colors.text.primary, fontWeight: '700', marginTop: 6 }}>
+          {card.hourlyOnly ? fromHourlyPrice(card.pricePerHour ?? 0, card.currency, pickerLang(i18n.language)) : daily}
+          {card.hourlyOnly ? null : ' '}
+          {card.hourlyOnly ? null : t('rentals.searchFirst.perDay', '/ day')}
         </Text>
-        {card.available && card.totalForDates != null && card.dayCount ? (
+        {!card.hourlyOnly && card.available && card.totalForDates != null && card.dayCount ? (
           <Text style={{ color: colors.text.secondary }} testID={`rental-search-total-${card.id}`}>
             {card.totalIsEstimate
               ? t('rentals.searchFirst.totalEstimate', 'Est. {{amount}} for {{count}} days', {
@@ -99,7 +105,7 @@ export function RentalSearchResultCard({
                 })}
           </Text>
         ) : null}
-        {!card.rangeLabel && !card.catalog ? (
+        {!card.rangeLabel && !card.catalog && !card.hourlyOnly ? (
           <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
             {t('rentals.searchFirst.totalsAfterDates', 'Totals appear once you add dates')}
           </Text>
