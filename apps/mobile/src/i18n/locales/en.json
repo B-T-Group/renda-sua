@@ -6632,6 +6632,7 @@
     "bookingDetail": {
       "securityDeposit": "Security deposit",
       "heldOnCard": "{{amount}} held on your card.",
+      "heldOnRenterCard": "{{amount}} held on the renter's card",
       "authorizedOnCard": "Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.",
       "authorizedOnCardInspected": "Held on your card: {{amount}} (rental + deposit). The rental is charged at return. The deposit is released unless there's damage or a late return.",
       "payAtPickup": "Nothing paid yet — the rental total is due at pickup.",

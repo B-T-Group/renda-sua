@@ -1,9 +1,11 @@
-import { cardHoldLines, depositInputError, depositOnSave, showsCardDeposit, showsListingDeposit } from './cardDeposit';
+import { cardHoldLines, depositInputError, depositOnSave, holdPresentation, showsCardDeposit, showsListingDeposit } from './cardDeposit';
 
 describe('card deposit field', () => {
   it('hides a deposit that is the whole card hold', () => {
     expect(cardHoldLines({ total: 180, deposit: 180, authorized: 180 }).showDeposit).toBe(false);
-    expect(cardHoldLines({ total: 160, deposit: 20, authorized: 180 }).additive).toBe(true);
+    expect(holdPresentation({ total: 180, deposit: 180, authorized: 180 })).toEqual({ mode: 'sentence', amount: 180 });
+    expect(holdPresentation({ total: 160, deposit: 20, authorized: 180 })).toEqual({ mode: 'split', total: 160, deposit: 20 });
+    expect(holdPresentation({ total: 45000, deposit: 0, authorized: 0 })).toEqual({ mode: 'total', amount: 45000 });
   });
 
   it('hides the field for XAF and XOF and keeps it for card currencies', () => {

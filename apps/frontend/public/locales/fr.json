@@ -7276,6 +7276,7 @@
       "paymentConfirmed": "Paiement confirmé",
       "securityDeposit": "Caution",
       "heldOnCard": "{{amount}} retenus sur votre carte.",
+      "heldOnRenterCard": "{{amount}} retenus sur la carte du locataire",
       "authorizedOnCard": "Réservé sur votre carte (location + caution) : {{amount}}. Le montant final au retour est au minimum le total de la location ; la caution ne couvre que les heures supplémentaires.",
       "authorizedOnCardInspected": "Bloqué sur votre carte : {{amount}} (location + caution). La location est débitée au retour. La caution est libérée sauf en cas de dommage ou de retard.",
       "payAtPickup": "Rien n’est payé pour le moment — le total de la location est dû au retrait.",

@@ -15,6 +15,27 @@ function finiteAmount(value: number): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+export type HoldPresentation =
+  | { mode: 'sentence'; amount: number }
+  | { mode: 'split'; total: number; deposit: number }
+  | { mode: 'total'; amount: number };
+
+/** One hold sentence, a total plus deposit, or the rental total when nothing is held. */
+export function holdPresentation(input: {
+  total: number;
+  deposit: number;
+  authorized: number;
+}): HoldPresentation {
+  const total = finiteAmount(input.total);
+  const deposit = finiteAmount(input.deposit);
+  const authorized = finiteAmount(input.authorized);
+  if (cardHoldLines({ total, deposit, authorized }).additive) {
+    return { mode: 'split', total, deposit };
+  }
+  if (authorized > 0) return { mode: 'sentence', amount: authorized };
+  return { mode: 'total', amount: total };
+}
+
 export function holdCopyKey(additive: boolean, inspected: boolean): string {
   if (!additive) return 'rentals.bookingDetail.heldOnCard';
   return inspected

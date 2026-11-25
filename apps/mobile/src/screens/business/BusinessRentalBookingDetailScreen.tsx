@@ -49,7 +49,7 @@ import {
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
 import { formatDoualaStamp } from '../../utils/rentals/renterReturnPhase';
-import { cardHoldLines } from '../../utils/rentals/cardDeposit';
+import { holdPresentation, type HoldPresentation } from '../../utils/rentals/cardDeposit';
 import {
   businessCanReplaceReport,
   reportReadyToReview,
@@ -287,7 +287,7 @@ export default function BusinessRentalBookingDetailScreen() {
     (booking.status === 'confirmed' || isReserved) && !booking.actual_start_at;
   const depositAmount = Math.max(0, Number(booking.security_deposit_amount) || 0);
   const authorizedAmount = Math.max(0, Number(booking.authorized_amount) || 0);
-  const hold = cardHoldLines({
+  const presentation = holdPresentation({
     total: Number(booking.total_amount) || 0,
     deposit: depositAmount,
     authorized: authorizedAmount,
@@ -358,25 +358,12 @@ export default function BusinessRentalBookingDetailScreen() {
             </Text>
           ))}
         </View>
-        <Text style={{ color: colors.text.primary, marginTop: 8, fontWeight: '600' }}>
-          {detailMoney(Number(booking.total_amount) || 0)}
-        </Text>
-        {hold.showDeposit ? (
-          <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
-            {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
-            {': '}
-            {detailMoney(depositAmount)}
-          </Text>
-        ) : null}
-        {authorizedAmount > 0 ? (
-          <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
-            {t(
-              'business.rentals.authorizedAmount',
-              'Held on client card: {{amount}}',
-              { amount: detailMoney(authorizedAmount) }
-            )}
-          </Text>
-        ) : null}
+        <BookingMoney
+          presentation={presentation}
+          total={detailMoney(Number(booking.total_amount) || 0)}
+          deposit={detailMoney(depositAmount)}
+          held={detailMoney(presentation.mode === 'sentence' ? presentation.amount : authorizedAmount)}
+        />
       </View>
 
       {reviewReady ? (
@@ -909,6 +896,39 @@ function handoverPill(
   if (status === 'awaiting_return') return t(bookingDetailStatusLabelKey(status), 'Return due');
   if (status === 'reserved' || status === 'confirmed' || status === 'active') return phaseLabel(phase, day, t);
   return t(fallbackKey, status);
+}
+
+function BookingMoney(props: {
+  presentation: HoldPresentation;
+  total: string;
+  deposit: string;
+  held: string;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  if (props.presentation.mode === 'sentence') return <HeldSentence held={props.held} />;
+  return (
+    <View>
+      <Text style={{ color: colors.text.primary, marginTop: 8, fontWeight: '600' }}>{props.total}</Text>
+      {props.presentation.mode === 'split' ? (
+        <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
+          {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
+          {': '}
+          {props.deposit}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function HeldSentence({ held }: { held: string }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <Text style={{ color: colors.text.primary, marginTop: 8, fontWeight: '600' }}>
+      {t('rentals.bookingDetail.heldOnRenterCard', "{{amount}} held on the renter's card", { amount: held })}
+    </Text>
+  );
 }
 
 function phaseLabel(

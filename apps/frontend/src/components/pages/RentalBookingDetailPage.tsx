@@ -50,7 +50,7 @@ import {
   formatRequestAmount,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
-import { cardHoldLines, holdCopyFallback, holdCopyKey, showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { cardHoldLines, holdPresentation, showsCardDeposit, type HoldPresentation } from '../../utils/rentals/cardDeposit';
 import { bookingRequestedPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
 import { formatDoualaStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
 import {
@@ -514,7 +514,7 @@ const RentalBookingDetailPage: React.FC = () => {
     ? Number(booking.security_deposit_amount) || 0
     : 0;
   const authorizedAmount = Number(booking.authorized_amount) || 0;
-  const hold = cardHoldLines({
+  const presentation = holdPresentation({
     total: Number(booking.total_amount) || 0,
     deposit: depositAmount,
     authorized: authorizedAmount,
@@ -1041,30 +1041,14 @@ const RentalBookingDetailPage: React.FC = () => {
                     bgcolor: alpha(theme.palette.success.main, 0.06),
                   }}
                 >
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    {t('rentals.clientRequests.bookConfirmLabelTotal', 'Quoted total')}
-                  </Typography>
-                  <Typography variant="h5" fontWeight={900} color="success.dark">
-                    {formatDetailMoney(Number(booking.total_amount) || 0)}
-                  </Typography>
+                  <SummaryMoney
+                    presentation={presentation}
+                    business={Boolean(isBusiness)}
+                    total={formatDetailMoney(Number(booking.total_amount) || 0)}
+                    deposit={formatDetailMoney(depositAmount)}
+                    held={formatDetailMoney(presentation.mode === 'sentence' ? presentation.amount : 0)}
+                  />
                   <Stack spacing={0.5} sx={{ mt: 1 }}>
-                    {hold.showDeposit ? (
-                      <Typography variant="body2" color="text.secondary">
-                        {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}:{' '}
-                        <strong>
-                          {formatDetailMoney(depositAmount)}
-                        </strong>
-                      </Typography>
-                    ) : null}
-                    {booking.payment_status === 'authorized' && authorizedAmount > 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        {t(
-                          holdCopyKey(hold.additive, booking.inspection_policy_version != null),
-                          holdCopyFallback(hold.additive, booking.inspection_policy_version != null),
-                          { amount: formatDetailMoney(authorizedAmount) }
-                        )}
-                      </Typography>
-                    ) : null}
                     {booking.payment_timing === 'pay_at_pickup' &&
                     booking.payment_status === 'pending' ? (
                       <Typography variant="body2" color="text.secondary">
@@ -1367,6 +1351,47 @@ function BookingConfirmation({
         )}
       </Container>
     </Box>
+  );
+}
+
+function SummaryMoney(props: {
+  presentation: HoldPresentation;
+  business: boolean;
+  total: string;
+  deposit: string;
+  held: string;
+}) {
+  if (props.presentation.mode === 'sentence') {
+    return <HeldSentence business={props.business} held={props.held} />;
+  }
+  return <TotalAndDeposit total={props.total} deposit={props.deposit} split={props.presentation.mode === 'split'} />;
+}
+
+function HeldSentence({ business, held }: { business: boolean; held: string }) {
+  const { t } = useTranslation();
+  const key = business ? 'rentals.bookingDetail.heldOnRenterCard' : 'rentals.start.held';
+  const fallback = business ? "{{amount}} held on the renter's card" : '{{amount}} held on your card';
+  return (
+    <Typography variant="h6" fontWeight={800} color="success.dark">
+      {t(key, fallback, { amount: held })}
+    </Typography>
+  );
+}
+
+function TotalAndDeposit({ total, deposit, split }: { total: string; deposit: string; split: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Typography variant="caption" color="text.secondary" display="block">
+        {t('rentals.clientRequests.bookConfirmLabelTotal', 'Quoted total')}
+      </Typography>
+      <Typography variant="h5" fontWeight={900} color="success.dark">{total}</Typography>
+      {split ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}: <strong>{deposit}</strong>
+        </Typography>
+      ) : null}
+    </>
   );
 }
 
