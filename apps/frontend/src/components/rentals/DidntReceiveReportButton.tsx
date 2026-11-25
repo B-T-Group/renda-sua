@@ -1,3 +1,4 @@
+import { HelpOutline } from '@mui/icons-material';
 import {
   Button,
   Dialog,
@@ -12,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import {
+  didntReceiveMinutesLeft,
   notReceivedErrorKey,
   notReceivedFailure,
   showDidntReceiveLink,
@@ -52,14 +54,24 @@ export function useDidntReceiveWindow(
   return showDidntReceiveLink({ enrolled, startedAt, now });
 }
 
+function missingLabel(startedAt: string | null | undefined, t: ReturnType<typeof useTranslation>['t']): string {
+  const minutes = didntReceiveMinutesLeft(startedAt);
+  if (!minutes) return t('rentalInspection.didntReceive', "Didn't receive the item? Tell us");
+  return t('rentals.start.didntReceiveLeft', "Didn't receive the item? · {{minutes}} min", {
+    minutes: String(minutes),
+  });
+}
+
 export function DidntReceiveReportButton({
   bookingId,
   reported = false,
+  startedAt,
   onReported,
   onWindowClosed,
 }: {
   bookingId: string;
   reported?: boolean;
+  startedAt?: string | null;
   onReported?: () => void;
   onWindowClosed?: () => void;
 }) {
@@ -143,10 +155,12 @@ export function DidntReceiveReportButton({
   return (
     <>
       <Button
+        color="error"
+        startIcon={<HelpOutline />}
         onClick={() => (enabled ? setStep('confirm') : navigate('/support'))}
-        sx={{ alignSelf: 'flex-start', minHeight: 48 }}
+        sx={{ alignSelf: 'flex-start', minHeight: 48, textAlign: 'left' }}
       >
-        {t('rentalInspection.didntReceive', "Didn't receive the item? Tell us")}
+        {missingLabel(startedAt, t)}
       </Button>
       <Dialog open={step != null} onClose={close} fullWidth maxWidth="xs">
         <DialogTitle>{title}</DialogTitle>

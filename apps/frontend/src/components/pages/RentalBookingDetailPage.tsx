@@ -61,7 +61,8 @@ import {
   bookingDetailTimelineIndex,
   messagesDefaultExpanded,
 } from '../../utils/rentalPhase';
-import { businessCanReplaceReport, reportReadyToReview, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { businessCanReplaceReport, didntReceiveWindowOpen, reportReadyToReview, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import { RentalHandoverNotice } from '../rentals/RentalHandoverNotice';
 import {
   confirmationDepositHeld,
   confirmationTimeZone,
@@ -354,10 +355,7 @@ const RentalBookingDetailPage: React.FC = () => {
     }
   };
 
-  const didntWindowOpen = useDidntReceiveWindow(
-    booking?.inspection_policy_version != null,
-    booking?.actual_start_at
-  );
+  const didntWindowOpen = useDidntReceiveWindow(true, booking?.actual_start_at);
   const reportedMissingItem = reportedNow || Boolean(booking?.not_received_report);
   useEffect(() => {
     setReportedNow(false);
@@ -824,15 +822,24 @@ const RentalBookingDetailPage: React.FC = () => {
 
           {isClient &&
           bookingId &&
+          !showStartPanel &&
           (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
             <DidntReceiveReportButton
               bookingId={bookingId}
+              startedAt={booking.actual_start_at}
               reported={reportedMissingItem}
               onReported={() => setReportedNow(true)}
               onWindowClosed={() => setWindowForcedClosed(true)}
             />
           ) : null}
 
+          {isBusiness && status === 'active' && didntReceiveWindowOpen(booking.actual_start_at) ? (
+            <RentalHandoverNotice
+              mode="banner"
+              renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ') || t('rentals.renter', 'The renter')}
+              itemName={booking.rental_location_listing?.rental_item?.name ?? ''}
+            />
+          ) : null}
           {showStartPanel ? (
             <RentalStartPanel
               booking={booking}
@@ -850,6 +857,17 @@ const RentalBookingDetailPage: React.FC = () => {
                   setError(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
                 });
               } : undefined}
+              missing={
+                isClient && bookingId && (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
+                  <DidntReceiveReportButton
+                    bookingId={bookingId}
+                    startedAt={booking.actual_start_at}
+                    reported={reportedMissingItem}
+                    onReported={() => setReportedNow(true)}
+                    onWindowClosed={() => setWindowForcedClosed(true)}
+                  />
+                ) : undefined
+              }
               onConfirm={() => {
                 if (!bookingId) return;
                 void startRental(bookingId).then((res) => {

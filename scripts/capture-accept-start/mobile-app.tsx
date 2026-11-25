@@ -63,7 +63,7 @@ const CLOCK: Record<string, string> = {
   today: '2026-11-24T14:00:00.000Z',
   momoDay: '2026-11-24T07:00:00.000Z',
   late: '2026-11-24T16:00:00.000Z',
-  startedSimple: '2026-11-24T15:20:00.000Z',
+  startedSimple: '2026-11-24T15:05:00.000Z',
   inspect: '2026-11-24T14:30:00.000Z',
   waitingPhotos: '2026-11-24T15:06:00.000Z',
   inspectStart: '2026-11-24T15:12:00.000Z',

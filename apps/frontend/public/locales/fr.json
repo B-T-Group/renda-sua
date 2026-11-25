@@ -7126,11 +7126,12 @@
       "momoWaitingBody": "Approuvez la demande sur votre téléphone. Cette page se met à jour quand le paiement est accepté.",
       "held": "{{amount}} retenus sur votre carte",
       "returnBy": "Retour le {{when}}",
-      "locked": "Démarrer la location · à partir du {{day}}",
+      "locked": "Démarrer · dès le {{day}}",
       "button": "Démarrer la location{{amount}}",
       "confirmTitle": "Démarrer la location ?",
       "confirmBody": "Démarrez seulement lorsque vous êtes avec le commerce. On vous remet l'article dès que vous démarrez.",
       "didntHint": "Vous n'avez pas reçu l'article après le démarrage ? Vous pouvez nous le dire dans les 30 minutes.",
+      "didntReceiveLeft": "Pas reçu l'article ? · {{minutes}} min",
       "notYet": "Pas encore",
       "startedBanner": "Location démarrée à {{time}}. Le commerce a été prévenu pour remettre l'article."
     },
@@ -7140,6 +7141,8 @@
       "startedLine": "Démarrée à {{time}} · remettez l'article",
       "photosAsked": "{{name}} a demandé de nouvelles photos avant le démarrage.",
       "sendPhotos": "Envoyer les photos mises à jour",
+      "pushStartedTitle": "Location démarrée, remettez l'article",
+      "pushStartedBody": "{{name}} a démarré la location de {{item}}. Vous pouvez remettre l'article.",
       "notCollected": "Article non récupéré ?",
       "notCollectedSent": "Le support a été prévenu que l'article n'a pas été récupéré.",
       "photosPill": "Nouvelles photos demandées"

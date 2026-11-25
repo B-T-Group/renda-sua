@@ -122,10 +122,7 @@ export default function RentalBookingDetailScreen() {
 
   const [reportedNow, setReportedNow] = useState(false);
   const [windowForcedClosed, setWindowForcedClosed] = useState(false);
-  const didntWindowOpen = useDidntReceiveWindow(
-    booking?.inspection_policy_version != null,
-    booking?.actual_start_at
-  );
+  const didntWindowOpen = useDidntReceiveWindow(true, booking?.actual_start_at);
   const reportedMissingItem = reportedNow || Boolean(booking?.not_received_report);
   useEffect(() => {
     setReportedNow(false);
@@ -571,6 +568,17 @@ export default function RentalBookingDetailScreen() {
               onOpen={() => setStartOpen(true)}
               onClose={() => setStartOpen(false)}
               onConfirm={() => void onStartRental()}
+              missing={
+                reportedMissingItem || (didntWindowOpen && !windowForcedClosed) ? (
+                  <DidntReceiveReportButton
+                    bookingId={booking.id}
+                    startedAt={booking.actual_start_at}
+                    reported={reportedMissingItem}
+                    onReported={() => setReportedNow(true)}
+                    onWindowClosed={() => setWindowForcedClosed(true)}
+                  />
+                ) : undefined
+              }
             />
           </View>
         ) : null}
@@ -661,15 +669,6 @@ export default function RentalBookingDetailScreen() {
               </Text>
             ) : null}
           </View>
-        ) : null}
-
-        {reportedMissingItem || (didntWindowOpen && !windowForcedClosed) ? (
-          <DidntReceiveReportButton
-            bookingId={booking.id}
-            reported={reportedMissingItem}
-            onReported={() => setReportedNow(true)}
-            onWindowClosed={() => setWindowForcedClosed(true)}
-          />
         ) : null}
 
         <View

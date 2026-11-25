@@ -41,6 +41,7 @@ interface Props {
   onConfirm: () => void;
   onNotCollected?: () => void;
   now?: number;
+  missing?: React.ReactNode;
 }
 
 export function RentalStartCard(props: Props) {
@@ -90,6 +91,7 @@ function StartBody(props: Props & { phase: PickupPhase }) {
       </Text>
       <StartButton {...props} day={day} momo={momo} />
       <NotCollected {...props} />
+      {props.phase === 'started' && props.role === 'client' ? props.missing : null}
     </View>
   );
 }

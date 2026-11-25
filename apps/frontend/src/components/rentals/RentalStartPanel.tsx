@@ -26,6 +26,7 @@ interface Props {
   starting?: boolean;
   onConfirm: () => void;
   onNotCollected?: () => void;
+  missing?: React.ReactNode;
 }
 
 export function RentalStartPanel(props: Props) {
@@ -87,6 +88,7 @@ export function RentalStartPanel(props: Props) {
           {t('rentals.business.notCollected', 'Item not collected?')}
         </Button>
       ) : null}
+      {props.role === 'client' && phase === 'started' ? props.missing : null}
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
         <DialogContent>
           <Stack alignItems="center" spacing={1}>

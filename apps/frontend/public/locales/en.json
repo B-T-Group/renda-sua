@@ -7411,6 +7411,7 @@
       "confirmTitle": "Start rental?",
       "confirmBody": "Only start once you are with the business. The business will hand over the item once you start.",
       "didntHint": "Didn't get the item after starting? You can tell us within 30 minutes.",
+      "didntReceiveLeft": "Didn't receive the item? · {{minutes}} min",
       "notYet": "Not yet",
       "startedBanner": "Rental started at {{time}}. The business has been notified to hand over the item."
     },
@@ -7420,6 +7421,8 @@
       "startedLine": "Started at {{time}} · hand over the item",
       "photosAsked": "{{name}} asked for new photos before starting.",
       "sendPhotos": "Send updated photos",
+      "pushStartedTitle": "Rental started, hand over the item",
+      "pushStartedBody": "{{name}} started {{item}}. You can hand over the item.",
       "notCollected": "Item not collected?",
       "notCollectedSent": "Support was notified that the item was not collected.",
       "photosPill": "New photos asked"

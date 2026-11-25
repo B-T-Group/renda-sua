@@ -14,6 +14,7 @@ import {
   returnHasDamage,
   notReceivedErrorKey,
   notReceivedFailure,
+  didntReceiveMinutesLeft,
   showDidntReceiveLink,
   showLegacyReturnPicker,
   unitPhotosMeetMinimum,
@@ -176,13 +177,13 @@ describe('client review and money copy', () => {
     expect(classifyInspectionError({ code: 'ERR_NETWORK', message: 'Network Error' })).toBe('unavailable');
   });
 
-  it('shows Didn\'t receive only for an inspected rental in the first 30 minutes', () => {
+  it('shows Didn\'t receive for any started rental in the first 30 minutes', () => {
     const start = '2026-11-12T14:20:00.000Z';
     const soon = new Date('2026-11-12T14:40:00.000Z').getTime();
     const late = new Date('2026-11-12T15:00:00.000Z').getTime();
     expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: soon })).toBe(true);
     expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: late })).toBe(false);
-    expect(showDidntReceiveLink({ enrolled: false, startedAt: start, now: soon })).toBe(false);
+    expect(showDidntReceiveLink({ enrolled: false, startedAt: start, now: soon })).toBe(true);
     expect(showDidntReceiveLink({ enrolled: true, startedAt: null, now: soon })).toBe(false);
     const at = new Date(start).getTime();
     expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at })).toBe(true);
@@ -193,6 +194,9 @@ describe('client review and money copy', () => {
     expect(showDidntReceiveLink({ enrolled: true, startedAt: start, now: at - 1 })).toBe(false);
     expect(showDidntReceiveLink({ enrolled: true, startedAt: 'not-a-date', now: at })).toBe(false);
     expect(showDidntReceiveLink({ enrolled: true, startedAt: '', now: at })).toBe(false);
+    expect(didntReceiveMinutesLeft(start, at)).toBe(30);
+    expect(didntReceiveMinutesLeft(start, at + 60000)).toBe(29);
+    expect(didntReceiveMinutesLeft(start, late)).toBe(0);
   });
 
   it('maps a not-received rejection to its message', () => {

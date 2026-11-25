@@ -54,8 +54,10 @@ import {
   reportReadyToReview,
   pickupGate,
   showEnrolledReturn,
+  didntReceiveWindowOpen,
   showLegacyReturnPicker,
 } from '../../utils/rentals/rentalInspection';
+import { RentalHandoverNotice } from '../../components/rentals/RentalHandoverNotice';
 import { formatZonedDay, formatZonedWhen, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalBookingDetail'>;
@@ -533,6 +535,13 @@ export default function BusinessRentalBookingDetailScreen() {
 
       {(booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active') && !showRenterReport && !photosAsked ? (
         <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          {booking.status === 'active' && didntReceiveWindowOpen(booking.actual_start_at) ? (
+            <RentalHandoverNotice
+              mode="banner"
+              renterName={clientName || t('rentals.renter', 'The renter')}
+              itemName={booking.rental_location_listing?.rental_item?.name ?? ''}
+            />
+          ) : null}
           <RentalStartCard
             booking={booking}
             timeZone={confirmationTimeZone(listingCountry, booking.currency)}

@@ -205,8 +205,19 @@ export function showDidntReceiveLink(input: {
   startedAt: string | null | undefined;
   now?: number;
 }): boolean {
-  if (!input.enrolled) return false;
+  void input.enrolled;
   return didntReceiveWindowOpen(input.startedAt, input.now ?? Date.now());
+}
+
+export function didntReceiveMinutesLeft(
+  startedAt: string | null | undefined,
+  now = Date.now(),
+  minutes = 30
+): number {
+  if (!didntReceiveWindowOpen(startedAt, now, minutes) || !startedAt) return 0;
+  const at = new Date(startedAt).getTime();
+  const left = Math.ceil((at + minutes * 60000 - now) / 60000);
+  return Math.max(1, left);
 }
 
 export function didntReceiveWindowOpen(
