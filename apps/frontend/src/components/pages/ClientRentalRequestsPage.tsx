@@ -33,6 +33,11 @@ import {
   type RentalHubGroup,
 } from '../../utils/rentalPhase';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
+import {
+  isPriceChangeUnseenError,
+  PRICE_CHANGE_UNSEEN_KEY,
+  PRICE_CHANGE_UNSEEN_TEXT,
+} from '../../utils/rentals/priceChangeUnseen';
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   const friendly = cardWindowErrorMessage(err, navigator.language);
@@ -149,7 +154,9 @@ const ClientRentalRequestsPage: React.FC = () => {
       navigate(`/rentals/bookings/${res.bookingId}`);
     } catch (e: unknown) {
       enqueueSnackbar(
-        rentalBookingErrorIsExpired(e)
+        isPriceChangeUnseenError(e)
+          ? t(PRICE_CHANGE_UNSEEN_KEY, PRICE_CHANGE_UNSEEN_TEXT)
+          : rentalBookingErrorIsExpired(e)
           ? t(
               'rentals.clientRequests.contractExpiredBookError',
               'This offer has expired. Send a new request from the listing.'
@@ -319,6 +326,7 @@ const ClientRentalRequestsPage: React.FC = () => {
                 onBookRequest={openBookConfirm}
                 onCancel={(id) => setCancelModalId(id)}
                 onViewListing={(listingId) => navigate(`/rentals/${listingId}`)}
+                onBrowseRentals={() => navigate('/rentals')}
                 onViewBooking={(bId) => navigate(`/rentals/bookings/${bId}`)}
               />
             ))}

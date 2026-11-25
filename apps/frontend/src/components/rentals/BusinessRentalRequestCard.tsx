@@ -124,7 +124,8 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
     }
     const ratePerHour = Number(request.rental_location_listing.base_price_per_hour);
     const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
-    const computed = computeRentalPricingLines(windows, ratePerHour, ratePerDay);
+    const units = Math.max(1, Math.floor(Number(request.units_requested)) || 1);
+    const computed = computeRentalPricingLines(windows, ratePerHour, ratePerDay, units);
     return { lines: computed.lines, total: computed.total, currency };
   }, [
     currency,
@@ -132,6 +133,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
     request.rental_location_listing.base_price_per_hour,
     request.rental_pricing_snapshot,
     request.rental_selection_windows,
+    request.units_requested,
   ]);
 
   const phase = useMemo(
@@ -163,9 +165,45 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
       phase.businessQueue === 'start' ||
       phase.businessQueue === 'return');
 
+  const openBooking = () => {
+    if (!booking?.id) return;
+    navigate(`/rentals/bookings/${booking.id}`);
+  };
+
+  const stopAnd = (fn: () => void) => (event: React.MouseEvent) => {
+    event.stopPropagation();
+    fn();
+  };
+
+  const cardOpensBooking = Boolean(booking?.id);
+
   return (
     <Paper
       elevation={0}
+      role={cardOpensBooking ? 'button' : undefined}
+      tabIndex={cardOpensBooking ? 0 : undefined}
+      aria-label={
+        cardOpensBooking
+          ? t('business.rentals.openRequestCardA11y', 'Open {{item}}, {{status}}', {
+              item: itemName,
+              status:
+                request.status === 'pending'
+                  ? t('rentals.modify.requested', 'Requested')
+                  : t(phase.labelKey, request.status),
+            })
+          : undefined
+      }
+      onClick={cardOpensBooking ? openBooking : undefined}
+      onKeyDown={
+        cardOpensBooking
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openBooking();
+              }
+            }
+          : undefined
+      }
       sx={{
         border: 1,
         borderColor: 'divider',
@@ -173,6 +211,16 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
         mb: 2.25,
         borderRadius: 2,
         bgcolor: 'background.paper',
+        ...(cardOpensBooking
+          ? {
+              cursor: 'pointer',
+              '&:hover': { borderColor: 'primary.light' },
+              '&:focus-visible': {
+                outline: `2px solid ${theme.palette.primary.main}`,
+                outlineOffset: 2,
+              },
+            }
+          : {}),
       }}
     >
       <Stack direction="row" spacing={2} alignItems="stretch">
@@ -284,14 +332,18 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
           >
             {request.status === 'pending' ? (
               <>
-                <Button size="small" variant="contained" onClick={() => onAccept(request)}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={stopAnd(() => onAccept(request))}
+                >
                   {t('rentals.actions.accept', 'Accept')}
                 </Button>
                 <Button
                   size="small"
                   variant="outlined"
                   color="warning"
-                  onClick={() => onReject(request)}
+                  onClick={stopAnd(() => onReject(request))}
                 >
                   {t('rentals.actions.decline', 'Decline')}
                 </Button>
@@ -299,21 +351,13 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
             ) : null}
 
             {openBookingCta && booking?.id ? (
-              <Button
-                size="small"
-                variant="contained"
-                onClick={() => navigate(`/rentals/bookings/${booking.id}`)}
-              >
+              <Button size="small" variant="contained" onClick={stopAnd(openBooking)}>
                 {phase.businessQueue === 'return'
-                      ? t('rentals.actions.confirmReturn', 'Confirm return')
-                      : t('rentals.actions.openBooking', 'Open booking')}
+                  ? t('rentals.actions.confirmReturn', 'Confirm return')
+                  : t('rentals.actions.openBooking', 'Open booking')}
               </Button>
             ) : booking?.id ? (
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() => navigate(`/rentals/bookings/${booking.id}`)}
-              >
+              <Button size="small" variant="outlined" onClick={stopAnd(openBooking)}>
                 {t('rentals.actions.openBooking', 'Open booking')}
               </Button>
             ) : null}

@@ -129,6 +129,47 @@ export function quotePlanTotal(
   return Number(total.toFixed(2));
 }
 
+export interface PriceConfirmQuote {
+  total: number;
+  currency: string;
+  previousTotal: number | null;
+}
+
+/** Pull the locked re-quote out of the SQL exception text. */
+export function parsePriceConfirmQuote(text: string): PriceConfirmQuote | null {
+  const at = text.indexOf('rental_request_price_confirm_required');
+  if (at < 0) return null;
+  const start = text.indexOf('{', at);
+  const end = text.indexOf('}', start);
+  if (start < 0 || end < 0) return null;
+  try {
+    const parsed = JSON.parse(text.slice(start, end + 1)) as {
+      total?: unknown;
+      currency?: unknown;
+      previousTotal?: unknown;
+    };
+    return quoteFromPayload(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function quoteFromPayload(parsed: {
+  total?: unknown;
+  currency?: unknown;
+  previousTotal?: unknown;
+}): PriceConfirmQuote | null {
+  const total = Number(parsed.total);
+  const currency = typeof parsed.currency === 'string' ? parsed.currency : '';
+  if (!Number.isFinite(total) || !currency) return null;
+  const previous = parsed.previousTotal == null ? null : Number(parsed.previousTotal);
+  return {
+    total,
+    currency,
+    previousTotal: previous != null && Number.isFinite(previous) ? previous : null,
+  };
+}
+
 export function earliestWindowIso(windows: RentalWindowSnapshot[]): string {
   const starts = windows
     .map((row) => new Date(row.start_at).getTime())

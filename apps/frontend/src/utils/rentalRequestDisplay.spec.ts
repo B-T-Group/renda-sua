@@ -1,4 +1,4 @@
-import { formatAssistantMoney, formatRequestAmount } from './rentalRequestDisplay';
+import { businessChangedThePrice, formatAssistantMoney, formatRequestAmount } from './rentalRequestDisplay';
 
 const NBSP = '\u00A0';
 
@@ -11,6 +11,13 @@ describe('formatAssistantMoney', () => {
     expect(formatAssistantMoney(25, 'CAD', 'en')).toBe('$25.00');
     expect(formatAssistantMoney(25, 'CAD', 'fr')).toBe('25,00\u00A0$');
     expect(formatAssistantMoney(2500, 'XAF', 'fr')).toBe('2\u00A0500\u00A0FCFA');
+  });
+});
+
+describe('businessChangedThePrice', () => {
+  it('H1 stays quiet on a pending request', () => {
+    expect(businessChangedThePrice('pending', 2500, 3000)).toBe(false);
+    expect(businessChangedThePrice('available', 2500, 3000)).toBe(true);
   });
 });
 
@@ -31,6 +38,13 @@ describe('formatRequestAmount', () => {
   it('leaves USD on the currency formatter', () => {
     expect(formatRequestAmount(260, 'USD', 'en')).not.toMatch(/FCFA/);
     expect(formatRequestAmount(260, 'USD', 'fr')).not.toMatch(/FCFA/);
+  });
+
+  it('formats CAD like the shared confirmation amounts', () => {
+    expect(formatRequestAmount(65, 'CAD', 'en')).toBe('$65.00');
+    expect(formatRequestAmount(65, 'CAD', 'fr')).toBe('65,00\u00a0$');
+    expect(formatRequestAmount(45, 'CAD', 'en')).not.toContain('CA$');
+    expect(formatRequestAmount(45, 'CAD', 'fr')).not.toMatch(/\bCAD\b/);
   });
 
   it('rounds to the nearest franc, keeps the sign, and groups millions', () => {

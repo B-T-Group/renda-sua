@@ -2,6 +2,8 @@ import type {
   BusinessRentalItemDetail,
   BusinessRentalItemRow,
   BusinessRentalRequestRow,
+  BusinessRentalItemActivity,
+  BusinessRentalItemActivityScope,
   BusinessRentalScheduleRow,
   ClientRentalBookingRow,
   ClientRentalRequestRow,
@@ -242,7 +244,10 @@ export async function getClientBookings(
 
 export async function modifyRequest(
   requestId: string,
-  body: CreateRentalRequestBody & { expectedVersion: number }
+  body: CreateRentalRequestBody & {
+    expectedVersion: number;
+    confirmedTotal?: { amount: number; currency: string };
+  }
 ): Promise<{ success: boolean; requestId: string; editVersion: number; quotedTotal: number | null }> {
   return apiRequest(`/rentals/requests/${encodeURIComponent(requestId)}`, {
     method: 'PATCH',
@@ -512,11 +517,29 @@ export async function deleteBusinessListing(
   );
 }
 
+export async function getDashboardRequests(
+  init?: Init
+): Promise<{
+  requests: BusinessRentalRequestRow[];
+  expiryNotices: Array<{ id: string; itemName: string; renterName: string; window: 'sla' | 'start' }>;
+}> {
+  const res = await apiRequest<{
+    success: boolean;
+    data: {
+      requests: BusinessRentalRequestRow[];
+      expiryNotices?: Array<{ id: string; itemName: string; renterName: string; window: 'sla' | 'start' }>;
+    };
+  }>('/rentals/business/requests?status=pending&limit=100', { method: 'GET', signal: init?.signal });
+  if (!res.success) return { requests: [], expiryNotices: [] };
+  return { requests: res.data?.requests ?? [], expiryNotices: res.data?.expiryNotices ?? [] };
+}
+
 export async function getBusinessRequests(
-  init?: Init & { status?: string }
+  init?: Init & { status?: string; id?: string }
 ): Promise<BusinessRentalRequestRow[]> {
   const search = new URLSearchParams();
   if (init?.status) search.set('status', init.status);
+  if (init?.id) search.set('id', init.id);
   const q = search.toString();
   const path = q
     ? `/rentals/business/requests?${q}`
@@ -554,6 +577,36 @@ export async function getBusinessSchedule(
   });
   if (!res.success) return [];
   return res.data?.schedule ?? [];
+}
+
+export async function getBusinessItemActivity(
+  itemId: string,
+  opts?: {
+    scope?: BusinessRentalItemActivityScope;
+    page?: number;
+    limit?: number;
+    signal?: AbortSignal;
+  }
+): Promise<BusinessRentalItemActivity | null> {
+  if (!itemId) return null;
+  const search = new URLSearchParams();
+  if (opts?.scope) search.set('scope', opts.scope);
+  if (opts?.page) search.set('page', String(opts.page));
+  if (opts?.limit) search.set('limit', String(opts.limit));
+  const q = search.toString();
+  const path = `/rentals/business/items/${encodeURIComponent(itemId)}/activity${
+    q ? `?${q}` : ''
+  }`;
+  try {
+    const res = await apiRequest<{
+      success: boolean;
+      data: BusinessRentalItemActivity;
+    }>(path, { method: 'GET', signal: opts?.signal });
+    if (!res.success) return null;
+    return res.data ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function confirmReturn(
@@ -646,6 +699,7 @@ export const rentalsApi = {
   reportReturned,
   getBusinessItems,
   getBusinessItem,
+  getBusinessItemActivity,
   createBusinessItem,
   updateBusinessItem,
   deleteBusinessItem,
@@ -654,6 +708,7 @@ export const rentalsApi = {
   updateBusinessListing,
   deleteBusinessListing,
   getBusinessRequests,
+  getDashboardRequests,
   respondToRequest,
   getBusinessSchedule,
   confirmReturn,

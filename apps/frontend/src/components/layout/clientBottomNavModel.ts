@@ -9,7 +9,12 @@ function rentalsRequests(pathname: string): boolean {
 }
 
 function homeActive(pathname: string, rentalsTabEnabled: boolean): boolean {
-  if (pathname === '/items' || pathname.startsWith('/items/') || pathname.startsWith('/foods')) {
+  if (
+    pathname === '/items' ||
+    pathname.startsWith('/items/') ||
+    pathname.startsWith('/foods') ||
+    pathname.startsWith('/exports')
+  ) {
     return true;
   }
   if (!pathname.startsWith('/rentals')) return false;

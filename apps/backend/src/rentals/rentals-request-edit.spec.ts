@@ -337,13 +337,82 @@ describe('RentalsService rental request edits', () => {
     });
     expect(notify).not.toHaveBeenCalled();
   });
+
+  const PRICE_ERROR = new Error(
+    'rental_request_price_confirm_required {"total":1140,"currency":"XAF","previousTotal":760}'
+  );
+
+  it('returns 409 and does not notify when a higher price is not confirmed', async () => {
+    const { service, executeMutation, notify } = serviceWith(pendingRequest({ quoted_total: '760' }));
+    executeMutation.mockRejectedValue(PRICE_ERROR);
+    try {
+      await service.modifyRentalRequest('request-1', nextWindows);
+      throw new Error('expected rejection');
+    } catch (error) {
+      expect(codeOf(error)).toBe('PRICE_CONFIRM_REQUIRED');
+      expect((error as HttpException).getStatus()).toBe(409);
+      expect((error as HttpException).getResponse()).toMatchObject({
+        quote: { total: 1140, currency: 'XAF', previousTotal: 760 },
+      });
+    }
+    expect(executeMutation).toHaveBeenCalledTimes(1);
+    expect(executeMutation).toHaveBeenCalledWith(
+      Q.APPLY_RENTAL_REQUEST_EDIT,
+      expect.objectContaining({ confirmedAmount: null, confirmedCurrency: null })
+    );
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when the confirmed amount is not the new total', async () => {
+    const { service, executeMutation, notify } = serviceWith(pendingRequest({ quoted_total: '760' }));
+    executeMutation.mockRejectedValue(PRICE_ERROR);
+    await expect(
+      service.modifyRentalRequest('request-1', { ...nextWindows, confirmedTotal: { amount: 1000, currency: 'XAF' } })
+    ).rejects.toMatchObject({ status: 409 });
+    expect(executeMutation).toHaveBeenCalledWith(
+      Q.APPLY_RENTAL_REQUEST_EDIT,
+      expect.objectContaining({ confirmedAmount: 1000, confirmedCurrency: 'XAF' })
+    );
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('saves a higher price the renter confirmed', async () => {
+    const { service, executeMutation, notify } = serviceWith(pendingRequest({ quoted_total: '760' }));
+    executeMutation.mockResolvedValue({
+      apply_rental_request_edit: [{ version: 2, quoted_total: '1140.00' }],
+    });
+    const saved = await service.modifyRentalRequest('request-1', {
+      ...nextWindows,
+      confirmedTotal: { amount: 1140, currency: 'XAF' },
+    });
+    expect(executeMutation).toHaveBeenCalledWith(
+      Q.APPLY_RENTAL_REQUEST_EDIT,
+      expect.objectContaining({ confirmedAmount: 1140, confirmedCurrency: 'XAF' })
+    );
+    expect(saved).toEqual({ success: true, requestId: 'request-1', editVersion: 2, quotedTotal: 1140 });
+    expect(notify).toHaveBeenCalled();
+  });
+
+  it('saves a lower price without a confirm', async () => {
+    const { service, executeMutation } = serviceWith(pendingRequest({ quoted_total: '1140' }));
+    executeMutation.mockResolvedValue({
+      apply_rental_request_edit: [{ version: 2, quoted_total: '760.00' }],
+    });
+    const saved = await service.modifyRentalRequest('request-1', nextWindows);
+    expect(executeMutation).toHaveBeenCalledWith(
+      Q.APPLY_RENTAL_REQUEST_EDIT,
+      expect.objectContaining({ confirmedAmount: null, confirmedCurrency: null })
+    );
+    expect(saved.quotedTotal).toBe(760);
+  });
 });
 
 describe('RentalsService.respondToRentalRequest version gate', () => {
   function responder(
     request: Record<string, unknown>,
     flag = false,
-    conflict: Record<string, unknown> = {}
+    conflict: Record<string, unknown> = {},
+    dashboard = false
   ) {
     const executeMutation = jest.fn().mockResolvedValue({
       update_rental_requests: { affected_rows: 1 },
@@ -361,8 +430,9 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     service.hasuraSystemService = {
       executeMutation,
       executeQuery: jest.fn(async (query: string) => {
-        if (query.includes('GetModifyRequestFlag')) {
-          return { application_configurations: [{ boolean_value: flag, country_code: null }] };
+        if (query.includes('GetModifyRequestFlag') || query.includes('DashboardRequestsFlag')) {
+          const on = query.includes('DashboardRequestsFlag') ? dashboard : flag;
+          return { application_configurations: [{ boolean_value: on, country_code: null }] };
         }
         fetches += 1;
         return {
@@ -388,6 +458,20 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     service.emailClientRentalRequestAccepted = jest.fn();
     service.emailClientRentalRequestRejected = jest.fn();
     return { service, executeMutation };
+  }
+
+  function acceptWatchingCeiling() {
+    const { service } = responder(pendingRequest(), true, {}, true);
+    const seen = { ceilingCalls: 0 };
+    const inner = service.hasuraSystemService.executeQuery.getMockImplementation();
+    service.hasuraSystemService.executeQuery.mockImplementation(async (query: string, vars?: unknown) => {
+      if (String(query).includes('rentals_total_override_max')) {
+        seen.ceilingCalls += 1;
+        throw new Error('ceiling down');
+      }
+      return inner(query, vars);
+    });
+    return { service, seen };
   }
 
   const accept = {
@@ -426,11 +510,19 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     expect(service.insertProposedBookingRow).not.toHaveBeenCalled();
   });
 
-  it('keeps the old respond mutation when the client sends no version and the flag is off', async () => {
+  it('M1 compare-and-sets status even when the client sends no version', async () => {
     const { service, executeMutation } = responder(pendingRequest(), false);
     await service.respondToRentalRequest('request-1', accept);
     expect(executeMutation).toHaveBeenCalledWith(Q.UPDATE_RENTAL_REQUEST_RESPOND, expect.any(Object));
-    expect(executeMutation).not.toHaveBeenCalledWith(Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS, expect.any(Object));
+    expect(Q.UPDATE_RENTAL_REQUEST_RESPOND).toContain('status: { _eq: pending }');
+    expect(Q.UPDATE_RENTAL_REQUEST_RESPOND).toContain('price_change_seen_at: null');
+    expect(Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS).toContain('price_change_seen_at: null');
+  });
+
+  it('M1 returns 409 when an auto-decline already won and no version was sent', async () => {
+    const { service, executeMutation } = responder(pendingRequest(), false, { status: 'unavailable' });
+    executeMutation.mockResolvedValue({ update_rental_requests: { affected_rows: 0 } });
+    await expect(service.respondToRentalRequest('request-1', accept)).rejects.toMatchObject({ status: 409 });
   });
 
   it('rejects a stale decline before any write', async () => {
@@ -459,6 +551,43 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     expect(service.emailClientRentalRequestAccepted).not.toHaveBeenCalled();
   });
 
+  it('does not release a hold when a still-pending request is declined', async () => {
+    const { service, executeMutation } = responder(pendingRequest());
+    service.releaseLinkedDeclineHold = jest.fn();
+    executeMutation.mockResolvedValue({ update_rental_requests: { affected_rows: 1 } });
+    await service.respondToRentalRequest('request-1', {
+      status: RespondRentalRequestStatusDto.unavailable,
+      unavailableReasonCode: UnavailableRentalReasonCode.fully_booked,
+      expectedVersion: 1,
+    });
+    expect(service.releaseLinkedDeclineHold).not.toHaveBeenCalled();
+    expect(service.emailClientRentalRequestRejected).toHaveBeenCalled();
+  });
+
+  it('ends the contract at the start when the rental is under an hour away', async () => {
+    const start = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+    const { service } = responder(pendingRequest({
+      requested_start_at: start,
+      rental_selection_windows: [{ billing: 'all_day', calendar_date: '2026-11-18', start_at: start, end_at: start }],
+    }));
+    await service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1 });
+    expect(service.insertProposedBookingRow).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      new Date(start).toISOString()
+    );
+  });
+
+  it('rejects a contract longer than 48 hours', async () => {
+    const { service } = responder(pendingRequest());
+    await expect(
+      service.respondToRentalRequest('request-1', { ...accept, contractExpiryHours: 49, expectedVersion: 1 })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(service.insertProposedBookingRow).not.toHaveBeenCalled();
+  });
+
   it('reports an accepted request on a lost decline without deleting a booking', async () => {
     const { service, executeMutation } = responder(pendingRequest(), false, { status: 'available' });
     executeMutation.mockResolvedValue({ update_rental_requests: { affected_rows: 0 } });
@@ -475,5 +604,76 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     expect(executeMutation).toHaveBeenCalledWith(Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS, expect.any(Object));
     expect(service.deleteBooking).not.toHaveBeenCalled();
     expect(service.emailClientRentalRequestRejected).not.toHaveBeenCalled();
+  });
+
+  it('H2 charges the server quote and ignores the client snapshot total', async () => {
+    const { service, executeMutation } = responder(pendingRequest({ units_requested: 2, quoted_total: 15000 }));
+    service.computePricingSnapshotForRequest.mockReturnValue({
+      version: 4,
+      currency: 'XAF',
+      total: 15000,
+      lines: [],
+      computedAt: OPEN,
+      unitsBooked: 2,
+      securityDeposit: 0,
+    });
+    await service.respondToRentalRequest('request-1', {
+      ...accept,
+      rentalPricingSnapshot: { version: 3, currency: 'XAF', total: 7500, lines: [], computedAt: OPEN },
+    });
+    const persisted = executeMutation.mock.calls.find((call) => String(call[0]).includes('status: { _eq: pending }'));
+    expect(persisted?.[1].snapshot.total).toBe(15000);
+  });
+
+  it('H2 accepts a positive total override only when both flags are on', async () => {
+    const on = responder(pendingRequest(), true, {}, true);
+    on.service.computePricingSnapshotForRequest.mockReturnValue({
+      version: 4, currency: 'XAF', total: 15000, lines: [{ kind: 'hourly', subtotal: 15000 }],
+      computedAt: OPEN, unitsBooked: 2, securityDeposit: 0,
+    });
+    await on.service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1, totalOverride: 12000 });
+    const persisted = on.executeMutation.mock.calls.find((call) => String(call[0]).includes('edit_version'));
+    expect(persisted?.[1].snapshot.total).toBe(12000);
+
+    const off = responder(pendingRequest(), false, {}, false);
+    await expect(
+      off.service.respondToRentalRequest('request-1', { ...accept, totalOverride: 12000 })
+    ).rejects.toMatchObject({ status: 400 });
+    const zero = responder(pendingRequest(), true, {}, true);
+    await expect(
+      zero.service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1, totalOverride: 0 })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('N23 loads the ceiling only for an override above the quote', async () => {
+    const plain = acceptWatchingCeiling();
+    await plain.service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1 });
+    expect(plain.seen.ceilingCalls).toBe(0);
+    const discount = acceptWatchingCeiling();
+    await discount.service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1, totalOverride: 500 });
+    expect(discount.seen.ceilingCalls).toBe(0);
+    const raised = acceptWatchingCeiling();
+    const failed = raised.service.respondToRentalRequest('request-1', {
+      ...accept,
+      expectedVersion: 1,
+      totalOverride: 5000,
+    });
+    await expect(failed).rejects.toBeInstanceOf(HttpException);
+    await expect(failed).rejects.toMatchObject({
+      status: 400,
+      response: 'The currency limit could not be loaded. Try again.',
+    });
+    expect(raised.seen.ceilingCalls).toBe(1);
+  });
+
+  it('L3 returns 409 expired when accept is after respond_by and the flag is on', async () => {
+    const { service } = responder(
+      pendingRequest({ created_at: '2026-11-01T00:00:00.000Z' }),
+      false,
+      {},
+      true
+    );
+    await expect(service.respondToRentalRequest('request-1', accept)).rejects.toMatchObject({ status: 409 });
+    expect(service.insertProposedBookingRow).not.toHaveBeenCalled();
   });
 });

@@ -201,6 +201,9 @@ export const BusinessRentalItemEditPage = lazy(() =>
 export const BusinessRentalItemViewPage = lazy(() =>
   import('../components/pages/BusinessRentalItemViewPage')
 );
+export const BusinessRentalItemActivityPage = lazy(() =>
+  import('../components/pages/BusinessRentalItemActivityPage')
+);
 export const BusinessRentalAiProposalPage = lazy(() =>
   import('../components/pages/BusinessRentalAiProposalPage')
 );

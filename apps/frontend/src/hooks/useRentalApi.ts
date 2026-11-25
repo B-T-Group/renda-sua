@@ -163,6 +163,7 @@ export interface RentalTakenWindow {
 export interface RespondRentalRequestBody {
   status: 'available' | 'unavailable';
   rentalPricingSnapshot?: RentalPricingSnapshotBody;
+  totalOverride?: number;
   contractExpiryHours?: number;
   unavailableReasonCode?: UnavailableRentalReasonCode;
   businessResponseNote?: string;
@@ -191,6 +192,14 @@ export interface BusinessRentalRequestRow {
     dates?: { from: RentalSelectionWindow[]; to: RentalSelectionWindow[] };
     quantity?: { from: number; to: number };
   } | null;
+  quoted_total?: number | string | null;
+  requested_start_at?: string | null;
+  respond_by?: string | null;
+  respond_window?: 'sla' | 'start' | null;
+  listing_timezone?: string | null;
+  dates_available?: boolean | null;
+  payment_rail?: string | null;
+  total_override_ceiling?: number | null;
   unavailable_reason_code?: string | null;
   expires_at?: string | null;
   responded_at?: string | null;
@@ -198,13 +207,18 @@ export interface BusinessRentalRequestRow {
     id: string;
     base_price_per_hour: number;
     base_price_per_day: number;
+    security_deposit_amount?: number | null;
     weekly_availability?: RentalWeeklyAvailabilityRow[];
+    business_location?: { name?: string | null; address?: { city?: string | null; country?: string | null } | null } | null;
     rental_item: {
       name: string;
       currency: string;
+      rental_category?: { name?: string | null } | null;
       rental_item_images?: Array<{
         id: string;
         image_url: string;
+        display_url?: string | null;
+        thumbnail?: string | null;
         alt_text?: string | null;
       }>;
     };
@@ -249,7 +263,7 @@ export interface ClientRentalRequestRow {
     base_price_per_hour: number | string;
     base_price_per_day?: number | string;
     business_location?: { name: string } | null;
-    rental_item: { name: string; currency: string };
+    rental_item: { name: string; currency: string; business?: { name?: string | null } | null };
   } | null;
   rental_booking?: {
     id: string;
@@ -287,6 +301,37 @@ export interface BusinessRentalScheduleRow {
       } | null;
     } | null;
   } | null;
+}
+
+export type BusinessRentalItemActivityScope = 'all' | 'upcoming' | 'past';
+
+export interface BusinessRentalItemActivityStats {
+  earnedTotal: number;
+  timesRented: number;
+  currentlyOut: number;
+  upcoming: number;
+  openRequests: number;
+  lastCompletedAt: string | null;
+  nextStartAt: string | null;
+  currency: string | null;
+}
+
+export interface BusinessRentalItemActivityBooking extends BusinessRentalScheduleRow {
+  actual_start_at?: string | null;
+  actual_end_at?: string | null;
+  overtime_amount?: number | null;
+  settlement_completed_at?: string | null;
+}
+
+export interface BusinessRentalItemActivity {
+  item: { id: string; name: string; currency: string | null };
+  stats: BusinessRentalItemActivityStats;
+  suggestedScope: BusinessRentalItemActivityScope;
+  scope: BusinessRentalItemActivityScope;
+  bookings: BusinessRentalItemActivityBooking[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export type RentalPaymentRail = 'wallet' | 'stripe' | 'mobile_money';
@@ -489,6 +534,26 @@ export function useRentalApi() {
     return data.data.requests ?? [];
   }, [api]);
 
+  const fetchDashboardRentalRequests = useCallback(async () => {
+    const { data } = await api.get<{
+      success: boolean;
+      data: {
+        requests: BusinessRentalRequestRow[];
+        expiryNotices?: Array<{
+          id: string;
+          itemName: string;
+          renterName: string;
+          window: 'sla' | 'start';
+        }>;
+      };
+    }>('/rentals/business/requests', { params: { status: 'pending', limit: 100 } });
+    if (!data.success) return { requests: [], expiryNotices: [] };
+    return {
+      requests: data.data.requests ?? [],
+      expiryNotices: data.data.expiryNotices ?? [],
+    };
+  }, [api]);
+
   const fetchClientRentalRequests = useCallback(async () => {
     const { data } = await api.get<{
       success: boolean;
@@ -511,6 +576,28 @@ export function useRentalApi() {
       });
       if (!data.success) return [];
       return data.data.schedule ?? [];
+    },
+    [api]
+  );
+
+  const fetchBusinessRentalItemActivity = useCallback(
+    async (
+      itemId: string,
+      opts?: { scope?: BusinessRentalItemActivityScope; page?: number; limit?: number }
+    ): Promise<BusinessRentalItemActivity | null> => {
+      if (!itemId) return null;
+      const { data } = await api.get<{
+        success: boolean;
+        data: BusinessRentalItemActivity;
+      }>(`/rentals/business/items/${encodeURIComponent(itemId)}/activity`, {
+        params: {
+          scope: opts?.scope,
+          page: opts?.page,
+          limit: opts?.limit,
+        },
+      });
+      if (!data.success) return null;
+      return data.data ?? null;
     },
     [api]
   );
@@ -836,8 +923,10 @@ export function useRentalApi() {
     fetchListingBookedWindows,
     fetchPublicRentalListing,
     fetchBusinessRentalRequests,
+    fetchDashboardRentalRequests,
     fetchClientRentalRequests,
     fetchBusinessRentalSchedule,
+    fetchBusinessRentalItemActivity,
     createBusinessRentalItem,
     createBusinessRentalListing,
     publishBusinessRentalListing,

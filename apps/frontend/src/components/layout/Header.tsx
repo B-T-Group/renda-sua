@@ -3,14 +3,11 @@ import {
     Dashboard,
     Description,
     FavoriteBorder,
-    Handshake,
     InfoOutlined,
     Logout,
     Menu,
     MoreVert,
     Person,
-    RestaurantMenu,
-    ShoppingBag,
     ShoppingCart,
     Storefront,
     SmartToy,
@@ -65,8 +62,11 @@ import { MarketSelector } from '../market/MarketSelector';
 import { HeaderSearchPopover } from './HeaderSearchPopover';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
+import { useMarket } from '../../hooks/useMarket';
+import { useMarketLanes } from '../../hooks/useMarketLanes';
 import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
 import { brandTokens } from '../../theme/brandTokens';
+import { browseLaneNavItems } from '../../utils/browseMarketLanes';
 import {
   SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION,
   SITE_EVENT_ASSISTANT_LAUNCHER_TAP,
@@ -85,6 +85,7 @@ function catalogContextFromPath(pathname: string): MarketStatesCatalog {
   if (
     pathname.startsWith('/items') ||
     pathname.startsWith('/foods') ||
+    pathname.startsWith('/exports') ||
     pathname.startsWith('/stores') ||
     pathname.startsWith('/collections') ||
     pathname.startsWith('/store') ||
@@ -151,6 +152,10 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
   const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const { selectedMarket } = useMarket();
+  const { visible: visibleLanes } = useMarketLanes(
+    selectedMarket?.countryCode
+  );
   const assistantScreen = assistantScreenName(location.pathname);
   useEffect(() => {
     if (assistantEntry !== 'character') return;
@@ -291,11 +296,12 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
     return location.pathname === path;
   };
 
-  const getGuestBrowseItems = () => [
-    { label: t('common.store', 'Store'), path: '/items', icon: <ShoppingBag /> },
-    { label: t('rentals.title', 'Rentals'), path: '/rentals', icon: <Handshake /> },
-    { label: t('foods.title', 'Food'), path: '/foods', icon: <RestaurantMenu /> },
-  ];
+  const getGuestBrowseItems = () =>
+    browseLaneNavItems(visibleLanes).map((lane) => ({
+      label: t(lane.labelKey, lane.labelDefault),
+      path: lane.path,
+      icon: lane.icon,
+    }));
 
   const getGuestUtilityItems = () => [
     { label: t('nav.forBusiness', 'For Business'), path: '/for-business', icon: <Dashboard /> },
@@ -321,9 +327,7 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
     // For authenticated users, show different navigation based on user type
     if (userType === 'client') {
       return [
-        { label: t('common.items', 'Items'), path: '/items', icon: <Assignment /> },
-        { label: t('rentals.title', 'Rentals'), path: '/rentals', icon: <Assignment /> },
-        { label: t('foods.title', 'Food'), path: '/foods', icon: <RestaurantMenu /> },
+        ...getGuestBrowseItems(),
         { label: t('common.orders', 'Orders'), path: '/orders', icon: <Assignment /> },
       ];
     }

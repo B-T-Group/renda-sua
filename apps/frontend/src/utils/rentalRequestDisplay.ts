@@ -3,6 +3,19 @@ import type {
   RentalPricingSnapshotLine,
   RentalSelectionWindow,
 } from '../hooks/useRentalApi';
+import { formatConfirmationMoney } from './rentals/confirmationFormat';
+
+/** A pending request never shows “the business changed the price”. */
+export function businessChangedThePrice(
+  status: string | null | undefined,
+  quoted: unknown,
+  accepted: unknown
+): boolean {
+  if (status !== 'available') return false;
+  const left = Number(quoted);
+  const right = Number(accepted);
+  return Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) >= 0.01;
+}
 
 export function formatRentalRequestLocalDateTime(iso: string): string {
   try {
@@ -90,15 +103,15 @@ function groupedDigits(amount: number, separator: string): string {
 }
 
 /**
- * Number, then `FCFA` (`45 000 FCFA`) in EN and FR for XAF, XOF, and FCFA.
- * Same shape as the mobile request formatter. Other currencies stay on `formatRentalMoney`.
+ * XAF, XOF, and FCFA use `45 000 FCFA` (non-breaking spaces).
+ * CAD uses the shared confirmation formatter: `$65.00` / `65,00 $`.
  */
-export function formatRequestAmount(amount: number, currency: string, _language: string): string {
+export function formatRequestAmount(amount: number, currency: string, language: string): string {
   const code = currency.toUpperCase();
   if (code === 'XAF' || code === 'XOF' || code === 'FCFA') {
     return `${groupedDigits(amount, '\u00A0')}\u00A0FCFA`;
   }
-  return formatRentalMoney(amount, currency);
+  return formatConfirmationMoney(amount, code, language).replace(/CA\$/g, '$');
 }
 
 /** Catalog cards: `45 000 FCFA`, `$45.00`, or `45,00 $`. */

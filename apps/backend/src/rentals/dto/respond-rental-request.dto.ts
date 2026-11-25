@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -31,6 +32,18 @@ export class RespondRentalRequestDto {
   @IsEnum(RespondRentalRequestStatusDto)
   status!: RespondRentalRequestStatusDto;
 
+  @ApiProperty({
+    required: false,
+    description:
+      'Replaces the server quote. Accepted only while modify-request and dashboard requests are both on. Any amount up to the quote is allowed. A higher amount cannot exceed 10 times the quote, or that currency’s configured ceiling.',
+    minimum: 0.01,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  totalOverride?: number;
+
   @ApiProperty({ type: RentalPricingSnapshotDto, required: false })
   @ValidateIf((o) => o.status === RespondRentalRequestStatusDto.available)
   @ValidateNested()
@@ -38,15 +51,16 @@ export class RespondRentalRequestDto {
   rentalPricingSnapshot?: RentalPricingSnapshotDto;
 
   @ApiProperty({
-    description: 'Hours until the proposed contract expires (1–168). Required when status is available.',
+    description:
+      'Whole hours until the renter must confirm (1–48, and not past the rental start). Required when status is available. Under one hour, the server ends the contract at the start.',
     required: false,
     minimum: 1,
-    maximum: 168,
+    maximum: 48,
   })
   @ValidateIf((o) => o.status === RespondRentalRequestStatusDto.available)
   @IsInt()
   @Min(1)
-  @Max(168)
+  @Max(48)
   contractExpiryHours?: number;
 
   @ApiProperty({

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Badge } from 'react-native-paper';
@@ -39,12 +39,28 @@ import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
 import { useNotifications } from '../../hooks/useNotifications';
 import { usePostSignupCreditShopNavigation } from '../../hooks/usePostSignupCreditShopNavigation';
+import { useMarket } from '../../hooks/useMarket';
+import { useMarketLanes, type MarketLaneId } from '../../hooks/useMarketLanes';
 import { useTheme } from '../../contexts/ThemeContext';
 import { spacing } from '../../theme';
 import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
 import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import { useClientHomeOrderCta } from '../../hooks/useClientHomeOrderCta';
 import type { Order } from '../../types/agent';
+
+function laneFromSegment(
+  segment: 'all' | 'food' | 'rentals' | 'exports' | undefined
+): HomeLane {
+  if (segment === 'food') return 'food';
+  if (segment === 'rentals') return 'rentals';
+  if (segment === 'exports') return 'exports';
+  return 'shop';
+}
+
+function segmentFromLane(lane: HomeLane): 'all' | 'food' | 'rentals' | 'exports' {
+  if (lane === 'shop') return 'all';
+  return lane;
+}
 
 /** Client browse tab: catalog + navigation to item detail on the root stack. */
 function ClientBrowseHomeScreenBase() {
@@ -167,18 +183,31 @@ function ClientBrowseHomeScreenBase() {
   });
 
   const isClientAuthenticated = auth.isAuthenticated && persona.activePersona === 'client';
-  const lane: HomeLane =
-    route.params?.segment === 'food' ? 'food' : route.params?.segment === 'rentals' ? 'rentals' : 'shop';
+  const { selectedMarket } = useMarket();
+  const { visible: visibleLanes } = useMarketLanes(selectedMarket?.countryCode);
+  const lane: HomeLane = laneFromSegment(route.params?.segment);
   const foodOnly = lane === 'food';
+  const exportOnly = lane === 'exports';
+  useEffect(() => {
+    if (visibleLanes.length === 0) return;
+    if (visibleLanes.includes(lane as MarketLaneId)) return;
+    tabNav.setParams({ segment: segmentFromLane(visibleLanes[0] as HomeLane) });
+  }, [lane, tabNav, visibleLanes]);
   const { items: actionsNeededItems, dismissAll } = useActionsNeeded(
     isClientAuthenticated ? 'client' : null
   );
   const { summary, usable } = usePurchaseCredits(isClientAuthenticated);
   usePostSignupCreditShopNavigation(isClientAuthenticated);
   const showActions =
-    !foodOnly && isClientAuthenticated && actionsNeededItems.length > 0;
+    !foodOnly &&
+    !exportOnly &&
+    isClientAuthenticated &&
+    actionsNeededItems.length > 0;
   const showCredits =
-    !foodOnly && isClientAuthenticated && summary.totalRemaining > 0;
+    !foodOnly &&
+    !exportOnly &&
+    isClientAuthenticated &&
+    summary.totalRemaining > 0;
   const buyAgain = useMemo(
     () => selectBuyAgainOrder(clientBrowseOrders ? orders : [], foodOnly),
     [clientBrowseOrders, orders, foodOnly]
@@ -189,9 +218,7 @@ function ClientBrowseHomeScreenBase() {
 
   const onLaneChange = useCallback(
     (next: HomeLane) => {
-      tabNav.setParams({
-        segment: next === 'shop' ? 'all' : next,
-      });
+      tabNav.setParams({ segment: segmentFromLane(next) });
     },
     [tabNav]
   );
@@ -221,7 +248,11 @@ function ClientBrowseHomeScreenBase() {
   if (lane === 'rentals') {
     return (
       <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.pageBackground }}>
-        <HomeLaneSwitcher value={lane} onChange={onLaneChange} />
+        <HomeLaneSwitcher
+          value={lane}
+          onChange={onLaneChange}
+          lanes={visibleLanes as HomeLane[]}
+        />
         <ClientRentalsHomeScreen />
       </View>
     );
@@ -235,7 +266,11 @@ function ClientBrowseHomeScreenBase() {
         backgroundColor: colors.pageBackground,
       }}
     >
-      <HomeLaneSwitcher value={lane} onChange={onLaneChange} />
+      <HomeLaneSwitcher
+        value={lane}
+        onChange={onLaneChange}
+        lanes={visibleLanes as HomeLane[]}
+      />
       {showActions ? (
         <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
           <ActionsNeededSection
@@ -260,10 +295,11 @@ function ClientBrowseHomeScreenBase() {
       <BrowseCatalogScreen
         onSearchBarPress={flags.rentals_client_tab_enabled ? openCatalogSearch : undefined}
         foodOnly={foodOnly}
+        exportOnly={exportOnly}
         initialSegment={foodOnly ? 'food' : 'all'}
         requestedCategory={route.params?.category}
         categoryRequestId={route.params?.categoryRequestId}
-        onBrowseCategories={foodOnly ? undefined : onBrowseCategories}
+        onBrowseCategories={foodOnly || exportOnly ? undefined : onBrowseCategories}
         applyTopSafeArea={false}
         onItemPress={onItemPress}
         onClientPlaceOrder={variantFlow.requestBuy}
@@ -295,9 +331,9 @@ function ClientBrowseHomeScreenBase() {
             />
           )
         }
-        discoveryExtra={({ foodOnly: foodSurface, exportOnly }) => (
+        discoveryExtra={({ foodOnly: foodSurface, exportOnly: exportSurface }) => (
           <>
-            {buyAgain ? (
+            {buyAgain && !exportSurface ? (
               <BuyAgainCard
                 orderId={buyAgain.order.id}
                 orderStatus={buyAgain.order.current_status}
@@ -308,7 +344,7 @@ function ClientBrowseHomeScreenBase() {
             <DiscoveryRails
               authenticated={isClientAuthenticated}
               surface={
-                exportOnly ? 'export' : foodSurface ? 'food' : 'all'
+                exportSurface ? 'export' : foodSurface ? 'food' : 'all'
               }
               onItemPress={onItemPress}
             />

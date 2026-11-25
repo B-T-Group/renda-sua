@@ -1,4 +1,11 @@
-import { applyAcceptedPrice, paymentBlockedUntilPriceSeen, priceChangeCopy, shouldNotifyPriceChange } from './rental-price-change';
+import {
+  applyAcceptedPrice,
+  businessChangedThePrice,
+  paymentBlockedUntilPriceSeen,
+  priceChangeCopy,
+  quoteWithTotalOverride,
+  shouldNotifyPriceChange,
+} from './rental-price-change';
 
 const snap = {
   version: 4,
@@ -13,6 +20,36 @@ describe('rental price change', () => {
     expect(shouldNotifyPriceChange(2500, 3000)).toBe(true);
     expect(shouldNotifyPriceChange(2500, 2500)).toBe(false);
     expect(shouldNotifyPriceChange(null, 3000)).toBe(false);
+  });
+
+  it('H1 shows a price change only after the business has accepted', () => {
+    expect(businessChangedThePrice('pending', 2500, 3000)).toBe(false);
+    expect(businessChangedThePrice('available', 2500, 3000)).toBe(true);
+    expect(businessChangedThePrice('available', 2500, 2500)).toBe(false);
+  });
+
+  it('H2 scales a positive override and rejects a disabled or empty one', () => {
+    const priced = { ...snap, total: 15000, lines: [{ kind: 'hourly' as const, subtotal: 15000, billableHours: 3, ratePerHour: 2500, startAt: 'a', endAt: 'b' }] };
+    expect(quoteWithTotalOverride(priced, null, false).total).toBe(15000);
+    expect(quoteWithTotalOverride(priced, 12000, true).lines[0].subtotal).toBe(12000);
+    expect(() => quoteWithTotalOverride(priced, 12000, false)).toThrow('TOTAL_OVERRIDE_DISABLED');
+    expect(() => quoteWithTotalOverride(priced, 0, true)).toThrow('TOTAL_OVERRIDE_INVALID');
+    expect(() => quoteWithTotalOverride(priced, 1e15, true)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
+    expect(() => quoteWithTotalOverride(priced, 15000 * 10 + 1, true)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
+  });
+
+  it('N12 allows any total up to the quote and applies a per-currency ceiling only above it', () => {
+    const quote = { ...snap, total: 2_000_000, lines: [{ kind: 'hourly' as const, subtotal: 2_000_000, billableHours: 1, ratePerHour: 2_000_000, startAt: 'a', endAt: 'b' }] };
+    expect(quoteWithTotalOverride(quote, 1_800_000, true, 1_000_000).total).toBe(1_800_000);
+    expect(() => quoteWithTotalOverride(quote, 5_000_000, true, 3_000_000)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
+    expect(quoteWithTotalOverride(quote, 5_000_000, true, null).total).toBe(5_000_000);
+  });
+
+  it('N24 accepts any positive override when the quote is 0 and no ceiling is set', () => {
+    const free = { ...snap, total: 0, lines: [] as typeof snap.lines };
+    expect(quoteWithTotalOverride(free, 1_000_000, true, null).total).toBe(1_000_000);
+    expect(quoteWithTotalOverride(free, 40_000, true, 50_000).total).toBe(40_000);
+    expect(() => quoteWithTotalOverride(free, 60_000, true, 50_000)).toThrow('TOTAL_OVERRIDE_TOO_HIGH');
   });
 
   it('blocks payment until the renter has seen the new price', () => {
@@ -52,5 +89,21 @@ describe('rental price change', () => {
   it('still blocks payment when the seen timestamp is blank', () => {
     expect(paymentBlockedUntilPriceSeen({ quoted: 2500, accepted: 3000, seenAt: '' })).toBe(true);
     expect(paymentBlockedUntilPriceSeen({ quoted: '2500', accepted: '2500.004', seenAt: null })).toBe(false);
+  });
+
+  it('keeps the server total when the business snapshot omits units', () => {
+    const computed = {
+      ...snap,
+      total: 10000,
+      unitsBooked: 2,
+      lines: [{ kind: 'all_day' as const, calendarDate: '2026-11-14', ratePerDay: 5000, subtotal: 10000 }],
+    };
+    const sent = {
+      total: 5000,
+      currency: 'XAF',
+      lines: [{ subtotal: 5000 }],
+    };
+    expect(applyAcceptedPrice(computed, sent).snapshot.total).toBe(10000);
+    expect(applyAcceptedPrice(computed, { total: 3000, currency: 'XAF', lines: [{ subtotal: 5000 }] }).snapshot.total).toBe(3000);
   });
 });

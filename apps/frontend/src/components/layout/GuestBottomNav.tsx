@@ -1,9 +1,14 @@
-import { Handshake, RestaurantMenu, ShoppingBag } from '@mui/icons-material';
 import { useMediaQuery, useTheme } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
+import { useMarket } from '../../hooks/useMarket';
+import { useMarketLanes } from '../../hooks/useMarketLanes';
+import {
+  browseLaneNavItems,
+  isBrowseLanePathActive,
+} from '../../utils/browseMarketLanes';
 import BottomNavBar, { BottomNavTab } from './BottomNavBar';
 
 const GuestBottomNav: React.FC = () => {
@@ -12,39 +17,24 @@ const GuestBottomNav: React.FC = () => {
   const { isAuthenticated } = useSessionAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { selectedMarket } = useMarket();
+  const { visible } = useMarketLanes(selectedMarket?.countryCode);
 
-  // Only show for unauthenticated users on mobile
   if (isAuthenticated || !isMobile) {
     return null;
   }
 
-  const tabs: BottomNavTab[] = [
-    {
-      key: 'items',
-      label: t('common.browseItems', 'Browse Items'),
-      path: '/items',
-      icon: <ShoppingBag />,
-      active:
-        location.pathname === '/items' ||
-        location.pathname.startsWith('/items/'),
-    },
-    {
-      key: 'rentals',
-      label: t('nav.rentals', 'Rentals'),
-      path: '/rentals',
-      icon: <Handshake />,
-      active:
-        location.pathname === '/rentals' ||
-        location.pathname.startsWith('/rentals/'),
-    },
-    {
-      key: 'foods',
-      label: t('foods.title', 'Food'),
-      path: '/foods',
-      icon: <RestaurantMenu />,
-      active: location.pathname.startsWith('/foods'),
-    },
-  ];
+  const tabs: BottomNavTab[] = browseLaneNavItems(visible).map((lane) => ({
+    key: lane.key,
+    label: t(lane.labelKey, lane.labelDefault),
+    path: lane.path,
+    icon: lane.icon,
+    active: isBrowseLanePathActive(location.pathname, lane.path),
+  }));
+
+  if (tabs.length === 0) {
+    return null;
+  }
 
   return <BottomNavBar tabs={tabs} />;
 };

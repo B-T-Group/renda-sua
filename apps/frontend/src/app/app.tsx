@@ -1064,6 +1064,14 @@ function App() {
               }
             />
             <Route
+              path="/business/rentals/items/:itemId/activity"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessRentalItemActivityPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/rentals/items/:itemId/edit"
               element={
                 <ProtectedRoute>

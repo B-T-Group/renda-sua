@@ -25,7 +25,8 @@ export type ClientFlagKey =
   | 'rentals_inspection_confirmations_enabled'
   | 'rentals_inspection_optin_enabled'
   | 'rentals_pickup_decline_enabled'
-  | 'rentals_default_list_enabled';
+  | 'rentals_default_list_enabled'
+  | 'rentals_dashboard_requests_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -71,6 +72,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_pickup_decline_enabled: false,
   /** Default rental list. Off until a config row turns it on. No NODE_ENV override. */
   rentals_default_list_enabled: false,
+  /** Business home rental requests and the 24h auto-decline. Off until a config row turns it on. */
+  rentals_dashboard_requests_enabled: false,
 };
 
 type ClientFlagsResponse = {

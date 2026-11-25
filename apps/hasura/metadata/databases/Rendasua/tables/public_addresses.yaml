@@ -57,6 +57,14 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+computed_fields:
+  - name: country_key
+    definition:
+      function:
+        name: address_country_key
+        schema: public
+      table_argument: address_row
+    comment: upper(btrim(country)), the same key the rental cutoff SQL compares
 insert_permissions:
   - role: agent
     permission:

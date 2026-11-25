@@ -5,6 +5,7 @@ import { CommonActions, getFocusedRouteNameFromRoute } from '@react-navigation/n
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { observer } from 'mobx-react-lite';
 import { useTheme } from '../contexts/ThemeContext';
 import type { AuthStackParamList, GuestRootStackParamList, GuestTabParamList } from './types';
 import GuestBrowseScreen from '../screens/guest/GuestBrowseScreen';
@@ -46,6 +47,18 @@ import {
 import { useClientFlags } from '../contexts/ClientFlagsContext';
 import { AssistantLauncherHost } from '../components/assistant/launcher/AssistantLauncherHost';
 import { markLauncherInteraction } from '../components/assistant/launcher/launcherSignals';
+import { useMarket } from '../hooks/useMarket';
+import {
+  useMarketLanes,
+  type MarketLaneId,
+} from '../hooks/useMarketLanes';
+
+function guestTabForLane(lane: MarketLaneId): keyof GuestTabParamList {
+  if (lane === 'rentals') return 'GuestRentals';
+  if (lane === 'exports') return 'GuestExports';
+  if (lane === 'food') return 'GuestFoods';
+  return 'GuestBrowse';
+}
 
 const GuestTab = createBottomTabNavigator<GuestTabParamList>();
 const GuestAuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -114,7 +127,7 @@ function resetGuestAuthToLogin(navigation: {
   });
 }
 
-function GuestTabsNavigator({
+const GuestTabsNavigator = observer(function GuestTabsNavigator({
   initialAuthRoute,
   initialSignupParams,
   preferBrowse,
@@ -127,6 +140,12 @@ function GuestTabsNavigator({
   const { t } = useTranslation();
   const theme = useTheme();
   const { flags } = useClientFlags();
+  const { selectedMarket } = useMarket();
+  const { visible: visibleLanes } = useMarketLanes(selectedMarket?.countryCode);
+  const showRentals = visibleLanes.includes('rentals');
+  const showExports = visibleLanes.includes('exports');
+  const showShop = visibleLanes.includes('shop');
+  const showFood = visibleLanes.includes('food');
   const tabBarScreenOptions = useTabBarScreenOptions({
     floatingHosted: flags.floating_nav_enabled,
   });
@@ -141,8 +160,11 @@ function GuestTabsNavigator({
       })
     : tabBarScreenOptions({ route: { name: 'GuestAuth' } }).tabBarStyle;
 
+  const browseTab = guestTabForLane(
+    (visibleLanes[0] as MarketLaneId | undefined) ?? 'shop'
+  );
   const initialTab =
-    preferBrowse || !initialAuthRoute ? 'GuestBrowse' : 'GuestAuth';
+    preferBrowse || !initialAuthRoute ? browseTab : 'GuestAuth';
 
   return (
     <FloatingTabBarVisibilityProvider>
@@ -153,30 +175,47 @@ function GuestTabsNavigator({
       screenOptions={tabBarScreenOptions}
     >
       <GuestTab.Screen
+        name="GuestRentals"
+        component={GuestRentalsScreen}
+        options={{
+          tabBarLabel: t('nav.guestTabs.rentals', 'Rentals'),
+          tabBarAccessibilityLabel: t('nav.guestTabs.rentals', 'Rentals'),
+          tabBarButton: showRentals ? undefined : () => null,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIconContent focused={focused} label={t('nav.guestTabs.rentals', 'Rentals')}>
+              <MaterialCommunityIcons name={focused ? 'hand-coin' : 'hand-coin-outline'} size={24} color={color} />
+            </TabBarIconContent>
+          ),
+        }}
+      />
+      <GuestTab.Screen
+        name="GuestExports"
+        options={{
+          tabBarLabel: t('nav.guestTabs.exports', 'Exports'),
+          tabBarAccessibilityLabel: t('nav.guestTabs.exports', 'Exports'),
+          tabBarButton: showExports ? undefined : () => null,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIconContent focused={focused} label={t('nav.guestTabs.exports', 'Exports')}>
+              <MaterialCommunityIcons name="airplane" size={24} color={color} />
+            </TabBarIconContent>
+          ),
+        }}
+      >
+        {() => <GuestBrowseScreen exportOnly />}
+      </GuestTab.Screen>
+      <GuestTab.Screen
         name="GuestBrowse"
         component={GuestBrowseScreen}
         listeners={({ navigation }) => ({
           tabPress: () => navigation.setParams({ segment: 'all' }),
         })}
         options={{
-          tabBarLabel: t('nav.guestTabs.browse', 'Items'),
-          tabBarAccessibilityLabel: t('nav.guestTabs.browse', 'Items'),
+          tabBarLabel: t('nav.guestTabs.browse', 'Shop'),
+          tabBarAccessibilityLabel: t('nav.guestTabs.browse', 'Shop'),
+          tabBarButton: showShop ? undefined : () => null,
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.guestTabs.browse', 'Items')}>
+            <TabBarIconContent focused={focused} label={t('nav.guestTabs.browse', 'Shop')}>
               <MaterialCommunityIcons name={focused ? 'shopping' : 'shopping-outline'} size={24} color={color} />
-            </TabBarIconContent>
-          ),
-        }}
-      />
-      <GuestTab.Screen
-        name="GuestRentals"
-        component={GuestRentalsScreen}
-        options={{
-          tabBarLabel: t('nav.guestTabs.rentals', 'Rentals'),
-          tabBarAccessibilityLabel: t('nav.guestTabs.rentals', 'Rentals'),
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.guestTabs.rentals', 'Rentals')}>
-              <MaterialCommunityIcons name={focused ? 'hand-coin' : 'hand-coin-outline'} size={24} color={color} />
             </TabBarIconContent>
           ),
         }}
@@ -186,6 +225,7 @@ function GuestTabsNavigator({
         options={{
           tabBarLabel: t('nav.guestTabs.foods', 'Food'),
           tabBarAccessibilityLabel: t('nav.guestTabs.foods', 'Food'),
+          tabBarButton: showFood ? undefined : () => null,
           tabBarIcon: ({ color, focused }) => (
             <TabBarIconContent focused={focused} label={t('nav.guestTabs.foods', 'Food')}>
               <MaterialCommunityIcons name={focused ? 'food' : 'food-outline'} size={24} color={color} />
@@ -249,7 +289,7 @@ function GuestTabsNavigator({
     </GuestTab.Navigator>
     </FloatingTabBarVisibilityProvider>
   );
-}
+});
 
 export function GuestRootNavigator({
   initialAuthRoute,

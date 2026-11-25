@@ -51,6 +51,7 @@ import { RentalsService } from './rentals.service';
 import { DeclineConditionDto, DeclinePhotoPresignDto } from './pickup-decline/pickup-decline.dto';
 import { RentalConditionPhotosService } from './pickup-decline/rental-condition-photos.service';
 import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
+import { BusinessRentalItemActivityQueryDto } from './dto/business-rental-item-activity.dto';
 
 @ApiTags('rentals')
 @ApiBearerAuth('access-token')
@@ -313,7 +314,7 @@ export class RentalsController {
   @ApiQuery({
     name: 'limit',
     required: false,
-    description: 'Page size (default 50, max 100)',
+    description: 'Page size (default 50, max 100). Pending requests are uncapped when rentals_dashboard_requests_enabled is on.',
   })
   @ApiQuery({
     name: 'status',
@@ -328,17 +329,20 @@ export class RentalsController {
     ],
     description: 'Filter by request status',
   })
+  @ApiQuery({ name: 'id', required: false, description: 'Load one request by id' })
   @ApiResponse({ status: 200, description: 'Requests returned' })
   @ApiResponse({ status: 403, description: 'Not a business user' })
   async getBusinessRequests(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('id') id?: string
   ) {
     const result = await this.rentalsService.getBusinessRentalRequests({
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
       status,
+      id,
     });
     return {
       success: true,
@@ -347,6 +351,7 @@ export class RentalsController {
         total: result.total,
         page: result.page,
         limit: result.limit,
+        expiryNotices: result.expiryNotices,
       },
     };
   }
@@ -416,6 +421,26 @@ export class RentalsController {
   async getBusinessItemById(@Param('itemId') itemId: string) {
     const item = await this.rentalsService.getBusinessRentalItemById(itemId);
     return { success: true, data: { item } };
+  }
+
+  @Get('business/items/:itemId/activity')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary: 'Rental activity and stats for one business catalog item',
+  })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiQuery({ name: 'scope', required: false, enum: ['all', 'upcoming', 'past'] })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (1-based)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size (default 20, max 100)' })
+  @ApiResponse({ status: 200, description: 'Activity returned' })
+  @ApiResponse({ status: 403, description: 'Not a business user' })
+  @ApiResponse({ status: 404, description: 'Item not found' })
+  async getBusinessItemActivity(
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Query() query: BusinessRentalItemActivityQueryDto
+  ) {
+    const data = await this.rentalsService.getBusinessRentalItemActivity(itemId, query);
+    return { success: true, data };
   }
 
   @Patch('business/items/:itemId')
@@ -605,7 +630,11 @@ export class RentalsController {
   @ApiBody({ type: UpdateRentalRequestDto })
   @ApiResponse({ status: 200, description: 'Request updated' })
   @ApiResponse({ status: 404, description: 'Feature off or request missing' })
-  @ApiResponse({ status: 409, description: 'Stale version, closed window, or no longer pending' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Stale version, closed window, no longer pending, or PRICE_CONFIRM_REQUIRED when the re-quote is higher than the confirmed total',
+  })
   async modifyRequest(@Param('id') requestId: string, @Body() dto: UpdateRentalRequestDto) {
     return this.rentalsService.modifyRentalRequest(requestId, dto);
   }

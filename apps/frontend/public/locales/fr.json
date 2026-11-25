@@ -2814,6 +2814,26 @@
       "setupNotice": "Signez le contrat marchand pour être en ligne et commencer à accepter des commandes."
     },
     "dashboard": {
+      "rentalRequests": {
+        "sectionTitle": "Demandes de location",
+        "sectionA11y": "Demandes de location, {{count}}",
+        "seeAll": "Tout voir",
+        "requested": "Demandée",
+        "startsToday": "Commence aujourd’hui",
+        "startsIn": "Commence dans {{count}} jours",
+        "updated": "Mise à jour",
+        "allDay": "Toute la journée",
+        "dayCount": "{{count}} jours",
+        "dailyRate": "{{count}} jours × {{rate}} / jour",
+        "youReceive": "Vous recevez",
+        "respondWithin": "Répondre sous {{hours}} h",
+        "accept": "Accepter",
+        "decline": "Refuser",
+        "acceptedToast": "Demande acceptée pour {{item}}",
+        "declinedToast": "Demande refusée pour {{item}}",
+        "expiredSla": "Demande expirée — aucune réponse en 24 h",
+        "expiredStart": "Demande expirée — aucune réponse avant le début"
+      },
       "welcome": "Bienvenue sur votre tableau de bord d'entreprise",
       "accountSummary": "Résumé du Compte",
       "adminManagement": "Gestion Administrateur",
@@ -3240,6 +3260,7 @@
     },
     "rentals": {
       "clientDetails": "Coordonnées du locataire",
+      "openRequestCardA11y": "Ouvrir {{item}}, {{status}}",
       "pageTitle": "Locations",
       "pageSubtitle": "Gérez les articles de location, les annonces et les demandes de réservation au même endroit.",
       "catalogPageTitle": "Catalogue de location",
@@ -3264,18 +3285,25 @@
       "markAvailable": "Disponible",
       "markUnavailable": "Indisponible",
       "respondDialogTitleAvailable": "Confirmer la disponibilité",
-      "respondDialogTitleUnavailable": "Marquer indisponible",
+      "respondDialogTitleUnavailable": "Refuser la demande",
       "contractBillableHoursTotal": "{{count}} heures facturables au total",
       "contractSummary": "Récapitulatif de l’offre",
       "contractDays": "{{count}} jour(s)",
       "contractRate": "{{amount}} par jour",
       "contractTotal": "Total",
-      "contractExpiryHoursLabel": "Le client doit confirmer sous (heures)",
-      "contractExpiryHelper": "Entre 1 et 168 heures (1 semaine).",
+      "changeTotalLabel": "Modifier le total (facultatif)",
+      "changeTotalHelper": "Le devis du locataire est une estimation. Si vous modifiez le total, il devra vérifier le nouveau prix avant de payer.",
+      "changeTotalInvalid": "Saisissez un total de zéro ou plus.",
+      "changeTotalTooHigh": "Saisissez un total au plus égal au devis, au maximum 10 fois le devis, ou dans la limite de la devise.",
+      "contractExpiryHoursLabel": "Contrat valable (heures)",
+      "contractExpiryHelper": "Jusqu’à {{count}} heures, sans dépasser le début.",
       "optionalMessage": "Message optionnel au client",
       "unavailableReasonLabel": "Motif",
       "otherReasonNote": "Veuillez préciser",
-      "submitResponse": "Envoyer la réponse",
+      "accept": "Accepter",
+      "decline": "Refuser",
+      "offerLineAllDay": "Journée complète · {{date}}",
+      "submitResponse": "Envoyer",
       "respondFailed": "Impossible d’envoyer la réponse",
       "respondValidationHours": "Indiquez un nombre entier d’heures entre 1 et 168.",
       "respondValidationReason": "Choisissez un motif.",
@@ -3369,7 +3397,26 @@
       "securityDeposit": "Caution",
       "depositInvalid": "Saisissez une caution valide.",
       "securityDepositHelper": "Retenue sur les locations par carte pour couvrir les heures supplémentaires. Par défaut : 8× le tarif horaire.",
-      "securityDepositCreateHint": "Laissez vide pour utiliser 8 × le tarif horaire. Retenue sur les locations par carte pour couvrir les heures supplémentaires."
+      "securityDepositCreateHint": "Laissez vide pour utiliser 8 × le tarif horaire. Retenue sur les locations par carte pour couvrir les heures supplémentaires.",
+      "activity": {
+        "title": "Activité de location",
+        "seeRentals": "Voir les locations",
+        "backToItem": "Retour à la location",
+        "earned": "Gains",
+        "timesRented": "Fois loué",
+        "currentlyOut": "En cours",
+        "upcoming": "À venir",
+        "openRequests": "{{count}} demande(s) ouverte(s)",
+        "scopeUpcoming": "À venir",
+        "scopePast": "Passées",
+        "scopeAll": "Toutes",
+        "scopeA11y": "Filtrer les locations",
+        "empty": "Aucune location dans ce filtre.",
+        "loadError": "Impossible de charger l’activité de location"
+      },
+      "schedule": {
+        "client": "Client"
+      }
     },
     "failedDeliveries": {
       "title": "Livraisons échouées",
@@ -4659,8 +4706,27 @@
     }
   },
   "client": {
+    "home": {
+      "liveOrders": {
+        "title": "En cours",
+        "seeAll": "Voir les {{count}} commandes",
+        "ctaTrack": "Suivre la commande",
+        "ctaView": "Voir la commande",
+        "openDetail": "Ouvrez la commande pour plus de détails."
+      },
+      "lane": {
+        "shop": "Boutique",
+        "food": "Repas",
+        "rentals": "Locations"
+      },
+      "forYou": "Pour vous",
+      "buyAgain": "Racheter"
+    },
     "search": {
-      "placeholder": "Rechercher des produits et des boutiques"
+      "placeholder": "Rechercher un produit, un magasin, un repas",
+      "emptyTitle": "Aucun résultat",
+      "emptyBody": "Essayez un produit, un magasin ou une catégorie.",
+      "recent": "Recherches récentes"
     },
     "orders": {
       "agentAssigned": "🚚 Excellent! An agent has claimed your order and will pick it up shortly. Your delivery is now in progress!",
@@ -4701,28 +4767,6 @@
       "refundedNotice": "💰 Votre remboursement de {{orderTotal}} a été traité et devrait apparaître dans votre compte dans les 3 à 5 jours ouvrables. Merci pour votre patience.",
       "subtitle": "Suivez le statut et l'historique de vos commandes",
       "title": "Mes commandes"
-    },
-    "home": {
-      "liveOrders": {
-        "title": "En cours",
-        "seeAll": "Voir les {{count}} commandes",
-        "ctaTrack": "Suivre la commande",
-        "ctaView": "Voir la commande",
-        "openDetail": "Ouvrez la commande pour plus de détails."
-      },
-      "lane": {
-        "shop": "Boutique",
-        "food": "Repas",
-        "rentals": "Locations"
-      },
-      "forYou": "Pour vous",
-      "buyAgain": "Racheter"
-    },
-    "search": {
-      "placeholder": "Rechercher un produit, un magasin, un repas",
-      "emptyTitle": "Aucun résultat",
-      "emptyBody": "Essayez un produit, un magasin ou une catégorie.",
-      "recent": "Recherches récentes"
     },
     "following": {
       "title": "Abonnements",
@@ -6858,7 +6902,13 @@
       "allDayRateLine": "Journée complète — tarif journalier",
       "allDayNeedsDate": "La sélection journée complète n’a pas de date.",
       "invalidAllDay": "La journée complète doit couvrir toutes les heures d’ouverture ce jour-là.",
-      "yourRanges": "Vos créneaux sélectionnés"
+      "yourRanges": "Vos créneaux sélectionnés",
+      "dayCount": "{{count}} jour",
+      "dayCount_one": "{{count}} jour",
+      "dayCount_other": "{{count}} jours",
+      "dayCount_plural": "{{count}} jours",
+      "dailyBreakdown": "{{days}} × {{rate}} / jour",
+      "hourlyBreakdown": "{{h}} h × {{rate}} / heure"
     },
     "fillDates": "Choisissez le début et la fin",
     "requestSent": "Demande envoyée. L'entreprise répondra.",
@@ -6959,6 +7009,12 @@
       "unavailableReason": "Motif",
       "businessNote": "Message de l’entreprise",
       "viewListing": "Voir l’annonce",
+      "browseRentals": "Parcourir les locations",
+      "theBusiness": "L’entreprise",
+      "declinedBadge": "Refusée",
+      "declinedTitle": "Demande de location refusée",
+      "noResponseSla": "{{business}} n’a pas répondu sous 24 h. Vous pouvez envoyer une nouvelle demande depuis l’annonce, ou parcourir d’autres locations.",
+      "noResponseStart": "{{business}} n’a pas répondu avant le début. Vous pouvez envoyer une nouvelle demande depuis l’annonce, ou parcourir d’autres locations.",
       "viewBooking": "Voir la réservation",
       "cancelRequest": "Annuler la demande",
       "cancelConfirmTitle": "Annuler cette demande ?",
@@ -6979,7 +7035,7 @@
       "bookConfirmLabelTotal": "Total indiqué",
       "bookConfirmLabelAcceptBy": "Offre valable jusqu’au",
       "contractExpiredBookError": "Cette offre a expiré. Envoyez une nouvelle demande depuis l’annonce.",
-      "browseRentals": "Parcourir les locations",
+      "priceChangeUnseenError": "L’entreprise a modifié le prix. Vérifiez le nouveau total de votre demande, puis réessayez.",
       "bookSuccess": "Réservation créée",
       "bookError": "Impossible de finaliser la réservation",
       "cancelSuccess": "Demande annulée",
@@ -7139,7 +7195,7 @@
     },
     "business": {
       "waitingTitle": "En attente que {{name}} démarre",
-      "waitingBody": "Remettez l'article seulement après «\u00a0Location démarrée\u00a0». Aucun code PIN n'est nécessaire.",
+      "waitingBody": "Remettez l'article seulement après « Location démarrée ». Aucun code PIN n'est nécessaire.",
       "startedLine": "Démarrée à {{time}} · remettez l'article",
       "photosAsked": "{{name}} a demandé de nouvelles photos avant le démarrage.",
       "sendPhotos": "Envoyer les photos mises à jour",
@@ -7179,6 +7235,7 @@
       "collectPayment": "Encaisser le paiement",
       "confirmReturn": "Confirmer le retour",
       "openBooking": "Ouvrir la réservation",
+      "viewRequest": "Voir la demande",
       "rate": "Noter la location",
       "accept": "Accepter",
       "decline": "Refuser"
@@ -7293,7 +7350,33 @@
     "cancelError": "Impossible d’annuler la réservation",
     "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué.",
     "returnAt": "Date et heure de retour",
-    "returnAtHint": "Indiquez quand l’article a été rendu. Un retour anticipé paie toujours le total de la location ; le temps après la fin prévue est facturé en heures supplémentaires."
+    "returnAtHint": "Indiquez quand l’article a été rendu. Un retour anticipé paie toujours le total de la location ; le temps après la fin prévue est facturé en heures supplémentaires.",
+    "modify": {
+      "changed": "Modifié : {{detail}}",
+      "staleBanner": "Cette demande a été mise à jour. Relisez la dernière version."
+    },
+    "requestCard": {
+      "title": "Demande de location",
+      "startsToday": "Commence aujourd’hui",
+      "startsIn_one": "Commence dans {{count}} jour",
+      "startsIn_other": "Commence dans {{count}} jours",
+      "startsIn_plural": "Commence dans {{count}} jours",
+      "alreadyBooked": "Ces dates sont déjà réservées",
+      "seeTimes_one": "{{count}} jour · voir les horaires",
+      "seeTimes_other": "{{count}} jours · voir les horaires",
+      "seeTimes_plural": "{{count}} jours · voir les horaires",
+      "seeTimesA11y": "Afficher chaque horaire",
+      "hideTimes": "Masquer les horaires",
+      "allDay": "Toute la journée",
+      "youReceive": "Vous recevez {{amount}}",
+      "deposit": "Caution {{amount}}",
+      "sent": "Envoyée {{time}}",
+      "quoteUnavailable": "Devis indisponible",
+      "openRequest": "Ouvrir la demande",
+      "acceptUnavailable": "Accepter indisponible — dates prises",
+      "chargedAfterAccept": "Le locataire est débité après votre acceptation",
+      "notFound": "Cette demande n’est plus là."
+    }
   },
   "profile": {
     "accountOverview": "Aperçu du Compte",

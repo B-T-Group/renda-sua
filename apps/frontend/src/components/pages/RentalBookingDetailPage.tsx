@@ -74,6 +74,11 @@ import {
 } from '../../utils/rentals/confirmationFormat';
 import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
+import {
+  isPriceChangeUnseenError,
+  PRICE_CHANGE_UNSEEN_KEY,
+  PRICE_CHANGE_UNSEEN_TEXT,
+} from '../../utils/rentals/priceChangeUnseen';
 
 const PAYMENT_POLL_MS = 4000;
 
@@ -86,6 +91,11 @@ function apiErrorMessage(
     ?.response;
   const friendly = cardWindowErrorMessage(err, navigator.language);
   if (friendly) return friendly;
+  if (isPriceChangeUnseenError(err)) {
+    return translate
+      ? translate(PRICE_CHANGE_UNSEEN_KEY, PRICE_CHANGE_UNSEEN_TEXT)
+      : PRICE_CHANGE_UNSEEN_TEXT;
+  }
   const message = typeof data?.data?.message === 'string' ? data.data.message : '';
   if (data?.status === 426 || data?.data?.code === 'RENTAL_INSPECTION_UPDATE_REQUIRED') {
     return translate

@@ -23,6 +23,11 @@ import { StatusPill } from '../../components/common/StatusPill';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useBookRental } from '../../hooks/useBookRental';
+import {
+  isPriceChangeUnseenError,
+  PRICE_CHANGE_UNSEEN_KEY,
+  PRICE_CHANGE_UNSEEN_TEXT,
+} from '../../utils/rentals/priceChangeUnseen';
 import { useClientRentalBookings } from '../../hooks/useClientRentalBookings';
 import { useClientRentalRequests } from '../../hooks/useClientRentalRequests';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
@@ -302,6 +307,12 @@ export default function ClientMyRentalsScreen({
         navigation.navigate('RentalBookingDetail', { bookingId: res.bookingId });
       }
     } catch (e: unknown) {
+      if (isPriceChangeUnseenError(e)) {
+        setSnack(t(PRICE_CHANGE_UNSEEN_KEY, PRICE_CHANGE_UNSEEN_TEXT));
+        setBookRow(null);
+        void refetchRequests();
+        return;
+      }
       setSnack(
         e instanceof Error
           ? e.message
@@ -348,13 +359,14 @@ export default function ClientMyRentalsScreen({
         }}
         onCancel={(id) => setCancelId(id)}
         onViewListing={(listingId) => navigation.navigate('RentalListingDetail', { listingId })}
+        onBrowseRentals={() => openRentalsLane('empty_cta')}
         onViewBooking={(bookingId) => navigation.navigate('RentalBookingDetail', { bookingId })}
         modifyState={modifyStateFor(item, flags.rentals_modify_request_enabled)}
         onModify={(id) => navigation.navigate('ModifyRentalRequest', { requestId: id })}
         onContact={(bookingId) => navigation.navigate('RentalBookingDetail', { bookingId })}
       />
     ),
-    [bookRow?.id, bookingLoading, cancellingId, flags.rentals_modify_request_enabled, navigation, requests]
+    [bookRow?.id, bookingLoading, cancellingId, flags.rentals_modify_request_enabled, navigation, openRentalsLane, requests]
   );
 
   const renderBooking = useCallback(

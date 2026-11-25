@@ -61,6 +61,11 @@ import {
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
 import { renterReturnPhase } from '../../utils/rentals/renterReturnPhase';
+import {
+  isPriceChangeUnseenError,
+  PRICE_CHANGE_UNSEEN_KEY,
+  PRICE_CHANGE_UNSEEN_TEXT,
+} from '../../utils/rentals/priceChangeUnseen';
 import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase } from '../../utils/rentals/rentalStartWindow';
 import { RentalMomoWaiting } from '../../components/rentals/RentalMomoWaiting';
 import { BookingQuickActions } from '../../components/rentals/BookingQuickActions';
@@ -381,7 +386,13 @@ export default function RentalBookingDetailScreen() {
         )
       );
     } catch (e: unknown) {
-      setSnack(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
+      setSnack(
+        isPriceChangeUnseenError(e)
+          ? t(PRICE_CHANGE_UNSEEN_KEY, PRICE_CHANGE_UNSEEN_TEXT)
+          : e instanceof Error
+            ? e.message
+            : t('rentals.requestFailed', 'Request failed')
+      );
     }
   }, [
     isStripePending,
