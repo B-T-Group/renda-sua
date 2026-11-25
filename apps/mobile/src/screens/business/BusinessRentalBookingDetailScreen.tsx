@@ -48,6 +48,7 @@ import {
   formatBookedSpan,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
+import { formatStoredPhone } from '../../utils/phoneLoginUsername';
 import { formatDoualaStamp } from '../../utils/rentals/renterReturnPhase';
 import { holdPresentation, type HoldPresentation } from '../../utils/rentals/cardDeposit';
 import {
@@ -451,7 +452,7 @@ export default function BusinessRentalBookingDetailScreen() {
           {clientName || '—'}
         </Text>
         {client?.phone_number ? (
-          <Text style={{ color: colors.text.secondary }}>{client.phone_number}</Text>
+          <Text style={{ color: colors.text.secondary }}>{formatStoredPhone(client.phone_number)}</Text>
         ) : null}
         {client?.email ? (
           <Text style={{ color: colors.text.secondary }}>{client.email}</Text>
@@ -586,6 +587,7 @@ export default function BusinessRentalBookingDetailScreen() {
       {canCancel ? (
         <Button
           mode="outlined"
+          icon="close-circle-outline"
           textColor={colors.error.main}
           style={{ marginTop: spacing.md }}
           disabled={busy}

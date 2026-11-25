@@ -1,4 +1,4 @@
-import { CheckCircle, Lens, RadioButtonUnchecked } from '@mui/icons-material';
+import { Cancel, CheckCircle, Lens, RadioButtonUnchecked } from '@mui/icons-material';
 import {
   Alert,
   Avatar,
@@ -242,6 +242,7 @@ const RentalBookingDetailPage: React.FC = () => {
   const [returning, setReturning] = useState(false);
   const [sharingPin, setSharingPin] = useState(false);
   const [momoWaiting, setMomoWaiting] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
   const [confirmView, setConfirmView] = useState<ConfirmView | null>(null);
   const inspection = useRentalInspection(bookingId, booking);
 
@@ -940,7 +941,7 @@ const RentalBookingDetailPage: React.FC = () => {
                       : undefined
                   }
                   pickupAside={`${formatZonedDay(booking.actual_start_at || booking.start_at, listingZone, i18n.language)} ${formatZonedTime(booking.actual_start_at || booking.start_at, listingZone)}`}
-                  accent={isBusiness ? '#0B7A3B' : undefined}
+                  accent={theme.palette.success.main}
                 />
               ) : (
               <BookingStatusSteps
@@ -1132,11 +1133,12 @@ const RentalBookingDetailPage: React.FC = () => {
                   </Button>
                 ) : null}
 
-                {isBusiness && booking.status === 'reserved' && cancellableBeforeStart ? (
+                {isBusiness && cancellableBeforeStart ? (
                   <Button
-                    color="warning"
+                    color="error"
                     variant="outlined"
-                    onClick={() => void handleCancelBooking()}
+                    startIcon={<Cancel />}
+                    onClick={() => setCancelConfirm(true)}
                   >
                     {t('rentals.cancelBooking', 'Cancel booking')}
                   </Button>
@@ -1144,6 +1146,24 @@ const RentalBookingDetailPage: React.FC = () => {
 
               </Paper>
             ) : null}
+
+            <Dialog open={cancelConfirm} onClose={() => setCancelConfirm(false)}>
+              <DialogTitle>{t('rentals.cancelBooking', 'Cancel booking')}</DialogTitle>
+              <DialogContent>
+                <Typography>
+                  {t(
+                    'rentals.bookingDetail.cancelBeforeStartMessage',
+                    'This booking has not started, so cancellation is free. Any card hold or wallet hold is released.'
+                  )}
+                </Typography>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setCancelConfirm(false)}>{t('common.cancel', 'Cancel')}</Button>
+                <Button color="error" onClick={() => { setCancelConfirm(false); void handleCancelBooking(); }}>
+                  {t('rentals.cancelBooking', 'Cancel booking')}
+                </Button>
+              </DialogActions>
+            </Dialog>
 
             {bookingId && booking.status !== 'cancelled' ? (
               <Box id="rental-messages">

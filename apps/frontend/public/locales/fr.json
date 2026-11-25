@@ -6970,7 +6970,7 @@
       "bookConfirmButton": "Continuer",
       "bookConfirmSummaryHeading": "Récapitulatif de la réservation",
       "bookConfirmLabelItem": "Article",
-      "bookConfirmLabelLocation": "Lieu de prise en charge",
+      "bookConfirmLabelLocation": "Lieu de retrait",
       "bookConfirmLabelPeriod": "Période de location",
       "bookConfirmLabelBreakdown": "Détail du prix",
       "lineAllDay": "Journée complète {{date}}",
