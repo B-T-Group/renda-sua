@@ -19,10 +19,13 @@ import {
   rentalPhaseColors,
 } from '../../utils/rentals';
 import {
+  businessChangedThePrice,
   formatListingDeadline,
   formatRequestAmount,
   formatRentalPeriod,
 } from '../../utils/rentals/rentalRequestFormat';
+import { rentalCategoryIcon } from '../../utils/rentals/rentalCategoryIcon';
+import { requestStartIso, respondWindow } from '../../utils/rentals/dashboardRentalRequests';
 
 export interface ClientRentalRequestRowProps {
   row: ClientRentalRequest;
@@ -35,6 +38,7 @@ export interface ClientRentalRequestRowProps {
   onCancel: (id: string) => void;
   onViewListing: (listingId: string) => void;
   onViewBooking: (bookingId: string) => void;
+  onBrowseRentals?: () => void;
 }
 
 export function ClientRentalRequestRow({
@@ -48,6 +52,7 @@ export function ClientRentalRequestRow({
   onCancel,
   onViewListing,
   onViewBooking,
+  onBrowseRentals,
 }: ClientRentalRequestRowProps) {
   const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -58,7 +63,7 @@ export function ClientRentalRequestRow({
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
   const quoted = Number(row.quoted_total);
   const accepted = Number(quote?.total);
-  const priceChanged = Number.isFinite(quoted) && Number.isFinite(accepted) && Math.abs(quoted - accepted) >= 0.01;
+  const priceChanged = businessChangedThePrice(row.status, quoted, accepted);
   useEffect(() => {
     if (!priceChanged) return;
     const meta = priceChangeMeta(quoted, accepted);
@@ -74,7 +79,13 @@ export function ClientRentalRequestRow({
     'client'
   );
   const statusColors = rentalPhaseColors(phase.phase, colors);
-  const statusLabel = cardStatusLabel(row.status, phase.labelKey, t);
+  const autoDeclined = row.status === 'unavailable' && row.unavailable_reason_code === 'no_response';
+  const statusLabel = autoDeclined
+    ? t('rentals.clientRequests.declinedBadge', 'Declined')
+    : cardStatusLabel(row.status, phase.labelKey, t);
+  const heading = autoDeclined
+    ? t('rentals.clientRequests.declinedTitle', 'Rental request declined')
+    : itemName;
   const updated = (row.change_summary?.fields?.length ?? 0) > 0;
   const deadlineIso = proposedContractDeadlineIso(row);
   const canBookNow = row.status === 'available' && isProposedContractOpen(row);
@@ -86,7 +97,7 @@ export function ClientRentalRequestRow({
   const total = quotedAmount(row, quote?.total);
   const currency = listing?.rental_item?.currency || quote?.currency || 'XAF';
   const amount = Number.isFinite(total)
-    ? `${row.units_requested ?? 1} × · ${formatRequestAmount(total as number, currency, i18n.language)}`
+    ? requestAmountLine(row.units_requested, formatRequestAmount(total as number, currency, i18n.language))
     : null;
 
   return (
@@ -133,12 +144,21 @@ export function ClientRentalRequestRow({
           onPress={() => listing?.id && onViewListing(listing.id)}
           style={[styles.thumb, { backgroundColor: colors.primary.main + '18' }]}
         >
-          <MaterialCommunityIcons name="warehouse" size={26} color={colors.primary.main} />
+          <MaterialCommunityIcons
+            name={rentalCategoryIcon(listing?.rental_item?.rental_category?.name || itemName)}
+            size={26}
+            color={colors.primary.main}
+          />
         </Pressable>
         <View style={styles.flex}>
           <Text style={[typography.subtitle1, { color: colors.text.primary, fontFamily: fontFamily.medium }]}>
-            {itemName}
+            {heading}
           </Text>
+          {autoDeclined ? (
+            <Text style={[typography.caption, { color: colors.text.secondary, fontFamily: fontFamily.medium }]}>
+              {itemName}
+            </Text>
+          ) : null}
           {subtitle ? (
             <Text style={[typography.caption, { color: colors.text.secondary, fontFamily: fontFamily.medium }]}>
               {subtitle}
@@ -184,6 +204,22 @@ export function ClientRentalRequestRow({
           ]}
         >
           {amount}
+        </Text>
+      ) : null}
+
+      {row.status === 'unavailable' && row.unavailable_reason_code === 'no_response' ? (
+        <Text style={[typography.body2, { color: colors.text.primary, marginTop: spacing.sm, fontFamily: fontFamily.medium }]}>
+          {respondWindow(row.created_at, requestStartIso(row)) === 'start'
+            ? t(
+                'rentals.clientRequests.noResponseStart',
+                '{{business}} didn’t respond before the start time. You can send a new request from the listing, or browse other rentals.',
+                { business: listing?.rental_item?.business?.name || subtitle || t('rentals.clientRequests.theBusiness', 'The business') }
+              )
+            : t(
+                'rentals.clientRequests.noResponseSla',
+                '{{business}} didn’t respond within 24 hours. You can send a new request from the listing, or browse other rentals.',
+                { business: listing?.rental_item?.business?.name || subtitle || t('rentals.clientRequests.theBusiness', 'The business') }
+              )}
         </Text>
       ) : null}
 
@@ -261,6 +297,11 @@ export function ClientRentalRequestRow({
             {t('rentals.modify.contact', 'Contact')}
           </Button>
         ) : null}
+        {row.status === 'unavailable' && row.unavailable_reason_code === 'no_response' && onBrowseRentals ? (
+          <Button mode="text" onPress={onBrowseRentals} labelStyle={styles.buttonLabel}>
+            {t('rentals.clientRequests.browseRentals', 'Browse rentals')}
+          </Button>
+        ) : null}
         {canBookNow ? (
           <Button
             mode="contained"
@@ -290,6 +331,11 @@ export function ClientRentalRequestRow({
       ) : null}
     </View>
   );
+}
+
+function requestAmountLine(units: number | null | undefined, money: string): string {
+  const count = units ?? 1;
+  return count > 1 ? `${count} × ${money}` : money;
 }
 
 function placeLine(row: ClientRentalRequest): string {

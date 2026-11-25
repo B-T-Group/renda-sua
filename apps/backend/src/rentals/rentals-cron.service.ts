@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -6,9 +7,29 @@ import { RentalInspectionService } from './inspection/rental-inspection.service'
 import { RentalPickupDeclineService } from './pickup-decline/rental-pickup-decline.service';
 import { RentalRenterReturnService } from './renter-return/rental-renter-return.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
+import { listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
+import {
+  autodeclineBounds,
+  cutoffForCountry,
+  expiryClauses,
+  noResponseRecipients,
+  pendingExpiryWhere,
+  expireUnansweredRentalRequests,
+  type AutodeclineConfigRow,
+  type NoResponseRecipient,
+  type SideEffectJob,
+  type UnansweredRentalRequest,
+} from './rental-request-expiry';
+import { earliestRequestStartIso, effectiveRespondBy, type RentalRespondWindow } from './rental-respond-by';
 import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
 import { isStartDay, listingZoneFor, startOpensAt } from './simple-start/simple-start.policy';
+
+function listedRecipients(value: unknown): NoResponseRecipient[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const recipients = value.filter((item): item is NoResponseRecipient => item === 'renter' || item === 'business');
+  return recipients.length ? recipients : undefined;
+}
 
 /**
  * Singleton cron host for rental system jobs.
@@ -68,6 +89,17 @@ export class RentalsCronService {
       if (n > 0) {
         this.logger.log(`Expired ${n} proposed rental contract(s)`);
       }
+    } catch (error: any) {
+      this.logger.error(error?.message ?? String(error));
+    }
+  }
+
+  /** Pending requests past respond_by. Off while rentals_dashboard_requests_enabled is false. */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleUnansweredRentalRequests(): Promise<void> {
+    try {
+      const n = await this.expireUnansweredRentalRequests();
+      if (n > 0) this.logger.log(`Auto-declined ${n} unanswered rental request(s)`);
     } catch (error: any) {
       this.logger.error(error?.message ?? String(error));
     }
@@ -425,6 +457,173 @@ export class RentalsCronService {
       }`,
       { id, _set }
     );
+  }
+
+  async expireUnansweredRentalRequests(now = new Date()): Promise<number> {
+    const flags = await this.loadDashboardRequestFlags();
+    return expireUnansweredRentalRequests({
+      now,
+      isEnabled: async () => flags.some((row) => row.boolean_value === true),
+      listPending: () => this.listUnansweredRequests(flags, now),
+      casDecline: (id, respondedAt) => this.casDeclineNoResponse(id, respondedAt),
+      releaseHolds: (requestId) => this.rentalsService.releaseLinkedDeclineHold(requestId),
+      notify: (row, window, recipients) => this.notifyNoResponse(row, window, recipients),
+      listRetries: () => this.listSideEffects(),
+      clearRetry: (id) => this.clearSideEffect(id),
+      recordFailure: (row, kind, window, error) =>
+        this.rentalsService.recordSideEffect(row.id, kind, error, {
+          row,
+          window,
+          recipients: noResponseRecipients(error),
+        }),
+    });
+  }
+
+  private async loadDashboardRequestFlags(): Promise<DashboardRequestFlagRow[]> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      application_configurations: DashboardRequestFlagRow[];
+    }>(Q.DASHBOARD_REQUESTS_FLAG, {});
+    return res.application_configurations ?? [];
+  }
+
+  private async listUnansweredRequests(
+    flags: DashboardRequestFlagRow[],
+    now: Date
+  ): Promise<UnansweredRentalRequest[]> {
+    const config = await this.loadExpiryConfig();
+    const bounds = autodeclineBounds(now, config);
+    const rows = await this.pageDueRequests(flags, config, now, bounds.limit);
+    return rows.map((row) => this.toUnanswered(row));
+  }
+
+  private async pageDueRequests(
+    flags: DashboardRequestFlagRow[],
+    config: AutodeclineConfigRow[],
+    now: Date,
+    limit: number
+  ): Promise<any[]> {
+    const found: any[] = [];
+    for (let offset = 0; offset < limit * 20 && found.length < limit; offset += limit) {
+      const page = await this.fetchDuePage(flags, config, now, limit, offset);
+      this.collectDue(found, page, flags, config, now, limit);
+      if (page.length < limit) break;
+    }
+    return found;
+  }
+
+  private async fetchDuePage(
+    flags: DashboardRequestFlagRow[],
+    config: AutodeclineConfigRow[],
+    now: Date,
+    limit: number,
+    offset: number
+  ): Promise<any[]> {
+    const where = pendingExpiryWhere(now, expiryClauses(flags, config, now));
+    if (!where) return [];
+    const res = await this.hasuraSystemService.executeQuery<{ rental_requests: any[] }>(
+      Q.LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY,
+      { where, limit, offset }
+    );
+    return res.rental_requests ?? [];
+  }
+
+  private collectDue(
+    found: any[],
+    page: any[],
+    flags: DashboardRequestFlagRow[],
+    config: AutodeclineConfigRow[],
+    now: Date,
+    limit: number
+  ): void {
+    for (const row of page) {
+      if (found.length >= limit) return;
+      if (this.rowDue(flags, config, row, now)) found.push(row);
+    }
+  }
+
+  private rowDue(
+    flags: DashboardRequestFlagRow[],
+    config: AutodeclineConfigRow[],
+    row: any,
+    now: Date
+  ): boolean {
+    const raw = row.rental_location_listing?.business_location?.address?.country ?? null;
+    if (!listingDashboardFlag(flags, raw)) return false;
+    const cutoff = cutoffForCountry(config, resolveItemCountry(raw), now);
+    const decision = effectiveRespondBy({
+      createdAt: row.created_at,
+      respondBy: row.respond_by,
+      startAt: earliestRequestStartIso(row),
+    });
+    return Date.parse(decision.respondBy) >= Date.parse(cutoff);
+  }
+
+  private async loadExpiryConfig(): Promise<AutodeclineConfigRow[]> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      application_configurations: AutodeclineConfigRow[];
+    }>(Q.DASHBOARD_REQUESTS_EXPIRY_CONFIG, {});
+    return res.application_configurations ?? [];
+  }
+
+  private async listSideEffects(): Promise<SideEffectJob[]> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      rental_request_side_effects: Array<{ id: string; kind: 'release' | 'notify'; payload: any }>;
+    }>(Q.LIST_RENTAL_SIDE_EFFECTS, {});
+    return (res.rental_request_side_effects ?? []).flatMap((row) => this.sideEffectJob(row));
+  }
+
+  private sideEffectJob(row: { id: string; kind: 'release' | 'notify'; payload: any }): SideEffectJob[] {
+    const payload = row.payload ?? {};
+    if (!payload.row?.id) return [];
+    return [{
+      id: row.id,
+      kind: row.kind,
+      row: payload.row,
+      window: payload.window === 'start' ? 'start' : 'sla',
+      recipients: listedRecipients(payload.recipients),
+    }];
+  }
+
+  private async clearSideEffect(id: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(Q.DELETE_RENTAL_SIDE_EFFECT, { id });
+  }
+
+  private toUnanswered(row: any): UnansweredRentalRequest {
+    const user = row.client?.user;
+    const item = row.rental_location_listing?.rental_item;
+    return {
+      id: row.id,
+      created_at: row.created_at,
+      respond_by: row.respond_by,
+      requested_start_at: row.requested_start_at,
+      rental_selection_windows: row.rental_selection_windows,
+      clientUserId: row.client?.user_id ?? null,
+      businessUserId: item?.business?.user_id ?? null,
+      itemName: item?.name ?? 'Rental',
+      businessName: item?.business?.name?.trim() || 'The business',
+      renterName: [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim(),
+      listingId: row.rental_location_listing?.id ?? '',
+    };
+  }
+
+  private async casDeclineNoResponse(id: string, respondedAt: string): Promise<boolean> {
+    const saved = await this.hasuraSystemService.executeMutation<{
+      update_rental_requests: { affected_rows: number } | null;
+    }>(Q.EXPIRE_RENTAL_REQUEST_NO_RESPONSE, { id, respondedAt });
+    return (saved.update_rental_requests?.affected_rows ?? 0) > 0;
+  }
+
+  private async notifyNoResponse(
+    row: UnansweredRentalRequest,
+    window: RentalRespondWindow,
+    recipients?: NoResponseRecipient[]
+  ): Promise<void> {
+    const failed = await this.notificationsService.failedNoResponseRecipients(
+      { ...row, window },
+      recipients
+    );
+    if (!failed.length) return;
+    throw new Error(`NO_RESPONSE_PARTIAL:${failed.join(',')}`);
   }
 
   private async logHistory(

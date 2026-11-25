@@ -124,7 +124,8 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
     }
     const ratePerHour = Number(request.rental_location_listing.base_price_per_hour);
     const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
-    const computed = computeRentalPricingLines(windows, ratePerHour, ratePerDay);
+    const units = Math.max(1, Math.floor(Number(request.units_requested)) || 1);
+    const computed = computeRentalPricingLines(windows, ratePerHour, ratePerDay, units);
     return { lines: computed.lines, total: computed.total, currency };
   }, [
     currency,
@@ -132,6 +133,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
     request.rental_location_listing.base_price_per_hour,
     request.rental_pricing_snapshot,
     request.rental_selection_windows,
+    request.units_requested,
   ]);
 
   const phase = useMemo(

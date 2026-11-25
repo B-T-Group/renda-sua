@@ -38,6 +38,7 @@ import { DashboardComposingOverlay } from '../../components/feedback/DashboardCo
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { ActionsNeededSection } from '../../components/common/ActionsNeededSection';
 import { ActiveOrdersCarousel } from '../../components/business/ActiveOrdersCarousel';
+import { DashboardRentalRequests } from '../../components/business/DashboardRentalRequests';
 import { ActiveOrderCtaHost } from '../../components/business/ActiveOrderCtaHost';
 import { MobilePaymentPhoneChooserSheet } from '../../components/dialogs/MobilePaymentPhoneChooserSheet';
 import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePaymentPhoneVerifyModal';
@@ -275,6 +276,8 @@ export function BusinessDashboardView({
         ) : null}
 
         {showSkeleton ? <DashboardSkeleton variant="business" rows={4} /> : null}
+
+        {!showSkeleton ? <DashboardRentalRequests /> : null}
 
         {/* —— Setup mode —— */}
         {!showSkeleton && setupMode && verificationStatus ? (

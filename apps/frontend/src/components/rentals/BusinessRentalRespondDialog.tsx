@@ -13,8 +13,9 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { contractHoursOffer, requestStartIso, totalOverrideTooHigh } from '../../utils/dashboardRentalRequests';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
-import { RichTextEditor } from '../common/RichTextEditor';
+import { buildRequestCardModel } from '../../utils/rentalRequestCardModel';
 import type {
   BusinessRentalRequestRow,
   RentalPricingSnapshotBody,
@@ -25,7 +26,9 @@ import {
   computeRentalPricingLines,
   parseRentalSelectionWindowsFromJson,
 } from '../../utils/rentalPricingLines';
-import { parseRentalSelectionWindows } from '../../utils/rentalRequestDisplay';
+import { formatRequestAmount } from '../../utils/rentalRequestDisplay';
+import { formatRentalDay } from '../../utils/rentalRequestFormat';
+import { useClientFlags } from '../../hooks/useClientFlags';
 
 function isStaleVersion(error: unknown): boolean {
   const data = (error as { response?: { data?: { code?: string } } })?.response?.data;
@@ -58,62 +61,56 @@ function totalRentalHoursForRequest(req: BusinessRentalRequestRow): number {
   return 0;
 }
 
+function parseTotalOverride(raw: string): number | null | 'invalid' {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value <= 0) return 'invalid';
+  return Number(value.toFixed(2));
+}
+
 function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnapshotBody {
-  const windows = parseRentalSelectionWindowsFromJson(req.rental_selection_windows);
+  const windows = parseRentalSelectionWindowsFromJson(
+    req.rental_selection_windows
+  );
   const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
   const ratePerDay = Number(req.rental_location_listing.base_price_per_day ?? 0);
-  const priced = scaleLinesByUnits(
-    computeRentalPricingLines(windows, ratePerHour, ratePerDay),
-    req.units_requested
+  const units = Math.max(1, Math.floor(Number(req.units_requested)) || 1);
+  const { lines, total } = computeRentalPricingLines(
+    windows,
+    ratePerHour,
+    ratePerDay,
+    units
   );
   return {
     version: 3,
     currency: req.rental_location_listing.rental_item.currency,
-    total: priced.total,
-    unitsBooked: priced.units,
-    lines: priced.lines,
+    total,
+    unitsBooked: units,
+    lines,
     computedAt: new Date().toISOString(),
   };
 }
 
-function scaleLinesByUnits<T extends { subtotal: number }>(
-  priced: { lines: T[]; total: number },
-  unitsRequested?: number | null
-): { lines: T[]; total: number; units: number } {
-  const units = Math.max(1, Math.floor(Number(unitsRequested)) || 1);
-  if (units === 1) return { ...priced, units };
-  const lines = priced.lines.map((line) => ({
-    ...line,
-    subtotal: Number((line.subtotal * units).toFixed(2)),
-  }));
-  const total = Number(lines.reduce((sum, line) => sum + line.subtotal, 0).toFixed(2));
-  return { lines, total, units };
+function formatMoney(amount: number, currency: string, language: string): string {
+  return formatRequestAmount(amount, currency, language);
 }
 
-function formatMoney(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency.length === 3 ? currency : 'XAF',
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `${amount} ${currency}`;
-  }
-}
+const declineButtonSx = {
+  bgcolor: 'error.main',
+  color: 'common.white',
+  '&:hover': { bgcolor: 'error.dark' },
+  '&.Mui-disabled': { bgcolor: 'error.main', color: 'common.white', opacity: 0.72 },
+};
 
-function formatDateTimeWithoutTimezone(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function declineBlocked(
+  mode: 'available' | 'unavailable' | null,
+  reason: UnavailableRentalReasonCode | '',
+  note: string
+): boolean {
+  if (mode !== 'unavailable') return false;
+  if (!reason) return true;
+  return reason === 'other' && !note.trim();
 }
 
 export interface BusinessRentalRespondDialogProps {
@@ -136,27 +133,46 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   respondRequest,
 }) => {
   const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
+  const canChangeTotal =
+    flags.rentals_dashboard_requests_enabled && flags.rentals_modify_request_enabled;
   const [contractHours, setContractHours] = useState('48');
   const [availableNote, setAvailableNote] = useState('');
   const [reasonCode, setReasonCode] = useState<UnavailableRentalReasonCode | ''>('');
   const [unavailableNote, setUnavailableNote] = useState('');
+  const [totalOverride, setTotalOverride] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const startIso = request ? requestStartIso(request) : null;
+  const hourOffer = contractHoursOffer(startIso);
+
   useEffect(() => {
     if (!open) return;
-    setContractHours('48');
+    const offer = contractHoursOffer(startIso);
+    setContractHours(String(offer.hidden ? 1 : offer.hours));
+    setTotalOverride('');
     setAvailableNote('');
     setReasonCode('');
     setUnavailableNote('');
     setError(null);
-  }, [open, request?.id, mode]);
+  }, [open, request?.id, mode, startIso]);
 
   const submitAvailable = useCallback(async () => {
     if (!request) return;
-    const h = parseInt(contractHours, 10);
-    if (!Number.isInteger(h) || h < 1 || h > 168) {
-      setError(t('business.rentals.respondValidationHours', 'Enter a whole number of hours between 1 and 168.'));
+    const offer = contractHoursOffer(requestStartIso(request));
+    const h = offer.hidden ? 1 : parseInt(contractHours, 10);
+    if (!offer.hidden && (!Number.isInteger(h) || h < 1 || h > offer.maxHours)) {
+      setError(t('business.rentals.respondValidationHours', 'Enter a whole number of hours from 1 to {{count}}.', { count: offer.maxHours }));
+      return;
+    }
+    const overridden = parseTotalOverride(totalOverride);
+    const quote = buildPricingSnapshot(request).total;
+    const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(quote, overridden, request.total_override_ceiling ?? null);
+    if (overridden === 'invalid' || tooHigh) {
+      setError(overridden === 'invalid'
+        ? t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.')
+        : t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.'));
       return;
     }
     setSubmitting(true);
@@ -166,6 +182,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
       await respondRequest(request.id, {
         status: 'available',
         rentalPricingSnapshot: snap,
+        totalOverride: canChangeTotal && overridden != null ? overridden : undefined,
         contractExpiryHours: h,
         businessResponseNote: availableNote.trim() || undefined,
         expectedVersion: request.edit_version ?? 1,
@@ -186,7 +203,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, contractHours, onClose, onStale, onSuccess, request, respondRequest, t]);
+  }, [availableNote, canChangeTotal, contractHours, i18n.language, onClose, onStale, onSuccess, request, respondRequest, t, totalOverride]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -243,13 +260,16 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     }
   }, [mode, request]);
 
+  const typedOverride = typeof parseTotalOverride(totalOverride) === 'number' ? parseTotalOverride(totalOverride) as number : null;
+  const quoteTotal = offerPreview?.ok ? offerPreview.total : 0;
+  const overrideTooHigh = typedOverride != null && totalOverrideTooHigh(quoteTotal, typedOverride, request?.total_override_ceiling ?? null);
+
   if (!open || !mode || !request) return null;
-  const selectionWindows = parseRentalSelectionWindows(request.rental_selection_windows);
 
   const title =
     mode === 'available'
       ? t('business.rentals.respondDialogTitleAvailable', 'Confirm availability')
-      : t('business.rentals.respondDialogTitleUnavailable', 'Mark unavailable');
+      : t('business.rentals.respondDialogTitleUnavailable', 'Decline request');
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -259,9 +279,8 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
           {request.rental_location_listing.rental_item.name}
         </Typography>
         <Typography variant="body2">
-          {selectionWindows.length
-            ? `${formatDateTimeWithoutTimezone(selectionWindows[0].start_at)} -> ${formatDateTimeWithoutTimezone(selectionWindows[selectionWindows.length - 1].end_at)}`
-            : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
+          {buildRequestCardModel(request, i18n.language, new Date(), t).schedule.summary
+            || t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
         </Typography>
 
         {mode === 'available' ? (
@@ -282,14 +301,14 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 {offerPreview.lines.map((line, idx) => (
                   <Typography key={idx} variant="body2">
                     {line.kind === 'all_day'
-                      ? t('rentals.requestForm.lineAllDay', 'Full day {{date}}', {
-                          date: line.calendarDate,
+                      ? t('business.rentals.offerLineAllDay', 'Full day · {{date}}', {
+                          date: formatRentalDay(line.calendarDate, i18n.language),
                         })
                       : t('rentals.requestForm.lineHourly', '{{h}} h × {{rate}}', {
                           h: line.billableHours,
-                          rate: formatMoney(line.ratePerHour, offerPreview.cur),
+                          rate: formatMoney(line.ratePerHour, offerPreview.cur, i18n.language),
                         })}{' '}
-                    — {formatMoney(line.subtotal, offerPreview.cur)}
+                    — {formatMoney(line.subtotal, offerPreview.cur, i18n.language)}
                   </Typography>
                 ))}
                 <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -299,32 +318,43 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 </Typography>
                 <Typography variant="h6" fontWeight={700}>
                   {t('business.rentals.contractTotal', 'Total')}:{' '}
-                  {formatMoney(offerPreview.total, offerPreview.cur)}
+                  {formatMoney(offerPreview.total, offerPreview.cur, i18n.language)}
                 </Typography>
               </>
             ) : null}
+            {canChangeTotal ? (
             <TextField
-              label={t(
-                'business.rentals.contractExpiryHoursLabel',
-                'Client must confirm within (hours)'
-              )}
+              label={t('business.rentals.changeTotalLabel', 'Change total (optional)')}
               type="number"
-              value={contractHours}
-              onChange={(e) => setContractHours(e.target.value)}
-              inputProps={{ min: 1, max: 168 }}
-              helperText={t(
-                'business.rentals.contractExpiryHelper',
-                'Between 1 and 168 hours (1 week).'
-              )}
+              value={totalOverride}
+              onChange={(e) => setTotalOverride(e.target.value)}
+              inputProps={{ min: 0.01, step: '0.01' }}
+              error={overrideTooHigh}
+              helperText={overrideTooHigh
+                ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.')
+                : t('business.rentals.changeTotalHelper', 'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.')
+              }
               fullWidth
             />
-            <Typography variant="body2" color="text.secondary">
-              {t('business.rentals.optionalMessage', 'Optional message to the client')}
-            </Typography>
-            <RichTextEditor
+            ) : null}
+            {hourOffer.hidden ? null : (
+              <TextField
+                label={t('business.rentals.contractExpiryHoursLabel', 'Contract valid for (hours)')}
+                type="number"
+                value={contractHours}
+                onChange={(e) => setContractHours(e.target.value)}
+                inputProps={{ min: 1, max: hourOffer.maxHours, step: 1 }}
+                helperText={t('business.rentals.contractExpiryHelper', 'Up to {{count}} hours, and not past the start.', { count: hourOffer.maxHours })}
+                fullWidth
+              />
+            )}
+            <TextField
+              label={t('business.rentals.optionalMessage', 'Optional message to the client')}
               value={availableNote}
-              onChange={setAvailableNote}
-              placeholder={t('business.rentals.optionalMessage', 'Optional message to the client')}
+              onChange={(e) => setAvailableNote(e.target.value)}
+              multiline
+              minRows={3}
+              fullWidth
             />
           </>
         ) : (
@@ -346,19 +376,17 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 ))}
               </Select>
             </FormControl>
-            <Typography variant="body2" color="text.secondary">
-              {reasonCode === 'other'
-                ? t('business.rentals.otherReasonNote', 'Please explain')
-                : t('business.rentals.optionalMessage', 'Optional message to the client')}
-            </Typography>
-            <RichTextEditor
-              value={unavailableNote}
-              onChange={setUnavailableNote}
-              placeholder={
+            <TextField
+              label={
                 reasonCode === 'other'
                   ? t('business.rentals.otherReasonNote', 'Please explain')
                   : t('business.rentals.optionalMessage', 'Optional message to the client')
               }
+              value={unavailableNote}
+              onChange={(e) => setUnavailableNote(e.target.value)}
+              multiline
+              minRows={3}
+              fullWidth
             />
           </>
         )}
@@ -375,13 +403,19 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
         </Button>
         <Button
           variant="contained"
+          color={mode === 'unavailable' ? 'error' : 'primary'}
           disabled={
             submitting ||
-            (mode === 'available' && offerPreview != null && !offerPreview.ok)
+            declineBlocked(mode, reasonCode, unavailableNote) ||
+            (mode === 'available' && offerPreview != null && !offerPreview.ok) ||
+            (mode === 'available' && overrideTooHigh)
           }
           onClick={() => void (mode === 'available' ? submitAvailable() : submitUnavailable())}
+          sx={mode === 'unavailable' ? declineButtonSx : undefined}
         >
-          {t('business.rentals.submitResponse', 'Send response')}
+          {mode === 'available'
+            ? t('business.rentals.accept', 'Accept')
+            : t('business.rentals.decline', 'Decline')}
         </Button>
       </DialogActions>
     </Dialog>

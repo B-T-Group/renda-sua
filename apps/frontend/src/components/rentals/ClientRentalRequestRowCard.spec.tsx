@@ -159,6 +159,14 @@ describe('ClientRentalRequestRowCard period', () => {
     expect(screen.getByRole('button', { name: 'Réserver' })).toBeInTheDocument();
   });
 
+  it('H1 does not show a price change on a pending request', () => {
+    const item = row([day('2026-11-17')], 'pending');
+    item.quoted_total = 2500;
+    item.rental_pricing_snapshot = { total: 3000, currency: 'XAF' };
+    renderCard(item);
+    expect(screen.queryByText(/The business changed the price/)).toBeNull();
+  });
+
   it('shows the requested dates and formats a changed price like the rest of the app', async () => {
     const item = row([day('2026-11-17')]);
     item.quoted_total = 2500;

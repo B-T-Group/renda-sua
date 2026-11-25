@@ -326,6 +326,7 @@ const ClientRentalRequestsPage: React.FC = () => {
                 onBookRequest={openBookConfirm}
                 onCancel={(id) => setCancelModalId(id)}
                 onViewListing={(listingId) => navigate(`/rentals/${listingId}`)}
+                onBrowseRentals={() => navigate('/rentals')}
                 onViewBooking={(bId) => navigate(`/rentals/bookings/${bId}`)}
               />
             ))}
