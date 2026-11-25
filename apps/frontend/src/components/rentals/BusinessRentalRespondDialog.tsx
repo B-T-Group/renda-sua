@@ -59,25 +59,35 @@ function totalRentalHoursForRequest(req: BusinessRentalRequestRow): number {
 }
 
 function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnapshotBody {
-  const weekly = req.rental_location_listing.weekly_availability ?? [];
-  const windows = parseRentalSelectionWindowsFromJson(
-    req.rental_selection_windows
-  );
+  const windows = parseRentalSelectionWindowsFromJson(req.rental_selection_windows);
   const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
   const ratePerDay = Number(req.rental_location_listing.base_price_per_day ?? 0);
-  const { lines, total } = computeRentalPricingLines(
-    windows,
-    ratePerHour,
-    ratePerDay
+  const priced = scaleLinesByUnits(
+    computeRentalPricingLines(windows, ratePerHour, ratePerDay),
+    req.units_requested
   );
-  const cur = req.rental_location_listing.rental_item.currency;
   return {
     version: 3,
-    currency: cur,
-    total,
-    lines,
+    currency: req.rental_location_listing.rental_item.currency,
+    total: priced.total,
+    unitsBooked: priced.units,
+    lines: priced.lines,
     computedAt: new Date().toISOString(),
   };
+}
+
+function scaleLinesByUnits<T extends { subtotal: number }>(
+  priced: { lines: T[]; total: number },
+  unitsRequested?: number | null
+): { lines: T[]; total: number; units: number } {
+  const units = Math.max(1, Math.floor(Number(unitsRequested)) || 1);
+  if (units === 1) return { ...priced, units };
+  const lines = priced.lines.map((line) => ({
+    ...line,
+    subtotal: Number((line.subtotal * units).toFixed(2)),
+  }));
+  const total = Number(lines.reduce((sum, line) => sum + line.subtotal, 0).toFixed(2));
+  return { lines, total, units };
 }
 
 function formatMoney(amount: number, currency: string): string {
@@ -218,19 +228,15 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   const offerPreview = useMemo(() => {
     if (!request || mode !== 'available') return null;
     try {
-      const weekly = request.rental_location_listing.weekly_availability ?? [];
-      const windows = parseRentalSelectionWindowsFromJson(
-        request.rental_selection_windows
-      );
-      const ratePerHour = Number(request.rental_location_listing.base_price_per_hour);
-      const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
-      const { lines, total } = computeRentalPricingLines(
-        windows,
-        ratePerHour,
-        ratePerDay
-      );
+      const snap = buildPricingSnapshot(request);
       const hours = totalRentalHoursForRequest(request);
-      return { ok: true as const, lines, total, hours, cur: request.rental_location_listing.rental_item.currency };
+      return {
+        ok: true as const,
+        lines: snap.lines ?? [],
+        total: snap.total,
+        hours,
+        cur: snap.currency,
+      };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       return { ok: false as const, message: msg };

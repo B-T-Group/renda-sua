@@ -47,14 +47,32 @@ function buildPricingSnapshot(req: BusinessRentalRequestRow) {
   const windows = parseRentalSelectionWindowsFromJson(req.rental_selection_windows);
   const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
   const ratePerDay = Number(req.rental_location_listing.base_price_per_day ?? 0);
-  const { lines, total } = computeRentalPricingLines(windows, ratePerHour, ratePerDay);
+  const priced = scaleLinesByUnits(
+    computeRentalPricingLines(windows, ratePerHour, ratePerDay),
+    req.units_requested
+  );
   return {
     version: 3,
     currency: req.rental_location_listing.rental_item.currency,
-    total,
-    lines,
+    total: priced.total,
+    unitsBooked: priced.units,
+    lines: priced.lines,
     computedAt: new Date().toISOString(),
   };
+}
+
+function scaleLinesByUnits<T extends { subtotal: number }>(
+  priced: { lines: T[]; total: number },
+  unitsRequested?: number | null
+): { lines: T[]; total: number; units: number } {
+  const units = Math.max(1, Math.floor(Number(unitsRequested)) || 1);
+  if (units === 1) return { ...priced, units };
+  const lines = priced.lines.map((line) => ({
+    ...line,
+    subtotal: Number((line.subtotal * units).toFixed(2)),
+  }));
+  const total = Number(lines.reduce((sum, line) => sum + line.subtotal, 0).toFixed(2));
+  return { lines, total, units };
 }
 
 export function BusinessRentalRespondDialog({

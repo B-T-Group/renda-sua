@@ -23,6 +23,11 @@ import { StatusPill } from '../../components/common/StatusPill';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useBookRental } from '../../hooks/useBookRental';
+import {
+  isPriceChangeUnseenError,
+  PRICE_CHANGE_UNSEEN_KEY,
+  PRICE_CHANGE_UNSEEN_TEXT,
+} from '../../utils/rentals/priceChangeUnseen';
 import { useClientRentalBookings } from '../../hooks/useClientRentalBookings';
 import { useClientRentalRequests } from '../../hooks/useClientRentalRequests';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
@@ -302,6 +307,12 @@ export default function ClientMyRentalsScreen({
         navigation.navigate('RentalBookingDetail', { bookingId: res.bookingId });
       }
     } catch (e: unknown) {
+      if (isPriceChangeUnseenError(e)) {
+        setSnack(t(PRICE_CHANGE_UNSEEN_KEY, PRICE_CHANGE_UNSEEN_TEXT));
+        setBookRow(null);
+        void refetchRequests();
+        return;
+      }
       setSnack(
         e instanceof Error
           ? e.message
