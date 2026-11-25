@@ -1,4 +1,4 @@
-import { CalendarMonth, CreditCard, HelpOutline, Lock, PlayArrow, Storefront } from '@mui/icons-material';
+import { CalendarMonth, CreditCard, HelpOutline, Lock, PhoneIphone, PlayArrow, Storefront } from '@mui/icons-material';
 import { Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -111,7 +111,7 @@ export function RentalStartPanel(props: Props) {
           <Stack spacing={1} sx={{ mt: 2 }}>
             <Stack direction="row" spacing={1}><Storefront fontSize="small" color="action" /><Typography>{props.place}</Typography></Stack>
             <Stack direction="row" spacing={1}><CalendarMonth fontSize="small" color="action" /><Typography>{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Typography></Stack>
-            <Stack direction="row" spacing={1}><CreditCard fontSize="small" color="action" /><Typography>{momo ? t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: props.money }) : t('rentals.start.held', '{{amount}} held on your card', { amount: props.money })}</Typography></Stack>
+            <Stack direction="row" spacing={1}>{momo ? <PhoneIphone fontSize="small" color="action" /> : <CreditCard fontSize="small" color="action" />}<Typography>{momo ? t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: props.money }) : t('rentals.start.held', '{{amount}} held on your card', { amount: props.money })}</Typography></Stack>
           </Stack>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30 minutes.")}
@@ -119,7 +119,9 @@ export function RentalStartPanel(props: Props) {
         </DialogContent>
         <DialogActions sx={{ flexDirection: 'column', px: 3, pb: 2 }}>
           <Button fullWidth variant="contained" startIcon={<PlayArrow />} disabled={props.starting} onClick={() => { setOpen(false); props.onConfirm(); }}>
-            {t('rentals.actions.startRental', 'Start rental')}
+            {momo
+              ? t('rentals.start.button', 'Start rental{{amount}}', { amount: ` · ${props.money}` })
+              : t('rentals.actions.startRental', 'Start rental')}
           </Button>
           <Button fullWidth onClick={() => setOpen(false)}>{t('rentals.start.notYet', 'Not yet')}</Button>
         </DialogActions>

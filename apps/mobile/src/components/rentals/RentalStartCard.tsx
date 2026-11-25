@@ -155,6 +155,11 @@ function SheetRow({ icon, label }: { icon: React.ComponentProps<typeof MaterialC
   );
 }
 
+function confirmLabel(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
+  if (!isMomoDue(props.booking)) return t('rentals.actions.startRental', 'Start rental');
+  return t('rentals.start.button', 'Start rental{{amount}}', { amount: ` · ${props.money}` });
+}
+
 function sheetMoney(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
   if (isMomoDue(props.booking)) return t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: props.money });
   return t('rentals.start.held', '{{amount}} held on your card', { amount: props.money });
@@ -187,12 +192,12 @@ function ConfirmSheet(props: Props) {
           </Text>
           <SheetRow icon="store" label={props.place} />
           <SheetRow icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
-          <SheetRow icon="credit-card-outline" label={sheetMoney(props, t)} />
+          <SheetRow icon={isMomoDue(props.booking) ? 'cellphone' : 'credit-card-outline'} label={sheetMoney(props, t)} />
           <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 8 }]}>
             {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30 minutes.")}
           </Text>
           <Button mode="contained" icon="play" buttonColor={colors.primary.main} loading={props.starting} onPress={props.onConfirm} style={{ marginTop: 16, minHeight: 48 }}>
-            {t('rentals.actions.startRental', 'Start rental')}
+            {confirmLabel(props, t)}
           </Button>
           <Button onPress={props.onClose}>{t('rentals.start.notYet', 'Not yet')}</Button>
         </Pressable>
