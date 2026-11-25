@@ -3416,6 +3416,15 @@
       },
       "schedule": {
         "client": "Client"
+      },
+      "rentBy": {
+        "byDay": "Louer à la journée",
+        "byDayHint": "Les clients peuvent réserver une journée entière.",
+        "byHour": "Louer à l’heure",
+        "byHourHint": "Les clients peuvent réserver quelques heures.",
+        "atLeastOne": "Gardez au moins une option activée.",
+        "dayPrice": "Prix par jour",
+        "listingInvalid": "Vérifiez les chiffres de l’annonce, le max ≥ min et un prix pour chaque option activée."
       }
     },
     "failedDeliveries": {
@@ -7376,6 +7385,11 @@
       "acceptUnavailable": "Accepter indisponible — dates prises",
       "chargedAfterAccept": "Le locataire est débité après votre acceptation",
       "notFound": "Cette demande n’est plus là."
+    },
+    "dayHours": {
+      "changeDays": "Modifier les jours et les heures",
+      "pickDays": "Choisir les jours et les heures",
+      "sectionSubtitle": "Choisissez les jours voulus : une journée entière ou quelques heures."
     }
   },
   "profile": {

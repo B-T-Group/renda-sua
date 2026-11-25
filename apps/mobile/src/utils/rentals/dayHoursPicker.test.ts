@@ -150,7 +150,7 @@ describe('day-hours picker model', () => {
     expect(pickerMoney(88, 'CAD', 'en')).toBe('$88.00');
     expect(pickerMoney(88, 'CAD', 'fr')).toBe('88,00\u00A0$');
     expect(rangeLabel(10, 13, 'en', 'America/Toronto')).toBe('10 AM – 1 PM');
-    expect(rangeLabel(14, 17, 'en', 'America/Toronto')).toBe('2 – 5 PM');
+    expect(rangeLabel(14, 17, 'en', 'America/Toronto')).toBe('2 PM – 5 PM');
     expect(rangeLabel(8, 10, 'en', 'Africa/Libreville')).toBe('08:00 – 10:00');
     expect(dayLabel('2026-11-27', 'en')).toBe('Fri 27 Nov');
   });

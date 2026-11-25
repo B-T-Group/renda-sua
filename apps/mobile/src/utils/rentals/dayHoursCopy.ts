@@ -148,15 +148,8 @@ export function minuteLabel(totalMinutes: number, lang: PickerLang, timeZone?: s
   return hourLabel(Math.floor(totalMinutes / 60), lang, timeZone, totalMinutes % 60);
 }
 
-/** "08:00 – 10:00" or "10 AM – 1 PM". */
+/** "08:00 – 10:00" or "2 PM – 5 PM" (mockup 09). */
 export function rangeLabel(start: number, end: number, lang: PickerLang, timeZone?: string | null): string {
-  if (uses12h(lang, timeZone)) {
-    const a = hourLabel(start, lang, timeZone);
-    const b = hourLabel(end, lang, timeZone);
-    const [an, as] = a.split(' ');
-    const [bn, bs] = b.split(' ');
-    return as === bs ? `${an} – ${bn} ${bs}` : `${a} – ${b}`;
-  }
   return `${hourLabel(start, lang, timeZone)} – ${hourLabel(end, lang, timeZone)}`;
 }
 

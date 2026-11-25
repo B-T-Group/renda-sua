@@ -936,6 +936,10 @@ const RentalListingDetailPage: React.FC = () => {
                   initialStartDate={searchParams.get('start_date') || undefined}
                   initialEndDate={searchParams.get('end_date') || undefined}
                   cardWindow={row}
+                  offersDaily={row.offers_daily}
+                  offersHourly={row.offers_hourly}
+                  timeZone={row.timezone ?? null}
+                  city={row.business_location?.address?.city ?? null}
                 />
               ) : null}
             </Grid>

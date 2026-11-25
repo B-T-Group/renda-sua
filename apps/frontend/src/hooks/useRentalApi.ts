@@ -71,6 +71,8 @@ export interface BusinessRentalListingDetail {
   business_location_id: string;
   base_price_per_hour: number;
   base_price_per_day: number;
+  offers_daily?: boolean;
+  offers_hourly?: boolean;
   security_deposit_amount?: number;
   min_rental_hours: number;
   max_rental_hours: number | null;
@@ -135,6 +137,8 @@ export interface UpdateBusinessRentalItemBody {
 }
 
 export interface UpdateBusinessRentalListingBody {
+  offers_daily?: boolean;
+  offers_hourly?: boolean;
   pickup_instructions?: string;
   dropoff_instructions?: string;
   base_price_per_hour?: number;

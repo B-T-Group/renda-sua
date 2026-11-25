@@ -413,7 +413,7 @@ function Calendar({
     <View testID="day-hours-calendar">
       <View style={styles.monthRow}>
         <Pressable accessibilityRole="button" accessibilityLabel={pickerText(lang, 'prevMonth')} disabled={atStart} onPress={() => shift(-1)} style={styles.monthBtn}>
-          <MaterialCommunityIcons name="chevron-left" size={24} color={atStart ? colors.text.disabled : BLUE} />
+          <MaterialCommunityIcons name="chevron-left" size={24} color={atStart ? colors.divider : BLUE} />
         </Pressable>
         <Text style={[styles.monthTitle, { color: colors.text.primary }]}>{monthTitle(month.y, month.m, lang)}</Text>
         <Pressable testID="day-hours-next-month" accessibilityRole="button" accessibilityLabel={pickerText(lang, 'nextMonth')} onPress={() => shift(1)} style={styles.monthBtn}>
@@ -562,7 +562,6 @@ function HourBar({
 }) {
   if (!cells.length) return null;
   const labels = [...cells.map((c) => c.hour), cells[cells.length - 1].hour + 1];
-  const twelve = lang === 'en' && (timeZone ?? '').startsWith('America/');
   return (
     <View testID={`${testPrefix}-bar`}>
       <View style={styles.bar}>
@@ -593,7 +592,7 @@ function HourBar({
       <View style={styles.barLabels}>
         {labels.map((h) => (
           <Text key={h} style={styles.barLabel}>
-            {twelve ? String(h % 12 === 0 ? 12 : h % 12) : String(h)}
+            {String(h)}
           </Text>
         ))}
       </View>
@@ -811,26 +810,26 @@ function Toggle({ on }: { on: boolean }) {
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   scrim: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'flex-end' },
-  sheet: { maxHeight: '94%', minHeight: '88%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8 },
+  sheet: { maxHeight: '94%', minHeight: '92%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8 },
   handle: { width: 44, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 10 },
   header: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, gap: 12 },
   title: { fontSize: 22, fontWeight: '800' },
   subtitle: { fontSize: 13, marginTop: 4 },
   close: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, marginTop: 12, marginBottom: 4 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  chipText: { fontSize: 13, fontWeight: '700' },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 },
+  chipText: { fontSize: 12, fontWeight: '700' },
   content: { paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   monthBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   monthTitle: { fontSize: 17, fontWeight: '800' },
   week: { flexDirection: 'row' },
-  weekHead: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700', paddingVertical: 6 },
-  dayCell: { flex: 1, alignItems: 'center', paddingVertical: 2 },
-  dayDot: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  weekHead: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700', paddingVertical: 4 },
+  dayCell: { flex: 1, alignItems: 'center', paddingVertical: 1 },
+  dayDot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   dayNum: { fontSize: 16 },
   partialDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: AMBER, marginTop: 1 },
-  partialSpace: { height: 6 },
+  partialSpace: { height: 5 },
   legend: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   legendText: { fontSize: 12 },
   empty: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 14, padding: 16, marginTop: 6 },

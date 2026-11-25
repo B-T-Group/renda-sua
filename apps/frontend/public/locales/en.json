@@ -3722,6 +3722,15 @@
       },
       "schedule": {
         "client": "Client"
+      },
+      "rentBy": {
+        "byDay": "Rent by the day",
+        "byDayHint": "Renters can book a full day.",
+        "byHour": "Rent by the hour",
+        "byHourHint": "Renters can book a few hours.",
+        "atLeastOne": "Keep at least one on.",
+        "dayPrice": "Price per day",
+        "listingInvalid": "Check listing numbers, max ≥ min, and a price for each way you rent."
       }
     },
     "failedDeliveries": {
@@ -7656,6 +7665,11 @@
       "acceptUnavailable": "Accept unavailable — dates are taken",
       "chargedAfterAccept": "The renter is charged after you accept",
       "notFound": "This request is no longer here."
+    },
+    "dayHours": {
+      "changeDays": "Change days and hours",
+      "pickDays": "Pick days and hours",
+      "sectionSubtitle": "Pick the days you need: a full day or just a few hours."
     }
   },
   "profile": {
