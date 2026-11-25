@@ -3,6 +3,7 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-nat
 import { Button, Text, TextInput } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../../contexts/ThemeContext';
 import type { InspectionPhoto, InspectionView } from '../../../utils/rentals/rentalInspection';
 import { listingCity } from '../../../utils/rentals/pickupPhotoTime';
@@ -230,9 +231,12 @@ function Waiting(props: Props) {
   const asked = askedAt ? formatZonedTime(askedAt, props.timeZone) : '';
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: colors.warning.dark ?? colors.warning.main }}>
-        {`⏱ ${t('rentalInspection.waitingPhotos', "Waiting for new photos. We'll notify you when they're ready.")}`}
-      </Text>
+      <View style={styles.row}>
+        <MaterialCommunityIcons name="clock-outline" size={18} color={colors.warning.main} />
+        <Text style={{ color: colors.warning.dark ?? colors.warning.main, marginLeft: 8, flex: 1 }}>
+          {t('rentalInspection.waitingPhotos', "Waiting for new photos. We'll notify you when they're ready.")}
+        </Text>
+      </View>
       <ChipRow chips={parts.chips} />
       {parts.note ? <Text style={{ color: colors.text.primary }}>{parts.note}</Text> : null}
       {asked ? (
@@ -293,14 +297,24 @@ function StartStep(props: Props) {
       <Text style={{ color: colors.text.secondary }}>
         {t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
       </Text>
-      <Text style={{ color: colors.text.primary }}>{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Text>
-      <Text style={{ color: colors.text.primary }}>{props.money}</Text>
+      <IconLine icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
+      <IconLine icon="credit-card-outline" label={t('rentals.start.held', '{{amount}} held on your card', { amount: props.money })} />
       <Button mode="contained" icon={locked ? 'lock' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart}>
         {t('rentals.actions.startRental', 'Start rental')}
       </Button>
       <Button textColor={colors.primary.main} onPress={props.onReport}>
         {t('rentalInspection.reportProblem', 'Report a problem')}
       </Button>
+    </View>
+  );
+}
+
+function IconLine({ icon, label }: { icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; label: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.row}>
+      <MaterialCommunityIcons name={icon} size={18} color={colors.text.secondary} />
+      <Text style={{ color: colors.text.primary, marginLeft: 8, flex: 1 }}>{label}</Text>
     </View>
   );
 }
@@ -334,4 +348,5 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.45)' },
   sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center' },
 });
