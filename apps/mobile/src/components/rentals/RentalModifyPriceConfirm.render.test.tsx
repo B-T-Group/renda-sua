@@ -2,6 +2,10 @@ jest.mock('../../hooks/useCreateRentalRequest', () => ({
   useCreateRentalRequest: () => ({ submit: jest.fn(), loading: false, error: null }),
 }));
 
+jest.mock('../../services/analytics/AppEventsService', () => ({
+  trackSiteEvent: jest.fn(),
+}));
+
 import { NavigationContainer } from '@react-navigation/native';
 import { act, cleanup, fireEvent } from '@testing-library/react-native';
 import { renderWithProviders } from '@/__tests__/test-utils';
