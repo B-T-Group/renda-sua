@@ -214,6 +214,8 @@ export interface BrowseCatalogScreenProps {
   applyTopSafeArea?: boolean;
   /** Restrict the list to cooked food and use Food-tab copy and filters. */
   foodOnly?: boolean;
+  /** Force export-only catalog (home Exports lane). Hides the export chip. */
+  exportOnly?: boolean;
   /** Initial merged-catalog segment, including alias-route navigation. */
   initialSegment?: 'all' | 'food';
   /** Opens the full category browser from the carousel More card. */
@@ -250,6 +252,7 @@ function BrowseCatalogScreenInner({
   headerMarketTrailing,
   applyTopSafeArea = true,
   foodOnly: legacyFoodOnly = false,
+  exportOnly: forcedExportOnly = false,
   initialSegment = 'all',
   onBrowseCategories,
   requestedCategory,
@@ -336,7 +339,11 @@ function BrowseCatalogScreenInner({
     business: '',
     collection: '',
   });
-  const [exportOnly, setExportOnly] = useState(false);
+  const [exportOnlyState, setExportOnly] = useState(forcedExportOnly);
+  useEffect(() => {
+    setExportOnly(forcedExportOnly);
+  }, [forcedExportOnly]);
+  const exportOnly = forcedExportOnly || exportOnlyState;
   useEffect(() => {
     if (!requestedCategory || !categoryRequestId) return;
     setCatalogFilters((prev) => ({
@@ -993,6 +1000,7 @@ function BrowseCatalogScreenInner({
 
   const showExportsChip =
     !foodOnly &&
+    !forcedExportOnly &&
     (exportOnly || exportStopLoading || exportStopItems.length > 0);
 
   const listHeaderElement = useMemo(

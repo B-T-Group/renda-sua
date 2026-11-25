@@ -1281,8 +1281,9 @@
   "nav": {
     "manageRecipients": "Saved recipients",
     "guestTabs": {
-      "browse": "Items",
+      "browse": "Shop",
       "rentals": "Rentals",
+      "exports": "Exports",
       "foods": "Food",
       "reels": "Reels",
       "login": "Sign in"
@@ -4074,9 +4075,10 @@
         "cardA11y": "Order {{number}}, {{title}}"
       },
       "lane": {
+        "rentals": "Rentals",
+        "exports": "Exports",
         "shop": "Shop",
-        "food": "Food",
-        "rentals": "Rentals"
+        "food": "Food"
       },
       "forYou": "For you",
       "buyAgain": "Buy again",

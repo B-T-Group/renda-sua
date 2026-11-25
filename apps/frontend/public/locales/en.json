@@ -4937,6 +4937,14 @@
     }
   },
   "client": {
+    "home": {
+      "lane": {
+        "rentals": "Rentals",
+        "exports": "Exports",
+        "shop": "Shop",
+        "food": "Food"
+      }
+    },
     "search": {
       "placeholder": "Search products and stores"
     },

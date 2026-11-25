@@ -192,6 +192,7 @@ export type GuestTabParamList = {
     | { segment?: 'all' | 'food'; category?: string; categoryRequestId?: number }
     | undefined;
   GuestRentals: undefined;
+  GuestExports: undefined;
   GuestFoods: undefined;
   GuestReels: undefined;
   GuestAuth: NavigatorScreenParams<AuthStackParamList>;
@@ -199,7 +200,11 @@ export type GuestTabParamList = {
 
 export type ClientMainTabParamList = {
   ClientBrowse:
-    | { segment?: 'all' | 'food' | 'rentals'; category?: string; categoryRequestId?: number }
+    | {
+        segment?: 'all' | 'food' | 'rentals' | 'exports';
+        category?: string;
+        categoryRequestId?: number;
+      }
     | undefined;
   ClientSearch: undefined;
   ClientReels: undefined;

@@ -1,46 +1,66 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
 import { haptics } from '@/services/haptics';
 import { motion } from '@/theme/motion';
 import { AppText } from '../common/AppText';
 
-export type HomeLane = 'shop' | 'food' | 'rentals';
+export type HomeLane = 'rentals' | 'exports' | 'shop' | 'food';
 
 type Props = {
   value: HomeLane;
   onChange: (lane: HomeLane) => void;
+  lanes: HomeLane[];
 };
 
-const LANES: HomeLane[] = ['shop', 'food', 'rentals'];
+const LANE_ICONS: Record<HomeLane, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  rentals: 'hand-coin',
+  exports: 'airplane',
+  shop: 'shopping',
+  food: 'food',
+};
 
-export function HomeLaneSwitcher({ value, onChange }: Props) {
+export function HomeLaneSwitcher({ value, onChange, lanes }: Props) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const [width, setWidth] = useState(0);
-  const index = Math.max(0, LANES.indexOf(value));
+  const index = Math.max(0, lanes.indexOf(value));
   const offset = useSharedValue(index);
   useEffect(() => {
     offset.value = withTiming(index, { duration: motion.duration.normal });
   }, [index, offset]);
+  const laneCount = Math.max(lanes.length, 1);
   const indicator = useAnimatedStyle(() => ({
-    transform: [{ translateX: (width / LANES.length) * offset.value }],
+    transform: [{ translateX: (width / laneCount) * offset.value }],
   }));
   const labels: Record<HomeLane, string> = {
+    rentals: t('client.home.lane.rentals', 'Rentals'),
+    exports: t('client.home.lane.exports', 'Exports'),
     shop: t('client.home.lane.shop', 'Shop'),
     food: t('client.home.lane.food', 'Food'),
-    rentals: t('client.home.lane.rentals', 'Rentals'),
   };
   const select = (lane: HomeLane) => {
     if (lane !== value) haptics.selection();
     onChange(lane);
   };
+  if (lanes.length < 2) {
+    return null;
+  }
   return (
     <View
       onLayout={(event) => setWidth(event.nativeEvent.layout.width - 8)}
-      style={[styles.row, { marginHorizontal: spacing.md, marginBottom: spacing.sm, backgroundColor: colors.surfaceInput, borderRadius: borderRadius.button }]}
+      style={[
+        styles.row,
+        {
+          marginHorizontal: spacing.md,
+          marginBottom: spacing.sm,
+          backgroundColor: colors.surfaceInput,
+          borderRadius: borderRadius.button,
+        },
+      ]}
     >
       {width > 0 ? (
         <Animated.View
@@ -48,11 +68,15 @@ export function HomeLaneSwitcher({ value, onChange }: Props) {
           style={[
             styles.indicator,
             indicator,
-            { width: width / LANES.length, backgroundColor: colors.surface, borderRadius: borderRadius.chip },
+            {
+              width: width / laneCount,
+              backgroundColor: colors.surface,
+              borderRadius: borderRadius.chip,
+            },
           ]}
         />
       ) : null}
-      {LANES.map((lane) => (
+      {lanes.map((lane) => (
         <Pressable
           key={lane}
           accessibilityRole="button"
@@ -60,9 +84,19 @@ export function HomeLaneSwitcher({ value, onChange }: Props) {
           onPress={() => select(lane)}
           style={styles.lane}
         >
-          <AppText role="label" color={lane === value ? colors.text.primary : colors.text.muted}>
-            {labels[lane]}
-          </AppText>
+          <View style={styles.laneInner}>
+            <MaterialCommunityIcons
+              name={LANE_ICONS[lane]}
+              size={16}
+              color={lane === value ? colors.text.primary : colors.text.muted}
+            />
+            <AppText
+              role="label"
+              color={lane === value ? colors.text.primary : colors.text.muted}
+            >
+              {labels[lane]}
+            </AppText>
+          </View>
         </Pressable>
       ))}
     </View>
@@ -72,5 +106,11 @@ export function HomeLaneSwitcher({ value, onChange }: Props) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', padding: 4 },
   lane: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  laneInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 2,
+  },
   indicator: { position: 'absolute', top: 4, bottom: 4, left: 4 },
 });

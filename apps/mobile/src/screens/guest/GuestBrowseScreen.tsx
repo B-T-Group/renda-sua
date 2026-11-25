@@ -18,8 +18,10 @@ import { toOrderItemVariantId } from '../../utils/shopperVariantSelection';
 
 export default observer(function GuestBrowseScreen({
   foodOnly = false,
+  exportOnly = false,
 }: {
   foodOnly?: boolean;
+  exportOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const navigation = useNavigation<BottomTabNavigationProp<GuestTabParamList>>();
@@ -136,10 +138,11 @@ export default observer(function GuestBrowseScreen({
     <View style={{ flex: 1 }}>
       <BrowseCatalogScreen
         foodOnly={foodOnly}
+        exportOnly={exportOnly}
         initialSegment={route.params?.segment}
         requestedCategory={route.params?.category}
         categoryRequestId={route.params?.categoryRequestId}
-        onBrowseCategories={foodOnly ? undefined : onBrowseCategories}
+        onBrowseCategories={foodOnly || exportOnly ? undefined : onBrowseCategories}
         onGuestBuyNow={variantFlow.requestBuy}
         onAddToCart={variantFlow.requestAddToCart}
         onItemPress={onItemPress}

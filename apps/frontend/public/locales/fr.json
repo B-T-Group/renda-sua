@@ -4659,6 +4659,14 @@
     }
   },
   "client": {
+    "home": {
+      "lane": {
+        "rentals": "Locations",
+        "exports": "Exportations",
+        "shop": "Boutique",
+        "food": "Repas"
+      }
+    },
     "search": {
       "placeholder": "Rechercher des produits et des boutiques"
     },

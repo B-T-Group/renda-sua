@@ -1224,9 +1224,10 @@
   "nav": {
     "manageRecipients": "Destinataires enregistrés",
     "guestTabs": {
-      "browse": "Articles",
+      "browse": "Boutique",
       "rentals": "Locations",
-      "foods": "Restauration",
+      "exports": "Exportations",
+      "foods": "Repas",
       "reels": "Reels",
       "login": "Connexion"
     },
@@ -3981,9 +3982,10 @@
         "cardA11y": "Commande {{number}}, {{title}}"
       },
       "lane": {
+        "rentals": "Locations",
+        "exports": "Exportations",
         "shop": "Boutique",
-        "food": "Repas",
-        "rentals": "Locations"
+        "food": "Repas"
       },
       "forYou": "Pour vous",
       "buyAgain": "Racheter",
@@ -6446,7 +6448,7 @@
     },
     "business": {
       "waitingTitle": "En attente que {{name}} démarre",
-      "waitingBody": "Remettez l'article seulement après avoir reçu «\u00a0Location démarrée\u00a0». Aucun code PIN n'est nécessaire.",
+      "waitingBody": "Remettez l'article seulement après avoir reçu « Location démarrée ». Aucun code PIN n'est nécessaire.",
       "startedLine": "Démarrée à {{time}} · remettez l'article",
       "photosAsked": "{{name}} a demandé de nouvelles photos avant le démarrage.",
       "sendPhotos": "Envoyer les photos mises à jour",

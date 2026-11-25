@@ -125,6 +125,11 @@ function inventoryItemsFilterKeyParts(
 
 export const CATALOG_EXPERIENCE_TTL_SECONDS = 90;
 export const CATALOG_EXPERIENCE_RETURNING_TTL_SECONDS = 45;
+export const MARKET_LANES_TTL_SECONDS = 120;
+
+export function buildMarketLanesCacheKey(countryCode: string): string {
+  return ['market-lanes', countryCode || 'global'].join(':');
+}
 
 export function buildCatalogExperienceCacheKey(input: {
   country?: string;
