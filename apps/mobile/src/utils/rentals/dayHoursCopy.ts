@@ -27,6 +27,8 @@ const EN = {
   allDays: 'All {{count}} days',
   oneSetting: 'One setting for every day',
   tapHint: 'Tap a start hour, then an end hour.',
+  /** Web (mouse) wording of tapHint. */
+  chooseHint: 'Choose a start hour, then an end hour.',
   tapEnd: 'Now tap the end hour.',
   sharedHint: 'Hours booked on any of these days are greyed out.',
   lockBooked: 'Full day isn’t possible: {{range}} is already booked.',
@@ -77,6 +79,7 @@ const FR: Record<keyof typeof EN, string> = {
   allDays: 'Les {{count}} jours',
   oneSetting: 'Un seul réglage pour chaque jour',
   tapHint: 'Touchez l’heure de début, puis l’heure de fin.',
+  chooseHint: 'Choisissez l’heure de début, puis l’heure de fin.',
   tapEnd: 'Touchez maintenant l’heure de fin.',
   sharedHint: 'Les heures prises sur l’un de ces jours sont grisées.',
   lockBooked: 'Journée impossible\u00A0: {{range}} est déjà réservé.',

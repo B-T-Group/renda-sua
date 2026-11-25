@@ -671,7 +671,7 @@ function DayRow({
       ) : open && lockText ? (
         <Note testId={`${prefix}-lock`} icon="lock" color={AMBER} text={lockText} />
       ) : open ? (
-        <Note icon="info" color={MUTED} text={pickerText(lang, awaitingEnd ? 'tapEnd' : 'tapHint')} />
+        <Note icon="info" color={MUTED} text={pickerText(lang, awaitingEnd ? 'tapEnd' : 'chooseHint')} />
       ) : null}
     </RowShell>
   );

@@ -689,7 +689,7 @@ function DayRow({
     <RowShell testID={prefix} active={open}>
       <View style={styles.rowHead}>
         <Pressable onPress={isHours ? onExpand : undefined} style={styles.flex}>
-          <Text style={[styles.rowDay, { color: colors.text.primary }]}>{dayLabel(day.key, lang)}</Text>
+          <Text style={[styles.rowDay, { color: colors.text.primary }]}>{dayLabel(day.key, lang).replace('\u00A0', ' ')}</Text>
           {sub ? <Text style={{ color: colors.text.secondary, fontSize: 12 }}>{sub}</Text> : null}
           {!isHours && info.openMin != null && info.closeMin != null && !both ? (
             <Text style={{ color: colors.text.secondary, fontSize: 12, marginTop: 2 }}>
