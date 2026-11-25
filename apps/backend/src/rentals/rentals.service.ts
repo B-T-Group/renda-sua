@@ -351,6 +351,9 @@ export interface PublicRentalListingRow {
   moderation_status?: string;
   base_price_per_hour: number;
   base_price_per_day: number;
+  /** Day/hour switches (rentals_day_hours_picker_enabled). Missing means both on. */
+  offers_daily?: boolean | null;
+  offers_hourly?: boolean | null;
   min_rental_hours: number;
   max_rental_hours: number | null;
   units_available: number;
