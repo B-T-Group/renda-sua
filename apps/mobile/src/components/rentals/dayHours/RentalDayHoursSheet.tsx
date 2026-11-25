@@ -800,7 +800,7 @@ function SharedCard({
         {isHours ? (
           <>
             <TimeChip text={rangeLabel(first.start, first.end, lang, timeZone)} />
-            <Text style={[styles.hours, { color: colors.text.secondary }]}>{days.length} × {blockHours(first)}{'\u00A0'}h</Text>
+            <Text style={[styles.hours, { color: colors.text.secondary }]}>{`${days.length}\u00A0×\u00A0${blockHours(first)}\u00A0h`}</Text>
           </>
         ) : null}
         <View style={styles.flex} />

@@ -35,13 +35,13 @@ const EN = {
   lockToday: 'Full day isn’t possible today: it has already started.',
   lockTodaySoon: 'Full day isn’t possible today: it starts in less than 2\u00A0h.',
   sharedLockBooked: 'Full day isn’t possible: {{day}} is partly booked.',
-  fromPerHour: 'from {{amount}} / h',
+  fromPerHour: 'from\u00A0{{amount}} / h',
   stretched: 'Minimum {{count}}\u00A0h, so the end moved to {{time}}.',
   capped: 'Maximum {{count}}\u00A0h, so the end moved to {{time}}.',
   tooShort: 'Not enough free hours from {{time}}. Pick another start.',
   notInARow: 'Pick days in a row.',
   notInARowRemove: 'Remove days from the start or the end, so the rest stay in a row.',
-  todayFrom: 'Today · from {{time}}',
+  todayFrom: 'Today · from\u00A0{{time}}',
   daysChanged: '{{count}} days · tap to change',
   noDays: 'No days yet',
   noDaysSub: 'Full day or hours — you choose per day.',
@@ -208,7 +208,7 @@ export function summaryLine(days: PickedDay[], lang: PickerLang): string {
   if (blocks.length) {
     const same = blocks.every((b) => b === blocks[0]);
     if (blocks.length === 1) parts.push(`${blocks[0]}\u00A0h`);
-    else if (same) parts.push(`${blocks.length} × ${blocks[0]}\u00A0h`);
+    else if (same) parts.push(`${blocks.length}\u00A0×\u00A0${blocks[0]}\u00A0h`);
     else parts.push(blocks.map((b) => `${b}\u00A0h`).join(' + '));
   }
   return [head, parts.join(', ')].filter(Boolean).join(' · ');

@@ -153,8 +153,8 @@ describe('day-hours picker model', () => {
       { requestedStartAt: '2026-11-30T14:00:00.000Z', requestedEndAt: '2026-11-30T17:00:00.000Z', billing: 'hourly' },
     ]);
     expect(totalPrice(days, l)).toBe(45000);
-    expect(summaryLine(days, 'en')).toBe('3 days · 1 full, 2 × 3\u00A0h');
-    expect(summaryLine(days, 'fr')).toBe('3 jours · 1 journée, 2 × 3\u00A0h');
+    expect(summaryLine(days, 'en')).toBe('3 days · 1 full, 2\u00A0×\u00A03\u00A0h');
+    expect(summaryLine(days, 'fr')).toBe('3 jours · 1 journée, 2\u00A0×\u00A03\u00A0h');
     expect(footerDetail(days, infos, 'en', 'Africa/Libreville')).toBe('Pickup Fri\u00A027\u00A0Nov, 08:00');
     expect(footerDetail(days, infos, 'fr', 'Africa/Libreville')).toBe('Retrait ven.\u00A027\u00A0nov., 08:00');
   });
@@ -168,7 +168,7 @@ describe('day-hours picker model', () => {
     expect(rangeLabel(8, 10, 'en', 'Africa/Libreville')).toBe('08:00 – 10:00');
     expect(dayLabel('2026-11-27', 'en')).toBe('Fri\u00A027\u00A0Nov');
     expect(dayLabel('2026-11-30', 'fr')).toBe('lun.\u00A030\u00A0nov.');
-    expect(fromHourlyPrice(3000, 'XAF', 'en')).toBe('from 3\u00A0000\u00A0FCFA / h');
+    expect(fromHourlyPrice(3000, 'XAF', 'en')).toBe('from\u00A03\u00A0000\u00A0FCFA / h');
     expect(fromHourlyPrice(3000, 'XAF', 'fr')).toBe('dès\u00A03\u00A0000\u00A0FCFA / h');
     expect(pickerText('fr', 'todayFrom', { time: '09:00' })).toBe('Aujourd’hui · dès\u00A009:00');
     expect(serverRuleText('RENTAL_LEAD_TIME', 'fr')).toBe('Ce début est maintenant dans moins de 2\u00A0h. Choisissez une heure plus tard.');

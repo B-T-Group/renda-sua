@@ -125,7 +125,7 @@ describe('RentalsDefaultCatalog', () => {
       ready: true,
     });
     renderCatalog();
-    expect(screen.getAllByText((_, node) => (node?.textContent ?? '') === 'from 3\u00A0000\u00A0FCFA / h').length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, node) => (node?.textContent ?? '') === 'from\u00A03\u00A0000\u00A0FCFA / h').length).toBeGreaterThan(0);
     expect(screen.queryAllByText((_, node) => /(^|\D)0\u00A0FCFA/.test(node?.textContent ?? '')).length).toBe(0);
   });
 

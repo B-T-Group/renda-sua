@@ -728,7 +728,7 @@ function SharedCard({
         {isHours ? (
           <>
             <TimeChip text={rangeLabel(first.start, first.end, lang, timeZone)} />
-            <Typography sx={{ fontSize: 13, color: MUTED }}>{days.length} × {blockHours(first)}{'\u00A0'}h</Typography>
+            <Typography sx={{ fontSize: 13, color: MUTED }}>{`${days.length}\u00A0×\u00A0${blockHours(first)}\u00A0h`}</Typography>
           </>
         ) : (
           <Typography sx={{ fontSize: 13, color: MUTED }}>{pickerText(lang, 'fullDays')}</Typography>
