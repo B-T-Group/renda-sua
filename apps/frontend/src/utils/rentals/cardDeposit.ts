@@ -1,3 +1,38 @@
+/** Show a separate deposit only when it is the extra on top of the rental total. */
+export function cardHoldLines(input: {
+  total: number;
+  deposit: number;
+  authorized: number;
+}): { showDeposit: boolean; additive: boolean } {
+  const deposit = finiteAmount(input.deposit);
+  const authorized = finiteAmount(input.authorized);
+  const total = finiteAmount(input.total);
+  const additive = deposit > 0 && Math.abs(authorized - (total + deposit)) < 0.01;
+  return { showDeposit: additive, additive };
+}
+
+function finiteAmount(value: number): number {
+  return Number.isFinite(value) ? value : 0;
+}
+
+export function holdCopyKey(additive: boolean, inspected: boolean): string {
+  if (!additive) return 'rentals.bookingDetail.heldOnCard';
+  return inspected
+    ? 'rentals.bookingDetail.authorizedOnCardInspected'
+    : 'rentals.bookingDetail.authorizedOnCard';
+}
+
+export function holdCopyFallback(additive: boolean, inspected: boolean): string {
+  if (!additive) return '{{amount}} held on your card.';
+  if (inspected) return inspectedHold;
+  return plainHold;
+}
+
+const inspectedHold =
+  "Held on your card: {{amount}} (rental + deposit). The rental is charged at return. The deposit is released unless there's damage or a late return.";
+const plainHold =
+  'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.';
+
 export function showsCardDeposit(currency: string | null | undefined): boolean {
   const code = (currency ?? '').trim().toUpperCase();
   return code !== 'XAF' && code !== 'XOF';

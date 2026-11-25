@@ -90,6 +90,7 @@ function bookingFor(current: Scene) {
       payment_timing: momo ? 'pay_at_pickup' : 'pay_now',
       inspection_policy_version: current === 'bizPhotos' ? 1 : null,
       authorized_amount: momo ? 0 : 180,
+      security_deposit_amount: momo ? 0 : 180,
       rental_location_listing: {
         rental_item: { name: 'JBL PartyBox 310', rental_item_images: [{ id: 'img', image_url: '/hero-jbl.png' }] },
         business_location: { name: momo ? 'Akwa Sound' : "Stripe Rail · L'Assomption", address: { country: momo ? 'CM' : 'CA' } },

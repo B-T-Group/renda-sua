@@ -37,6 +37,20 @@ export function zonedStartOfDay(iso: string, timeZone: string): number {
   return adjusted + (landed.day > parts.day ? -3600000 : 3600000);
 }
 
+export function windowStatusLabel(input: {
+  phase: PickupPhase;
+  photosAsked: boolean;
+  day: string;
+  t: (key: string, fallback: string, vars?: Record<string, string>) => string;
+}): string | null {
+  if (input.photosAsked) return input.t('rentals.business.photosPill', 'New photos asked');
+  if (input.phase === 'closed') return null;
+  if (input.phase === 'before') return input.t('rentals.start.pillDay', 'Pickup {{day}}', { day: input.day });
+  if (input.phase === 'late') return input.t('rentals.start.latePickup', 'Late pickup');
+  if (input.phase === 'started') return input.t('rentals.journey.inProgress', 'In progress');
+  return input.t('rentals.start.pickupToday', 'Pickup today');
+}
+
 export function formatZonedDay(iso: string, timeZone: string, language: string): string {
   const parts = zonedParts(new Date(iso), timeZone);
   const month = monthName(parts.month, language);

@@ -50,7 +50,7 @@ import {
   formatRequestAmount,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
-import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { cardHoldLines, holdCopyFallback, holdCopyKey, showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import { bookingRequestedPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
 import { formatDoualaStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
 import {
@@ -72,7 +72,7 @@ import {
   formatConfirmationDue,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
-import { formatZonedWhen } from '../../utils/rentalStartWindow';
+import { formatZonedDay, formatZonedWhen, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 
 const PAYMENT_POLL_MS = 4000;
@@ -479,6 +479,22 @@ const RentalBookingDetailPage: React.FC = () => {
     return formatRequestAmount(amount, currency, i18n.language);
   };
 
+  const listingZone = confirmationTimeZone(listingCountry, booking.currency);
+  const windowPhase = pickupPhase({
+    now: Date.now(),
+    startAt: booking.start_at,
+    endAt: booking.end_at,
+    startOpensAt: booking.start_opens_at,
+    timeZone: listingZone,
+    started: status === 'active' || Boolean(booking.actual_start_at),
+  });
+  const windowLabel = windowStatusLabel({
+    phase: windowPhase,
+    photosAsked: photosRequested,
+    day: formatZonedDay(booking.start_at, listingZone, i18n.language),
+    t,
+  });
+
   const statusChipColor =
     status === 'confirmed'
       ? ('success' as const)
@@ -498,6 +514,11 @@ const RentalBookingDetailPage: React.FC = () => {
     ? Number(booking.security_deposit_amount) || 0
     : 0;
   const authorizedAmount = Number(booking.authorized_amount) || 0;
+  const hold = cardHoldLines({
+    total: Number(booking.total_amount) || 0,
+    deposit: depositAmount,
+    authorized: authorizedAmount,
+  });
   const overtimeAmount = Number(booking.overtime_amount) || 0;
   const cancellableBeforeStart =
     (status === 'confirmed' || status === 'reserved') && !booking.actual_start_at;
@@ -606,13 +627,15 @@ const RentalBookingDetailPage: React.FC = () => {
             </Box>
             <Chip
               label={
-                reviewReady
-                  ? detailStatusLabel
-                  : status === 'awaiting_return'
-                    ? t(detailStatusKey, 'Return due')
-                    : status === 'reserved'
-                      ? t('rentals.phases.reservedShort', 'Reserved')
-                      : `${t('rentals.status', 'Status')}: ${t(`rentals.bookingStatus.${status}`, status)}`
+                windowLabel
+                  ? windowLabel
+                  : reviewReady
+                    ? detailStatusLabel
+                    : status === 'awaiting_return'
+                      ? t(detailStatusKey, 'Return due')
+                      : status === 'reserved'
+                        ? t('rentals.phases.reservedShort', 'Reserved')
+                        : `${t('rentals.status', 'Status')}: ${t(`rentals.bookingStatus.${status}`, status)}`
               }
               color={reviewReady ? undefined : statusChipColor}
               sx={{
@@ -1013,7 +1036,7 @@ const RentalBookingDetailPage: React.FC = () => {
                     {formatDetailMoney(Number(booking.total_amount) || 0)}
                   </Typography>
                   <Stack spacing={0.5} sx={{ mt: 1 }}>
-                    {depositAmount > 0 ? (
+                    {hold.showDeposit ? (
                       <Typography variant="body2" color="text.secondary">
                         {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}:{' '}
                         <strong>
@@ -1024,12 +1047,8 @@ const RentalBookingDetailPage: React.FC = () => {
                     {booking.payment_status === 'authorized' && authorizedAmount > 0 ? (
                       <Typography variant="body2" color="text.secondary">
                         {t(
-                          booking.inspection_policy_version != null
-                            ? 'rentals.bookingDetail.authorizedOnCardInspected'
-                            : 'rentals.bookingDetail.authorizedOnCard',
-                          booking.inspection_policy_version != null
-                            ? 'Held on your card: {{amount}} (rental + deposit). The rental is charged at return. The deposit is released unless there\'s damage or a late return.'
-                            : 'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
+                          holdCopyKey(hold.additive, booking.inspection_policy_version != null),
+                          holdCopyFallback(hold.additive, booking.inspection_policy_version != null),
                           { amount: formatDetailMoney(authorizedAmount) }
                         )}
                       </Typography>
@@ -1342,7 +1361,12 @@ function BookingConfirmation({
 function depositLabel(booking: RentalBookingDetail, language: string): string {
   if (!showsCardDeposit(booking.currency)) return '';
   const amount = Number(booking.security_deposit_amount) || 0;
-  if (amount <= 0) return '';
+  const lines = cardHoldLines({
+    total: Number(booking.total_amount) || 0,
+    deposit: amount,
+    authorized: Number(booking.authorized_amount) || 0,
+  });
+  if (!lines.showDeposit) return '';
   return formatConfirmationMoney(amount, booking.currency, language);
 }
 

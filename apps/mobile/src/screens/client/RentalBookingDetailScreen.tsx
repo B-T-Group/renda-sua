@@ -33,7 +33,7 @@ import { useRentalBookingDetail } from '../../hooks/useRentalBookingDetail';
 import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
 import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
-import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { cardHoldLines, holdCopyFallback, holdCopyKey, showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import {
   settleRentalStripePayment,
   useRentalStripePayment,
@@ -241,6 +241,11 @@ export default function RentalBookingDetailScreen() {
     ? toAmount(booking?.security_deposit_amount)
     : 0;
   const authorizedAmount = toAmount(booking?.authorized_amount);
+  const hold = cardHoldLines({
+    total: toAmount(booking?.total_amount),
+    deposit: depositAmount,
+    authorized: authorizedAmount,
+  });
   const overtimeAmount = toAmount(booking?.overtime_amount);
   const returnPhase = renterReturnPhase({
     status: booking?.status ?? '',
@@ -616,7 +621,7 @@ export default function RentalBookingDetailScreen() {
             phone={booking.return_place?.phone ?? null}
             endAt={booking.end_at}
             reportedAt={booking.renter_reported_returned_at}
-            depositLabel={depositAmount > 0 ? formatDetailMoney(depositAmount) : ''}
+            depositLabel={hold.showDeposit ? formatDetailMoney(depositAmount) : ''}
             onReported={() => void refetch()}
             onAlreadyConfirmed={() => void refetch()}
             onMessage={() => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true })}
@@ -803,7 +808,7 @@ export default function RentalBookingDetailScreen() {
           <Text style={[typography.h6, { color: colors.text.primary }]}>
             {formatDetailMoney(pricing?.total ?? toAmount(booking.total_amount))}
           </Text>
-          {depositAmount > 0 ? (
+          {hold.showDeposit ? (
             <Text style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}>
               {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
               {': '}
@@ -813,15 +818,9 @@ export default function RentalBookingDetailScreen() {
           {authorizedAmount > 0 ? (
             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
               {t(
-                booking.inspection_policy_version != null
-                  ? 'rentals.bookingDetail.authorizedOnCardInspected'
-                  : 'rentals.bookingDetail.authorizedOnCard',
-                booking.inspection_policy_version != null
-                  ? 'Held on your card: {{amount}} (rental + deposit). The rental is charged at return. The deposit is released unless there\'s damage or a late return.'
-                  : 'Held on your card (rental + deposit): {{amount}}. The final charge at return is at least the rental total; the deposit only covers extra hours.',
-                {
-                  amount: formatDetailMoney(authorizedAmount),
-                }
+                holdCopyKey(hold.additive, booking.inspection_policy_version != null),
+                holdCopyFallback(hold.additive, booking.inspection_policy_version != null),
+                { amount: formatDetailMoney(authorizedAmount) }
               )}
             </Text>
           ) : null}

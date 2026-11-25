@@ -6552,6 +6552,7 @@
     "listPayAtPickup": "Payer au retrait",
     "bookingDetail": {
       "securityDeposit": "Caution",
+      "heldOnCard": "{{amount}} retenus sur votre carte.",
       "authorizedOnCard": "Réservé sur votre carte (location + caution) : {{amount}}. Le montant final au retour est au minimum le total de la location ; la caution ne couvre que les heures supplémentaires.",
       "authorizedOnCardInspected": "Bloqué sur votre carte : {{amount}} (location + caution). La location est débitée au retour. La caution est libérée sauf en cas de dommage ou de retard.",
       "payAtPickup": "Rien n’est payé pour le moment — le total de la location est dû au retrait.",
@@ -8619,7 +8620,7 @@
     "stepStart": "Démarrer la location",
     "matchesQuestion": "Les photos correspondent-elles à l'article devant vous ?",
     "matches": "Ça correspond",
-    "askPhotos": "Ça ne correspond pas · demander de nouvelles photos",
+    "askPhotos": "Ne correspond pas · nouvelles photos",
     "askTitle": "Demander de nouvelles photos",
     "askBody": "Le commerce reprend les photos. Vous vérifiez de nouveau avant de démarrer. Rien n'est facturé entre-temps.",
     "noteOptional": "Note (facultative)",
