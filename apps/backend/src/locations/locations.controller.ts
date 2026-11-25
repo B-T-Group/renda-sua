@@ -516,13 +516,10 @@ export class LocationsController {
         { ttlSeconds: SUPPORTED_COUNTRIES_TTL_SECONDS }
       );
     } catch (error: any) {
-      this.logger.error('Failed to fetch supported countries (public)', error);
-      throw new HttpException(
-        {
-          success: false,
-          error: 'Failed to fetch supported countries',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
+      this.rethrowOrLocationLookupFailure(
+        error,
+        'Failed to fetch supported countries (public)',
+        'Failed to fetch supported countries'
       );
     }
   }
@@ -596,10 +593,10 @@ export class LocationsController {
       }
       return await this.fetchCombinedMarketStates(countryCode);
     } catch (error: any) {
-      this.logger.error('Failed to fetch market states', error);
-      throw new HttpException(
-        { success: false, error: 'Failed to fetch market states' },
-        HttpStatus.INTERNAL_SERVER_ERROR
+      this.rethrowOrLocationLookupFailure(
+        error,
+        'Failed to fetch market states',
+        'Failed to fetch market states'
       );
     }
   }
@@ -929,13 +926,10 @@ export class LocationsController {
         countries: Array.from(countryMap.values()),
       };
     } catch (error: any) {
-      this.logger.error('Failed to fetch supported countries', error);
-      throw new HttpException(
-        {
-          success: false,
-          error: 'Failed to fetch supported countries',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
+      this.rethrowOrLocationLookupFailure(
+        error,
+        'Failed to fetch supported countries',
+        'Failed to fetch supported countries'
       );
     }
   }
@@ -1221,6 +1215,21 @@ export class LocationsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private rethrowOrLocationLookupFailure(
+    error: any,
+    logMessage: string,
+    clientError: string
+  ): never {
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    this.logger.error(logMessage, error);
+    throw new HttpException(
+      { success: false, error: clientError, message: clientError },
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
   }
 
   private ensureAuthenticatedForLocation(ctx: RequestContext): void {
