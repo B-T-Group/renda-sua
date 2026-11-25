@@ -5,11 +5,37 @@ import {
   SUPPORTED_COUNTRIES_TTL_SECONDS,
 } from '../catalog-cache/catalog-cache-keys';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
+import {
+  HASURA_UNAVAILABLE_MESSAGE,
+  hasuraUnavailableResponse,
+} from '../hasura/hasura-request.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CountryOnboardingService } from './country-onboarding.service';
 import { LocationsController } from './locations.controller';
 import { LocationsService } from './locations.service';
+
+function hasuraUnavailableException(): HttpException {
+  return new HttpException(
+    hasuraUnavailableResponse(),
+    HttpStatus.SERVICE_UNAVAILABLE
+  );
+}
+
+async function expectHttpException(
+  action: () => Promise<unknown>,
+  status: number,
+  response: object
+): Promise<void> {
+  try {
+    await action();
+    fail('expected HttpException');
+  } catch (error: any) {
+    expect(error).toBeInstanceOf(HttpException);
+    expect(error.getStatus()).toBe(status);
+    expect(error.getResponse()).toEqual(response);
+  }
+}
 
 describe('LocationsController', () => {
   let controller: LocationsController;
@@ -160,15 +186,27 @@ describe('LocationsController', () => {
     it('returns a stable 500 payload when Hasura country lookup fails', async () => {
       hasuraService.executeQuery.mockRejectedValueOnce(new Error('hasura down'));
 
-      await expect(controller.getPublicSupportedCountries()).rejects.toThrow(
-        new HttpException(
-          {
-            success: false,
-            error: 'Failed to fetch supported countries',
-          },
-          HttpStatus.INTERNAL_SERVER_ERROR
-        )
+      await expectHttpException(
+        () => controller.getPublicSupportedCountries(),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          success: false,
+          error: 'Failed to fetch supported countries',
+          message: 'Failed to fetch supported countries',
+        }
       );
+    });
+
+    it('rethrows a remapped Hasura 503 instead of wrapping it as 500', async () => {
+      const unavailable = hasuraUnavailableException();
+      hasuraService.executeQuery.mockRejectedValueOnce(unavailable);
+
+      await expectHttpException(
+        () => controller.getPublicSupportedCountries(),
+        HttpStatus.SERVICE_UNAVAILABLE,
+        hasuraUnavailableResponse()
+      );
+      expect(unavailable.message).toBe(HASURA_UNAVAILABLE_MESSAGE);
     });
   });
 
@@ -207,6 +245,32 @@ describe('LocationsController', () => {
       expect(result.success).toBe(true);
       expect(result.totalItemCount).toBe(2);
       expect(result.states).toEqual([{ state: 'Littoral', itemCount: 2 }]);
+    });
+
+    it('rethrows a remapped Hasura 503 instead of wrapping it as 500', async () => {
+      hasuraService.executeQuery.mockRejectedValueOnce(
+        hasuraUnavailableException()
+      );
+
+      await expectHttpException(
+        () => controller.getMarketStates('CM'),
+        HttpStatus.SERVICE_UNAVAILABLE,
+        hasuraUnavailableResponse()
+      );
+    });
+  });
+
+  describe('getSupportedCountries', () => {
+    it('rethrows a remapped Hasura 503 instead of wrapping it as 500', async () => {
+      hasuraService.executeQuery.mockRejectedValueOnce(
+        hasuraUnavailableException()
+      );
+
+      await expectHttpException(
+        () => controller.getSupportedCountries(),
+        HttpStatus.SERVICE_UNAVAILABLE,
+        hasuraUnavailableResponse()
+      );
     });
   });
 });
