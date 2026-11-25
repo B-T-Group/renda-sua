@@ -147,8 +147,14 @@ export class RentalInspectionService {
     const minPhotos = await this.minPhotoCount();
     const claimedDamageAmount = await this.claimedDamage(bookingId);
     const extra = this.photoRules ? await this.photoRules.viewerExtras(bookingId, viewer.audience) : {};
-    if (viewer.audience === 'client') return { ...presented, minPhotos, claimedDamageAmount, ...extra };
-    return { ...presented, minPhotos, claimedDamageAmount, correctionReason: body.correctionReason, ...extra };
+    return {
+      ...presented,
+      minPhotos,
+      claimedDamageAmount,
+      correctionReason: body.correctionReason,
+      askedAt: body.askedAt,
+      ...extra,
+    };
   }
 
   async acknowledge(bookingId: string, stage: InspectionStage, versionId: string, decision: Decision, reason?: string) {
@@ -605,8 +611,7 @@ export class RentalInspectionService {
       editingDraft ? null : current?.id ?? null
     );
     const decision = current ? await this.clientDecision(current.id) : null;
-    const correctionReason =
-      audience === 'client' || !current ? null : await this.correctionReason(current.id);
+    const ack = current ? await this.correctionAck(current.id) : null;
     return {
       versionId: editingDraft ? null : current?.id ?? null,
       versionNo: audience === 'client' ? null : current?.version_no ?? null,
@@ -615,7 +620,8 @@ export class RentalInspectionService {
       status: inspection.status,
       units,
       yourDecision: decision,
-      correctionReason,
+      correctionReason: ack?.reason ?? null,
+      askedAt: ack?.askedAt ?? null,
     };
   }
 
@@ -629,6 +635,7 @@ export class RentalInspectionService {
       units: [],
       yourDecision: null,
       correctionReason: null as string | null,
+      askedAt: null as string | null,
     };
   }
 
@@ -641,19 +648,22 @@ export class RentalInspectionService {
     return Math.max(DEFAULT_MIN_PHOTOS, Math.round(configured));
   }
 
-  private async correctionReason(versionId: string): Promise<string | null> {
+  private async correctionAck(versionId: string) {
     const result = await this.hasura.executeQuery<{
-      rental_inspection_acks: Array<{ reason: string | null }>;
+      rental_inspection_acks: Array<{ reason: string | null; created_at: string | null }>;
     }>(
       `query CorrectionReason($id: uuid!) {
         rental_inspection_acks(
           where: { version_id: { _eq: $id }, persona: { _eq: "client" }, decision: { _eq: "correction" } }
+          order_by: { created_at: desc }
           limit: 1
-        ) { reason }
+        ) { reason created_at }
       }`,
       { id: versionId }
     );
-    return result.rental_inspection_acks?.[0]?.reason ?? null;
+    const row = result.rental_inspection_acks?.[0];
+    if (!row) return null;
+    return { reason: row.reason ?? null, askedAt: row.created_at ?? null };
   }
 
   private async remind(hours: number): Promise<number> {
@@ -1071,7 +1081,13 @@ export class RentalInspectionService {
     const body = await this.viewOf(bookingId, inspection, 'admin');
     const presented = presentInspection(body, 'admin');
     const units = await this.withPhotoUrls(bookingId, body.units);
-    return { ...presented, minPhotos: await this.minPhotoCount(), correctionReason: body.correctionReason, units };
+    return {
+      ...presented,
+      minPhotos: await this.minPhotoCount(),
+      correctionReason: body.correctionReason,
+      askedAt: body.askedAt,
+      units,
+    };
   }
 
   private async withPhotoUrls(
