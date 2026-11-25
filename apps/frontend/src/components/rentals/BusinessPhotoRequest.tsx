@@ -82,10 +82,12 @@ function PhotoUpload({
   const camera = `camera-${photo.id}`;
   const library = `library-${photo.id}`;
   return (
-    <Stack alignItems="center" spacing={0.5}>
+    <Stack alignItems="center" spacing={0.5} sx={{ width: 148 }}>
       {photo.url ? <Box component="img" src={photo.url} alt={slotTileLabel(photo.role, language)} sx={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 1 }} /> : null}
-      <Typography variant="caption">{slotTileLabel(photo.role, language)}</Typography>
-      <Typography variant="caption" color="text.secondary">{photoBadge(photo, language, timeZone, t)}</Typography>
+      <Typography variant="caption" align="center">{slotTileLabel(photo.role, language)}</Typography>
+      <Typography variant="caption" color="text.secondary" align="center" sx={{ whiteSpace: 'normal', overflowWrap: 'break-word', lineHeight: 1.3 }}>
+        {photoBadge(photo, language, timeZone, t)}
+      </Typography>
       <Stack direction="row">
         <Button component="label" size="small" aria-label={camera}>
           <PhotoCamera fontSize="small" />
