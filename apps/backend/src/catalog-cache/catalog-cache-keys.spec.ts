@@ -12,7 +12,7 @@ import {
 
 describe('buildMarketLanesCacheKey', () => {
   it('scopes by country code', () => {
-    expect(buildMarketLanesCacheKey('CM')).toBe('market-lanes:CM');
+    expect(buildMarketLanesCacheKey('CM')).toBe('market-lanes-v2:CM');
   });
 });
 
