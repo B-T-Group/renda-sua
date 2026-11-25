@@ -92,6 +92,16 @@ export class UpdateBusinessRentalListingDto {
   @IsBoolean()
   is_active?: boolean;
 
+  @ApiProperty({ required: false, description: 'Rent by the hour' })
+  @IsOptional()
+  @IsBoolean()
+  offers_hourly?: boolean;
+
+  @ApiProperty({ required: false, description: 'Rent by the day' })
+  @IsOptional()
+  @IsBoolean()
+  offers_daily?: boolean;
+
   @ApiProperty({ required: false, type: [UpdateRentalWeeklyAvailabilityDto] })
   @IsOptional()
   @IsArray()
