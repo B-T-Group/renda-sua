@@ -150,9 +150,9 @@ const unit = (id: string, label: string) => ({
   wear: 'none',
   accessories: id === 'u2' ? [{ name: 'Battery + charger', count: 2 }] : [],
   photos: [
-    { id: `${id}-1`, role: 'overview', url: '/hero-jbl.png' },
-    { id: `${id}-2`, role: 'other_side', url: '/hero-jbl.png' },
-    { id: `${id}-3`, role: 'accessories', url: '/hero-jbl.png' },
+    { id: `${id}-1`, role: 'overview', url: '/hero-jbl.png', capturedAt: '2026-11-24T14:51:00.000Z', reused: false },
+    { id: `${id}-2`, role: 'other_side', url: '/hero-jbl.png', capturedAt: '2026-11-02T15:00:00.000Z', reused: true },
+    { id: `${id}-3`, role: 'accessories', url: '/hero-jbl.png', capturedAt: '2026-11-02T15:00:00.000Z', reused: true },
   ],
 });
 

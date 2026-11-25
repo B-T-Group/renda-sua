@@ -8,6 +8,7 @@ import { createRentalInspectionApi } from '../../services/rentalInspectionApi';
 import type { InspectionPhoto } from '../../utils/rentalInspection';
 import { splitCorrectionReason } from '../../utils/rentalInspection';
 import { formatListingStamp, listingCity, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
+import { formatPhotoStamp } from '../../utils/rentalStartWindow';
 
 interface Props {
   bookingId: string;
@@ -76,6 +77,7 @@ function PhotoUpload({
   language: string;
   timeZone: string;
 }) {
+  const { t } = useTranslation();
   const api = useApiClient();
   const camera = `camera-${photo.id}`;
   const library = `library-${photo.id}`;
@@ -83,7 +85,7 @@ function PhotoUpload({
     <Stack alignItems="center" spacing={0.5}>
       {photo.url ? <Box component="img" src={photo.url} alt={slotTileLabel(photo.role, language)} sx={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 1 }} /> : null}
       <Typography variant="caption">{slotTileLabel(photo.role, language)}</Typography>
-      <Typography variant="caption" color="text.secondary">{photoBadge(photo, language, timeZone)}</Typography>
+      <Typography variant="caption" color="text.secondary">{photoBadge(photo, language, timeZone, t)}</Typography>
       <Stack direction="row">
         <Button component="label" size="small" aria-label={camera}>
           <PhotoCamera fontSize="small" />
@@ -98,9 +100,17 @@ function PhotoUpload({
   );
 }
 
-function photoBadge(photo: InspectionPhoto, language: string, timeZone: string): string {
-  const fresh = photo.reused ? (language.startsWith('fr') ? 'Réutilisée' : 'Reused') : language.startsWith('fr') ? 'Nouvelle' : 'New';
-  return photo.capturedAt ? `${fresh} · ${formatListingStamp(photo.capturedAt, timeZone, language)}` : fresh;
+function photoBadge(
+  photo: InspectionPhoto,
+  language: string,
+  timeZone: string,
+  t: (key: string, fallback: string) => string
+): string {
+  const fresh = photo.reused
+    ? t('rentalInspection.reusedBadge', 'Reused')
+    : t('rentalInspection.newBadge', 'New');
+  if (!photo.capturedAt) return fresh;
+  return `${fresh} · ${formatPhotoStamp(photo.capturedAt, timeZone, language)}`;
 }
 
 function reasonLabels(t: (key: string, fallback: string) => string): Record<string, string> {
