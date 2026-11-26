@@ -39,6 +39,7 @@ import {
   type RentalDateRange,
 } from '../../utils/rentals/rentalSearchDates';
 import { loadRecentSearches, rememberSearch } from '../../utils/rentals/recentRentalSearches';
+import { searchRentAction } from '../../utils/rentals/searchRentAction';
 import { splitTopCategories } from '../../utils/rentals/rentalCategoryIcon';
 import {
   allDaySelectionsForRange,
@@ -192,13 +193,12 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   }, [mode, query, geo.ready, geo.country_code, geo.state]);
 
   const openListing = useCallback(
-    (listingId: string, range: RentalDateRange | null) => {
+    (listingId: string, range: RentalDateRange | null, openRequest = Boolean(range)) => {
       const parent = navigation.getParent() ?? navigation;
       (parent as { navigate: (name: string, params: object) => void }).navigate('RentalListingDetail', {
         listingId,
-        ...(range
-          ? { startDate: range.startDate, endDate: range.endDate, openRequest: true }
-          : {}),
+        ...(range ? { startDate: range.startDate, endDate: range.endDate } : {}),
+        ...(openRequest ? { openRequest: true } : {}),
       });
     },
     [navigation]
@@ -327,13 +327,14 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
           commitQuery(term);
         }}
         onRent={(id) => {
-          if (!dates) {
-            setPendingRentId(id);
-            setDraftDates(null);
-            setDateSheetOpen(true);
+          if (searchRentAction(dates, flags.rentals_day_hours_picker_enabled === true) === 'request') {
+            // With the day-and-hours picker on, the request screen opens it; the search date sheet is the old range picker.
+            openListing(id, dates, true);
             return;
           }
-          openListing(id, dates);
+          setPendingRentId(id);
+          setDraftDates(null);
+          setDateSheetOpen(true);
         }}
         onSeeDates={(id) => {
           const hit = visibleHits.find((row) => row.listing.id === id);

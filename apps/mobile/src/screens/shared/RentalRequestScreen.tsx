@@ -13,6 +13,7 @@ import { RentalSearchDateSheet } from '../../components/rentals/search/RentalSea
 import { RentalDayHoursSheet } from '../../components/rentals/dayHours/RentalDayHoursSheet';
 import { useDayHoursPicker } from '../../components/rentals/dayHours/useDayHoursPicker';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { DEFAULT_CLIENT_FLAGS } from '../../services/clientFlagsApi';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
 import { useRentalRequestDates } from '../../hooks/useRentalRequestDates';
@@ -38,7 +39,9 @@ export default function RentalRequestScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RequestRoute, 'RentalRequest'>>();
   const { auth } = useStore();
-  const { flags } = useClientFlags();
+  const { flags, loading: flagsLoading } = useClientFlags();
+  /** Before the first flags response every flag reads false; wait so the old date UI never flashes. */
+  const flagsPending = flagsLoading && flags === DEFAULT_CLIENT_FLAGS;
   const listingId = route.params?.listingId;
   const { listing, bookedWindows, loading, error, refetch } = useRentalListingDetail(listingId);
   const dates = useRentalRequestDates(listing, route.params?.startDate, route.params?.endDate);
@@ -77,7 +80,7 @@ export default function RentalRequestScreen() {
     [listing?.inspection_policy_version, navigation]
   );
 
-  if (loading && !listing) {
+  if ((loading && !listing) || flagsPending) {
     return (
       <View style={[styles.center, { backgroundColor: colors.pageBackground, paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color={colors.primary.main} />

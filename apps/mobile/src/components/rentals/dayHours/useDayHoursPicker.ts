@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RentalListingRow, RentalTakenWindow } from '../../../types/rentals';
 import type { SelectionRange } from '../../../utils/rentals';
 import {
@@ -60,6 +60,13 @@ export function useDayHoursPicker(input: {
 }) {
   const { enabled, listing, booked, seed, language } = input;
   const [open, setOpen] = useState(Boolean(input.enabled && input.openOnStart));
+  /** Flags can arrive after mount: open once when the picker turns on, not only at mount. */
+  const autoOpened = useRef(Boolean(input.enabled && input.openOnStart));
+  useEffect(() => {
+    if (!input.openOnStart || !enabled || autoOpened.current) return;
+    autoOpened.current = true;
+    setOpen(true);
+  }, [enabled, input.openOnStart]);
   const [picked, setPicked] = useState<{ rows: SelectionRange[]; days: PickedDay[] } | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const model = useMemo(() => (listing ? dayHoursListingModel(listing, booked) : null), [booked, listing]);
