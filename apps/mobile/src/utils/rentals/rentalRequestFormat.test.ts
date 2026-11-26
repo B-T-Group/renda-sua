@@ -395,10 +395,28 @@ describe('rental edit confirmation', () => {
   const now = Date.parse('2026-11-12T10:00:00.000Z');
 
   it('closes the edit at exactly 2 hours and for an unusable start', () => {
-    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS).toISOString(), now)).toBe(false);
-    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS + 1).toISOString(), now)).toBe(true);
-    expect(rentalEditWindowOpen('not-a-date', now)).toBe(false);
-    expect(rentalEditWindowOpen('', now)).toBe(false);
+    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS).toISOString(), 'UTC', now)).toBe(false);
+    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS + 1).toISOString(), 'UTC', now)).toBe(true);
+    expect(rentalEditWindowOpen('not-a-date', 'UTC', now)).toBe(false);
+    expect(rentalEditWindowOpen('', 'UTC', now)).toBe(false);
+  });
+
+  it('reads now on the listing wall clock (start is stored as UTC components)', () => {
+    // 9:40 AM in Toronto (EST) on 26 Nov; a 12:00 start is stored as T12:00:00Z.
+    const toronto = Date.parse('2026-11-26T14:40:00.000Z');
+    expect(rentalEditWindowOpen('2026-11-26T12:00:00.000Z', 'America/Toronto', toronto)).toBe(true);
+    expect(rentalEditWindowOpen('2026-11-26T11:30:00.000Z', 'America/Toronto', toronto)).toBe(false);
+    // Summer (EDT): 9:40 AM is 13:40Z.
+    const july = Date.parse('2026-07-15T13:40:00.000Z');
+    expect(rentalEditWindowOpen('2026-07-15T12:00:00.000Z', 'America/Toronto', july)).toBe(true);
+    // 9:40 AM in Douala is 08:40Z; 11:00 is too close, raw UTC would have said open.
+    const douala = Date.parse('2026-11-26T08:40:00.000Z');
+    expect(rentalEditWindowOpen('2026-11-26T11:00:00.000Z', 'Africa/Douala', douala)).toBe(false);
+    expect(rentalEditWindowOpen('2026-11-26T12:00:00.000Z', 'Africa/Douala', douala)).toBe(true);
+    // 9:40 AM in Manila is 01:40Z.
+    const manila = Date.parse('2026-11-26T01:40:00.000Z');
+    expect(rentalEditWindowOpen('2026-11-26T12:00:00.000Z', 'Asia/Manila', manila)).toBe(true);
+    expect(rentalEditWindowOpen('2026-11-26T11:00:00.000Z', 'Asia/Manila', manila)).toBe(false);
   });
 
   it('asks for confirmation only when the new total is higher by more than one centime', () => {

@@ -197,6 +197,12 @@ export function wallClockNowMs(nowMs: number, timeZone: string): number {
   }
 }
 
+/** True when a stored wall-clock start (UTC components) is still ahead of the listing's "now". */
+export function isFutureWallClockStart(start: Date, nowMs: number, timeZone: string): boolean {
+  const startMs = start.getTime();
+  return Number.isFinite(startMs) && startMs > wallClockNowMs(nowMs, timeZone);
+}
+
 /** Every window starts at least 2 hours from now (listing local time), less a small grace. */
 export function leadTimeViolation(
   windows: DayHoursWindow[],

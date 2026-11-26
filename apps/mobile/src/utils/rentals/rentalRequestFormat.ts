@@ -1,5 +1,6 @@
 import { formatSelectionLabel, localDateKey, type SelectionRange } from './rentalRequestScheduleUtils';
 import { formatConfirmationMoney } from './confirmationFormat';
+import { listingNowMs } from './dayHoursPicker';
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -204,9 +205,17 @@ export type PeriodWindow = {
 export const LISTING_TIME_ZONE = 'Africa/Douala';
 export const RENTAL_EDIT_LEAD_MS = 2 * 60 * 60 * 1000;
 
-export function rentalEditWindowOpen(startIso: string, now = Date.now()): boolean {
+/**
+ * `startIso` is listing wall clock stored as UTC components, so "now" is read on the
+ * listing's wall clock (device clock when the zone is unknown), like the server check.
+ */
+export function rentalEditWindowOpen(
+  startIso: string,
+  timeZone?: string | null,
+  now = Date.now()
+): boolean {
   const start = Date.parse(startIso);
-  return Number.isFinite(start) && start > now + RENTAL_EDIT_LEAD_MS;
+  return Number.isFinite(start) && start > listingNowMs(now, timeZone) + RENTAL_EDIT_LEAD_MS;
 }
 
 function monthLabel(isoDate: string, locale: string): string {

@@ -174,11 +174,13 @@ export interface ClientRentalRequestRow {
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
   expires_at?: string | null;
+  /** Listing zone from the API; request times are its wall clock stored as UTC components. */
+  listing_timezone?: string | null;
   rental_location_listing: {
     id: string;
     base_price_per_hour: number | string;
     base_price_per_day?: number | string;
-    business_location?: { name: string; address?: { city?: string | null } | null } | null;
+    business_location?: { name: string; address?: { city?: string | null; country?: string | null } | null } | null;
     rental_item: {
       name: string;
       currency: string;

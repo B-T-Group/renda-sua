@@ -126,18 +126,7 @@ export function RentalSearchResultCard({
           >
             {t('rentals.searchFirst.seeDates', 'See dates')}
           </Button>
-        ) : (
-          <Button
-            mode="outlined"
-            icon="eye-outline"
-            textColor={colors.primary.main}
-            onPress={() => onOpen(card.id)}
-            style={[styles.action, { borderColor: colors.primary.main }]}
-            testID={`rental-search-view-${card.id}`}
-          >
-            {t('rentals.searchFirst.viewDetails', 'View details')}
-          </Button>
-        )}
+        ) : null}
       </View>
       <View style={styles.chevron}>
         <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.secondary} />
