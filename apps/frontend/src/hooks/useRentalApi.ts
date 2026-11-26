@@ -631,7 +631,7 @@ export function useRentalApi() {
       dropoff_instructions?: string;
       base_price_per_hour: number;
       base_price_per_day: number;
-      /** Listing switches (rentals_day_hours_picker_enabled); omitted means both on. */
+      /** Listing switches; omitted means both on. */
       offers_daily?: boolean;
       offers_hourly?: boolean;
       security_deposit_amount?: number;

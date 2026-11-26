@@ -17,7 +17,6 @@ import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import type { AddBusinessLocationData } from '../../../../hooks/useBusinessLocations';
 import { useBusinessLocations } from '../../../../hooks/useBusinessLocations';
 import { useBusinessInventory } from '../../../../hooks/useBusinessInventory';
-import { useClientFlags } from '../../../../hooks/useClientFlags';
 import { useRentalApi } from '../../../../hooks/useRentalApi';
 import LocationModal from '../../LocationModal';
 import ListingPreviewDialog from '../../ListingPreviewDialog';
@@ -65,8 +64,6 @@ const FirstRentalItemLocationStep: React.FC<
   const [locationId, setLocationId] = useState('');
   const [pricePerHour, setPricePerHour] = useState('');
   const [pricePerDay, setPricePerDay] = useState('');
-  const { flags } = useClientFlags();
-  const modesOn = flags.rentals_day_hours_picker_enabled === true;
   const [modes, setModes] = useState<RentalModes>({ offersDaily: true, offersHourly: true });
   const [weeklyAvailability, setWeeklyAvailability] = useState<
     WeeklyAvailabilitySlot[]
@@ -121,7 +118,6 @@ const FirstRentalItemLocationStep: React.FC<
     const res = createListingPrices({
       hourlyRaw: pricePerHour,
       dailyRaw: pricePerDay,
-      modesOn,
       modes,
     });
     if (!res.ok) {
@@ -131,21 +127,14 @@ const FirstRentalItemLocationStep: React.FC<
               'business.onboarding.firstRental.location.invalidHourlyPrice',
               'Enter a valid hourly price'
             )
-          : modesOn
-            ? t('business.rentals.rentBy.priceRequired', 'Set a price for each way you rent.')
-            : t(
-                'business.onboarding.firstRental.location.invalidDailyPrice',
-                'Enter a valid daily price or leave it empty'
-              );
+          : t('business.rentals.rentBy.priceRequired', 'Set a price for each way you rent.');
       enqueueSnackbar(message, { variant: 'warning' });
       return null;
     }
     return {
       hourly: res.base_price_per_hour,
       daily: res.base_price_per_day,
-      offers: modesOn
-        ? { offers_daily: res.offers_daily, offers_hourly: res.offers_hourly }
-        : undefined,
+      offers: { offers_daily: res.offers_daily, offers_hourly: res.offers_hourly },
     };
   };
 
@@ -284,14 +273,12 @@ const FirstRentalItemLocationStep: React.FC<
           )}
         </Button>
       </Stack>
-      {modesOn ? (
-        <RentalModeSwitches value={modes} onChange={setModes} disabled={busy} />
-      ) : null}
+      <RentalModeSwitches value={modes} onChange={setModes} disabled={busy} />
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        {!modesOn || modes.offersHourly ? (
+        {modes.offersHourly ? (
           <TextField
             fullWidth
-            required={modesOn}
+            required
             label={t(
               'business.onboarding.firstRental.location.pricePerHour',
               'Price per hour'
@@ -303,10 +290,10 @@ const FirstRentalItemLocationStep: React.FC<
             inputProps={{ min: 0, step: '0.01', 'data-testid': 'first-rental-price-hour' }}
           />
         ) : null}
-        {!modesOn || modes.offersDaily ? (
+        {modes.offersDaily ? (
           <TextField
             fullWidth
-            required={modesOn}
+            required
             label={t(
               'business.onboarding.firstRental.location.pricePerDay',
               'Price per day'
@@ -316,14 +303,6 @@ const FirstRentalItemLocationStep: React.FC<
             onChange={(e) => setPricePerDay(e.target.value)}
             disabled={busy}
             inputProps={{ min: 0, step: '0.01', 'data-testid': 'first-rental-price-day' }}
-            helperText={
-              modesOn
-                ? undefined
-                : t(
-                    'business.onboarding.firstRental.location.pricePerDayHint',
-                    'Leave empty to use 12 × hourly rate'
-                  )
-            }
           />
         ) : null}
       </Stack>
@@ -382,13 +361,12 @@ const FirstRentalItemLocationStep: React.FC<
             const res = createListingPrices({
               hourlyRaw: pricePerHour,
               dailyRaw: pricePerDay,
-              modesOn,
               modes,
             });
             if (!res.ok) return null;
             const parts = [
-              !modesOn || res.offers_hourly ? `${res.base_price_per_hour}/hr` : null,
-              !modesOn || res.offers_daily ? `${res.base_price_per_day}/day` : null,
+              res.offers_hourly ? `${res.base_price_per_hour}/hr` : null,
+              res.offers_daily ? `${res.base_price_per_day}/day` : null,
             ].filter(Boolean);
             return parts.join(' · ') || null;
           })(),

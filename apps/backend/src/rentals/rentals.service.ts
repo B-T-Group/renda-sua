@@ -352,7 +352,7 @@ export interface PublicRentalListingRow {
   moderation_status?: string;
   base_price_per_hour: number;
   base_price_per_day: number;
-  /** Day/hour switches (rentals_day_hours_picker_enabled). Missing means both on. */
+  /** Day/hour switches. Missing means both on. */
   offers_daily?: boolean | null;
   offers_hourly?: boolean | null;
   min_rental_hours: number;
@@ -5366,39 +5366,12 @@ export class RentalsService {
     );
   }
 
-  private assertDurationHours(listing: any, hours: number) {
-    if (hours < listing.min_rental_hours) {
-      throw new HttpException('Below minimum rental hours', HttpStatus.BAD_REQUEST);
-    }
-    if (listing.max_rental_hours != null && hours > listing.max_rental_hours) {
-      throw new HttpException('Above maximum rental hours', HttpStatus.BAD_REQUEST);
-    }
-  }
-
   private throwDayHours(violation: DayHoursViolation | null): void {
     if (!violation) return;
     throw new HttpException(
       { message: violation.message, error: violation.message, code: violation.code },
       HttpStatus.BAD_REQUEST
     );
-  }
-
-  /** rentals_day_hours_picker_enabled for the listing's country. Off when unreadable. */
-  private async dayHoursPickerOn(listing: {
-    business_location?: { address?: { country?: string | null } | null } | null;
-  }): Promise<boolean> {
-    try {
-      if (!this.hasuraSystemService) return false;
-      const res = await this.hasuraSystemService.executeQuery<{
-        application_configurations?: DashboardRequestFlagRow[];
-      }>(Q.GET_DAY_HOURS_PICKER_FLAG, {});
-      return listingDashboardFlag(
-        res?.application_configurations ?? [],
-        listing?.business_location?.address?.country
-      );
-    } catch {
-      return false;
-    }
   }
 
   private listingTimeZone(listing: {
@@ -5505,21 +5478,17 @@ export class RentalsService {
     );
     this.assertRentalRequestStartsInFuture(earliest);
     this.throwDayHours(modeViolation(plan.windows, listing));
-    if (await this.dayHoursPickerOn(listing)) {
-      this.throwDayHours(
-        dayHoursPickerViolation({
-          windows: plan.windows,
-          listing,
-          minHours: listing.block_min_hours ?? listing.min_rental_hours,
-          maxHours:
-            listing.block_max_hours !== undefined ? listing.block_max_hours : listing.max_rental_hours,
-          nowMs: Date.now(),
-          timeZone: this.listingTimeZone(listing),
-        })
-      );
-    } else {
-      this.assertDurationHours(listing, plan.totalHours);
-    }
+    this.throwDayHours(
+      dayHoursPickerViolation({
+        windows: plan.windows,
+        listing,
+        minHours: listing.block_min_hours ?? listing.min_rental_hours,
+        maxHours:
+          listing.block_max_hours !== undefined ? listing.block_max_hours : listing.max_rental_hours,
+        nowMs: Date.now(),
+        timeZone: this.listingTimeZone(listing),
+      })
+    );
     this.assertAllDayWindows(plan, listing);
     const weekly = listing.weekly_availability ?? [];
     for (const w of plan.windows) {

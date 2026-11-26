@@ -176,9 +176,8 @@ describe('day-hours picker model', () => {
     expect(serverRuleText('SOMETHING_ELSE', 'en')).toBeNull();
     expect(serverRuleCode({ response: { data: { code: 'RENTAL_LEAD_TIME' } } })).toBe('RENTAL_LEAD_TIME');
     const refused = { response: { status: 400, data: { code: 'RENTAL_LEAD_TIME' } } };
-    expect(submitRuleText(refused, true, 'fr-FR')).toBe('Ce début est maintenant dans moins de 2\u00A0h. Choisissez une heure plus tard.');
-    expect(submitRuleText(refused, false, 'en')).toBeNull();
-    expect(submitRuleText(new Error('network'), true, 'en')).toBeNull();
+    expect(submitRuleText(refused, 'fr-FR')).toBe('Ce début est maintenant dans moins de 2\u00A0h. Choisissez une heure plus tard.');
+    expect(submitRuleText(new Error('network'), 'en')).toBeNull();
   });
 
   it('builds Sunday-first and Monday-first grids and reads listing time', () => {

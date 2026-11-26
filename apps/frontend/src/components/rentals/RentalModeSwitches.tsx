@@ -17,7 +17,7 @@ export interface RentalModes {
   offersHourly: boolean;
 }
 
-/** "Rent by the day" / "Rent by the hour" (rentals_day_hours_picker_enabled). Switching off the last one is refused with "Keep at least one on." in red. */
+/** "Rent by the day" / "Rent by the hour". Switching off the last one is refused with "Keep at least one on." in red. */
 export const RentalModeSwitches: React.FC<{ value: RentalModes; onChange: (next: RentalModes) => void; disabled?: boolean }> = ({
   value,
   onChange,

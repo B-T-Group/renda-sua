@@ -11,7 +11,7 @@ export interface RentalModes {
 }
 
 /**
- * "Rent by the day" / "Rent by the hour" (rentals_day_hours_picker_enabled).
+ * "Rent by the day" / "Rent by the hour" listing switches.
  * At least one stays on: switching off the last one is refused with "Keep at least one on." in red.
  */
 export function RentalModeSwitches({

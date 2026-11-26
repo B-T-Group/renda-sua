@@ -14,36 +14,29 @@ const listing = {
   timezone: 'Africa/Douala',
 } as unknown as RentalListingRow;
 
-type Props = { enabled: boolean };
-
-function setup(initial: Props) {
-  return renderHook(
-    ({ enabled }: Props) =>
-      useDayHoursPicker({ enabled, listing, booked: [], seed: [], language: 'en', openOnStart: true }),
-    { initialProps: initial }
-  );
-}
-
-describe('useDayHoursPicker open on start', () => {
-  it('opens at mount when the flag is already on', async () => {
-    const view = await setup({ enabled: true });
-    expect(view.result.current.enabled).toBe(true);
+describe('useDayHoursPicker', () => {
+  it('opens on start with no flag to wait for', async () => {
+    const view = await renderHook(() =>
+      useDayHoursPicker({ listing, booked: [], seed: [], language: 'en', openOnStart: true })
+    );
+    expect(view.result.current.model).not.toBeNull();
     expect(view.result.current.open).toBe(true);
   });
 
-  it('opens once the flag arrives after mount (client-flags still loading)', async () => {
-    const view = await setup({ enabled: false });
-    expect(view.result.current.open).toBe(false);
-    await act(async () => view.rerender({ enabled: true }));
-    expect(view.result.current.enabled).toBe(true);
-    expect(view.result.current.open).toBe(true);
-  });
-
-  it('does not reopen after the renter closes it', async () => {
-    const view = await setup({ enabled: true });
+  it('stays closed after the renter closes it, across re-renders', async () => {
+    const view = await renderHook(() =>
+      useDayHoursPicker({ listing, booked: [], seed: [], language: 'en', openOnStart: true })
+    );
     await act(async () => view.result.current.close());
     expect(view.result.current.open).toBe(false);
-    await act(async () => view.rerender({ enabled: true }));
+    await act(async () => view.rerender({}));
+    expect(view.result.current.open).toBe(false);
+  });
+
+  it('starts closed on the modify screen (no openOnStart)', async () => {
+    const view = await renderHook(() =>
+      useDayHoursPicker({ listing, booked: [], seed: [], language: 'en' })
+    );
     expect(view.result.current.open).toBe(false);
   });
 });

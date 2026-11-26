@@ -52,7 +52,7 @@ export type AddRentalLocationForm = {
   locationName?: string;
   base_price_per_hour: number;
   base_price_per_day: number;
-  /** Set only when rentals_day_hours_picker_enabled shows the switches. */
+  /** The listing switches "Rent by the day" / "Rent by the hour". */
   offers_daily?: boolean;
   offers_hourly?: boolean;
   security_deposit_amount?: number;

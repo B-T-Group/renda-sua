@@ -22,12 +22,9 @@ function listing(over: Record<string, unknown> = {}) {
   };
 }
 
-function harness(flagRows: Array<{ boolean_value: boolean; country_code: string | null }>) {
+function harness() {
   const svc = Object.create(RentalsService.prototype) as any;
   svc.assertCapacity = jest.fn().mockResolvedValue(undefined);
-  svc.hasuraSystemService = {
-    executeQuery: jest.fn().mockResolvedValue({ application_configurations: flagRows }),
-  };
   return svc;
 }
 
@@ -57,33 +54,22 @@ async function codeOf(svc: any, windows: unknown[], l = listing()): Promise<stri
   }
 }
 
-describe('rental request validation with rentals_day_hours_picker_enabled', () => {
-  const on = [{ boolean_value: true, country_code: null }];
-  const off = [{ boolean_value: false, country_code: null }];
-
-  it('flag off keeps the old total-hours rule and allows days that are not in a row', async () => {
-    const svc = harness(off);
-    // Two 1 h blocks meet a 2 h minimum in total.
-    expect(await codeOf(svc, [hourly(dayKey(8), 10, 11), hourly(dayKey(11), 10, 11)])).toBeNull();
-    // Two full days count 24 h each against the 8 h maximum, as today.
-    expect(await codeOf(svc, [fullDay(dayKey(8)), fullDay(dayKey(9))])).toBe('Above maximum rental hours');
-  });
-
-  it('flag on applies min/max per hour block and exempts full days', async () => {
-    const svc = harness(on);
+describe('rental request validation (day-and-hours rules, always on)', () => {
+  it('applies min/max per hour block and exempts full days', async () => {
+    const svc = harness();
     expect(await codeOf(svc, [fullDay(dayKey(8)), fullDay(dayKey(9))])).toBeNull();
     expect(await codeOf(svc, [hourly(dayKey(8), 10, 11), hourly(dayKey(9), 10, 11)])).toBe(
       'RENTAL_BLOCK_BELOW_MIN_HOURS'
     );
   });
 
-  it('flag on rejects days that are not in a row', async () => {
-    const svc = harness(on);
+  it('rejects days that are not in a row', async () => {
+    const svc = harness();
     expect(await codeOf(svc, [fullDay(dayKey(8)), fullDay(dayKey(10))])).toBe('RENTAL_DAYS_NOT_IN_A_ROW');
   });
 
-  it('flag on enforces the 2-hour lead time in listing time', async () => {
-    const svc = harness(on);
+  it('enforces the 2-hour lead time in listing time', async () => {
+    const svc = harness();
     const now = new Date();
     const libreville = new Date(now.getTime() + 60 * 60 * 1000); // UTC+1 wall clock
     const soon = new Date(libreville.getTime() + 30 * 60 * 1000);
@@ -98,27 +84,20 @@ describe('rental request validation with rentals_day_hours_picker_enabled', () =
     expect(code).toBe('RENTAL_LEAD_TIME');
   });
 
-  it('the country row wins over the global row', async () => {
-    const svc = harness([
-      { boolean_value: false, country_code: null },
-      { boolean_value: true, country_code: 'GA' },
-    ]);
+  it('applies the rules without reading any flag row', async () => {
+    const svc = harness();
+    svc.hasuraSystemService = { executeQuery: jest.fn() };
     expect(await codeOf(svc, [fullDay(dayKey(8)), fullDay(dayKey(10))])).toBe('RENTAL_DAYS_NOT_IN_A_ROW');
+    expect(svc.hasuraSystemService.executeQuery).not.toHaveBeenCalled();
   });
 
   it('always rejects a way of renting the listing switched off', async () => {
-    const svc = harness(off);
+    const svc = harness();
     expect(await codeOf(svc, [fullDay(dayKey(8))], listing({ offers_daily: false, max_rental_hours: null }))).toBe(
       'RENTAL_DAILY_NOT_OFFERED'
     );
     expect(await codeOf(svc, [hourly(dayKey(8), 10, 12)], listing({ offers_hourly: false }))).toBe(
       'RENTAL_HOURLY_NOT_OFFERED'
     );
-  });
-
-  it('treats an unreadable flag as off', async () => {
-    const svc = Object.create(RentalsService.prototype) as any;
-    svc.assertCapacity = jest.fn().mockResolvedValue(undefined);
-    expect(await codeOf(svc, [hourly(dayKey(8), 10, 11), hourly(dayKey(11), 10, 11)])).toBeNull();
   });
 });

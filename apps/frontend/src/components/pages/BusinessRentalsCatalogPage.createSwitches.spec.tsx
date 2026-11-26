@@ -7,7 +7,6 @@ import en from '../../../public/locales/en.json';
 import fr from '../../../public/locales/fr.json';
 import BusinessRentalsCatalogPage from './BusinessRentalsCatalogPage';
 
-const mockFlags: { rentals_day_hours_picker_enabled: boolean } = { rentals_day_hours_picker_enabled: true };
 const mockCreate = jest.fn();
 const mockPublish = jest.fn();
 const mockApi = {
@@ -18,7 +17,7 @@ const mockApi = {
 };
 const mockLocations = { locations: [{ id: 'loc-1', name: 'Atelier Plateau' }] };
 
-jest.mock('../../hooks/useClientFlags', () => ({ useClientFlags: () => ({ flags: mockFlags }) }));
+jest.mock('../../hooks/useClientFlags', () => ({ useClientFlags: () => ({ flags: {} }) }));
 jest.mock('../../hooks/useRentalApi', () => ({ useRentalApi: () => mockApi }));
 jest.mock('../../hooks/useBusinessLocations', () => ({ useBusinessLocations: () => mockLocations }));
 jest.mock('../../contexts/UserProfileContext', () => ({
@@ -67,7 +66,6 @@ function type(testId: string, value: string) {
 
 describe('BusinessRentalsCatalogPage: Add location listing with the rent switches (#866)', () => {
   beforeEach(async () => {
-    mockFlags.rentals_day_hours_picker_enabled = true;
     mockApi.fetchBusinessRentalItems.mockResolvedValue([item]);
     mockCreate.mockReset().mockResolvedValue({ success: true, data: { id: 'lst-new' } });
     mockPublish.mockReset().mockResolvedValue({ success: true });
@@ -120,19 +118,5 @@ describe('BusinessRentalsCatalogPage: Add location listing with the rent switche
     expect(within(dialog).getByText('Louer à l’heure')).toBeTruthy();
     fireEvent.click(within(dialog).getByTestId('rental-mode-offersDaily').querySelector('input') as HTMLInputElement);
     expect(screen.queryByTestId('add-listing-price-day')).toBeNull();
-  });
-
-  it('keeps the old dialog with the flag off: no switches, empty day price = 12 × hourly, no offers sent', async () => {
-    mockFlags.rentals_day_hours_picker_enabled = false;
-    const dialog = await openDialog();
-    expect(within(dialog).queryByTestId('rental-mode-offersDaily')).toBeNull();
-    type('add-listing-price-hour', '8');
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('add-listing-publish'));
-    });
-    const body = mockCreate.mock.calls[0][0];
-    expect(body).toEqual(expect.objectContaining({ base_price_per_hour: 8, base_price_per_day: 96 }));
-    expect(body).not.toHaveProperty('offers_daily');
-    expect(body).not.toHaveProperty('offers_hourly');
   });
 });

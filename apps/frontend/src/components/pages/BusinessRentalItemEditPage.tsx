@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { InspectionOptInCard } from '../rentals/InspectionOptInCard';
 import { RentalModeSwitches } from '../rentals/RentalModeSwitches';
-import { useClientFlags } from '../../hooks/useClientFlags';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import {
@@ -112,19 +111,17 @@ function buildItemUpdateBody(
 
 function buildListingUpdateBody(
   f: ListingFormState,
-  currency: string,
-  modesOn = false
+  currency: string
 ): UpdateBusinessRentalListingBody | null {
   const parsed = parsePriceFields(f, currency);
   if (!parsed) return null;
-  if (modesOn) {
-    if (!f.offers_daily && !f.offers_hourly) return null;
-    if (f.offers_hourly && !(parsed.base_price_per_hour > 0)) return null;
-    if (f.offers_daily && !(parsed.base_price_per_day > 0)) return null;
-  }
+  if (!f.offers_daily && !f.offers_hourly) return null;
+  if (f.offers_hourly && !(parsed.base_price_per_hour > 0)) return null;
+  if (f.offers_daily && !(parsed.base_price_per_day > 0)) return null;
   return {
     ...parsed,
-    ...(modesOn ? { offers_daily: f.offers_daily, offers_hourly: f.offers_hourly } : {}),
+    offers_daily: f.offers_daily,
+    offers_hourly: f.offers_hourly,
     pickup_instructions: f.pickup_instructions.trim(),
     dropoff_instructions: f.dropoff_instructions.trim(),
     is_active: f.is_active,
@@ -175,8 +172,6 @@ const BusinessRentalItemEditPage: React.FC = () => {
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
   const { lockedCurrency } = useBusinessLockedCurrency(businessId);
-  const { flags } = useClientFlags();
-  const modesOn = flags.rentals_day_hours_picker_enabled === true;
   const {
     fetchBusinessRentalItem,
     updateBusinessRentalItem,
@@ -286,12 +281,10 @@ const BusinessRentalItemEditPage: React.FC = () => {
     async (listingId: string) => {
       const f = listingForms[listingId];
       if (!f) return;
-      const body = buildListingUpdateBody(f, item?.currency || lockedCurrency, modesOn);
+      const body = buildListingUpdateBody(f, item?.currency || lockedCurrency);
       if (!body) {
         enqueueSnackbar(
-          modesOn
-            ? t('business.rentals.rentBy.listingInvalid', 'Check listing numbers, max ≥ min, and a price for each way you rent.')
-            : t('business.rentals.listingInvalid', 'Check listing numbers and max ≥ min.'),
+          t('business.rentals.rentBy.listingInvalid', 'Check listing numbers, max ≥ min, and a price for each way you rent.'),
           { variant: 'warning' }
         );
         return;
@@ -312,7 +305,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
         setSavingListingId(null);
       }
     },
-    [enqueueSnackbar, item?.currency, listingForms, lockedCurrency, modesOn, reload, t, updateBusinessRentalListing]
+    [enqueueSnackbar, item?.currency, listingForms, lockedCurrency, reload, t, updateBusinessRentalListing]
   );
 
   const publishListing = useCallback(
@@ -663,15 +656,13 @@ const BusinessRentalItemEditPage: React.FC = () => {
                 </Alert>
               ) : null}
               <Stack spacing={2}>
-                {modesOn ? (
-                  <RentalModeSwitches
-                    value={{ offersDaily: f.offers_daily, offersHourly: f.offers_hourly }}
-                    onChange={(next) =>
-                      patchListingForm(l.id, { offers_daily: next.offersDaily, offers_hourly: next.offersHourly })
-                    }
-                  />
-                ) : null}
-                {!modesOn || f.offers_hourly ? (
+                <RentalModeSwitches
+                  value={{ offersDaily: f.offers_daily, offersHourly: f.offers_hourly }}
+                  onChange={(next) =>
+                    patchListingForm(l.id, { offers_daily: next.offersDaily, offers_hourly: next.offersHourly })
+                  }
+                />
+                {f.offers_hourly ? (
                   <TextField
                     label={t('business.rentals.pricePerHour', 'Price per hour')}
                     value={f.base_price_per_hour}
@@ -682,12 +673,10 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     fullWidth
                   />
                 ) : null}
-                {!modesOn || f.offers_daily ? (
+                {f.offers_daily ? (
                   <TextField
                     label={
-                      modesOn
-                        ? t('business.rentals.rentBy.dayPrice', 'Price per day')
-                        : t('business.rentals.pricePerDay', 'Full day price (daily rate)')
+                      t('business.rentals.rentBy.dayPrice', 'Price per day')
                     }
                     value={f.base_price_per_day}
                     onChange={(e) =>
@@ -709,7 +698,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     type="number"
                     fullWidth
                     helperText={
-                      modesOn && !f.offers_hourly
+                      !f.offers_hourly
                         ? t(
                             'business.rentals.securityDepositHelperDaily',
                             'Held on card rentals to cover extra time. Default is two-thirds of the day price.'

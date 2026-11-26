@@ -12,7 +12,6 @@ import { renderWithProviders } from '@/__tests__/test-utils';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import i18n from '@/i18n';
 import { allDaySelectionsForRange } from '@/utils/rentals/rentalSearchPreset';
-import { defaultWeeklyAvailability } from '@/utils/rentals/defaultWeeklyAvailability';
 import { RentalSlotPicker } from './RentalSlotPicker';
 
 const selections = allDaySelectionsForRange(
@@ -26,14 +25,12 @@ function renderRequest(over: Record<string, unknown> = {}) {
     <NavigationContainer>
       <ThemeProvider>
         <RentalSlotPicker
-          layout="screen"
           listingId="listing-1"
           isAuthenticated
           bookedWindows={[]}
           basePricePerDay={380}
           basePricePerHour={40}
           currency="XAF"
-          weeklyAvailability={defaultWeeklyAvailability()}
           initialSelections={selections}
           datesFilled
           dateLine="11–13 Nov · 2 days"
@@ -57,7 +54,7 @@ describe('rental request screen', () => {
     cleanup();
   });
 
-  it('lands with human days, a day price, and the builder collapsed', async () => {
+  it('lands with human days, a day price, and Change days and hours (no old time builder)', async () => {
     const onEditDates = jest.fn();
     const view = await renderRequest({ onEditDates });
     expect(view.getByTestId('rental-request-dates').props.children).toBe('11–13 Nov · 2 days');
@@ -68,7 +65,8 @@ describe('rental request screen', () => {
     expect(view.queryByText('FCFA 760')).toBeNull();
     expect(view.queryByText(/billable hours/i)).toBeNull();
     expect(view.queryByText(/2026-11-11/)).toBeNull();
-    expect(view.queryByTestId('rental-request-builder')).toBeNull();
+    expect(view.queryByTestId('rental-request-add-times')).toBeNull();
+    expect(view.getByTestId('rental-request-change-days')).toBeTruthy();
     expect(view.getByTestId('rental-request-sticky')).toBeTruthy();
     expect(view.getByText('Nothing is charged until the business accepts.')).toBeTruthy();
     expect(view.getByText('1 of 1 available for your dates')).toBeTruthy();
@@ -76,21 +74,10 @@ describe('rental request screen', () => {
       fireEvent.press(view.getByTestId('rental-request-edit-dates'));
     });
     expect(onEditDates).toHaveBeenCalledTimes(1);
-    expect(view.queryByTestId('rental-request-builder')).toBeNull();
-  });
-
-  it('highlights the chosen dates when the builder opens, not an unchosen today', async () => {
-    const view = await renderRequest();
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-request-add-times'));
+      fireEvent.press(view.getByTestId('rental-request-change-days'));
     });
-    expect(view.getByTestId('rental-request-builder')).toBeTruthy();
-    expect(view.getByTestId('rental-request-chip-2026-11-11').props.accessibilityState.selected).toBe(true);
-    expect(view.getByTestId('rental-request-chip-2026-11-12').props.accessibilityState.selected).toBe(true);
-    const today = view.queryByTestId('rental-request-chip-2026-11-10');
-    if (today) expect(today.props.accessibilityState.selected).toBe(false);
-    expect(view.getByTestId('rental-request-sticky')).toBeTruthy();
-    expect(view.getByText('Add full day (daily rate)')).toBeTruthy();
+    expect(onEditDates).toHaveBeenCalledTimes(2);
   });
 
   it('uses vous copy and day wording in French', async () => {
@@ -102,7 +89,7 @@ describe('rental request screen', () => {
     expect(view.getByText('Mer. 11 nov. · Toute la journée')).toBeTruthy();
     expect(view.getByText('Jeu. 12 nov. · Toute la journée')).toBeTruthy();
     expect(view.getByText('Modifier')).toBeTruthy();
-    expect(view.getByText('Ajouter ou modifier des horaires')).toBeTruthy();
+    expect(view.getByText('Modifier les jours et les heures')).toBeTruthy();
     expect(view.getByText('2 jours × 380\u00A0FCFA / jour')).toBeTruthy();
     expect(view.getByText('1 sur 1 disponible pour vos dates')).toBeTruthy();
     expect(view.getByPlaceholderText('Notes facultatives pour l’entreprise')).toBeTruthy();
@@ -133,7 +120,7 @@ describe('rental request screen', () => {
     });
     expect(view.getByTestId('rental-request-choose-dates')).toBeTruthy();
     expect(view.queryByTestId('rental-request-dates')).toBeNull();
-    expect(view.queryByTestId('rental-request-builder')).toBeNull();
+    expect(view.queryByTestId('rental-request-change-days')).toBeNull();
   });
 
   it('shows Available from and disables send when the dates are booked', async () => {

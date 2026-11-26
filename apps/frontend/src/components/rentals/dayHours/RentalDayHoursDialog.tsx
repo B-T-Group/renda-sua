@@ -96,7 +96,7 @@ export interface RentalDayHoursDialogProps {
 
 type Notes = Record<string, BlockNote | null>;
 
-/** Web day-and-hours picker (rentals_day_hours_picker_enabled). Calendar left, days right. */
+/** Web day-and-hours picker. Calendar left, days right. */
 export const RentalDayHoursDialog: React.FC<RentalDayHoursDialogProps> = (props) => {
   const theme = useTheme();
   const narrow = useMediaQuery(theme.breakpoints.down('md'));

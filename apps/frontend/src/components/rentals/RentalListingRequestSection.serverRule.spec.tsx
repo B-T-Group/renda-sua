@@ -15,7 +15,7 @@ const mockNavigate = jest.fn();
 jest.mock('../../hooks/useRentalApi', () => ({ useRentalApi: () => mockApi }));
 jest.mock('../../hooks/useClientFlags', () => ({
   useClientFlags: () => ({
-    flags: { rentals_day_hours_picker_enabled: true, rentals_card_window_guard_enabled: false },
+    flags: { rentals_card_window_guard_enabled: false },
   }),
 }));
 jest.mock('../../hooks/useTrackSiteEvent', () => ({

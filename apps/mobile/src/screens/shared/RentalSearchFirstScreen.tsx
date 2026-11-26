@@ -39,7 +39,6 @@ import {
   type RentalDateRange,
 } from '../../utils/rentals/rentalSearchDates';
 import { loadRecentSearches, rememberSearch } from '../../utils/rentals/recentRentalSearches';
-import { searchRentAction } from '../../utils/rentals/searchRentAction';
 import { splitTopCategories } from '../../utils/rentals/rentalCategoryIcon';
 import {
   allDaySelectionsForRange,
@@ -85,7 +84,6 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   const [dates, setDates] = useState<RentalDateRange | null>(initialDates);
   const [draftDates, setDraftDates] = useState<RentalDateRange | null>(null);
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
-  const [pendingRentId, setPendingRentId] = useState<string | null>(null);
   const [categories, setCategories] = useState<RentalTopCategory[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<RentalSuggestion[]>([]);
@@ -193,7 +191,7 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   }, [mode, query, geo.ready, geo.country_code, geo.state]);
 
   const openListing = useCallback(
-    (listingId: string, range: RentalDateRange | null, openRequest = Boolean(range)) => {
+    (listingId: string, range: RentalDateRange | null, openRequest: boolean) => {
       const parent = navigation.getParent() ?? navigation;
       (parent as { navigate: (name: string, params: object) => void }).navigate('RentalListingDetail', {
         listingId,
@@ -226,12 +224,7 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
     setDates(draftDates);
     setDateSheetOpen(false);
     setDatesSkipped(true);
-    if (pendingRentId) {
-      const listingId = pendingRentId;
-      setPendingRentId(null);
-      openListing(listingId, draftDates);
-    }
-  }, [draftDates, openListing, pendingRentId]);
+  }, [draftDates]);
 
   const visibleHits = defaultList ? catalog.hits : hits;
   const cards: RentalSearchCardModel[] = useMemo(
@@ -297,7 +290,6 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
         onApplyDates={onApplyDates}
         onCloseDates={() => {
           setDateSheetOpen(false);
-          setPendingRentId(null);
         }}
         onCategory={(id) => {
           setCategoryId(categoryId === id ? null : id);
@@ -327,14 +319,8 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
           commitQuery(term);
         }}
         onRent={(id) => {
-          if (searchRentAction(dates, flags.rentals_day_hours_picker_enabled === true) === 'request') {
-            // With the day-and-hours picker on, the request screen opens it; the search date sheet is the old range picker.
-            openListing(id, dates, true);
-            return;
-          }
-          setPendingRentId(id);
-          setDraftDates(null);
-          setDateSheetOpen(true);
+          // The request screen opens the day-and-hours picker (with the search dates, if any).
+          openListing(id, dates, true);
         }}
         onSeeDates={(id) => {
           const hit = visibleHits.find((row) => row.listing.id === id);

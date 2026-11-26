@@ -5,10 +5,8 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RentalSlotPicker } from '../../components/rentals/RentalSlotPicker';
 import { RentalModifyBlockedSheet } from '../../components/rentals/RentalModifySheets';
-import { RentalSearchDateSheet } from '../../components/rentals/search/RentalSearchDateSheet';
 import { RentalDayHoursSheet } from '../../components/rentals/dayHours/RentalDayHoursSheet';
 import { useDayHoursPicker } from '../../components/rentals/dayHours/useDayHoursPicker';
-import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
 import { useRentalRequestDates } from '../../hooks/useRentalRequestDates';
@@ -148,16 +146,14 @@ function ModifyRequestForm({
   const previousTotal = Number.isFinite(previous) ? previous : dayRate * Math.max(savedSelections.length, 1);
   const draft = draftSelections(dates.stay, openedRange, listing, dayRate, savedSelections);
   const image = listing?.rental_item?.rental_item_images?.[0];
-  const { flags } = useClientFlags();
   const picker = useDayHoursPicker({
-    enabled: flags.rentals_day_hours_picker_enabled === true,
     listing,
     booked: bookedWindows,
     seed: savedSelections,
     language: i18n.language,
   });
-  const picked = picker.enabled ? picker.rows : null;
-  const openDates = picker.enabled ? () => picker.setOpen(true) : dates.openDateEditor;
+  const picked = picker.rows;
+  const openDates = () => picker.setOpen(true);
 
   return (
     <>
@@ -168,21 +164,18 @@ function ModifyRequestForm({
       />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <RentalSlotPicker
-          key={`${request.id}:${dates.stay?.startDate ?? ''}:${dates.stay?.endDate ?? ''}:${picker.enabled ? picker.selectionKey : ''}`}
-          layout="screen"
+          key={`${request.id}:${dates.stay?.startDate ?? ''}:${dates.stay?.endDate ?? ''}:${picker.selectionKey}`}
           submitMode="modify"
           listingId={listing?.id ?? request.rental_location_listing?.id ?? ''}
           isAuthenticated
           bookedWindows={bookedWindows}
-          weeklyAvailability={listing?.weekly_availability}
           unitsAvailable={Number(listing?.units_available) || 1}
           basePricePerDay={dayRate}
           basePricePerHour={Number(listing?.base_price_per_hour) || 0}
           currency={item?.currency || 'XAF'}
           initialSelections={picked ?? draft}
-          dayHoursPicker={picker.enabled}
-          minRentalHours={picker.enabled ? listing?.min_rental_hours : undefined}
-          maxRentalHours={picker.enabled ? listing?.max_rental_hours : undefined}
+          minRentalHours={listing?.min_rental_hours}
+          maxRentalHours={listing?.max_rental_hours}
           savedSelections={savedSelections}
           initialUnits={request.units_requested ?? 1}
           initialNotes={request.client_request_note ?? ''}
@@ -192,19 +185,18 @@ function ModifyRequestForm({
           itemName={item?.name}
           itemMeta={itemMeta(request, dayRate, i18n.language, t, listing ?? request.rental_location_listing)}
           imageUrl={image?.display_url || image?.image_url || null}
-          requestBlocked={Boolean(blocked) || dates.requestBlocked}
-          requestBusy={dates.checkingStay}
-          unavailableLabel={blocked ?? dates.unavailableLabel}
+          requestBlocked={Boolean(blocked)}
+          unavailableLabel={blocked ?? undefined}
           onSeeDates={() => {
             onClearBlocked();
             openDates();
           }}
           onEditDates={openDates}
-          onServerRuleError={picker.enabled ? picker.reopenWithError : undefined}
+          onServerRuleError={picker.reopenWithError}
           onModifySave={onSave}
         />
       </KeyboardAvoidingView>
-      {picker.enabled && picker.model ? (
+      {picker.model ? (
         <RentalDayHoursSheet
           visible={picker.open}
           listing={picker.model}
@@ -221,20 +213,6 @@ function ModifyRequestForm({
           }}
         />
       ) : null}
-      <RentalSearchDateSheet
-        visible={!picker.enabled && dates.editOpen}
-        value={dates.draftStay}
-        timeZone={dates.timeZone}
-        onChange={dates.setDraftStay}
-        onApply={() => {
-          const next = dates.draftStay;
-          if (!next || next.dayCount < 1 || next.dayCount > 30) return;
-          dates.setEditOpen(false);
-          onClearBlocked();
-          void dates.commitStay(next);
-        }}
-        onClose={() => dates.setEditOpen(false)}
-      />
     </>
   );
 }

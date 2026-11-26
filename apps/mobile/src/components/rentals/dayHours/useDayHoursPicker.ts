@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { RentalListingRow, RentalTakenWindow } from '../../../types/rentals';
 import type { SelectionRange } from '../../../utils/rentals';
 import {
@@ -46,11 +46,10 @@ export function dayHoursListingModel(
 }
 
 /**
- * State for the request screens when rentals_day_hours_picker_enabled is on.
+ * State for the rental request screens (the day-and-hours picker is the only date picker).
  * `rows` are what the review step submits; `days` reopen the sheet as they were.
  */
 export function useDayHoursPicker(input: {
-  enabled: boolean;
   listing: RentalListingRow | null;
   booked: RentalTakenWindow[];
   /** Rows the screen opened with (search dates as all-day rows, or a saved request). */
@@ -58,15 +57,8 @@ export function useDayHoursPicker(input: {
   language: string;
   openOnStart?: boolean;
 }) {
-  const { enabled, listing, booked, seed, language } = input;
-  const [open, setOpen] = useState(Boolean(input.enabled && input.openOnStart));
-  /** Flags can arrive after mount: open once when the picker turns on, not only at mount. */
-  const autoOpened = useRef(Boolean(input.enabled && input.openOnStart));
-  useEffect(() => {
-    if (!input.openOnStart || !enabled || autoOpened.current) return;
-    autoOpened.current = true;
-    setOpen(true);
-  }, [enabled, input.openOnStart]);
+  const { listing, booked, seed, language } = input;
+  const [open, setOpen] = useState(Boolean(input.openOnStart));
   const [picked, setPicked] = useState<{ rows: SelectionRange[]; days: PickedDay[] } | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const model = useMemo(() => (listing ? dayHoursListingModel(listing, booked) : null), [booked, listing]);
@@ -95,7 +87,6 @@ export function useDayHoursPicker(input: {
     setOpen(false);
   }, []);
   return {
-    enabled: enabled && Boolean(model),
     model,
     open,
     setOpen,

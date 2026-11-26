@@ -1,4 +1,3 @@
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditCalendarOutlinedIcon from '@mui/icons-material/EditCalendarOutlined';
 import {
   Alert,
@@ -6,21 +5,14 @@ import {
   Button,
   Card,
   CardContent,
-  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
-  FormControl,
-  IconButton,
-  InputLabel,
-  FormControlLabel,
   List,
   ListItem,
   ListItemText,
-  MenuItem,
-  Select,
   Stack,
   TextField,
   Typography,
@@ -40,21 +32,13 @@ import {
   cardWindowSendReason,
   cardWindowWarning,
   effectiveCardEnd,
-  calendarDay,
   formatCardCutoff,
   type CardWindowFields,
 } from '../../utils/rentals/cardWindow';
 import { localPickerInstantToRequestParts, requestedSlotUtcIso } from '../../utils/rentalRequestUtc';
 import { estimateTotalFromSelectionRanges } from '../../utils/rentalPricingLines';
 import {
-  bookedSegmentsForLocalDay,
-  dayHasRemainingCapacity,
   formatSelectionLabel,
-  freeSlotEndsLocal,
-  freeSlotStartsLocal,
-  listingDayBoundsLocal,
-  maximalFreeHourRangesLocal,
-  mergeRangeIntoSelections,
   remainingUnitsInRange,
   rentalBillableHours,
   totalBillableHours,
@@ -67,12 +51,7 @@ import { fromSelectionRanges, listingNowMs } from '../../utils/rentalDayHoursPic
 import { submitRuleText } from '../../utils/rentalDayHoursCopy';
 
 export const RENTAL_REQUEST_SECTION_ID = 'rental-request-section';
-const RENTAL_MIN_START_BUFFER_MS = 2 * 60 * 60 * 1000;
 
-function parseDateInputLocal(dateStr: string): Date {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0);
-}
 
 function exclusiveDays(start: string, end: string): string[] {
   const days: string[] = [];
@@ -85,12 +64,6 @@ function exclusiveDays(start: string, end: string): string[] {
   return days;
 }
 
-function todayDateInputValue(): string {
-  const n = new Date();
-  const mo = String(n.getMonth() + 1).padStart(2, '0');
-  const da = String(n.getDate()).padStart(2, '0');
-  return `${n.getFullYear()}-${mo}-${da}`;
-}
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -120,7 +93,7 @@ export interface RentalListingRequestSectionProps {
   initialEndDate?: string;
   cardWindow?: CardWindowFields | null;
   inspectionPolicyVersion?: number | null;
-  /** Listing switches; missing means both on. Read only with rentals_day_hours_picker_enabled. */
+  /** Listing switches; missing means both on. */
   offersDaily?: boolean;
   offersHourly?: boolean;
   /** Listing market time zone (floating wall-clock times). */
@@ -151,7 +124,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
   const guardOn = flags.rentals_card_window_guard_enabled;
-  const pickerOn = flags.rentals_day_hours_picker_enabled === true;
   const [pickerOpen, setPickerOpen] = useState(false);
   /** Server rule text shown inside the reopened picker, not on the page behind it. */
   const [pickerError, setPickerError] = useState<string | null>(null);
@@ -160,14 +132,9 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   const cardOn = payingByCard ?? cardWindow?.payment_rail === 'stripe';
   const latest = guardOn ? effectiveCardEnd(cardWindow, cardOn) : null;
   const navigate = useNavigate();
-  const dateRef = useRef<HTMLInputElement | null>(null);
   const { createRequest, fetchListingBookedWindows } = useRentalApi();
   const { trackSiteEvent } = useTrackSiteEvent();
   const [booked, setBooked] = useState<RentalTakenWindow[]>([]);
-  const [dateStr, setDateStr] = useState(todayDateInputValue());
-  const [startMs, setStartMs] = useState<number | ''>('');
-  const [endMs, setEndMs] = useState<number | ''>('');
-  const [allDayChecked, setAllDayChecked] = useState(false);
   const [selections, setSelections] = useState<SelectionRange[]>([]);
   const [unitsRequested, setUnitsRequested] = useState(1);
   const [notes, setNotes] = useState('');
@@ -187,7 +154,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
       calendarDate: day,
     }));
     if (!ranges.length) return;
-    setDateStr(initialStartDate);
     setSelections(ranges);
     document.getElementById(RENTAL_REQUEST_SECTION_ID)?.scrollIntoView({ behavior: 'smooth' });
   }, [initialEndDate, initialStartDate]);
@@ -226,41 +192,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     void loadBooked();
   }, [loadBooked]);
 
-  const dayAnchor = useMemo(() => parseDateInputLocal(dateStr), [dateStr]);
-  const dayBounds = useMemo(
-    () => listingDayBoundsLocal(dayAnchor, weeklyAvailability),
-    [dayAnchor, weeklyAvailability]
-  );
-
-  const dayStartEnd = useMemo(() => {
-    const start = new Date(dayAnchor);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
-    return { start, end };
-  }, [dayAnchor]);
-
-  const bookedSegs = useMemo(
-    () => bookedSegmentsForLocalDay(dayStartEnd.start, dayStartEnd.end, booked),
-    [booked, dayStartEnd.end, dayStartEnd.start]
-  );
-
-  const nowMs = Date.now();
-  const minStartMs = nowMs + RENTAL_MIN_START_BUFFER_MS;
-  const slotStarts = useMemo(() => {
-    if (!dayBounds) return [];
-    return freeSlotStartsLocal(dayBounds.open, dayBounds.close, bookedSegs, minStartMs, stock);
-  }, [bookedSegs, dayBounds, minStartMs, stock]);
-
-  const slotEnds = useMemo(() => {
-    if (!dayBounds || startMs === '') return [];
-    return freeSlotEndsLocal(Number(startMs), dayBounds.close, bookedSegs, stock);
-  }, [bookedSegs, dayBounds, startMs, stock]);
-
-  const canAllDay =
-    !!dayBounds &&
-    dayHasRemainingCapacity(dayBounds.open, dayBounds.close, booked, stock, 1);
-
   const remainingForSelection = useMemo(() => {
     if (selections.length === 0) return stock;
     let minRem = stock;
@@ -274,73 +205,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   useEffect(() => {
     setUnitsRequested((prev) => Math.min(Math.max(1, prev), Math.max(1, remainingForSelection)));
   }, [remainingForSelection]);
-
-  useEffect(() => {
-    setStartMs('');
-    setEndMs('');
-    setAllDayChecked(false);
-  }, [dateStr]);
-
-  const addRange = () => {
-    setMsg(null);
-    if (allDayChecked) {
-      if (!dayBounds || !canAllDay) return;
-      const openMs = dayBounds.open.getTime();
-      if (openMs > minStartMs) {
-        setSelections((prev) =>
-          mergeRangeIntoSelections(prev, openMs, dayBounds.close.getTime(), {
-            billing: 'all_day',
-            calendarDate: dateStr,
-          })
-        );
-      } else {
-        const ranges = maximalFreeHourRangesLocal(
-          dayBounds.open,
-          dayBounds.close,
-          bookedSegs,
-          minStartMs,
-          stock
-        );
-        if (ranges.length === 0) return;
-        setSelections((prev) => {
-          let next = prev;
-          for (const r of ranges) {
-            next = mergeRangeIntoSelections(next, r.startMs, r.endMs, { billing: 'hourly' });
-          }
-          return next;
-        });
-      }
-      setStartMs('');
-      setEndMs('');
-      setAllDayChecked(false);
-      return;
-    }
-    if (!dayBounds || startMs === '' || endMs === '') {
-      setMsg(t('rentals.requestForm.pickStartEnd', 'Choose a start and end time.'));
-      return;
-    }
-    const s = Number(startMs);
-    const e = Number(endMs);
-    if (!(e > s)) {
-      setMsg(t('rentals.requestForm.endAfterStart', 'End must be after start.'));
-      return;
-    }
-    if (s < minStartMs) {
-      setMsg(t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.'));
-      return;
-    }
-    if (remainingUnitsInRange(s, e, booked, stock) < 1) {
-      setMsg(t('rentals.requestForm.noUnitsLeft', 'No units left for that time.'));
-      return;
-    }
-    setSelections((prev) => mergeRangeIntoSelections(prev, s, e, { billing: 'hourly' }));
-    setStartMs('');
-    setEndMs('');
-  };
-
-  const removeSelection = (id: string) => {
-    setSelections((prev) => prev.filter((r) => r.id !== id));
-  };
 
   const hoursTotal = useMemo(() => totalBillableHours(selections), [selections]);
   const { lines: estimateLines, total: estimatedTotal } = useMemo(
@@ -372,15 +236,9 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     if (selections.length === 0) {
       return t('rentals.requestForm.addOneRange', 'Add at least one time range.');
     }
-    if (pickerOn) {
-      const blockError = dayHoursBlockError(selections, minRentalHours, maxRentalHours);
-      if (blockError === 'min') return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
-      if (blockError === 'max') return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
-    } else if (hoursTotal < minRentalHours) {
-      return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
-    } else if (maxRentalHours != null && hoursTotal > maxRentalHours) {
-      return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
-    }
+    const blockError = dayHoursBlockError(selections, minRentalHours, maxRentalHours);
+    if (blockError === 'min') return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
+    if (blockError === 'max') return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
     if (unitsRequested < 1 || unitsRequested > remainingForSelection) {
       return t(
         'rentals.requestForm.unitsUnavailable',
@@ -392,10 +250,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         if (!r.calendarDate) {
           return t('rentals.requestForm.allDayNeedsDate', 'All-day selection is missing a date.');
         }
-      }
-      if (!pickerOn && r.startMs < minStartMs) {
-        // With the picker on, the dialog and the server check lead time in listing time.
-        return t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.');
       }
       if (remainingUnitsInRange(r.startMs, r.endMs, booked, stock) < unitsRequested) {
         return t(
@@ -410,7 +264,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     hoursTotal,
     maxRentalHours,
     minRentalHours,
-    minStartMs,
     remainingForSelection,
     selections,
     stock,
@@ -418,7 +271,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     unitsRequested,
     cardUnfit,
     i18n.language,
-    pickerOn,
   ]);
 
   const openConfirm = () => {
@@ -483,7 +335,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         state: { inspectionPolicyVersion: version, requestId: created.requestId },
       });
     } catch (e: unknown) {
-      const ruleText = submitRuleText(e, pickerOn, i18n.language);
+      const ruleText = submitRuleText(e, i18n.language);
       if (ruleText) {
         // Day-and-hours rule (for example the 2 h lead time): say why and reopen the picker.
         setConfirmOpen(false);
@@ -551,26 +403,9 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                   <Typography variant="h6" fontWeight={700}>
                     {t('rentals.requestRental', 'Request this rental')}
                   </Typography>
-                  {pickerOn ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {t('rentals.dayHours.sectionSubtitle', 'Pick the days you need: a full day or just a few hours.')}
-                    </Typography>
-                  ) : (
-                    <>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {t(
-                          'rentals.requestForm.slotSubtitle',
-                          'Pick a day, choose times within open hours, then add each range to your request.'
-                        )}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                        {t(
-                          'rentals.requestForm.halfHourHint',
-                          'Times are in full-hour slots (e.g. 9:00–10:00).'
-                        )}
-                      </Typography>
-                    </>
-                  )}
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {t('rentals.dayHours.sectionSubtitle', 'Pick the days you need: a full day or just a few hours.')}
+                  </Typography>
                 </Box>
                 {guardOn && cardWindow ? (
                   <CardWindowCalendar
@@ -585,7 +420,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                     tone="warn"
                     body={cardWindowWarning(cutoff, i18n.language)}
                     action={i18n.language.startsWith('fr') ? 'Modifier les dates' : 'Change dates'}
-                    onAction={() => (pickerOn ? setPickerOpen(true) : dateRef.current?.focus())}
+                    onAction={() => setPickerOpen(true)}
                   />
                 ) : null}
                 {cardFallback ? (
@@ -598,121 +433,18 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                   />
                 ) : null}
 
-                {pickerOn ? (
-                  <Button
-                    data-testid="day-hours-open"
-                    variant={selections.length ? 'outlined' : 'contained'}
-                    size="large"
-                    startIcon={<EditCalendarOutlinedIcon />}
-                    onClick={() => setPickerOpen(true)}
-                    sx={{ minHeight: 48, fontWeight: 700, borderRadius: 2, alignSelf: { sm: 'flex-start' } }}
-                  >
-                    {selections.length
-                      ? t('rentals.dayHours.changeDays', 'Change days and hours')
-                      : t('rentals.dayHours.pickDays', 'Pick days and hours')}
-                  </Button>
-                ) : !dayBounds ? (
-                  <Alert severity="info">
-                    {t('rentals.requestForm.closedDay', 'The business is closed on this day. Pick another date.')}
-                  </Alert>
-                ) : (
-                  <Stack spacing={2}>
-                    <TextField
-                      label={t('rentals.requestForm.pickDay', 'Date')}
-                      type="date"
-                      value={dateStr}
-                      onChange={(e) => setDateStr(e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                      inputRef={dateRef}
-                      inputProps={{
-                        min: todayDateInputValue(),
-                        max: latest && cardWindow?.timezone ? calendarDay(new Date(latest), cardWindow.timezone) : undefined,
-                      }}
-                      size="small"
-                      fullWidth
-                    />
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
-                      <FormControlLabel
-                        sx={{ ml: 0, mr: 0.5, minWidth: { sm: 140 } }}
-                        control={
-                          <Checkbox
-                            checked={allDayChecked}
-                            onChange={(e) => setAllDayChecked(e.target.checked)}
-                            disabled={!dayBounds || !canAllDay}
-                          />
-                        }
-                        label={t('rentals.requestForm.allDayLabel', 'All day')}
-                      />
-                      <FormControl size="small" fullWidth sx={{ flex: 1 }}>
-                        <InputLabel>{t('rentals.requestForm.slotStart', 'Start time')}</InputLabel>
-                        <Select
-                          label={t('rentals.requestForm.slotStart', 'Start time')}
-                          value={startMs === '' ? '' : String(startMs)}
-                          onChange={(e) => {
-                            setStartMs(e.target.value === '' ? '' : Number(e.target.value));
-                            setEndMs('');
-                          }}
-                          disabled={allDayChecked}
-                        >
-                          <MenuItem value="">
-                            <em>{t('rentals.requestForm.selectTime', 'Select')}</em>
-                          </MenuItem>
-                          {slotStarts.map((d) => (
-                            <MenuItem key={d.getTime()} value={String(d.getTime())}>
-                              {new Intl.DateTimeFormat(i18n.language, {
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              }).format(d)}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <FormControl size="small" fullWidth sx={{ flex: 1 }}>
-                        <InputLabel>{t('rentals.requestForm.slotEnd', 'End time')}</InputLabel>
-                        <Select
-                          label={t('rentals.requestForm.slotEnd', 'End time')}
-                          value={endMs === '' ? '' : String(endMs)}
-                          onChange={(e) => setEndMs(e.target.value === '' ? '' : Number(e.target.value))}
-                          disabled={allDayChecked || startMs === ''}
-                        >
-                          <MenuItem value="">
-                            <em>{t('rentals.requestForm.selectTime', 'Select')}</em>
-                          </MenuItem>
-                          {slotEnds.map((d) => (
-                            <MenuItem key={d.getTime()} value={String(d.getTime())}>
-                              {new Intl.DateTimeFormat(i18n.language, {
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              }).format(d)}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Stack>
-                    <Button variant="contained" onClick={addRange} disabled={!dayBounds} fullWidth>
-                      {allDayChecked
-                        ? dayBounds && dayBounds.open.getTime() > minStartMs
-                          ? t('rentals.requestForm.addFullDayRate', 'Add full day (daily rate)')
-                          : t('rentals.requestForm.allDay', 'Add all available hours')
-                        : t('rentals.requestForm.addRange', 'Add to request')}
-                    </Button>
-                    {dayBounds && !canAllDay ? (
-                      <Typography variant="caption" color="text.secondary">
-                        {t(
-                          'rentals.requestForm.allDayDisabledHint',
-                          'Add all available hours is disabled when any time that day is already booked.'
-                        )}
-                      </Typography>
-                    ) : dayBounds && slotStarts.length === 0 ? (
-                      <Typography variant="caption" color="text.secondary">
-                        {t(
-                          'rentals.requestForm.noBookableSlotsHint',
-                          'No bookable hours left on this day. Try another date.'
-                        )}
-                      </Typography>
-                    ) : null}
-                  </Stack>
-                )}
+                <Button
+                  data-testid="day-hours-open"
+                  variant={selections.length ? 'outlined' : 'contained'}
+                  size="large"
+                  startIcon={<EditCalendarOutlinedIcon />}
+                  onClick={() => setPickerOpen(true)}
+                  sx={{ minHeight: 48, fontWeight: 700, borderRadius: 2, alignSelf: { sm: 'flex-start' } }}
+                >
+                  {selections.length
+                    ? t('rentals.dayHours.changeDays', 'Change days and hours')
+                    : t('rentals.dayHours.pickDays', 'Pick days and hours')}
+                </Button>
 
                 {selections.length > 0 ? (
                   <>
@@ -733,13 +465,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                             borderColor: 'divider',
                             bgcolor: 'background.paper',
                           }}
-                          secondaryAction={
-                            pickerOn ? undefined : (
-                              <IconButton edge="end" aria-label="remove" onClick={() => removeSelection(r.id)}>
-                                <DeleteOutlineIcon />
-                              </IconButton>
-                            )
-                          }
                         >
                           <ListItemText
                             primary={formatSelectionLabel(r.startMs, r.endMs, i18n.language)}
@@ -865,29 +590,27 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         </Card>
       </Box>
 
-      {pickerOn ? (
-        <RentalDayHoursDialog
-          open={pickerOpen}
-          listing={dayHoursModel}
-          currency={currency}
-          language={i18n.language}
-          timeZone={listingZone}
-          city={city}
-          initialDays={pickerDays}
-          serverError={pickerError}
-          onClose={() => {
-            setPickerError(null);
-            setPickerOpen(false);
-          }}
-          onContinue={(rows) => {
-            setPickerError(null);
-            setMsg(null);
-            setCardFallback(null);
-            setSelections(rows);
-            setPickerOpen(false);
-          }}
-        />
-      ) : null}
+      <RentalDayHoursDialog
+        open={pickerOpen}
+        listing={dayHoursModel}
+        currency={currency}
+        language={i18n.language}
+        timeZone={listingZone}
+        city={city}
+        initialDays={pickerDays}
+        serverError={pickerError}
+        onClose={() => {
+          setPickerError(null);
+          setPickerOpen(false);
+        }}
+        onContinue={(rows) => {
+          setPickerError(null);
+          setMsg(null);
+          setCardFallback(null);
+          setSelections(rows);
+          setPickerOpen(false);
+        }}
+      />
       <Dialog open={confirmOpen} onClose={() => !submitting && setConfirmOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('rentals.requestForm.confirmTitle', 'Confirm your request')}</DialogTitle>
         <DialogContent>

@@ -19,13 +19,21 @@ describe('rental day-hours picker migration', () => {
     expect(up).toMatch(/IF NOT EXISTS \(\s*SELECT 1 FROM pg_constraint/);
   });
 
-  it('seeds the flag false with no environment override', () => {
+  it('seeded the flag false; the flag is now retired and no longer a client flag', () => {
     expect(up).toContain("'rentals_day_hours_picker_enabled'");
     expect(up).toMatch(/'boolean', false/);
     expect(up).not.toMatch(/'boolean', true/);
     expect(up).toContain('WHERE NOT EXISTS');
-    expect(constants).toMatch(/rentals_day_hours_picker_enabled: false/);
-    expect(constants).not.toMatch(/rentals_day_hours_picker_enabled:\s*isNonProduction/);
+    expect(constants).not.toContain('rentals_day_hours_picker_enabled');
+  });
+
+  it('the retire migration deletes the row and down restores the seeded global row', () => {
+    const retire = join(root, 'hasura/migrations/Rendasua/20261126150000_retire_rental_day_hours_picker_flag');
+    const retireUp = readFileSync(join(retire, 'up.sql'), 'utf8');
+    const retireDown = readFileSync(join(retire, 'down.sql'), 'utf8');
+    expect(retireUp).toMatch(/DELETE FROM public\.application_configurations\s+WHERE config_key = 'rentals_day_hours_picker_enabled'/);
+    expect(retireDown).toMatch(/'boolean', false, NULL/);
+    expect(retireDown).toContain('WHERE NOT EXISTS');
   });
 
   it('down drops what up added', () => {

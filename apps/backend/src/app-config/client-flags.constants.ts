@@ -28,7 +28,6 @@ export const CLIENT_FLAG_KEYS = [
   'rentals_pickup_decline_enabled',
   'rentals_default_list_enabled',
   'rentals_dashboard_requests_enabled',
-  'rentals_day_hours_picker_enabled',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -93,6 +92,4 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   rentals_default_list_enabled: false,
   /** Business home rental requests and the 24h auto-decline. Off until a row turns it on. No NODE_ENV override. */
   rentals_dashboard_requests_enabled: false,
-  /** Day-and-hours picker, listing day/hour switches and their server rules. Off until a row turns it on. No NODE_ENV override. */
-  rentals_day_hours_picker_enabled: false,
 };

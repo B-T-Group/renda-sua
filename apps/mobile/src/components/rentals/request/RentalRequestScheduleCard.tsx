@@ -3,15 +3,13 @@ import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { RentalRequestBuilder, type RentalRequestBuilderProps } from './RentalRequestBuilder';
 
 export interface RequestDayRow {
   id: string;
   label: string;
-  removeLabel: string;
 }
 
-export interface RentalRequestScheduleCardProps extends RentalRequestBuilderProps {
+export interface RentalRequestScheduleCardProps {
   itemName: string;
   itemMeta?: string;
   imageUrl?: string | null;
@@ -21,15 +19,6 @@ export interface RentalRequestScheduleCardProps extends RentalRequestBuilderProp
   unavailableLabel?: string;
   onSeeDates?: () => void;
   rows: RequestDayRow[];
-  onRemove: (id: string) => void;
-  builderOpen: boolean;
-  onToggleBuilder: () => void;
-  /**
-   * Day-and-hours picker (rentals_day_hours_picker_enabled): days and hours are edited
-   * in the picker sheet, so the hidden builder and per-row remove are replaced by one
-   * "Change days" action that reopens the sheet.
-   */
-  dayHoursPicker?: boolean;
 }
 
 export function RentalRequestScheduleCard(props: RentalRequestScheduleCardProps) {
@@ -61,15 +50,8 @@ export function RentalRequestScheduleCard(props: RentalRequestScheduleCardProps)
           </Text>
         </Pressable>
       ) : null}
-      <DayList rows={props.rows} onRemove={props.dayHoursPicker ? undefined : props.onRemove} />
-      {props.dayHoursPicker ? (
-        props.onEditDates ? <ChangeDays onPress={props.onEditDates} /> : null
-      ) : (
-        <>
-          <BuilderToggle open={props.builderOpen} onPress={props.onToggleBuilder} />
-          {props.builderOpen ? <RentalRequestBuilder {...props} /> : null}
-        </>
-      )}
+      <DayList rows={props.rows} />
+      {props.onEditDates ? <ChangeDays onPress={props.onEditDates} /> : null}
     </View>
   );
 }
@@ -121,7 +103,7 @@ function DateLine({ dateLine, onEditDates }: { dateLine: string; onEditDates?: (
   );
 }
 
-function DayList({ rows, onRemove }: { rows: RequestDayRow[]; onRemove?: (id: string) => void }) {
+function DayList({ rows }: { rows: RequestDayRow[] }) {
   const { colors, spacing } = useTheme();
   if (rows.length === 0) return null;
   return (
@@ -129,11 +111,6 @@ function DayList({ rows, onRemove }: { rows: RequestDayRow[]; onRemove?: (id: st
       {rows.map((row) => (
         <View key={row.id} testID={`rental-request-day-${row.id}`} style={[styles.day, { borderBottomColor: colors.divider, paddingHorizontal: spacing.sm }]}>
           <Text style={[styles.dayLabel, { color: colors.text.primary }]}>{row.label}</Text>
-          {onRemove ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={row.removeLabel} onPress={() => onRemove(row.id)} hitSlop={8}>
-              <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.error.main} />
-            </Pressable>
-          ) : null}
         </View>
       ))}
     </View>
@@ -157,35 +134,6 @@ function ChangeDays({ onPress }: { onPress: () => void }) {
       </View>
       <Text style={[styles.toggleLabel, { color: colors.primary.main }]}>{label}</Text>
       <MaterialCommunityIcons name="chevron-right" size={18} color={colors.primary.main} />
-    </Pressable>
-  );
-}
-
-function BuilderToggle({ open, onPress }: { open: boolean; onPress: () => void }) {
-  const { t } = useTranslation();
-  const { colors, spacing, borderRadius } = useTheme();
-  const label = t('rentals.requestForm.addOrChangeTimes', 'Add or change times');
-  return (
-    <Pressable
-      testID="rental-request-add-times"
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ expanded: open }}
-      onPress={onPress}
-      style={[
-        styles.toggle,
-        {
-          borderTopColor: colors.divider,
-          backgroundColor: open ? colors.pageBackground : colors.surface,
-          paddingHorizontal: spacing.sm,
-        },
-      ]}
-    >
-      <View style={[styles.plus, { backgroundColor: colors.primaryTint, borderRadius: borderRadius.sm }]}>
-        <MaterialCommunityIcons name={open ? 'minus' : 'plus'} size={16} color={colors.primary.main} />
-      </View>
-      <Text style={[styles.toggleLabel, { color: colors.primary.main }]}>{label}</Text>
-      <MaterialCommunityIcons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.primary.main} />
     </Pressable>
   );
 }
