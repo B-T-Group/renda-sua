@@ -67,22 +67,33 @@ async function expectStatus(pending: Promise<unknown>, status: number) {
 describe('pickup photo upload gate', () => {
   const gate = { bookingId: '11111111-1111-4111-8111-111111111111', role: 'overview', platform: 'ios', slotKey: 'overview' };
 
-  it('rejects Toronto just before midnight and allows the pickup day', async () => {
+  it('rejects Toronto just before stored midnight and allows the UTC pickup day', async () => {
     const early = service(true, { PickupRulesBooking: booking('Canada') });
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T04:59:59.000Z'))).rejects.toBeInstanceOf(HttpException);
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T04:59:59.000Z'))).rejects.toMatchObject({
+    await expect(early.rules.assertUpload(gate, new Date('2026-11-16T23:59:59.000Z'))).rejects.toBeInstanceOf(HttpException);
+    await expect(early.rules.assertUpload(gate, new Date('2026-11-16T23:59:59.000Z'))).rejects.toMatchObject({
       response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
     });
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T05:00:00.000Z'))).resolves.toBeUndefined();
+    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T00:00:00.000Z'))).resolves.toBeUndefined();
+    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T04:59:59.000Z'))).resolves.toBeUndefined();
   });
 
-  it('rejects Douala just before midnight and the day after', async () => {
+  it('rejects Douala just before stored midnight and the UTC day after', async () => {
     const rules = service(true, { PickupRulesBooking: booking('Cameroon') }).rules;
-    await expect(rules.assertUpload(gate, new Date('2026-11-16T22:59:59.000Z'))).rejects.toMatchObject({
+    await expect(rules.assertUpload(gate, new Date('2026-11-16T23:59:59.000Z'))).rejects.toMatchObject({
       response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
     });
-    await expect(rules.assertUpload(gate, new Date('2026-11-16T23:00:00.000Z'))).resolves.toBeUndefined();
-    await expect(rules.assertUpload(gate, new Date('2026-11-17T23:00:00.000Z'))).rejects.toMatchObject({
+    await expect(rules.assertUpload(gate, new Date('2026-11-17T00:00:00.000Z'))).resolves.toBeUndefined();
+    await expect(rules.assertUpload(gate, new Date('2026-11-17T23:00:00.000Z'))).resolves.toBeUndefined();
+    await expect(rules.assertUpload(gate, new Date('2026-11-18T00:00:00.000Z'))).rejects.toMatchObject({
+      response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
+    });
+  });
+
+  it('allows a Manila afternoon booking on the stored date', async () => {
+    const rules = service(true, { PickupRulesBooking: booking('Philippines', '2026-11-26T16:00:00.000Z') }).rules;
+    await expect(rules.assertUpload(gate, new Date('2026-11-26T08:00:00.000Z'))).resolves.toBeUndefined();
+    await expect(rules.assertUpload(gate, new Date('2026-11-26T16:00:00.000Z'))).resolves.toBeUndefined();
+    await expect(rules.assertUpload(gate, new Date('2026-11-27T00:00:00.000Z'))).rejects.toMatchObject({
       response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
     });
   });
