@@ -356,6 +356,40 @@ export class PdfService {
     }
   }
 
+  /**
+   * Render arbitrary HTML to PDF, upload to S3, return user_uploads row.
+   */
+  async generateHtmlPdf(params: {
+    html: string;
+    fileName: string;
+    documentTypeName: string;
+    userId: string;
+    note?: string;
+    persona?: 'client' | 'business' | 'agent';
+  }): Promise<{ id: string; file_name?: string }> {
+    const pdfBuffer = await this.convertHtmlToPdf(params.html);
+    const documentTypeId = await this.getDocumentTypeId(params.documentTypeName);
+    const uploadResult = await this.uploadService.generateUploadUrl(
+      {
+        document_type_id: documentTypeId,
+        file_name: params.fileName,
+        content_type: 'application/pdf',
+        file_size: pdfBuffer.length,
+        note: params.note ?? params.fileName,
+      },
+      { userId: params.userId, persona: params.persona ?? 'client' }
+    );
+    try {
+      await axios.put(uploadResult.presigned_url, pdfBuffer, {
+        headers: { 'Content-Type': 'application/pdf' },
+        timeout: 30000,
+      });
+    } catch (error: any) {
+      throw httpExceptionFromPdfStoreError(error);
+    }
+    return { id: uploadResult.upload_record.id, file_name: params.fileName };
+  }
+
   async generateMerchantAgreementPdf(params: {
     locale: string;
     businessName: string;

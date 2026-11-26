@@ -1,0 +1,19 @@
+table:
+  name: export_credit_ledger
+  schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - client_user_id
+        - export_order_id
+        - credit_note_id
+        - entry_type
+        - amount
+        - expires_at
+        - created_at
+      filter:
+        client_user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true

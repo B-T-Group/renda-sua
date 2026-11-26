@@ -1,0 +1,60 @@
+table:
+  name: export_order_lines
+  schema: public
+object_relationships:
+  - name: export_order
+    using:
+      foreign_key_constraint_on: export_order_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+select_permissions:
+  - role: client
+    permission:
+      columns: &line_cols
+        - id
+        - export_order_id
+        - item_id
+        - business_inventory_id
+        - product_name
+        - characteristics
+        - quantity
+        - unit
+        - particularities
+        - unit_price
+        - line_total
+        - sort_order
+        - created_at
+        - updated_at
+      filter:
+        export_order:
+          client_user_id:
+            _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns: *line_cols
+      filter:
+        export_order:
+          agent_user_id:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - item_id
+        - product_name
+        - characteristics
+        - quantity
+        - unit
+        - particularities
+        - manufacturer_unit_cost
+        - sort_order
+        - created_at
+        - updated_at
+      filter:
+        export_order:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

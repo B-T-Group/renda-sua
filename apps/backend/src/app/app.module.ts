@@ -76,6 +76,7 @@ import { RestockAlertsModule } from '../restock-alerts/restock-alerts.module';
 import { DedicatedAgentsModule } from '../dedicated-agents/dedicated-agents.module';
 import { BusinessFollowsModule } from '../business-follows/business-follows.module';
 import { ProductInterestModule } from '../product-interest/product-interest.module';
+import { ExportOrdersModule } from '../export-orders/export-orders.module';
 import { MarketplacePublicModule } from '../marketplace-public/marketplace-public.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
@@ -202,6 +203,7 @@ import { AppService } from './app.service';
     DedicatedAgentsModule,
     BusinessFollowsModule,
     ProductInterestModule,
+    ExportOrdersModule,
     MetaConversionsModule,
     MarketplacePublicModule,
     FacebookCatalogFeedModule,

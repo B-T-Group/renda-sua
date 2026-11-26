@@ -1,0 +1,40 @@
+table:
+  name: export_payments
+  schema: public
+object_relationships:
+  - name: export_order
+    using:
+      foreign_key_constraint_on: export_order_id
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - amount
+        - currency
+        - method
+        - reference
+        - value_date
+        - allocation
+        - receipt_document_id
+        - voided_at
+        - created_at
+      filter:
+        export_order:
+          client_user_id:
+            _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - amount
+        - currency
+        - allocation
+        - value_date
+        - created_at
+      filter:
+        export_order:
+          agent_user_id:
+            _eq: X-Hasura-User-Id

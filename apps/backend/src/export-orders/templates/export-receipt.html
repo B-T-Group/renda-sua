@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Reçu {{docNumber}}</title>
+    <style>
+      body { font-family: Georgia, serif; color: #1a1a1a; margin: 40px; }
+      .banner { background: #1b5e20; color: #fff; padding: 16px 20px; margin: -40px -40px 24px; }
+      h1 { margin: 0; font-size: 22px; }
+      .box { border: 1px solid #ddd; padding: 16px; margin-top: 16px; }
+    </style>
+  </head>
+  <body>
+    <div class="banner">
+      <h1>Reçu de paiement</h1>
+      <div>{{docNumber}} · {{issuedAt}}</div>
+    </div>
+    <div class="box">
+      <p><strong>Commande:</strong> {{bcNumber}}</p>
+      <p><strong>Client:</strong> {{clientName}}</p>
+      <p><strong>Montant:</strong> {{amount}} {{currency}}</p>
+      <p><strong>En lettres:</strong> {{amountWords}}</p>
+      <p><strong>Affectation:</strong> {{allocation}}</p>
+      <p><strong>Mode:</strong> {{method}} · Réf. {{reference}}</p>
+      <p><strong>Date de valeur:</strong> {{valueDate}}</p>
+      <p><strong>Solde restant estimé:</strong> {{remaining}} {{currency}}</p>
+    </div>
+  </body>
+</html>

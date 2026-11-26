@@ -1,0 +1,151 @@
+table:
+  name: export_orders
+  schema: public
+object_relationships:
+  - name: client_user
+    using:
+      foreign_key_constraint_on: client_user_id
+  - name: agent_user
+    using:
+      foreign_key_constraint_on: agent_user_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: business_location
+    using:
+      foreign_key_constraint_on: business_location_id
+  - name: client
+    using:
+      foreign_key_constraint_on: client_id
+  - name: product_interest_request
+    using:
+      foreign_key_constraint_on: product_interest_request_id
+array_relationships:
+  - name: lines
+    using:
+      foreign_key_constraint_on:
+        column: export_order_id
+        table:
+          name: export_order_lines
+          schema: public
+  - name: documents
+    using:
+      foreign_key_constraint_on:
+        column: export_order_id
+        table:
+          name: export_documents
+          schema: public
+  - name: invoices
+    using:
+      foreign_key_constraint_on:
+        column: export_order_id
+        table:
+          name: export_invoices
+          schema: public
+  - name: payments
+    using:
+      foreign_key_constraint_on:
+        column: export_order_id
+        table:
+          name: export_payments
+          schema: public
+  - name: audit_log
+    using:
+      foreign_key_constraint_on:
+        column: export_order_id
+        table:
+          name: export_audit_log
+          schema: public
+  - name: shipments
+    using:
+      foreign_key_constraint_on:
+        column: export_order_id
+        table:
+          name: export_shipments
+          schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - status
+        - client_user_id
+        - client_id
+        - agent_user_id
+        - business_id
+        - business_location_id
+        - country_code
+        - currency
+        - bc_number
+        - bc_version
+        - product_interest_request_id
+        - balance_option
+        - deposit_rate
+        - credit_rate_full
+        - credit_rate_30
+        - credit_rate_60
+        - manufacturer_cost_total
+        - client_subtotal
+        - fees_total
+        - tax_total
+        - grand_total
+        - deposit_amount
+        - balance_amount
+        - credit_limit
+        - has_open_dispute
+        - bc_expires_at
+        - proforma_expires_at
+        - deposit_due_at
+        - client_note
+        - closed_at
+        - created_at
+        - updated_at
+      filter:
+        client_user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true
+  - role: agent
+    permission:
+      columns:
+        - id
+        - status
+        - client_user_id
+        - agent_user_id
+        - business_id
+        - country_code
+        - currency
+        - bc_number
+        - bc_version
+        - balance_option
+        - grand_total
+        - deposit_amount
+        - balance_amount
+        - client_note
+        - created_at
+        - updated_at
+      filter:
+        agent_user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - status
+        - client_user_id
+        - business_id
+        - business_location_id
+        - country_code
+        - currency
+        - bc_number
+        - bc_version
+        - manufacturer_cost_total
+        - client_note
+        - created_at
+        - updated_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id
+      allow_aggregations: true

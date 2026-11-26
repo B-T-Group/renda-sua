@@ -71,6 +71,11 @@ export const AUTO_APPROVED_DOCUMENT_TYPE_NAMES = [
   'order_receipt',
   'rendasua_contract_agreement',
   'rendasua_training_completion',
+  'export_bc',
+  'export_proforma',
+  'export_invoice',
+  'export_receipt',
+  'export_credit_note',
 ];
 
 @Injectable()

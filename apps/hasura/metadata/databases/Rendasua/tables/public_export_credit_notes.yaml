@@ -1,0 +1,18 @@
+table:
+  name: export_credit_notes
+  schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - client_user_id
+        - document_number
+        - amount
+        - reason
+        - expires_at
+        - created_at
+      filter:
+        client_user_id:
+          _eq: X-Hasura-User-Id

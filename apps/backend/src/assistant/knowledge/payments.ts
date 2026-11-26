@@ -15,7 +15,7 @@ function countrySection(country: string | null | undefined, locale: KnowledgeLoc
       return `Pour ${label} : cartes bancaires via Stripe. Le paiement à la livraison n'est pas disponible pour les vendeurs sur le rail Stripe.`;
     }
     if (code === 'CD') {
-      return `Pour la République démocratique du Congo (RDC) : pas de paiement local. Les acheteurs manifestent leur intérêt pour des articles à l'export ; le vendeur assure le suivi hors application. Ce n'est pas le Congo-Brazzaville.`;
+      return `Pour la République démocratique du Congo (RDC) : pas de paiement local marketplace. Les acheteurs ouvrent un intérêt ou une commande export ; les dépôts/soldes export se règlent en CAD par virement (saisie finance Rendasua), pas en mobile money local. Ce n'est pas le Congo-Brazzaville.`;
     }
     return `Rails de paiement : Afrique centrale/ouest (GA/CM) = mobile money ; CA/US/PH = Stripe (cartes). Le paiement à la livraison n'est pas disponible pour les vendeurs Stripe.`;
   }
@@ -31,7 +31,7 @@ function countrySection(country: string | null | undefined, locale: KnowledgeLoc
     return `For ${label}: card payments via Stripe. Pay-at-delivery is not available for Stripe-rail sellers.`;
   }
   if (code === 'CD') {
-    return `For the Democratic Republic of the Congo (RDC): there is no local payment. Shoppers submit interest on export items and the seller follows up outside the app. This is not Congo-Brazzaville.`;
+    return `For the Democratic Republic of the Congo (RDC): there is no local marketplace payment. Shoppers open export interest or an export order; export deposits/balances are settled in CAD by wire (recorded by Rendasua finance), not local mobile money. This is not Congo-Brazzaville.`;
   }
   return `Payment rails: Central/West Africa (GA/CM) use mobile money; CA/US/PH use Stripe cards. Pay-at-delivery is blocked for Stripe-rail sellers.`;
 }
