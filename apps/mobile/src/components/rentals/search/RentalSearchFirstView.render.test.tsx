@@ -192,6 +192,8 @@ describe('search-first rentals', () => {
       fireEvent.press(view.getByTestId('rental-search-see-dates-nikon'));
     });
     expect(onSeeDates).toHaveBeenCalledWith('nikon');
+    // See dates only changes the search dates; it doesn't also open the details page.
+    expect(onOpenListing).toHaveBeenCalledTimes(2);
     expect(view.queryByTestId('rental-search-view-nikon')).toBeNull();
   });
 
