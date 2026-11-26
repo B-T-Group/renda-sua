@@ -17,6 +17,7 @@ import {
   bookingDetailPeriodLines,
   isSingleRequestedPeriod,
   type PeriodWindow,
+  formatRentalShortMonth,
 } from './rentalRequestFormat';
 
 const days = (count: number) => (count === 1 ? '1 day' : `${count} days`);
@@ -33,6 +34,18 @@ const hourly = (start: string, end: string): PeriodWindow => ({
   billing: 'hourly',
   start_at: start,
   end_at: end,
+});
+
+
+describe('formatRentalShortMonth', () => {
+  it('uses typographic French abbreviations, lowercase with a period when truncated', () => {
+    expect(formatRentalShortMonth('2026-11-27', 'en')).toBe('Nov');
+    expect(formatRentalShortMonth('2026-11-27', 'fr')).toBe('nov.');
+    expect(formatRentalShortMonth('2026-11-27', 'fr-FR')).toBe('nov.');
+    expect(formatRentalShortMonth('2026-06-01', 'fr')).toBe('juin');
+    expect(formatExclusiveStayRange('2026-11-27', '2026-11-30', 'en')).toBe('27\u201329 Nov');
+    expect(formatExclusiveStayRange('2026-11-27', '2026-11-30', 'fr')).toBe('27\u201329 nov.');
+  });
 });
 
 describe('formatRentalPeriod', () => {

@@ -17,6 +17,7 @@ import {
   formatListingDeadline,
   formatListingDue,
   formatRentalDateRange,
+  formatRentalDay,
   formatRentalPeriod,
   formatReturnDay,
   formatRequestedPeriod,
@@ -29,6 +30,7 @@ import {
   rentalSelectionFingerprint,
   RENTAL_EDIT_LEAD_MS,
   readPriceConfirmQuote,
+  formatRentalShortMonth,
 } from './rentalRequestFormat';
 
 const NBSP = '\u00A0';
@@ -36,6 +38,21 @@ const NBSP = '\u00A0';
 function joined(text: string): string {
   return text.replace(/ /g, NBSP);
 }
+
+
+describe('formatRentalShortMonth', () => {
+  it('uses typographic French abbreviations, lowercase with a period when truncated', () => {
+    expect(formatRentalShortMonth('2026-11-27', 'en')).toBe('Nov');
+    expect(formatRentalShortMonth('2026-11-27', 'fr')).toBe('nov.');
+    expect(formatRentalShortMonth('2026-11-27', 'fr-FR')).toBe('nov.');
+    expect(formatRentalShortMonth('2026-06-01', 'fr')).toBe('juin');
+    expect(formatRentalDay('2026-11-28', 'fr')).toBe('28 nov.');
+    expect(formatRentalDateRange([
+      { calendar_date: '2026-11-27', start_at: '', end_at: '' },
+      { calendar_date: '2026-11-29', start_at: '', end_at: '' },
+    ], 'fr')).toBe('27\u201329 nov.');
+  });
+});
 
 describe('formatRequestAmount', () => {
   it('puts the amount before FCFA in English and French', () => {

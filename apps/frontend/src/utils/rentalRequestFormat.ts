@@ -23,20 +23,19 @@ function utcDate(iso: string): Date | null {
   return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
 }
 
-function capitalizeFirst(value: string): string {
-  if (!value) return value;
-  return value.charAt(0).toLocaleUpperCase() + value.slice(1);
+const EN_SHORT_MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+const FR_SHORT_MONTH = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'] as const;
+
+/** `Nov` / `nov.` House short months. FR uses typographic abbreviations (period only when truncated). */
+export function formatRentalShortMonth(iso: string, locale: string): string {
+  const date = utcDate(iso.slice(0, 10));
+  if (!date) return '';
+  const months = locale.toLowerCase().startsWith('fr') ? FR_SHORT_MONTH : EN_SHORT_MONTH;
+  return months[date.getUTCMonth()];
 }
 
 function monthLabel(isoDate: string, locale: string): string {
-  const date = utcDate(isoDate);
-  if (!date) return '';
-  const french = locale.toLowerCase().startsWith('fr');
-  const raw = new Intl.DateTimeFormat(french ? 'fr' : 'en', {
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(date);
-  return french ? raw : capitalizeFirst(raw.replace(/\./g, ''));
+  return formatRentalShortMonth(isoDate, locale);
 }
 
 function dayNum(isoDate: string): number {

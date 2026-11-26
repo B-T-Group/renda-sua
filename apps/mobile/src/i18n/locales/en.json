@@ -6473,7 +6473,7 @@
       "fromHourly": "From {{price}}",
       "fromDaily": "From {{price}}",
       "openTodayUntil": "Open today until {{time}}",
-      "minHoursSnapshot": "{{h}}h minimum",
+      "minHoursSnapshot": "{{h}} h minimum",
       "depositBarHint": "Deposit held on card · Nothing charged until accepted",
       "noChargeUntilAccepted": "Nothing charged until the business accepts your request",
       "notFoundTitle": "We couldn’t find this listing",

@@ -223,7 +223,7 @@ export default function RentalListingDetailScreen() {
     closeToday
       ? t('rentals.detail.openTodayUntil', 'Open today until {{time}}', { time: closeToday })
       : null,
-    modes.hourly ? t('rentals.detail.minHoursSnapshot', '{{h}}h minimum', { h: listing.min_rental_hours }) : null,
+    modes.hourly ? t('rentals.detail.minHoursSnapshot', '{{h}}\u00A0h\u00A0minimum', { h: listing.min_rental_hours }) : null,
   ].filter(Boolean);
 
   return (

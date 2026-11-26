@@ -5,6 +5,7 @@
  */
 import type { BlockNote, DayInfo, PickedDay } from './rentalDayHoursPicker';
 import { withRateUnit } from './rentals/moneyRateUnit';
+import { formatRentalShortMonth } from './rentalRequestFormat';
 
 export type PickerLang = 'en' | 'fr';
 
@@ -200,8 +201,6 @@ export function rangeLabel(start: number, end: number, lang: PickerLang, timeZon
 
 const EN_WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const FR_WD = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
-const EN_MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const FR_MO = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const EN_MONTH = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const FR_MONTH = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -209,8 +208,7 @@ const FR_MONTH = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juille
 export function dayLabel(key: string, lang: PickerLang): string {
   const d = new Date(`${key}T00:00:00.000Z`);
   const wd = (lang === 'fr' ? FR_WD : EN_WD)[d.getUTCDay()];
-  const mo = (lang === 'fr' ? FR_MO : EN_MO)[d.getUTCMonth()];
-  return `${wd}\u00A0${d.getUTCDate()}\u00A0${mo}`;
+  return `${wd}\u00A0${d.getUTCDate()}\u00A0${formatRentalShortMonth(key, lang)}`;
 }
 
 export function monthTitle(year: number, month0: number, lang: PickerLang): string {
