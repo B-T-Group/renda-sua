@@ -16,6 +16,7 @@ import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import type { RenterReturnPhase } from '../../utils/renterReturnPhase';
 import { formatReturnStamp } from '../../utils/renterReturnPhase';
+import { instantClock } from '../../utils/rentals/earlyReturn';
 
 export function RenterReturnPanel({
   phase,
@@ -27,6 +28,7 @@ export function RenterReturnPanel({
   reportedAt,
   timeZone,
   depositLabel,
+  early,
   onChanged,
 }: {
   phase: Exclude<RenterReturnPhase, 'hidden'>;
@@ -39,6 +41,8 @@ export function RenterReturnPanel({
   /** Listing zone, for the report time (a real instant). */
   timeZone?: string | null;
   depositLabel: string;
+  /** The renter tapped Return early: early waiting copy on the listing clock. */
+  early?: boolean;
   onChanged: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -52,6 +56,9 @@ export function RenterReturnPanel({
   // endAt is listing wall clock (UTC components); reportedAt is a real instant.
   const due = formatReturnStamp(endAt, i18n.language, 'UTC');
   const when = reportedAt ? formatReturnStamp(reportedAt, i18n.language, timeZone) : due;
+  const body = early && phase === 'waiting'
+    ? earlyWaitingCopy(t, instantClock(reportedAt, i18n.language, timeZone), depositLabel)
+    : copy(phase, t, location, when, depositLabel);
 
   const submit = async () => {
     setBusy(true);
@@ -102,7 +109,9 @@ export function RenterReturnPanel({
           variant="caption"
           sx={{ px: 1, py: 0.25, borderRadius: 99, border: 1, borderColor: overdue ? 'error.main' : '#0A4FB5', color: overdue ? 'error.main' : '#0A4FB5' }}
         >
-          {t(overdue ? 'rentals.returnReport.overdue' : 'rentals.bookingStatus.awaiting_return', overdue ? 'Overdue' : 'Return due')}
+          {early && phase === 'waiting'
+            ? t('rentals.earlyReturn.returnedEarlyStep', 'Returned early')
+            : t(overdue ? 'rentals.returnReport.overdue' : 'rentals.bookingStatus.awaiting_return', overdue ? 'Overdue' : 'Return due')}
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {t('rentals.returnReport.nextStep', 'Next step')}
@@ -111,9 +120,9 @@ export function RenterReturnPanel({
       <Typography variant="subtitle1" fontWeight={700} color={overdue ? 'error.main' : 'text.primary'}>
         {heading(phase, t, location, due)}
       </Typography>
-      {copy(phase, t, location, when, depositLabel) ? (
+      {body ? (
         <Typography variant="body2" sx={{ mt: 0.5 }}>
-          {copy(phase, t, location, when, depositLabel)}
+          {body}
         </Typography>
       ) : null}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
@@ -204,6 +213,21 @@ function waitingCopy(
     'rentals.returnReport.waitingBody',
     'You reported the return on {{time}}. The business will check the item. Your {{amount}} deposit is released only after they confirm.',
     { time: when, amount }
+  );
+}
+
+function earlyWaitingCopy(
+  t: (key: string, def: string, opts?: Record<string, string>) => string,
+  time: string,
+  amount: string
+): string {
+  if (!amount) {
+    return t('rentals.earlyReturn.waitingBodyNoDeposit', 'You returned it early at {{time}}. The business will check the item.', { time });
+  }
+  return t(
+    'rentals.earlyReturn.waitingBody',
+    'You returned it early at {{time}}. Your {{amount}} deposit is released once they confirm.',
+    { time, amount }
   );
 }
 

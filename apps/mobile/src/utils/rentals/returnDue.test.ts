@@ -79,7 +79,7 @@ describe('hourly early start return preview', () => {
     expect(formatZonedTime('2026-11-26T14:00:00.000Z', 'UTC', 'fr', 'America/Toronto')).toBe('14:00');
     expect(formatZonedTime('2026-11-26T14:00:00.000Z', 'UTC', 'en', 'Africa/Douala')).toBe('14:00');
     expect(formatZonedTime('2026-11-26T14:00:00.000Z', 'UTC')).toBe('14:00');
-    expect(formatZonedWhen('2026-11-26T16:00:00.000Z', 'UTC', 'en', 'America/Toronto')).toBe('Thu 26 Nov · 4:00 PM');
+    expect(formatZonedWhen('2026-11-26T16:00:00.000Z', 'UTC', 'en', 'America/Toronto')).toBe('Thu, Nov 26 · 4:00 PM');
   });
 
   it('labels the business return option with the due time', () => {

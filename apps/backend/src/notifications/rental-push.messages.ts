@@ -60,6 +60,32 @@ export function formatRentalNoticeDue(
   return zone ? `${clock} (${zone})` : clock;
 }
 
+/**
+ * Clock time on the listing clock: "3:40 PM" in English for Americas listings,
+ * "15:40" everywhere else (and always in French). `wall` = the ISO is stored
+ * listing wall clock (end_at); otherwise it is a real instant.
+ */
+export function formatRentalNoticeClock(
+  iso: string | null | undefined,
+  timeZone: string | null | undefined,
+  language?: string | null,
+  wall = false
+): string {
+  if (!iso || Number.isNaN(new Date(iso).getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: wall ? 'UTC' : timeZone || 'UTC',
+    hour: 'numeric',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(iso));
+  const hour = Number(part(parts, 'hour')) % 24;
+  const minute = part(parts, 'minute');
+  const twelve = normalizeLocale(language) === 'en' && (timeZone || '').startsWith('America/');
+  if (!twelve) return `${String(hour).padStart(2, '0')}:${minute}`;
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h12}:${minute}\u00a0${hour < 12 ? 'AM' : 'PM'}`;
+}
+
 export function rentalNoticeZone(countryCode?: string | null): string | null {
   return marketTimeZone(countryCode);
 }
@@ -300,19 +326,48 @@ export function buildRentalNotReceivedNotice(params: {
   };
 }
 
+export interface RenterReturnedEarly {
+  renterName: string;
+  /** Real instant of the renter's report. */
+  returnedAt: string;
+  /** Booked end, listing wall clock. */
+  endAt: string;
+  timeZone: string;
+}
+
 export function buildRenterReturnedNotice(params: {
   rentalItemName: string;
   bookingNumber: string;
   preferredLanguage?: string | null;
+  early?: RenterReturnedEarly;
 }): { title: string; body: string } {
   const fr = normalizeLocale(params.preferredLanguage) === 'fr';
   const item = params.rentalItemName || 'Rental';
+  if (params.early) return earlyReturnNotice(item, params.early, params.preferredLanguage);
   const booking = params.bookingNumber || '—';
   return {
     title: fr ? 'Le client indique avoir rendu l’article' : 'Renter says the item is back',
     body: fr
       ? `${item} · ${booking}. Vérifiez l’article et confirmez le retour.`
       : `${item} · ${booking}. Please check the item and confirm the return.`,
+  };
+}
+
+/** Early return · {item}: the renter returned it before the booked end. */
+function earlyReturnNotice(
+  item: string,
+  early: RenterReturnedEarly,
+  language?: string | null
+): { title: string; body: string } {
+  const fr = normalizeLocale(language) === 'fr';
+  const time = formatRentalNoticeClock(early.returnedAt, early.timeZone, language);
+  const end = formatRentalNoticeClock(early.endAt, early.timeZone, language, true);
+  const renter = early.renterName || (fr ? 'Le client' : 'The renter');
+  return {
+    title: fr ? `Retour anticipé · ${item}` : `Early return · ${item}`,
+    body: fr
+      ? `${renter} indique l’avoir rendu à ${time}, avant ${end}. Vérifiez-le et confirmez le retour.`
+      : `${renter} says they returned it at ${time}, before ${end}. Check it and confirm the return.`,
   };
 }
 

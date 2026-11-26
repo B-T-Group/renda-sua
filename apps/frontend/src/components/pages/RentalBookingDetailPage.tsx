@@ -53,6 +53,21 @@ import {
   formatRequestAmount,
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
+import {
+  BusinessEarlyReturnCard,
+  BusinessItemReturnedActions,
+  BusinessReturnConfirmDialog,
+  RenterEarlyReturnPanel,
+  RenterReturnedEarlyCard,
+} from '../rentals/EarlyReturn';
+import {
+  bookedUntil,
+  canReturnEarly,
+  earlyReportPending,
+  instantClock,
+  returnInstantIso,
+  returnedEarly,
+} from '../../utils/rentals/earlyReturn';
 import { cardHoldLines, holdPresentation, showsCardDeposit, type HoldPresentation } from '../../utils/rentals/cardDeposit';
 import { bookingDetailPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
 import { formatReturnStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
@@ -248,6 +263,8 @@ const RentalBookingDetailPage: React.FC = () => {
   // Typed on the listing clock (like end_at); set when the return dialog opens.
   const [returnAtLocal, setReturnAtLocal] = useState('');
   const [returning, setReturning] = useState(false);
+  const [earlyDialogOpen, setEarlyDialogOpen] = useState(false);
+  const [earlyBusy, setEarlyBusy] = useState(false);
   const [sharingPin, setSharingPin] = useState(false);
   const [momoWaiting, setMomoWaiting] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
@@ -536,6 +553,56 @@ const RentalBookingDetailPage: React.FC = () => {
     authorized: authorizedAmount,
   });
   const overtimeAmount = Number(booking.overtime_amount) || 0;
+
+  // Early return (Samuel, 26 Nov): renter entry behind rentals_renter_return_report_enabled; no new flag.
+  const renterReportFlag = flagsLoaded && flags.rentals_renter_return_report_enabled === true;
+  const earlyOk =
+    Boolean(isClient) &&
+    canReturnEarly({ booking, timeZone: listingZone, flagOn: renterReportFlag, notReceived: reportedMissingItem });
+  const earlyPending = earlyReportPending(booking, listingZone);
+  const earlyDone = status === 'completed' && returnedEarly(booking, listingZone);
+  const earlyJourney =
+    earlyPending || earlyDone
+      ? {
+          aside: instantClock(returnInstantIso(booking), i18n.language, listingZone),
+          sub: earlyPending
+            ? isBusiness
+              ? t('rentals.earlyReturn.waitingStepBusiness', 'Waiting for you to confirm')
+              : t('rentals.earlyReturn.waitingStepRenter', 'Waiting for the business to confirm')
+            : t('rentals.earlyReturn.bookedUntil', 'Booked until {{time}}', {
+                time: bookedUntil(booking, i18n.language, listingZone),
+              }),
+        }
+      : undefined;
+  const priceLabel = formatDetailMoney(Number(booking.total_amount) || 0);
+  const depositLabel = depositAmount > 0 ? formatDetailMoney(depositAmount) : '';
+  const canItemReturned =
+    Boolean(isBusiness) && status === 'active' && Boolean(booking.actual_start_at) && !booking.renter_reported_returned_at;
+  const openEarlyConfirm = () => {
+    if (inspection.enrolled && !inspection.showLegacyReturn) {
+      document.getElementById('rental-inspection')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    setEarlyDialogOpen(true);
+  };
+  const submitEarlyReturn = async (actualEndAt: string) => {
+    setEarlyBusy(true);
+    setError(null);
+    try {
+      const res = await confirmReturn(bookingId, { actualEndAt });
+      setEarlyDialogOpen(false);
+      setInfo(
+        res.overtimeDue
+          ? t('rentals.earlyReturn.overtimePending', 'Return confirmed. Overtime payment in progress.')
+          : t('rentals.earlyReturn.completed', 'Return confirmed. The rental is complete.')
+      );
+      void load();
+    } catch (e: unknown) {
+      setError(apiErrorMessage(e, t('rentals.earlyReturn.failed', 'Could not send. Check your connection and try again.'), t));
+    } finally {
+      setEarlyBusy(false);
+    }
+  };
   const cancellableBeforeStart =
     (status === 'confirmed' || status === 'reserved') && !booking.actual_start_at;
 
@@ -614,6 +681,19 @@ const RentalBookingDetailPage: React.FC = () => {
   return (
     <>
       <SEOHead title={title} />
+      {isBusiness ? (
+        <BusinessReturnConfirmDialog
+          open={earlyDialogOpen}
+          booking={{ ...booking, status }}
+          timeZone={listingZone}
+          zoneLabel={confirmationZoneDefault(listingCountry, booking.currency, i18n.language)}
+          price={priceLabel}
+          deposit={depositLabel}
+          busy={earlyBusy}
+          onClose={() => setEarlyDialogOpen(false)}
+          onConfirm={(actualEndAt) => void submitEarlyReturn(actualEndAt)}
+        />
+      ) : null}
       <Box sx={{ minHeight: '100%', pb: { xs: 10, md: 5 }, bgcolor: alpha(theme.palette.divider, 0.04) }}>
         <Container maxWidth="md" sx={{ py: { xs: 2, md: 3 } }}>
           <Button
@@ -788,6 +868,26 @@ const RentalBookingDetailPage: React.FC = () => {
             </Box>
           ) : null}
 
+          {earlyOk && bookingId ? (
+            <RenterEarlyReturnPanel
+              booking={{ ...booking, id: bookingId, status }}
+              timeZone={listingZone}
+              price={priceLabel}
+              deposit={depositLabel}
+              location={returnLocation}
+              address={booking.return_place?.address ?? null}
+              onReported={() => void load()}
+            />
+          ) : null}
+          {earlyDone && isClient ? (
+            <RenterReturnedEarlyCard
+              booking={{ ...booking, status }}
+              timeZone={listingZone}
+              price={priceLabel}
+              deposit={depositLabel}
+              hold={depositLabel && authorizedAmount > 0 ? formatDetailMoney(authorizedAmount) : ''}
+            />
+          ) : null}
           {showReturnReport && bookingId ? (
             <RenterReturnPanel
               phase={returnPhase as Exclude<typeof returnPhase, 'hidden'>}
@@ -799,10 +899,20 @@ const RentalBookingDetailPage: React.FC = () => {
               reportedAt={booking.renter_reported_returned_at}
               timeZone={listingZone}
               depositLabel={depositAmount > 0 ? formatDetailMoney(depositAmount) : ''}
+              early={earlyPending}
               onChanged={() => void load()}
             />
           ) : null}
-          {showBusinessReport && booking.renter_reported_returned_at ? (
+          {showBusinessReport && earlyPending ? (
+            <BusinessEarlyReturnCard
+              booking={{ ...booking, status }}
+              timeZone={listingZone}
+              deposit={depositLabel}
+              onConfirm={openEarlyConfirm}
+              onProblem={() => document.getElementById('rental-inspection')?.scrollIntoView({ behavior: 'smooth' })}
+            />
+          ) : null}
+          {showBusinessReport && !earlyPending && booking.renter_reported_returned_at ? (
             <Alert severity="success" sx={{ mb: 2 }} data-testid="business-return-report">
               <Typography fontWeight={700}>
                 {t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
@@ -843,7 +953,7 @@ const RentalBookingDetailPage: React.FC = () => {
               </Stack>
             </Alert>
           ) : null}
-          {!showReturnReport && isClient &&
+          {!showReturnReport && !earlyOk && isClient &&
           (booking.status === 'active' ||
             booking.status === 'awaiting_return') ? (
             <Alert severity="info" sx={{ mb: 2 }}>
@@ -867,7 +977,7 @@ const RentalBookingDetailPage: React.FC = () => {
           {isClient &&
           bookingId &&
           !showStartPanel &&
-          (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
+          (reportedMissingItem || (didntWindowOpen && !windowForcedClosed && !booking.renter_reported_returned_at)) ? (
             <DidntReceiveReportButton
               bookingId={bookingId}
               startedAt={booking.actual_start_at}
@@ -903,6 +1013,14 @@ const RentalBookingDetailPage: React.FC = () => {
               money={formatConfirmationMoney(Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0, booking.currency, i18n.language)}
               returnLabel={formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language, listingZone)}
               starting={sharingPin}
+              actions={
+                canItemReturned ? (
+                  <BusinessItemReturnedActions
+                    phone={booking.client?.user?.phone_number ?? null}
+                    onItemReturned={openEarlyConfirm}
+                  />
+                ) : undefined
+              }
               onNotCollected={isBusiness && status === 'active' && bookingId ? () => {
                 void reportItemNotCollected(bookingId).then(() => {
                   setInfo(t('rentals.business.notCollectedSent', 'Support was notified that the item was not collected.'));
@@ -911,7 +1029,7 @@ const RentalBookingDetailPage: React.FC = () => {
                 });
               } : undefined}
               missing={
-                isClient && bookingId && (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
+                isClient && bookingId && (reportedMissingItem || (didntWindowOpen && !windowForcedClosed && !booking.renter_reported_returned_at)) ? (
                   <DidntReceiveReportButton
                     bookingId={bookingId}
                     startedAt={booking.actual_start_at}
@@ -973,7 +1091,8 @@ const RentalBookingDetailPage: React.FC = () => {
                       : undefined
                   }
                   pickupAside={pickupClockLabel(booking.actual_start_at, booking.start_at, listingZone, i18n.language)}
-                  accent={theme.palette.success.main}
+                  early={earlyJourney}
+                  accent="#0A4FB5"
                 />
               ) : (
               <BookingStatusSteps

@@ -44,6 +44,8 @@ interface Props {
   onConfirm: () => void;
   onNotCollected?: () => void;
   missing?: React.ReactNode;
+  /** Icon actions once started (renter ↶ Return early, business ↶ Item returned). */
+  actions?: React.ReactNode;
 }
 
 export function RentalStartPanel(props: Props) {
@@ -137,6 +139,7 @@ export function RentalStartPanel(props: Props) {
           {t('rentals.business.notCollected', 'Item not collected?')}
         </Button>
       ) : null}
+      {phase === 'started' ? props.actions : null}
       {props.role === 'client' && phase === 'started' ? props.missing : null}
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
         <DialogContent>
@@ -214,7 +217,7 @@ function titleText(
       return t('rentals.payAtPickup.businessPaid', 'Paid at {{time}} · hand over the item', { time: at });
     }
     return role === 'business'
-      ? t('rentals.business.startedLine', 'Started at {{time}} · hand over the item', { time: at })
+      ? t('rentals.business.startedLine', 'Rental started at {{time}}', { time: at })
       : t('rentals.start.startedBanner', 'Rental started at {{time}}. The business has been notified to hand over the item.', { time: at });
   }
   if (phase === 'before') return t('rentals.start.pickupOn', 'Pickup on {{when}} · {{time}}', { when, time });

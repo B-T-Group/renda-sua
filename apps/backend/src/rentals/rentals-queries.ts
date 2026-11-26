@@ -601,6 +601,7 @@ export const GET_RENTAL_BOOKING_FULL = `
       actual_start_at
       return_due_at
       actual_end_at
+      renter_reported_returned_at
       pickup_inspection_pending
       end_reminder_sent_at
       rental_pricing_snapshot

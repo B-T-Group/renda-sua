@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Linking, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -17,6 +17,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusPill } from '../../components/common/StatusPill';
 import { OrderMessageComposer } from '../../components/messaging/OrderMessageComposer';
 import { BusinessReturnedBanner } from '../../components/rentals/BusinessReturnedBanner';
+import { BusinessReturnConfirmSheet } from '../../components/rentals/BusinessEarlyReturn';
+import { IconActionRow, type IconAction } from '../../components/rentals/EarlyReturnParts';
+import {
+  bookedUntil,
+  earlyReportPending,
+  freedWindow,
+  instantClock,
+} from '../../utils/rentals/earlyReturn';
 import { BusinessDeclineBanner } from '../../components/rentals/DeclinePickupScreens';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
@@ -91,6 +99,9 @@ export default function BusinessRentalBookingDetailScreen() {
   const [returnDialog, setReturnDialog] = useState(false);
   const [returnDate, setReturnDate] = useState('');
   const [returnTime, setReturnTime] = useState('');
+  const [earlySheet, setEarlySheet] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const messagesY = useRef(0);
   const {
     messages,
     loading: messagesLoading,
@@ -204,6 +215,25 @@ export default function BusinessRentalBookingDetailScreen() {
     }
   }, [bookingId, load, returnDate, returnTime, returnZone, t]);
 
+  /** Early return / Item returned: settle at the chosen listing-clock time (already a real instant). */
+  const submitEarlyReturn = useCallback(async (actualEndAt: string) => {
+    setBusy(true);
+    try {
+      const res = await rentalsApi.confirmReturn(bookingId, { actualEndAt });
+      setEarlySheet(false);
+      setSnack(
+        res.paymentPending || res.overtimeDue
+          ? t('rentals.earlyReturn.overtimePending', 'Return recorded. A payment request for the extra hours was sent to the renter.')
+          : t('rentals.earlyReturn.completed', 'Return confirmed. The rental is complete.')
+      );
+      await load();
+    } catch (e: unknown) {
+      setSnack(e instanceof Error ? e.message : t('business.rentals.returnFailed', 'Could not confirm return'));
+    } finally {
+      setBusy(false);
+    }
+  }, [bookingId, load, t]);
+
   const cancelBooking = useCallback(async () => {
     setBusy(true);
     try {
@@ -297,6 +327,40 @@ export default function BusinessRentalBookingDetailScreen() {
     !flagsLoading &&
     flags.rentals_renter_return_report_enabled &&
     Boolean(booking.renter_reported_returned_at);
+  const earlyPending = showRenterReport && earlyReportPending(booking, listingZone);
+  // ↶ Item returned: the business ends an active rental itself (no flag; the endpoint is ungated).
+  const canItemReturned =
+    booking.status === 'active' && Boolean(booking.actual_start_at) && !booking.renter_reported_returned_at;
+  const openEarlyConfirm = () => {
+    if (showReturnInspection) {
+      navigation.navigate('BusinessInspection', { bookingId, stage: 'return' });
+      return;
+    }
+    setEarlySheet(true);
+  };
+  const cardDeposit =
+    booking.currency !== 'XAF' && booking.currency !== 'XOF' && Number(booking.security_deposit_amount) > 0
+      ? detailMoney(Number(booking.security_deposit_amount) || 0)
+      : '';
+  const itemReturnedActions: IconAction[] = [
+    ...(client?.phone_number
+      ? [{ key: 'call', icon: 'phone-outline' as const, label: t('rentals.earlyReturn.call', 'Call'), onPress: () => void Linking.openURL(`tel:${client.phone_number}`) }]
+      : []),
+    {
+      key: 'message',
+      icon: 'message-outline',
+      label: t('rentals.earlyReturn.message', 'Message'),
+      onPress: () => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true }),
+    },
+    {
+      key: 'returned',
+      icon: 'undo-variant',
+      label: t('rentals.earlyReturn.itemReturned', 'Item returned'),
+      onPress: openEarlyConfirm,
+      primary: true,
+      testID: 'business-item-returned',
+    },
+  ];
   const isReserved = booking.status === 'reserved';
   const canCancel =
     (booking.status === 'confirmed' || isReserved) && !booking.actual_start_at;
@@ -310,6 +374,7 @@ export default function BusinessRentalBookingDetailScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={{ flex: 1, backgroundColor: colors.pageBackground }}
       contentContainerStyle={{
         padding: spacing.md,
@@ -473,7 +538,62 @@ export default function BusinessRentalBookingDetailScreen() {
         ) : null}
       </View>
 
-      {showRenterReport && booking.renter_reported_returned_at ? (
+      {earlyPending && booking.renter_reported_returned_at ? (
+        <View>
+          <BusinessReturnedBanner
+            title={t('rentals.earlyReturn.returnedEarly', 'Returned early · {{time}}', {
+              time: instantClock(booking.renter_reported_returned_at, i18n.language, listingZone),
+            })}
+            body={
+              cardDeposit
+                ? t('rentals.earlyReturn.businessBody', 'Booked until {{end}}. Check the item, then confirm the return. The {{amount}} deposit is released only after you confirm.', {
+                    end: bookedUntil(booking, i18n.language, listingZone),
+                    amount: cardDeposit,
+                  })
+                : t('rentals.earlyReturn.businessBodyNoDeposit', 'Booked until {{end}}. Check the item, then confirm the return.', {
+                    end: bookedUntil(booking, i18n.language, listingZone),
+                  })
+            }
+            early={{
+              frees: t('rentals.earlyReturn.frees', '{{from}} – {{to}} opens for new bookings once you confirm.', {
+                from: instantClock(booking.renter_reported_returned_at, i18n.language, listingZone),
+                to: bookedUntil(booking, i18n.language, listingZone),
+              }),
+              freesWindow: freedWindow(booking, booking.renter_reported_returned_at, i18n.language, listingZone),
+              onMessage: () => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true }),
+            }}
+            onConfirm={openEarlyConfirm}
+            onProblem={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'return' })}
+          />
+          <View
+            style={[
+              styles.card,
+              { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.md, marginTop: spacing.md },
+            ]}
+          >
+            <Text style={[typography.subtitle2, { color: colors.text.primary, marginBottom: 8 }]}>
+              {t('rentals.status', 'Status')}
+            </Text>
+            <RentalJourneyList
+              hideTitle
+              status={booking.status}
+              payAtPickup={booking.payment_timing === 'pay_at_pickup'}
+              paidAside={
+                (booking.payment_status === 'paid' || booking.payment_status === 'authorized') && (booking.paid_at || booking.created_at)
+                  ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
+                  : undefined
+              }
+              pickupAside={pickupClockLabel(booking.actual_start_at, booking.start_at, listingZone, i18n.language)}
+              paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
+              early={{
+                aside: instantClock(booking.renter_reported_returned_at, i18n.language, listingZone),
+                sub: t('rentals.earlyReturn.waitingStepBusiness', 'Waiting for you to confirm'),
+              }}
+            />
+          </View>
+        </View>
+      ) : null}
+      {showRenterReport && booking.renter_reported_returned_at && !earlyPending ? (
         <BusinessReturnedBanner
           title={t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
             time: formatReturnStamp(booking.renter_reported_returned_at, i18n.language, listingZone),
@@ -573,6 +693,7 @@ export default function BusinessRentalBookingDetailScreen() {
             onClose={() => undefined}
             onConfirm={() => undefined}
             onNotCollected={booking.status === 'active' ? () => void reportNotCollected() : undefined}
+            actions={canItemReturned ? <IconActionRow actions={itemReturnedActions} /> : undefined}
           />
           <View
             style={[
@@ -615,6 +736,7 @@ export default function BusinessRentalBookingDetailScreen() {
 
       {booking.status !== 'cancelled' ? (
         <View
+          onLayout={(event) => { messagesY.current = event.nativeEvent.layout.y; }}
           style={[
             styles.card,
             shadows.sm,
@@ -645,6 +767,18 @@ export default function BusinessRentalBookingDetailScreen() {
           />
         </View>
       ) : null}
+
+      <BusinessReturnConfirmSheet
+        open={earlySheet}
+        booking={booking}
+        timeZone={listingZone}
+        zoneLabel={confirmationZoneDefault(listingCountry, booking.currency, i18n.language)}
+        price={detailMoney(Number(booking.total_amount) || 0)}
+        deposit={cardDeposit}
+        busy={busy}
+        onClose={() => setEarlySheet(false)}
+        onConfirm={(iso) => void submitEarlyReturn(iso)}
+      />
 
       <Portal>
 

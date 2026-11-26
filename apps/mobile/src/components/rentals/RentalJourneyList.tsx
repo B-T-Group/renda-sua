@@ -21,6 +21,7 @@ export function RentalJourneyList(input: JourneyInput & { accent?: string; hideT
           label={t(step.labelKey, step.label)}
           state={step.state}
           aside={step.aside}
+          sub={step.sub}
           accent={input.accent ?? colors.primary.main}
         />
       ))}
@@ -32,11 +33,13 @@ function JourneyRow({
   label,
   state,
   aside,
+  sub,
   accent,
 }: {
   label: string;
   state: 'done' | 'current' | 'upcoming';
   aside?: string;
+  sub?: string;
   accent: string;
 }) {
   const { colors, typography } = useTheme();
@@ -44,7 +47,10 @@ function JourneyRow({
   return (
     <View style={styles.row}>
       <StepIcon state={state} accent={accent} done={colors.success.main} muted={colors.text.disabled} />
-      <Text style={[typography.body2, styles.label, { color, fontWeight: state === 'current' ? '700' : '400' }]}>{label}</Text>
+      <View style={styles.label}>
+        <Text style={[typography.body2, { color, fontWeight: state === 'current' ? '700' : '400' }]}>{label}</Text>
+        {sub ? <Text style={[typography.caption, { color: colors.text.secondary }]}>{sub}</Text> : null}
+      </View>
       {aside ? <Text style={[typography.caption, { color: colors.text.secondary }]}>{aside}</Text> : null}
     </View>
   );

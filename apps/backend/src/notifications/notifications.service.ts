@@ -143,6 +143,7 @@ import {
   rentalNoticeZone,
   buildRentalNotReceivedNotice,
   buildRenterReturnedNotice,
+  type RenterReturnedEarly,
   buildRenterReturnEscalationNotice,
   buildRentalNotReceivedSupportNotice,
   buildRentalPeriodEndedPush,
@@ -3986,6 +3987,7 @@ export class NotificationsService {
     bookingId: string;
     bookingNumber: string;
     rentalItemName: string;
+    early?: RenterReturnedEarly;
   }): Promise<void> {
     const userId = payload.businessUserId?.trim();
     if (!userId) return;
@@ -4085,7 +4087,12 @@ export class NotificationsService {
 
   private async deliverRenterReturned(
     userId: string,
-    payload: { bookingId: string; bookingNumber: string; rentalItemName: string }
+    payload: {
+      bookingId: string;
+      bookingNumber: string;
+      rentalItemName: string;
+      early?: RenterReturnedEarly;
+    }
   ): Promise<void> {
     const user = await this.getUserRowForEmail(userId);
     const msg = buildRenterReturnedNotice({ ...payload, preferredLanguage: user?.preferred_language });

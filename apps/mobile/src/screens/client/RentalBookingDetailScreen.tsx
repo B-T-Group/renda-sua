@@ -66,6 +66,16 @@ import {
 } from '../../utils/rentals/confirmationFormat';
 import { renterReturnPhase } from '../../utils/rentals/renterReturnPhase';
 import {
+  bookedUntil,
+  canReturnEarly,
+  earlyReportPending,
+  instantClock,
+  returnInstantIso,
+  returnedEarly,
+} from '../../utils/rentals/earlyReturn';
+import { RenterEarlyReturn } from '../../components/rentals/RenterEarlyReturn';
+import { RenterReturnedEarlyCard } from '../../components/rentals/RenterReturnedEarlyCard';
+import {
   isPriceChangeUnseenError,
   PRICE_CHANGE_UNSEEN_KEY,
   PRICE_CHANGE_UNSEEN_TEXT,
@@ -322,6 +332,24 @@ export default function RentalBookingDetailScreen() {
     booking?.return_place?.name ||
     booking?.rental_location_listing?.business_location?.name ||
     '—';
+  const earlyOk = booking
+    ? canReturnEarly({
+        booking,
+        timeZone: startZone,
+        flagOn: !flagsLoading && flags.rentals_renter_return_report_enabled === true,
+        notReceived: reportedMissingItem,
+      })
+    : false;
+  const earlyPending = booking ? earlyReportPending(booking, startZone) : false;
+  const earlyDone = booking?.status === 'completed' && returnedEarly(booking, startZone);
+  const earlyJourney = booking && (earlyPending || earlyDone)
+    ? {
+        aside: instantClock(returnInstantIso(booking), i18n.language, startZone),
+        sub: earlyPending
+          ? t('rentals.earlyReturn.waitingStepRenter', 'Waiting for the business to confirm')
+          : t('rentals.earlyReturn.bookedUntil', 'Booked until {{time}}', { time: bookedUntil(booking, i18n.language, startZone) }),
+      }
+    : undefined;
   const isPayAtPickup = booking?.payment_timing === 'pay_at_pickup';
   const paymentPending =
     booking?.status === 'proposed' &&
@@ -639,8 +667,23 @@ export default function RentalBookingDetailScreen() {
               onOpen={() => setStartOpen(true)}
               onClose={() => setStartOpen(false)}
               onConfirm={() => void onStartRental()}
+              actions={
+                earlyOk ? (
+                  <RenterEarlyReturn
+                    booking={booking}
+                    timeZone={startZone}
+                    price={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+                    deposit={hold.showDeposit ? formatConfirmationMoney(depositAmount, booking.currency, i18n.language) : ''}
+                    location={returnLocation}
+                    address={booking.return_place?.address ?? null}
+                    onMessage={() => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true })}
+                    onReported={() => void refetch()}
+                    onAlreadyConfirmed={() => void refetch()}
+                  />
+                ) : undefined
+              }
               missing={
-                reportedMissingItem || (didntWindowOpen && !windowForcedClosed) ? (
+                reportedMissingItem || (didntWindowOpen && !windowForcedClosed && !booking.renter_reported_returned_at) ? (
                   <DidntReceiveReportButton
                     bookingId={booking.id}
                     startedAt={booking.actual_start_at}
@@ -689,9 +732,19 @@ export default function RentalBookingDetailScreen() {
             reportedAt={booking.renter_reported_returned_at}
             timeZone={startZone}
             depositLabel={hold.showDeposit ? formatDetailMoney(depositAmount) : ''}
+            early={earlyPending}
             onReported={() => void refetch()}
             onAlreadyConfirmed={() => void refetch()}
             onMessage={() => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true })}
+          />
+        ) : null}
+        {earlyDone ? (
+          <RenterReturnedEarlyCard
+            booking={booking}
+            timeZone={startZone}
+            price={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+            deposit={showsCardDeposit(booking.currency) && depositAmount > 0 ? formatConfirmationMoney(depositAmount, booking.currency, i18n.language) : ''}
+            hold={authorizedAmount > 0 ? formatConfirmationMoney(authorizedAmount, booking.currency, i18n.language) : ''}
           />
         ) : null}
         {!showReturnReport && booking.status === 'awaiting_return' ? (
@@ -771,6 +824,7 @@ export default function RentalBookingDetailScreen() {
               paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
               paidAside={paidAside}
               pickupAside={pickupAside}
+              early={earlyJourney}
             />
           ) : (
             timelineSteps.map((step, idx) => {
