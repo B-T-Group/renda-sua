@@ -239,6 +239,14 @@ describe('RentalRenterReturnService.report', () => {
     await expect(late.service.report('b1', NOW)).resolves.toMatchObject({ wasOverdue: true });
   });
 
+  it('uses the early-start return due before the booked end', async () => {
+    const wallNow = new Date(NOW.getTime() + 3_600_000);
+    const early = setup({
+      booking: { end_at: '2026-11-12T23:00:00.000Z', return_due_at: new Date(wallNow.getTime() - 60_000).toISOString() },
+    });
+    await expect(early.service.report('b1', NOW)).resolves.toMatchObject({ wasOverdue: true });
+  });
+
   it('asks the renter to retry when a lost stamp does not reappear', async () => {
     const gone = setup({ stamp: false });
     await expect(gone.service.report('b1', NOW)).rejects.toMatchObject({ status: 409, message: 'Try again' });

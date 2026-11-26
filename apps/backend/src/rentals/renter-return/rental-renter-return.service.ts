@@ -34,6 +34,7 @@ interface ReturnBooking {
   status: string;
   actual_start_at: string | null;
   end_at: string | null;
+  return_due_at?: string | null;
   renter_reported_returned_at: string | null;
   renter_return_escalated_at: string | null;
   inspection_policy_version: number | null;
@@ -47,7 +48,7 @@ interface ReturnBooking {
 const BOOKING = `
   query ReturnReportBooking($id: uuid!) {
     rental_bookings_by_pk(id: $id) {
-      id booking_number client_id status actual_start_at end_at
+      id booking_number client_id status actual_start_at end_at return_due_at
       renter_reported_returned_at renter_return_escalated_at inspection_policy_version
       business { user_id }
       rental_location_listing {
@@ -102,7 +103,7 @@ const LIST = `
       order_by: { renter_reported_returned_at: asc }
       limit: 50
     ) {
-      id booking_number status end_at security_deposit_amount currency
+      id booking_number status end_at return_due_at security_deposit_amount currency
       renter_reported_returned_at renter_return_escalated_at inspection_policy_version
       rental_location_listing {
         rental_item { name }
@@ -238,7 +239,7 @@ export class RentalRenterReturnService {
 
   private present(booking: ReturnBooking, alreadyReported: boolean): ReturnReportResult {
     const reportedAt = booking.renter_reported_returned_at ?? '';
-    // Due is listing wall clock (end_at); the report is a real instant.
+    // Due is listing wall clock (return_due_at after an hourly early start, else end_at).
     const end = bookingReturnDueInstantMs(booking);
     const at = new Date(reportedAt).getTime();
     return {
