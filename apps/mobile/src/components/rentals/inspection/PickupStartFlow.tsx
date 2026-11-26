@@ -9,6 +9,7 @@ import type { InspectionPhoto, InspectionView } from '../../../utils/rentals/ren
 import { listingCity } from '../../../utils/rentals/pickupPhotoTime';
 import { splitCorrectionReason } from '../../../utils/rentals/rentalInspection';
 import { formatPhotoStamp, formatZonedTime, pickupPhase } from '../../../utils/rentals/rentalStartWindow';
+import { earlyReturnLine, earlyReturnPreview } from '../../../utils/rentals/returnDue';
 
 const REASON_ORDER = ['photo_mismatch', 'wear_hidden', 'missing_accessory', 'wrong_unit'] as const;
 
@@ -23,6 +24,8 @@ interface Props {
   moneyLines?: { main: string; sub: string | null; icon: 'card' | 'momo' | 'wallet' };
   startAt: string;
   endAt: string;
+  /** rental_pricing_snapshot: an hourly booking started early is due at start + booked hours. */
+  pricingSnapshot?: unknown;
   startOpensAt?: string | null;
   busy: boolean;
   starting: boolean;
@@ -280,7 +283,7 @@ function LockedStart() {
 }
 
 function StartStep(props: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const phase = pickupPhase({
     now: Date.now(),
@@ -299,7 +302,7 @@ function StartStep(props: Props) {
       <Text style={{ color: colors.text.secondary }}>
         {t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
       </Text>
-      <IconLine icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
+      <IconLine icon="calendar-clock" label={startReturnLine(props, i18n.language, t)} />
       <MoneyLines lines={props.moneyLines ?? { main: t('rentals.start.held', '{{amount}} held on your card', { amount: props.money }), sub: null, icon: 'card' }} />
       <Button mode="contained" icon={locked ? 'lock' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart}>
         {t('rentals.actions.startRental', 'Start rental')}
@@ -324,6 +327,16 @@ function MoneyLines({ lines }: { lines: NonNullable<Props['moneyLines']> }) {
       </View>
     </View>
   );
+}
+
+function startReturnLine(props: Props, language: string, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
+  const preview = earlyReturnPreview(
+    { start_at: props.startAt, end_at: props.endAt, rental_pricing_snapshot: props.pricingSnapshot },
+    Date.now(),
+    props.timeZone
+  );
+  if (preview) return earlyReturnLine(preview, language, t);
+  return t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel });
 }
 
 function IconLine({ icon, label }: { icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; label: string }) {

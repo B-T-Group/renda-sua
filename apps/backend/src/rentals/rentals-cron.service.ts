@@ -25,6 +25,7 @@ import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
 import { isStartDay, listingZoneFor, startOpensAt, wallClockReached } from './simple-start/simple-start.policy';
 import { WALL_CLOCK_MAX_SKEW_MS } from './wall-clock';
+import { bookingReturnDueAt } from './return-due';
 
 function listedRecipients(value: unknown): NoResponseRecipient[] | undefined {
   if (!Array.isArray(value)) return undefined;
@@ -138,7 +139,10 @@ export class RentalsCronService {
     }
   }
 
-  /** end_at is listing wall clock: widen the query, then check each booking on its own clock. */
+  /**
+   * Return due (return_due_at, else end_at) is listing wall clock: widen the query,
+   * then check each booking on its own clock.
+   */
   async processEndedActiveBookings(): Promise<number> {
     const clock = new Date();
     const now = clock.toISOString();
@@ -194,7 +198,7 @@ export class RentalsCronService {
       bookingId,
       rentalItemName:
         booking.rental_location_listing?.rental_item?.name ?? 'Rental',
-      endAt: booking.end_at,
+      endAt: bookingReturnDueAt(booking) ?? booking.end_at,
       clientUserId: booking.client.user_id,
       businessUserId: booking.business.user_id,
     });
@@ -353,7 +357,8 @@ export class RentalsCronService {
   ): Promise<boolean> {
     const booking = await this.fetchBooking(bookingId);
     if (!booking || booking.status !== 'active') return false;
-    if (!wallClockReached(new Date(booking.end_at), new Date(nowIso), bookingZone(booking))) return false;
+    const due = new Date(bookingReturnDueAt(booking) ?? NaN);
+    if (!wallClockReached(due, new Date(nowIso), bookingZone(booking))) return false;
     const won = await casUpdateRentalBooking(
       this.hasuraSystemService,
       bookingId,
@@ -373,7 +378,7 @@ export class RentalsCronService {
       bookingId,
       rentalItemName:
         booking.rental_location_listing?.rental_item?.name ?? 'Rental',
-      endAt: booking.end_at,
+      endAt: bookingReturnDueAt(booking) ?? booking.end_at,
       clientUserId: booking.client.user_id,
       businessUserId: booking.business.user_id,
     });
@@ -676,9 +681,12 @@ function bookingZone(booking: any): string {
   return listingZoneFor(booking?.rental_location_listing?.business_location?.address?.country);
 }
 
-/** end_at (listing wall clock) is after the listing's now and within `windowMs` of it. */
+/**
+ * The return due (return_due_at after an hourly early start, else end_at; listing
+ * wall clock) is after the listing's now and within `windowMs` of it.
+ */
 export function endsWithinOnListingClock(booking: any, now: Date, windowMs: number): boolean {
-  const end = new Date(booking?.end_at);
+  const end = new Date(bookingReturnDueAt(booking) ?? NaN);
   const zone = bookingZone(booking);
   if (wallClockReached(end, now, zone)) return false;
   return wallClockReached(end, new Date(now.getTime() + windowMs), zone);
