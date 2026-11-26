@@ -7654,6 +7654,7 @@
     "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid.",
     "returnAt": "Return date and time",
     "returnAtHint": "Select when the item was returned. Early returns still pay the full rental total; time after the booked end is billed as overtime.",
+    "returnAtInvalid": "Enter a valid return date and time",
     "modify": {
       "changed": "Changed: {{detail}}",
       "staleBanner": "This request was updated. Review the latest version."

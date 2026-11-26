@@ -11,6 +11,7 @@ import {
   returnNotEscalated,
   returnReportDisabled,
 } from './rental-renter-return.errors';
+import { bookingReturnDueInstantMs } from '../return-due';
 import { assertCanReportReturn, escalationCutoff } from './rental-renter-return.policy';
 
 export interface ReturnReportResult {
@@ -237,7 +238,8 @@ export class RentalRenterReturnService {
 
   private present(booking: ReturnBooking, alreadyReported: boolean): ReturnReportResult {
     const reportedAt = booking.renter_reported_returned_at ?? '';
-    const end = booking.end_at ? new Date(booking.end_at).getTime() : Number.NaN;
+    // Due is listing wall clock (end_at); the report is a real instant.
+    const end = bookingReturnDueInstantMs(booking);
     const at = new Date(reportedAt).getTime();
     return {
       success: true,
