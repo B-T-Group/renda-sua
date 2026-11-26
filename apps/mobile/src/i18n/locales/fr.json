@@ -2370,6 +2370,11 @@
         "declinedToast": "Demande refusée pour {{item}}",
         "expiredSla": "Demande expirée — aucune réponse en 24 h",
         "expiredStart": "Demande expirée — aucune réponse avant le début",
+        "expiredTitle": "Demande expirée",
+        "expiredStartReason": "Vous n’avez pas répondu avant l’heure de début. Le locataire peut envoyer une nouvelle demande.",
+        "expiredSlaReason": "Vous n’avez pas répondu sous 24 h. Le locataire peut envoyer une nouvelle demande.",
+        "viewRequest": "Voir la demande",
+        "dismissNotice": "Fermer",
         "pageA11y": "Demande {{current}} sur {{total}}"
       },
       "activeOrders": {

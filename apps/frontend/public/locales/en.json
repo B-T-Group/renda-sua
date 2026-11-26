@@ -3109,7 +3109,12 @@
         "acceptedToast": "Request accepted for {{item}}",
         "declinedToast": "Request declined for {{item}}",
         "expiredSla": "Request expired — no response in 24h",
-        "expiredStart": "Request expired — no response before the start time"
+        "expiredStart": "Request expired — no response before the start time",
+        "expiredTitle": "Request expired",
+        "expiredStartReason": "You didn’t reply before the start time. The renter can send a new request.",
+        "expiredSlaReason": "You didn’t reply within 24 hours. The renter can send a new request.",
+        "viewRequest": "View request",
+        "dismissNotice": "Dismiss"
       },
       "welcome": "Welcome to your business dashboard",
       "accountSummary": "Account Summary",
