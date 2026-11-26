@@ -76,7 +76,11 @@ function CardCopy({
       {model.renterName ? <Typography variant="body2" noWrap>{model.renterName}</Typography> : null}
       {model.place ? <Typography variant="body2" color="text.secondary" noWrap>{model.place}</Typography> : null}
       <ScheduleLine model={model} open={open} onToggle={onToggle} />
-      {model.receiveLine ? <Typography fontWeight={800}>{model.receiveLine}</Typography> : null}
+      {model.receiveLine ? (
+        <Typography fontWeight={800} color={model.expired ? 'text.secondary' : 'text.primary'}>
+          {model.receiveLine}
+        </Typography>
+      ) : null}
       {model.breakdown ? <Typography variant="caption" color="text.secondary">{model.breakdown}</Typography> : null}
       {model.depositAmount ? <Typography variant="caption" display="block">{t('rentals.requestCard.deposit', 'Deposit {{amount}}', { amount: model.depositAmount })}</Typography> : null}
       {model.changeDetail ? <Typography variant="caption" color="info.main" display="block">{t('rentals.modify.changed', 'Changed: {{detail}}', { detail: model.changeDetail })}</Typography> : null}
@@ -117,6 +121,18 @@ function categoryIcon(name: string) {
 
 function CardChips({ model }: { model: RequestCardModel }) {
   const { t } = useTranslation();
+  if (model.expired) {
+    return (
+      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+        <Chip
+          size="small"
+          data-testid="rental-request-expired-chip"
+          label={t('rentals.requestCard.expired', 'Expired')}
+          sx={{ bgcolor: 'action.hover', color: 'text.secondary', fontWeight: 800 }}
+        />
+      </Stack>
+    );
+  }
   return (
     <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
       <Chip size="small" label={t('business.dashboard.rentalRequests.requested', 'Requested')} />

@@ -39,6 +39,13 @@ function changeDetail(summary: BusinessRentalRequestRow['change_summary']): stri
   return bits.join(', ');
 }
 
+
+function finiteQuotedTotal(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const amount = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(amount) ? amount : null;
+}
+
 function exclusiveRange(windows: Array<{ calendar_date?: string }> | undefined): string {
   const days = (windows ?? []).map((row) => row.calendar_date).filter((day): day is string => Boolean(day)).sort();
   if (!days.length) return '';
@@ -117,20 +124,22 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   const currency = request.rental_location_listing?.rental_item?.currency ?? 'XAF';
   const pricingPreview = useMemo(() => {
     const quoted = parseRentalPricingSnapshot(request.rental_pricing_snapshot);
+    const frozen = finiteQuotedTotal(request.quoted_total) ?? quoted?.total ?? null;
     if (quoted?.lines?.length) {
-      return { lines: quoted.lines, total: quoted.total, currency: quoted.currency };
+      return { lines: quoted.lines, total: frozen ?? quoted.total, currency: quoted.currency };
     }
     const windows = parseRentalSelectionWindowsFromJson(request.rental_selection_windows);
     if (!windows.length) {
-      return { lines: [], total: 0, currency };
+      return { lines: [], total: frozen ?? 0, currency: quoted?.currency ?? currency };
     }
     const ratePerHour = Number(request.rental_location_listing.base_price_per_hour);
     const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
     const units = Math.max(1, Math.floor(Number(request.units_requested)) || 1);
     const computed = computeRentalPricingLines(windows, ratePerHour, ratePerDay, units);
-    return { lines: computed.lines, total: computed.total, currency };
+    return { lines: computed.lines, total: frozen ?? computed.total, currency: quoted?.currency ?? currency };
   }, [
     currency,
+    request.quoted_total,
     request.rental_location_listing.base_price_per_day,
     request.rental_location_listing.base_price_per_hour,
     request.rental_pricing_snapshot,
@@ -188,8 +197,9 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
         cardOpensBooking
           ? t('business.rentals.openRequestCardA11y', 'Open {{item}}, {{status}}', {
               item: itemName,
-              status:
-                request.status === 'pending'
+              status: isExpiredRentalRequest(request)
+                ? t('rentals.requestCard.expired', 'Expired')
+                : request.status === 'pending'
                   ? t('rentals.modify.requested', 'Requested')
                   : t(phase.labelKey, request.status),
             })
@@ -281,9 +291,21 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
             <Stack direction="row" spacing={0.5}>
               <Chip
                 size="small"
-                color={statusChipColor}
-                label={request.status === 'pending' ? t('rentals.modify.requested', 'Requested') : t(phase.labelKey, request.status)}
-                sx={{ fontWeight: 800 }}
+                data-testid={isExpiredRentalRequest(request) ? 'rental-request-expired-chip' : undefined}
+                color={isExpiredRentalRequest(request) ? 'default' : statusChipColor}
+                label={
+                  isExpiredRentalRequest(request)
+                    ? t('rentals.requestCard.expired', 'Expired')
+                    : request.status === 'pending'
+                      ? t('rentals.modify.requested', 'Requested')
+                      : t(phase.labelKey, request.status)
+                }
+                sx={{
+                  fontWeight: 800,
+                  ...(isExpiredRentalRequest(request)
+                    ? { bgcolor: 'action.hover', color: 'text.secondary' }
+                    : {}),
+                }}
               />
               {(request.change_summary?.fields?.length ?? 0) > 0 ? (
                 <Chip size="small" color="primary" variant="outlined" label={t('rentals.modify.updated', 'Updated')} />
@@ -327,8 +349,16 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
               : '—'}
           </Typography>
 
-          <Typography variant="body2" fontWeight={700}>
-            {formatRentalMoney(pricingPreview.total, pricingPreview.currency)}
+          <Typography
+            variant="body2"
+            fontWeight={700}
+            color={isExpiredRentalRequest(request) ? 'text.secondary' : 'text.primary'}
+          >
+            {isExpiredRentalRequest(request)
+              ? t('rentals.requestCard.wouldHaveReceived', 'Would have received {{amount}}', {
+                  amount: formatRentalMoney(pricingPreview.total, pricingPreview.currency),
+                })
+              : formatRentalMoney(pricingPreview.total, pricingPreview.currency)}
           </Typography>
 
           <Stack

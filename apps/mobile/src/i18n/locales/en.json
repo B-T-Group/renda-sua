@@ -6743,6 +6743,8 @@
       "hideTimes": "Hide times",
       "allDay": "All day",
       "youReceive": "You receive {{amount}}",
+      "wouldHaveReceived": "Would have received {{amount}}",
+      "expired": "Expired",
       "deposit": "Deposit {{amount}}",
       "sent": "Sent {{time}}",
       "quoteUnavailable": "Quote unavailable",

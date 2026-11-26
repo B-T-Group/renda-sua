@@ -86,10 +86,15 @@ describe('business rental request card — expired', () => {
     renderCard(request({ status: 'unavailable', unavailable_reason_code: 'no_response', respond_window: 'start' }));
     expect(screen.getByTestId('rental-request-expired-state')).toBeInTheDocument();
     expect(screen.getByText('Request expired')).toBeInTheDocument();
+    expect(screen.getByTestId('rental-request-expired-chip')).toBeInTheDocument();
+    expect(screen.getByText('Expired')).toBeInTheDocument();
+    expect(screen.queryByText('Done')).not.toBeInTheDocument();
+    expect(screen.queryByText('Requested')).not.toBeInTheDocument();
     expect(
       screen.getByText("You didn’t reply before the start time. The renter can send a new request.")
     ).toBeInTheDocument();
     expect(screen.getByText('JBL PartyBox 310')).toBeInTheDocument();
+    expect(screen.getByText(/Would have received/)).toBeInTheDocument();
     expect(screen.queryByTestId('rental-request-accept')).not.toBeInTheDocument();
     expect(screen.queryByTestId('rental-request-decline')).not.toBeInTheDocument();
     expect(screen.queryByText(/Nothing was charged/i)).not.toBeInTheDocument();
@@ -99,9 +104,27 @@ describe('business rental request card — expired', () => {
     await i18n.changeLanguage('fr');
     renderCard(request({ status: 'unavailable', unavailable_reason_code: 'no_response', respond_window: 'sla' }));
     expect(screen.getByText('Demande expirée')).toBeInTheDocument();
+    expect(screen.getByText('Expirée')).toBeInTheDocument();
+    expect(screen.queryByText('Terminé')).not.toBeInTheDocument();
+    expect(screen.getByText(/Vous auriez reçu/)).toBeInTheDocument();
     expect(screen.getByText(/Vous n’avez pas répondu sous 24/)).toBeInTheDocument();
     expect(i18n.t('business.dashboard.rentalRequests.expiredSlaReason')).toContain('24\u00a0h');
     expect(screen.queryByTestId('rental-request-accept')).not.toBeInTheDocument();
     await i18n.changeLanguage('en');
+  });
+
+  it('shows the frozen quote when snapshot lines are missing, not a live listing recomputation', async () => {
+    await i18n.changeLanguage('en');
+    renderCard(
+      request({
+        status: 'unavailable',
+        unavailable_reason_code: 'no_response',
+        quoted_total: 90,
+        rental_pricing_snapshot: { version: 4, currency: 'CAD', total: 90, securityDeposit: 0 },
+      })
+    );
+    expect(screen.getByText(/Would have received/)).toBeInTheDocument();
+    expect(screen.getByText(/90/)).toBeInTheDocument();
+    expect(screen.queryByText(/^\$45$/)).not.toBeInTheDocument();
   });
 });

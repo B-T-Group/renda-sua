@@ -99,10 +99,16 @@ describe('business rental request detail — expired', () => {
     const view = await renderDetail();
     await waitFor(() => expect(view.getByTestId('rental-request-expired-state')).toBeTruthy());
     expect(view.getByText('Request expired')).toBeTruthy();
+    expect(view.getByTestId('rental-request-expired-chip')).toBeTruthy();
+    expect(view.getByText('Expired')).toBeTruthy();
+    expect(view.queryByText('Requested')).toBeNull();
+    expect(view.queryByText('Starts today')).toBeNull();
     expect(
       view.getByText("You didn’t reply before the start time. The renter can send a new request.")
     ).toBeTruthy();
     expect(view.getByText('JBL PartyBox 310')).toBeTruthy();
+    expect(view.getByText(/Would have received/)).toBeTruthy();
+    expect(view.queryByText(/You receive/)).toBeNull();
     expect(view.queryByText('The renter is charged after you accept')).toBeNull();
     expect(view.queryByTestId('rental-request-accept')).toBeNull();
     expect(view.queryByTestId('rental-request-decline')).toBeNull();
@@ -116,10 +122,14 @@ describe('business rental request detail — expired', () => {
     await i18n.changeLanguage('fr');
     const view = await renderDetail();
     await waitFor(() => expect(view.getByText('Demande expirée')).toBeTruthy());
+    expect(view.getByText('Expirée')).toBeTruthy();
+    expect(view.queryByText('Demandée')).toBeNull();
+    expect(view.getByText(/Vous auriez reçu/)).toBeTruthy();
     expect(view.getByText(/Vous n’avez pas répondu sous 24/)).toBeTruthy();
     expect(i18n.t('business.dashboard.rentalRequests.expiredSlaReason')).toContain('24\u00a0h');
     expect(view.queryByTestId('rental-request-accept')).toBeNull();
   });
+
 
   it('hides actions on a manual decline without the expired banner', async () => {
     mockRows.current = [request({ status: 'unavailable', unavailable_reason_code: 'item_unavailable' })];

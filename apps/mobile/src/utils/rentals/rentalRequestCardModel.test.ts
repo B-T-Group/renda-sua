@@ -264,3 +264,39 @@ describe('renter and sent time', () => {
     expect(model.quantity).toBeNull();
   });
 });
+
+describe('contract total vs breakdown', () => {
+  it('keeps the day breakdown consistent with the frozen quote when snapshot lines are missing', () => {
+    const model = buildRequestCardModel(
+      request({
+        quoted_total: 760,
+        rental_pricing_snapshot: { currency: 'XAF', total: 760, securityDeposit: 0 },
+        rental_location_listing: {
+          base_price_per_day: 100,
+          base_price_per_hour: 100,
+          security_deposit_amount: 0,
+          business_location: { name: 'Stripe Rail', address: { city: "L'Assomption" } },
+          rental_item: { name: 'JBL PartyBox 310', currency: 'XAF' },
+        },
+      }),
+      'en',
+      now,
+      copy
+    );
+    expect(model.receiveLine).toBe('You receive 760\u00A0FCFA');
+    expect(model.breakdown).toBe('2 days × 380\u00A0FCFA / day');
+    expect(model.breakdown).not.toMatch(/100/);
+    expect(model.expired).toBe(false);
+  });
+
+  it('labels an expired no_response request as would-have-received', () => {
+    const model = buildRequestCardModel(
+      request({ status: 'unavailable', unavailable_reason_code: 'no_response' }),
+      'en',
+      now,
+      copy
+    );
+    expect(model.expired).toBe(true);
+    expect(model.receiveLine).toBe('Would have received 760\u00A0FCFA');
+  });
+});

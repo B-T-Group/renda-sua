@@ -6,6 +6,7 @@ import {
   type PeriodWindow,
 } from './rentalRequestFormat';
 import type { RentalSelectionWindow } from '../hooks/useRentalApi';
+import { isExpiredRentalRequest } from './dashboardRentalRequests';
 
 const DOUALA = 'Africa/Douala';
 const EN_DASH = '\u2013';
@@ -26,6 +27,8 @@ export interface RequestCardSource {
     dates?: { from: PeriodWindow[]; to: PeriodWindow[] };
     quantity?: { from: number; to: number };
   } | null;
+  status?: string | null;
+  unavailable_reason_code?: string | null;
   dates_available?: boolean | null;
   payment_rail?: string | null;
   listing_timezone?: string | null;
@@ -68,6 +71,7 @@ export interface RequestCardModel {
   note: string | null;
   sentClock: string;
   acceptDisabled: boolean;
+  expired: boolean;
 }
 
 interface SnapshotLine {
@@ -152,7 +156,8 @@ export function buildRequestCardModel(
 ): RequestCardModel {
   const windows = windowsOf(request);
   const total = contractTotal(request);
-  const money = moneyLines(request, windows, total, locale, t);
+  const expired = isExpiredRentalRequest(request);
+  const money = moneyLines(request, windows, total, locale, t, expired);
   const deposit = depositAmount(request);
   const showDeposit = shouldShowDepositLine(deposit, request.payment_rail);
   const name = renterName(request);
@@ -177,6 +182,7 @@ export function buildRequestCardModel(
     note: request.client_request_note?.trim() || null,
     sentClock: sentClock(request.created_at, locale, zone),
     acceptDisabled: request.dates_available === false,
+    expired,
   };
 }
 
@@ -206,12 +212,15 @@ function moneyLines(
   windows: RentalSelectionWindow[],
   total: number | null,
   locale: string,
-  t: Copy
+  t: Copy,
+  expired = false
 ): { amount: string | null; line: string | null; breakdown: string | null } {
   if (total == null) return { amount: null, line: null, breakdown: null };
   const currency = currencyOf(request);
   const amount = formatRequestAmount(total, currency, locale);
-  const line = t('rentals.requestCard.youReceive', 'You receive {{amount}}', { amount });
+  const line = expired
+    ? t('rentals.requestCard.wouldHaveReceived', 'Would have received {{amount}}', { amount })
+    : t('rentals.requestCard.youReceive', 'You receive {{amount}}', { amount });
   return { amount, line, breakdown: breakdownLine(request, windows, total, currency, locale, t) };
 }
 
@@ -228,6 +237,7 @@ function breakdownLine(
   const hourly = windows.every((row) => row.billing !== 'all_day');
   if (!daily && !hourly) return null;
   const rates = ratesOf(request);
+  const units = Math.max(1, Number(request.units_requested) || 1);
   const rows = windows.map((row, index) => ({
     id: String(index),
     startMs: Date.parse(row.start_at),
@@ -239,13 +249,18 @@ function breakdownLine(
     (sum, row) => sum + rentalBillableHours(Date.parse(row.start_at), Date.parse(row.end_at)),
     0
   );
+  const days = rows.reduce((count, row) => count + (row.billing === 'all_day' ? 1 : 0), 0);
+  // Breakdown must match the frozen contract total, not a live listing rate
+  // (quoted_total can disagree with windows × base_price when lines were omitted).
+  const dayRate = daily && days > 0 ? total / (days * units) : rates.day;
+  const hourRate = hourly && hours > 0 ? total / (hours * units) : rates.hour;
   const priced = requestPriceCopy({
     rows,
     hours,
-    units: Math.max(1, Number(request.units_requested) || 1),
+    units,
     total,
-    dayRate: rates.day,
-    hourRate: rates.hour,
+    dayRate,
+    hourRate,
     currency,
     language: locale,
     t,
