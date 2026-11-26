@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Badge } from 'react-native-paper';
@@ -25,7 +25,8 @@ import { useStore } from '../../stores/RootStore';
 import { BuyAgainCard, buyAgainLines } from '../../components/client/BuyAgainCard';
 import { selectBuyAgainOrder } from '../../utils/selectBuyAgainOrder';
 import { DiscoveryRails } from '../../components/client/DiscoveryRails';
-import { HomeLaneSwitcher, type HomeLane } from '../../components/client/HomeLaneSwitcher';
+import { HomeLaneHeader } from '../../components/client/HomeLaneHeader';
+import type { HomeLane } from '../../components/client/HomeLaneSwitcher';
 import { ActionsNeededSection } from '../../components/common/ActionsNeededSection';
 import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
 import { AssistantIconButton } from '../../components/common/AssistantIconButton';
@@ -39,28 +40,13 @@ import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
 import { useNotifications } from '../../hooks/useNotifications';
 import { usePostSignupCreditShopNavigation } from '../../hooks/usePostSignupCreditShopNavigation';
-import { useMarket } from '../../hooks/useMarket';
-import { useMarketLanes, type MarketLaneId } from '../../hooks/useMarketLanes';
 import { useTheme } from '../../contexts/ThemeContext';
 import { spacing } from '../../theme';
+import { laneFromSegment, segmentFromLane } from '../../utils/homeLaneSegment';
 import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
 import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import { useClientHomeOrderCta } from '../../hooks/useClientHomeOrderCta';
 import type { Order } from '../../types/agent';
-
-function laneFromSegment(
-  segment: 'all' | 'food' | 'rentals' | 'exports' | undefined
-): HomeLane {
-  if (segment === 'food') return 'food';
-  if (segment === 'rentals') return 'rentals';
-  if (segment === 'exports') return 'exports';
-  return 'shop';
-}
-
-function segmentFromLane(lane: HomeLane): 'all' | 'food' | 'rentals' | 'exports' {
-  if (lane === 'shop') return 'all';
-  return lane;
-}
 
 /** Client browse tab: catalog + navigation to item detail on the root stack. */
 function ClientBrowseHomeScreenBase() {
@@ -183,16 +169,9 @@ function ClientBrowseHomeScreenBase() {
   });
 
   const isClientAuthenticated = auth.isAuthenticated && persona.activePersona === 'client';
-  const { selectedMarket } = useMarket();
-  const { visible: visibleLanes } = useMarketLanes(selectedMarket?.countryCode);
   const lane: HomeLane = laneFromSegment(route.params?.segment);
   const foodOnly = lane === 'food';
   const exportOnly = lane === 'exports';
-  useEffect(() => {
-    if (visibleLanes.length === 0) return;
-    if (visibleLanes.includes(lane as MarketLaneId)) return;
-    tabNav.setParams({ segment: segmentFromLane(visibleLanes[0] as HomeLane) });
-  }, [lane, tabNav, visibleLanes]);
   const { items: actionsNeededItems, dismissAll } = useActionsNeeded(
     isClientAuthenticated ? 'client' : null
   );
@@ -245,14 +224,25 @@ function ClientBrowseHomeScreenBase() {
     <NotificationBellButton unreadCount={unreadCount} onPress={onOpenNotifications} />
   ) : null;
 
+  const laneHeader = (
+    <HomeLaneHeader
+      value={lane}
+      onChange={onLaneChange}
+      trailing={
+        hideAssistantHeaderButton ? undefined : (
+          <AssistantIconButton
+            onPress={openAssistant}
+            character={canSeeRendaCharacter(viewer)}
+          />
+        )
+      }
+    />
+  );
+
   if (lane === 'rentals') {
     return (
       <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.pageBackground }}>
-        <HomeLaneSwitcher
-          value={lane}
-          onChange={onLaneChange}
-          lanes={visibleLanes as HomeLane[]}
-        />
+        {laneHeader}
         <ClientRentalsHomeScreen />
       </View>
     );
@@ -266,11 +256,7 @@ function ClientBrowseHomeScreenBase() {
         backgroundColor: colors.pageBackground,
       }}
     >
-      <HomeLaneSwitcher
-        value={lane}
-        onChange={onLaneChange}
-        lanes={visibleLanes as HomeLane[]}
-      />
+      {laneHeader}
       {showActions ? (
         <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
           <ActionsNeededSection
@@ -322,14 +308,6 @@ function ClientBrowseHomeScreenBase() {
             <HomeCartButton />
             {notificationBell}
           </View>
-        }
-        headerMarketTrailing={
-          hideAssistantHeaderButton ? undefined : (
-            <AssistantIconButton
-              onPress={openAssistant}
-              character={canSeeRendaCharacter(viewer)}
-            />
-          )
         }
         discoveryExtra={({ foodOnly: foodSurface, exportOnly: exportSurface }) => (
           <>

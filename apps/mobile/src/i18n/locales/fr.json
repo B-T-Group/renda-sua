@@ -1224,10 +1224,8 @@
   "nav": {
     "manageRecipients": "Destinataires enregistrés",
     "guestTabs": {
-      "browse": "Boutique",
+      "home": "Accueil",
       "rentals": "Locations",
-      "exports": "Exportations",
-      "foods": "Repas",
       "reels": "Reels",
       "login": "Connexion"
     },
@@ -6172,7 +6170,6 @@
       "emptyMarketTitle": "Aucune location ici pour le moment",
       "emptyMarketBody": "Rien n'est encore proposé à {{city}}. Essayez une autre ville ou recherchez par nom.",
       "tip": "Conseil : ajoutez des dates pour voir ce qui est libre pour vos dates. Vous pouvez ignorer et filtrer plus tard.",
-      "marketCameroon": "Cameroun",
       "emptyLanding": "Recherchez ou choisissez une catégorie",
       "noFeed": "Aucun fil à faire défiler sur cette page",
       "suggestions": "SUGGESTIONS",

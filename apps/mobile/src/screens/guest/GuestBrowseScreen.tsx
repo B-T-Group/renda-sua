@@ -25,7 +25,7 @@ export default observer(function GuestBrowseScreen({
 }) {
   const { t } = useTranslation();
   const navigation = useNavigation<BottomTabNavigationProp<GuestTabParamList>>();
-  const route = useRoute<RouteProp<GuestTabParamList, 'GuestBrowse'>>();
+  const route = useRoute<RouteProp<GuestTabParamList, 'GuestHome'>>();
   const [checkoutCatalogItem, setCheckoutCatalogItem] = useState<CatalogInventoryItem | null>(null);
   const [checkoutVariantId, setCheckoutVariantId] = useState<string | null>(null);
   const [checkoutQuantity, setCheckoutQuantity] = useState(1);
@@ -139,7 +139,8 @@ export default observer(function GuestBrowseScreen({
       <BrowseCatalogScreen
         foodOnly={foodOnly}
         exportOnly={exportOnly}
-        initialSegment={route.params?.segment}
+        initialSegment={foodOnly ? 'food' : 'all'}
+        applyTopSafeArea={false}
         requestedCategory={route.params?.category}
         categoryRequestId={route.params?.categoryRequestId}
         onBrowseCategories={foodOnly || exportOnly ? undefined : onBrowseCategories}

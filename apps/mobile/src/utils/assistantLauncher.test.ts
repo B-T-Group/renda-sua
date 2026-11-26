@@ -70,7 +70,7 @@ describe('flag gating + allowlist', () => {
     for (const r of ['ClientBrowse', 'ClientSearch', 'ClientCatalogSearch', 'ClientRentals', 'ClientOrders', 'ClientMenu', 'CategoriesBrowse', 'CollectionDetail', 'StoresList', 'StoreDetail', 'OrderDetail']) {
       expect(isLauncherRoute('client', r)).toBe(true);
     }
-    for (const r of ['GuestBrowse', 'GuestFoods', 'GuestRentals', 'StoreDetail', 'StoresList']) {
+    for (const r of ['GuestHome', 'StoreDetail', 'StoresList']) {
       expect(isLauncherRoute('guest', r)).toBe(true);
     }
     for (const r of ['Dashboard', 'OpenOrders', 'OrdersList', 'OrderDetail', 'Pay', 'Menu']) {
@@ -147,7 +147,7 @@ describe('placement', () => {
   });
 
   it('stacks above a visible cart FAB (cartBottom + 52 + 12)', () => {
-    expect(launcherPlacement({ ...base, route: 'GuestBrowse', cartFabVisible: true })).toEqual({ right: 14, bottom: 100 + 16 + 52 + 12 - 2 });
+    expect(launcherPlacement({ ...base, route: 'GuestHome', cartFabVisible: true })).toEqual({ right: 14, bottom: 100 + 16 + 52 + 12 - 2 });
     expect(launcherPlacement({ ...base, route: 'StoreDetail', cartFabVisible: true })).toEqual({ right: 14, bottom: 34 + 16 + 52 + 12 - 2 });
   });
 
@@ -165,7 +165,7 @@ describe('first-run nudge', () => {
   });
   it('shows once on browse home, after FTUE, without a market prompt', () => {
     expect(canShowNudge(ok)).toBe(true);
-    expect(canShowNudge({ ...ok, route: 'GuestBrowse' })).toBe(true);
+    expect(canShowNudge({ ...ok, route: 'GuestHome' })).toBe(true);
     expect(canShowNudge({ ...ok, seen: true })).toBe(false);
     expect(canShowNudge({ ...ok, seen: null })).toBe(false);
     expect(canShowNudge({ ...ok, route: 'ClientSearch' })).toBe(false);

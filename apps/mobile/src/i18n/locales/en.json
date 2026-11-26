@@ -1281,10 +1281,8 @@
   "nav": {
     "manageRecipients": "Saved recipients",
     "guestTabs": {
-      "browse": "Shop",
+      "home": "Home",
       "rentals": "Rentals",
-      "exports": "Exports",
-      "foods": "Food",
       "reels": "Reels",
       "login": "Sign in"
     },
@@ -6226,7 +6224,6 @@
       "emptyMarketTitle": "No rentals here yet",
       "emptyMarketBody": "Nothing is listed in {{city}} yet. Try another city, or search by name.",
       "tip": "Tip: add dates to see what's free for your trip. You can skip and filter later.",
-      "marketCameroon": "Cameroon",
       "emptyLanding": "Search or pick a category",
       "noFeed": "No scrolling feed on landing",
       "suggestions": "SUGGESTIONS",

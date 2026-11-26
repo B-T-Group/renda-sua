@@ -33,7 +33,6 @@ import FoodsMenuHero from '../foods/FoodsMenuHero';
 import { RestaurantCarousel } from '../foods/RestaurantCarousel';
 import RestaurantCard from '../foods/RestaurantCard';
 import FoodsEmptyStateIllustration from '../illustrations/FoodsEmptyStateIllustration';
-import { MarketSelector } from '../market/MarketSelector';
 import { useMarket } from '../../hooks/useMarket';
 
 const PAGE_SIZE = 24;
@@ -259,7 +258,6 @@ const FoodsPage: React.FC = () => {
         ) : null}
 
         <Stack spacing={2} sx={{ mb: 3 }}>
-          <MarketSelector catalogContext="inventory" />
           <Box component="form" onSubmit={handleSearchSubmit}>
             <TextField
               fullWidth

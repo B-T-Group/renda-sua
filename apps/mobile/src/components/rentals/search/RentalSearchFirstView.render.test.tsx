@@ -132,7 +132,6 @@ describe('search-first rentals', () => {
   it('lands without a feed or a My rentals shortcut', async () => {
     const view = await renderSearch();
     expect(view.getByPlaceholderText('Search cameras, tools, sound...')).toBeTruthy();
-    expect(view.getByText('Douala · Littoral')).toBeTruthy();
     expect(view.getByTestId('rental-search-skip-dates')).toBeTruthy();
     expect(view.getByTestId('rental-search-browse-all')).toBeTruthy();
     expect(view.getByText('Cameras')).toBeTruthy();
@@ -460,12 +459,6 @@ describe('search-first rentals', () => {
     });
     expect(view.getAllByText('Equipment')).toHaveLength(1);
     expect(view.getByTestId('rental-search-more')).toBeTruthy();
-  });
-
-  it('names Cameroon in French on the landing', async () => {
-    await i18n.changeLanguage('fr');
-    const view = await renderSearch({ marketLabel: 'Cameroon' });
-    expect(view.getByText('Cameroun')).toBeTruthy();
   });
 
   it('translates seeded categories and the empty-search row in French', async () => {

@@ -207,34 +207,6 @@
           }
         }
       ]
-    },
-    {
-      "name": "Catalog",
-      "item": [
-        {
-          "name": "Market lanes preflight",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/catalog/market-lanes?country_code=CM",
-              "host": ["{{baseUrl}}"],
-              "path": ["catalog", "market-lanes"],
-              "query": [
-                {
-                  "key": "country_code",
-                  "value": "CM",
-                  "description": "ISO-2 shopper market"
-                }
-              ]
-            },
-            "description": "Public preflight for home browse lanes. Shop and rentals are always true; exports and food are true only when the market has matching inventory."
-          }
-        }
-      ]
     }
   ]
 }

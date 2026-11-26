@@ -15,7 +15,6 @@ import { Button, IconButton, Menu, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SearchInput } from '../../components/common/SearchInput';
 import { CatalogItemSkeleton } from '../../components/browse/CatalogItemSkeleton';
-import { MarketSelector } from '../../components/market/MarketSelector';
 import { MarketSwitchBanner } from '../../components/market/MarketSwitchBanner';
 import { RentalListingCard } from '../../components/rentals/RentalListingCard';
 import { RentalLocationsStrip } from '../../components/rentals/RentalLocationsStrip';
@@ -161,9 +160,6 @@ export function RentalsBrowseScreen({
                 'Browse verified business-operated rentals in your region.'
               )}
         </Text>
-        <View style={{ marginTop: spacing.sm }}>
-          <MarketSelector catalogContext="rentals" />
-        </View>
         <MarketSwitchBanner />
         {headerExtra ? <View style={{ marginTop: spacing.sm }}>{headerExtra}</View> : null}
 

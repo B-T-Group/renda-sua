@@ -111,10 +111,6 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
         t('rentals.searchFirst.dayCount', '{{count}} days', { count })
       )
     : null;
-  const marketLabel = props.marketLabel.replace(
-    /\bCameroon\b/g,
-    t('rentals.searchFirst.marketCameroon', 'Cameroon')
-  );
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }} testID={`rental-search-${props.mode}`}>
       <View
@@ -147,9 +143,6 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
             ) : null}
           </View>
         </View>
-        {props.mode === 'landing' || listChrome ? (
-          <Text style={{ color: colors.text.secondary, marginBottom: spacing.sm }}>{marketLabel}</Text>
-        ) : null}
         {props.myRentals?.next ? <NextRentalCard {...props.myRentals.next} /> : null}
         <View style={[styles.search, { borderColor: props.mode === 'typing' ? colors.primary.main : colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.lg }]}>
           <MaterialCommunityIcons name="magnify" size={22} color={colors.text.secondary} />
@@ -590,7 +583,7 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, textAlign: 'center', fontWeight: '700' },
   backHit: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
   search: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, paddingHorizontal: 12, minHeight: 48, gap: 8 },
-  input: { flex: 1, fontSize: 16, paddingVertical: 10 },
+  input: { flex: 1, fontSize: 16, paddingVertical: 10, textAlignVertical: 'center', includeFontPadding: false },
   dateRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, padding: 12, gap: 10 },
   section: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4, marginTop: 16, marginBottom: 8 },
   iconRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 4, rowGap: 8, paddingVertical: 4 },

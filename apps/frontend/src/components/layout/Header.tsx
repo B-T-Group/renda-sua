@@ -62,11 +62,9 @@ import { MarketSelector } from '../market/MarketSelector';
 import { HeaderSearchPopover } from './HeaderSearchPopover';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
-import { useMarket } from '../../hooks/useMarket';
-import { useMarketLanes } from '../../hooks/useMarketLanes';
 import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
 import { brandTokens } from '../../theme/brandTokens';
-import { browseLaneNavItems } from '../../utils/browseMarketLanes';
+import { BROWSE_LANES } from '../../utils/browseMarketLanes';
 import {
   SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION,
   SITE_EVENT_ASSISTANT_LAUNCHER_TAP,
@@ -152,10 +150,6 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
   const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const { selectedMarket } = useMarket();
-  const { visible: visibleLanes } = useMarketLanes(
-    selectedMarket?.countryCode
-  );
   const assistantScreen = assistantScreenName(location.pathname);
   useEffect(() => {
     if (assistantEntry !== 'character') return;
@@ -297,7 +291,7 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
   };
 
   const getGuestBrowseItems = () =>
-    browseLaneNavItems(visibleLanes).map((lane) => ({
+    BROWSE_LANES.map((lane) => ({
       label: t(lane.labelKey, lane.labelDefault),
       path: lane.path,
       icon: lane.icon,

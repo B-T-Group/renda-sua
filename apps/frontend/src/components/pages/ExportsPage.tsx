@@ -32,7 +32,6 @@ import ItemCardSkeleton from '../common/ItemCardSkeleton';
 import { RecentlyViewedRail } from '../catalog-experience/RecentlyViewedRail';
 import ExportCatalogIllustration from '../illustrations/ExportCatalogIllustration';
 import SEOHead from '../seo/SEOHead';
-import { MarketSelector } from '../market/MarketSelector';
 
 const ITEMS_PER_PAGE = 24;
 const EXPORT_SKELETON_COUNT = 8;
@@ -180,7 +179,6 @@ const ExportsPage: React.FC = () => {
             </Typography>
           </Box>
         </Box>
-        <MarketSelector />
       </Box>
 
       <RecentlyViewedRail

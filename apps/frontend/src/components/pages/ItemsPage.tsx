@@ -84,7 +84,6 @@ import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import { TrackOrderModal } from '../dialogs/TrackOrderModal';
 import SEOHead from '../seo/SEOHead';
-import { MarketSelector } from '../market/MarketSelector';
 import { catalogSearchShouldFocus } from '../../utils/catalogSearchFocus';
 import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
 import type { Order } from '../../hooks/useOrders';
@@ -993,7 +992,6 @@ const ItemsPage: React.FC = () => {
                 flexWrap: 'wrap',
               }}
             >
-              <MarketSelector catalogContext="inventory" />
               <AssistantHomeEntry compact />
               {isClient && nearbyAgentsCount > 0 && (
                 <Chip

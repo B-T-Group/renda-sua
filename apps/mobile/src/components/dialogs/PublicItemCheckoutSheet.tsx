@@ -242,7 +242,7 @@ function PublicItemCheckoutSheetComponent({
     onDismiss();
     if (!authed) {
       (navigation as { navigate: (name: string, params?: object) => void }).navigate('GuestTabs', {
-        screen: 'GuestBrowse',
+        screen: 'GuestHome',
       });
     }
   }, [auth, navigation, onDismiss, resetForm, submitting]);

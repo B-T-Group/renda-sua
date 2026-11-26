@@ -114,7 +114,7 @@ function ReelsFeedScreen() {
       navigation.goBack();
       return;
     }
-    const home = HOME_TAB[persona.activePersona] ?? 'GuestBrowse';
+    const home = HOME_TAB[persona.activePersona] ?? 'GuestHome';
     (navigation as { navigate: (name: string) => void }).navigate(home);
   }, [navigation, persona.activePersona]);
 
