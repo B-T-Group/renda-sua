@@ -1,6 +1,7 @@
 import { formatSelectionLabel, localDateKey, type SelectionRange } from './rentalRequestScheduleUtils';
 import { formatConfirmationMoney } from './confirmationFormat';
 import { listingNowMs } from './dayHoursPicker';
+import { pickerLang, uses12h } from './dayHoursCopy';
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -265,6 +266,13 @@ function clock(iso: string): string {
   return match ? `${match[1]}:${match[2]}` : '';
 }
 
+function clock12(iso: string): string {
+  const match = /T(\d{2}):(\d{2})/.exec(iso);
+  if (!match) return '';
+  const hours = Number(match[1]);
+  return `${hours % 12 || 12}:${match[2]}\u00A0${hours < 12 ? 'AM' : 'PM'}`;
+}
+
 function hourlyLine(row: PeriodWindow, locale: string): string {
   const day = row.start_at.slice(0, 10);
   const month = monthLabel(day, locale);
@@ -275,9 +283,10 @@ function hourlyLine(row: PeriodWindow, locale: string): string {
 }
 
 /** Douala wall-clock components stored with a Z suffix: `12 Nov · 21:00`. */
-export function formatListingDue(iso: string, locale: string): string {
+/** "12 Nov · 09:00"; "12 Nov · 9:00 AM" for English when the listing `timeZone` is in the Americas. */
+export function formatListingDue(iso: string, locale: string, timeZone?: string | null): string {
   const day = iso.slice(0, 10);
-  const time = clock(iso);
+  const time = timeZone && uses12h(pickerLang(locale), timeZone) ? clock12(iso) : clock(iso);
   if (!ISO_DATE.test(day) || !time) return iso;
   return `${dayNum(day)}\u00A0${monthLabel(day, locale)}\u00A0·\u00A0${time}`;
 }

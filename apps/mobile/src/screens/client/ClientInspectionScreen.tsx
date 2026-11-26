@@ -83,10 +83,10 @@ export default function ClientInspectionScreen() {
     model.booking?.currency
   );
   const dueAt = bookingReturnDue(model.booking);
-  const dueLabel = dueAt ? formatZonedWhen(dueAt, BOOKING_CLOCK, i18n.language) : '';
+  const dueLabel = dueAt ? formatZonedWhen(dueAt, BOOKING_CLOCK, i18n.language, photoZone) : '';
   // Hourly early start: due at start + booked hours if the renter starts now.
   const earlyDue = earlyReturnPreview(model.booking, Date.now(), photoZone);
-  const sheetDueLabel = earlyDue ? formatReturnClock(earlyDue.dueAt, i18n.language) : dueLabel;
+  const sheetDueLabel = earlyDue ? formatReturnClock(earlyDue.dueAt, i18n.language, photoZone) : dueLabel;
   const pickupStart = stage === 'pickup' && !damaged;
 
   useEffect(() => {

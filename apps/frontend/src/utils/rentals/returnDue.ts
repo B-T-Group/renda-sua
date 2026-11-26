@@ -1,4 +1,5 @@
 import { listingNowMs } from '../rentalDayHoursPicker';
+import { pickerLang, uses12h } from '../rentalDayHoursCopy';
 
 /**
  * Hourly early start (Samuel, 26 Nov 2026): a single hourly booking started before its
@@ -20,6 +21,11 @@ export interface EarlyReturnPreview {
   dueAt: string;
   /** Booked length, the time from now until due. */
   durationMs: number;
+  /** Booked window, listing wall clock. */
+  startAt: string;
+  endAt: string;
+  /** Listing time zone (12-hour clock for English in the Americas). */
+  timeZone: string;
 }
 
 /** The stored return due: return_due_at after an hourly early start, else end_at. */
@@ -45,34 +51,53 @@ export function earlyReturnPreview(
   if (listingNowMs(now, timeZone) >= start) return null;
   const durationMs = end - start;
   const due = Math.min(listingNowMs(now + durationMs, timeZone), end);
-  return { dueAt: new Date(due).toISOString(), durationMs };
+  return {
+    dueAt: new Date(due).toISOString(),
+    durationMs,
+    startAt: new Date(start).toISOString(),
+    endAt: new Date(end).toISOString(),
+    timeZone,
+  };
 }
 
-/** "1:00 PM" in English, "13:00" in French, read on the stored wall clock. */
-export function formatReturnClock(wallIso: string, language: string): string {
+/**
+ * "1:00 PM" for English in the Americas, else "13:00" (same rule as the day-hours picker),
+ * read on the stored wall clock.
+ */
+export function formatReturnClock(wallIso: string, language: string, timeZone?: string | null): string {
   const date = new Date(wallIso);
   const hours = date.getUTCHours();
   const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-  if (language.toLowerCase().startsWith('fr')) return `${String(hours).padStart(2, '0')}:${minutes}`;
+  if (!uses12h(pickerLang(language), timeZone)) return `${String(hours).padStart(2, '0')}:${minutes}`;
   const suffix = hours < 12 ? 'AM' : 'PM';
   return `${hours % 12 || 12}:${minutes} ${suffix}`;
 }
 
-/** "2 h", "1 h 30 min", "45 min" (same in English and French). */
+/** "2 h", "1 h 30 min", "45 min" with non-breaking spaces (same in English and French). */
 export function formatReturnDuration(ms: number): string {
   const total = Math.max(0, Math.round(ms / 60_000));
   const hours = Math.floor(total / 60);
   const minutes = total % 60;
-  if (!hours) return `${minutes} min`;
-  return minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+  if (!hours) return `${minutes}\u00a0min`;
+  return minutes ? `${hours}\u00a0h\u00a0${minutes}\u00a0min` : `${hours}\u00a0h`;
 }
 
 type Translate = (key: string, fallback: string, vars?: Record<string, string>) => string;
 
-/** "Return by 1:00 PM (2 h from now)" / "Retour avant 13:00 (dans 2 h)". */
+/**
+ * "Return by 1:00 PM (2 h from now) · booked 2:00 PM – 4:00 PM" /
+ * "Retour avant 13:00 (dans 2 h) · réservé 14:00 – 16:00".
+ */
 export function earlyReturnLine(preview: EarlyReturnPreview, language: string, t: Translate): string {
-  return t('rentals.start.returnByEarly', 'Return by {{time}} ({{duration}} from now)', {
-    time: formatReturnClock(preview.dueAt, language),
+  return t('rentals.start.returnByEarly', 'Return by {{time}} ({{duration}} from now) · booked {{start}} – {{end}}', {
+    time: formatReturnClock(preview.dueAt, language, preview.timeZone),
     duration: formatReturnDuration(preview.durationMs),
+    start: formatReturnClock(preview.startAt, language, preview.timeZone),
+    end: formatReturnClock(preview.endAt, language, preview.timeZone),
   });
+}
+
+/** "Use due time · 1:00 PM" / "Utiliser l’heure de retour prévue · 13:00" (business return dialog). */
+export function dueTimeOptionLabel(dueWallIso: string, language: string, timeZone: string | null | undefined, t: Translate): string {
+  return t('rentals.returnUseDueTime', 'Use due time · {{time}}', { time: formatReturnClock(dueWallIso, language, timeZone) });
 }

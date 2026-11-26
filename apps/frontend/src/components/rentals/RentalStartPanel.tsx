@@ -52,7 +52,7 @@ export function RentalStartPanel(props: Props) {
   });
   const day = formatZonedDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
   const when = formatZonedWeekdayDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
-  const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
+  const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK, i18n.language, props.timeZone);
   const locked = phase === 'before' || phase === 'closed';
   const hold = startMoney(props.booking);
   const momo = hold.kind === 'momo_due';
@@ -66,12 +66,12 @@ export function RentalStartPanel(props: Props) {
       : phase === 'started'
         ? t('rentals.journey.inProgress', 'In progress')
         : t('rentals.start.pickupToday', 'Pickup today');
-  // Hourly early start: the due time if the renter starts now (Start dialog, business mirror).
+  // Hourly early start: the due time if the renter starts now (renter Start dialog only).
   const early = phase !== 'started' ? earlyReturnPreview(props.booking, Date.now(), props.timeZone) : null;
   const returnLine = early
     ? earlyReturnLine(early, i18n.language, t)
     : t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel });
-  const title = titleText(phase, props.role, props.renterName, when, time, props.booking.actual_start_at, props.timeZone, t);
+  const title = titleText(phase, props.role, props.renterName, when, time, props.booking.actual_start_at, props.timeZone, t, i18n.language);
   return (
     <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: (theme) => alpha(late ? theme.palette.warning.main : theme.palette.success.main, 0.12), border: 1, borderColor: tone, color: 'text.primary' }}>
       <Stack direction="row" spacing={1} alignItems="center">
@@ -84,7 +84,7 @@ export function RentalStartPanel(props: Props) {
         <Typography variant="body2" sx={{ mt: 0.5 }}>
           {t('rentals.start.lateStill', 'Booked for {{time}} · you can still start until {{until}}', {
             time,
-            until: formatZonedWhen(props.booking.end_at, BOOKING_CLOCK, i18n.language),
+            until: formatZonedWhen(props.booking.end_at, BOOKING_CLOCK, i18n.language, props.timeZone),
           })}
         </Typography>
       ) : null}
@@ -94,9 +94,15 @@ export function RentalStartPanel(props: Props) {
           {lines.sub ? <Typography variant="caption" color="text.secondary" display="block">{lines.sub}</Typography> : null}
         </Box>
       ) : null}
-      <Typography variant="body2">
-        {props.role === 'business' ? returnLine : t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
-      </Typography>
+      {props.role === 'business' && phase !== 'started' ? (
+        <Typography variant="body2">
+          {t('rentals.start.bookedWindow', 'Booked {{start}} – {{end}}', {
+            start: time,
+            end: formatZonedTime(props.booking.end_at, BOOKING_CLOCK, i18n.language, props.timeZone),
+          })}
+        </Typography>
+      ) : null}
+      <Typography variant="body2">{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Typography>
       {props.role === 'client' && phase !== 'started' ? (
         <Button
           variant="contained"
@@ -167,13 +173,14 @@ function titleText(
   time: string,
   startedAt: string | null | undefined,
   zone: string,
-  t: (key: string, fallback: string, vars?: Record<string, string>) => string
+  t: (key: string, fallback: string, vars?: Record<string, string>) => string,
+  language: string
 ): string {
   if (role === 'business' && phase !== 'started') {
     return t('rentals.business.waitingTitle', 'Waiting for {{name}} to start', { name: name || 'the renter' });
   }
   if (phase === 'started') {
-    const at = startedAt ? formatZonedTime(startedAt, zone) : time;
+    const at = startedAt ? formatZonedTime(startedAt, zone, language, zone) : time;
     return role === 'business'
       ? t('rentals.business.startedLine', 'Started at {{time}} · hand over the item', { time: at })
       : t('rentals.start.startedBanner', 'Rental started at {{time}}. The business has been notified to hand over the item.', { time: at });

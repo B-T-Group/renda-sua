@@ -890,7 +890,7 @@ const RentalBookingDetailPage: React.FC = () => {
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ')}
               place={booking.rental_location_listing?.business_location?.name ?? ''}
               money={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
-              returnLabel={formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language)}
+              returnLabel={formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language, listingZone)}
               starting={sharingPin}
               onNotCollected={isBusiness && status === 'active' && bookingId ? () => {
                 void reportItemNotCollected(bookingId).then(() => {

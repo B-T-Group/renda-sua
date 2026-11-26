@@ -193,7 +193,7 @@ export default function RentalBookingDetailScreen() {
   // Return due: return_due_at after an hourly early start, else the booked end.
   const returnDueAt = bookingReturnDue(booking);
   const returnByLabel = returnDueAt
-    ? formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language)
+    ? formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language, confirmationTimeZone(listingCountry, booking?.currency))
     : '—';
   const timelineStepsBase = bookingDetailTimeline(booking?.status ?? '');
   const currentIdxBase = bookingDetailTimelineIndex(timelineStepsBase, booking?.status ?? '');

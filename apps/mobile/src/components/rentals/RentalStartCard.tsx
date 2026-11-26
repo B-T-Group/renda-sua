@@ -80,7 +80,7 @@ function StartBody(props: Props & { phase: PickupPhase }) {
   const { colors, spacing, borderRadius, typography } = useTheme();
   const day = formatZonedDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
   const when = formatZonedWeekdayDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
-  const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
+  const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK, i18n.language, props.timeZone);
   const pill = pillText(props.phase, day, t);
   const momo = isMomoDue(props.booking);
   const tone = props.phase === 'late' ? colors.warning : colors.success;
@@ -92,14 +92,15 @@ function StartBody(props: Props & { phase: PickupPhase }) {
         </View>
         <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8 }]}>{t('rentals.nextStep.label', 'NEXT STEP')}</Text>
       </View>
-      <Text style={[typography.h6, { color: colors.text.primary }]}>{titleFor(props.phase, when, time, props, t)}</Text>
+      <Text style={[typography.h6, { color: colors.text.primary }]}>{titleFor(props.phase, when, time, props, t, i18n.language)}</Text>
       <Text style={[typography.body2, { color: colors.text.secondary }]}>{bodyFor(props, momo, t)}</Text>
       <LateLine {...props} />
       <MoneyLine {...props} momo={momo} />
+      {props.role === 'business' && props.phase !== 'started' ? (
+        <Text style={[typography.body2, { color: colors.text.primary }]}>{bookedWindow(props, t, i18n.language)}</Text>
+      ) : null}
       <Text style={[typography.body2, { color: colors.text.primary }]}>
-        {props.role === 'business' && props.phase !== 'started'
-          ? returnLine(props, t, i18n.language)
-          : t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
+        {t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
       </Text>
       <StartButton {...props} day={day} momo={momo} />
       <NotCollected {...props} />
@@ -198,8 +199,8 @@ function LateLine(props: Props & { phase: PickupPhase }) {
   const { t, i18n } = useTranslation();
   const { colors, typography } = useTheme();
   if (props.phase !== 'late') return null;
-  const booked = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
-  const until = formatZonedWhen(props.booking.end_at, BOOKING_CLOCK, i18n.language);
+  const booked = formatZonedTime(props.booking.start_at, BOOKING_CLOCK, i18n.language, props.timeZone);
+  const until = formatZonedWhen(props.booking.end_at, BOOKING_CLOCK, i18n.language, props.timeZone);
   return (
     <Text style={[typography.body2, { color: colors.text.primary }]}>
       {t('rentals.start.lateStill', 'Booked for {{time}} · you can still start until {{until}}', { time: booked, until })}
@@ -207,7 +208,15 @@ function LateLine(props: Props & { phase: PickupPhase }) {
   );
 }
 
-/** Hourly early start: the due time if the renter starts now. Otherwise the booked return. */
+/** Business before the start: the booked window ("Booked 2:00 PM – 4:00 PM"), no early preview. */
+function bookedWindow(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
+  return t('rentals.start.bookedWindow', 'Booked {{start}} – {{end}}', {
+    start: formatZonedTime(props.booking.start_at, BOOKING_CLOCK, language, props.timeZone),
+    end: formatZonedTime(props.booking.end_at, BOOKING_CLOCK, language, props.timeZone),
+  });
+}
+
+/** Renter Start sheet, hourly early start: the due time if the renter starts now. Otherwise the booked return. */
 function returnLine(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
   const preview = earlyReturnPreview(props.booking, props.now ?? Date.now(), props.timeZone);
   if (preview) return earlyReturnLine(preview, language, t);
@@ -249,12 +258,12 @@ function pillText(phase: PickupPhase, day: string, t: (key: string, fallback: st
   return t('rentals.start.pickupToday', 'Pickup today');
 }
 
-function titleFor(phase: PickupPhase, when: string, time: string, props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
+function titleFor(phase: PickupPhase, when: string, time: string, props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
   if (props.role === 'business' && phase !== 'started') {
     return t('rentals.business.waitingTitle', 'Waiting for {{name}} to start', { name: props.renterName || t('rentals.renter', 'the renter') });
   }
   if (phase === 'started') {
-    const at = props.booking.actual_start_at ? formatZonedTime(props.booking.actual_start_at, props.timeZone) : time;
+    const at = props.booking.actual_start_at ? formatZonedTime(props.booking.actual_start_at, props.timeZone, language, props.timeZone) : time;
     return props.role === 'business'
       ? t('rentals.business.startedLine', 'Started at {{time}} · hand over the item', { time: at })
       : t('rentals.start.startedBanner', 'Rental started at {{time}}. The business has been notified to hand over the item.', { time: at });
