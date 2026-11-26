@@ -6855,7 +6855,8 @@
       "refund": "This booking hasn’t started, so cancellation is free. You get the {{fee}} reservation fee back.",
       "keep": "It’s the pickup day, so the business keeps the {{fee}} reservation fee. Nothing else is charged.",
       "keepBooking": "Keep booking"
-    }
+    },
+    "renter": "The renter"
   },
   "admin": {
     "reels": {

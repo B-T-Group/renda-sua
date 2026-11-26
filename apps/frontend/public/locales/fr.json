@@ -7382,7 +7382,8 @@
       "collectPickupPayment": "Encaisser le paiement",
       "pickupPaid": "Paiement encaissé — location confirmée",
       "pickupPaymentSent": "Demande mobile money envoyée au client. La réservation sera confirmée dès réception du paiement.",
-      "pickupPaymentError": "Impossible d’encaisser le paiement"
+      "pickupPaymentError": "Impossible d’encaisser le paiement",
+      "cancelBeforeStartMessage": "Cette réservation n’a pas commencé, l’annulation est donc gratuite. Toute retenue sur carte ou portefeuille est libérée."
     },
     "cancelError": "Impossible d’annuler la réservation",
     "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué.",
@@ -7454,7 +7455,8 @@
       "comeByFee": "Venez avant 23:59 le {{day}}. Sinon, la réservation est annulée et le commerce garde les frais.",
       "comeBy": "Venez avant 23:59 le {{day}}. Sinon, la réservation est annulée.",
       "reserveFeeBodyWebCard": "Payez maintenant {{fee}} de frais de réservation pour bloquer l’article (par carte, sur une page Stripe sécurisée). Ils comptent dans votre total. Vous payez le reste au retrait, après avoir vérifié l’article.",
-      "reserveFeeBodyWebMomo": "Payez maintenant {{fee}} de frais de réservation pour bloquer l’article (par Mobile Money ou avec votre portefeuille). Ils comptent dans votre total. Vous payez le reste au retrait, après avoir vérifié l’article."
+      "reserveFeeBodyWebMomo": "Payez maintenant {{fee}} de frais de réservation pour bloquer l’article (par Mobile Money ou avec votre portefeuille). Ils comptent dans votre total. Vous payez le reste au retrait, après avoir vérifié l’article.",
+      "payBody": "Payez maintenant et le commerce vous remet l’article. La location démarre dès que le paiement passe."
     },
     "reserve": {
       "dates": "Dates",
@@ -7499,7 +7501,8 @@
       "refund": "Cette réservation n’a pas commencé, l’annulation est donc gratuite. Les frais de réservation de {{fee}} vous sont remboursés.",
       "keep": "C’est le jour du retrait, le commerce garde donc les frais de réservation de {{fee}}. Rien d’autre n’est débité.",
       "keepBooking": "Garder la réservation"
-    }
+    },
+    "renter": "Le locataire"
   },
   "profile": {
     "accountOverview": "Aperçu du Compte",

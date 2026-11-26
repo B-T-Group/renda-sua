@@ -7662,7 +7662,8 @@
       "collectPickupPayment": "Collect payment",
       "pickupPaid": "Payment collected — rental confirmed",
       "pickupPaymentSent": "Mobile money request sent to the client. The booking confirms once payment lands.",
-      "pickupPaymentError": "Could not collect payment"
+      "pickupPaymentError": "Could not collect payment",
+      "cancelBeforeStartMessage": "This booking has not started, so cancellation is free. Any card hold or wallet hold is released."
     },
     "cancelError": "Could not cancel booking",
     "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid.",
@@ -7734,7 +7735,8 @@
       "comeByFee": "Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.",
       "comeBy": "Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled.",
       "reserveFeeBodyWebCard": "Pay a {{fee}} reservation fee now to hold the item (card, on a secure Stripe page). It counts toward your total. You pay the rest at pickup, after you check the item.",
-      "reserveFeeBodyWebMomo": "Pay a {{fee}} reservation fee now to hold the item (Mobile Money or your wallet). It counts toward your total. You pay the rest at pickup, after you check the item."
+      "reserveFeeBodyWebMomo": "Pay a {{fee}} reservation fee now to hold the item (Mobile Money or your wallet). It counts toward your total. You pay the rest at pickup, after you check the item.",
+      "payBody": "Pay now and the business hands you the item. The rental starts when the payment goes through."
     },
     "reserve": {
       "dates": "Dates",
@@ -7779,7 +7781,8 @@
       "refund": "This booking hasn’t started, so cancellation is free. You get the {{fee}} reservation fee back.",
       "keep": "It’s the pickup day, so the business keeps the {{fee}} reservation fee. Nothing else is charged.",
       "keepBooking": "Keep booking"
-    }
+    },
+    "renter": "The renter"
   },
   "profile": {
     "accountOverview": "Account Overview",

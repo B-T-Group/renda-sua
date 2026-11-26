@@ -63,8 +63,8 @@ export function PayAtPickupPanel({ booking, format, itemCheck, pickupDay }: Prop
           icon={<AccessTime fontSize="small" />}
           text={
             fee > 0
-              ? t('rentals.payAtPickup.comeByFee', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.', { day: pickupDay })
-              : t('rentals.payAtPickup.comeBy', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled.', { day: pickupDay })
+              ? oneDot(t('rentals.payAtPickup.comeByFee', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.', { day: pickupDay }))
+              : oneDot(t('rentals.payAtPickup.comeBy', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled.', { day: pickupDay }))
           }
         />
       ) : null}
@@ -94,4 +94,9 @@ function Line({ icon, text }: { icon: React.ReactNode; text: string }) {
       <Typography variant="caption" color="text.secondary">{text}</Typography>
     </Stack>
   );
+}
+
+/** FR abbreviated dates end in a dot ("sam. 28 nov."): don’t double it before the next sentence. */
+function oneDot(text: string): string {
+  return text.replace(/\.\. /g, '. ');
 }

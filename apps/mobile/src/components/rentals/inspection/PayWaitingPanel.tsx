@@ -46,7 +46,7 @@ export function PayWaitingPanel(props: Props) {
         {waiting
           ? card
             ? t('rentals.payAtPickup.cardWaitingBody', 'Stay at the counter. This page updates when the payment goes through, then the business hands you the item.')
-            : t('orders.momoAwaiting.waitingBody', 'Approve the request on your phone. This page updates when payment succeeds.')
+            : t('rentals.start.momoWaitingBody', 'Approve the request on your phone. This page updates when the payment goes through.')
           : failed
             ? card
               ? t('rentals.payAtPickup.cardFailed', 'Card payment didn’t go through. Try again or use another card.')
