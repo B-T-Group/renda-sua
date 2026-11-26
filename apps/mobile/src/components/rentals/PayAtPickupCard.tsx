@@ -12,6 +12,7 @@ import {
   reservationFee,
   type PayAtPickupFields,
 } from '../../utils/rentals/reservationFee';
+import { dayEndDeadline } from '../../utils/rentals/reserveSummary';
 
 interface Props {
   booking: PayAtPickupFields;
@@ -19,11 +20,13 @@ interface Props {
   /** The business photographs the item and the renter checks it before paying. */
   itemCheck: boolean;
   pickupDay: string;
+  /** Listing zone: the start-day deadline reads 11:59 PM for English in the Americas. */
+  timeZone?: string | null;
 }
 
 /** Booking detail (02): what is paid, what is due at pickup, and the fee rules. */
-export function PayAtPickupCard({ booking, format, itemCheck, pickupDay }: Props) {
-  const { t } = useTranslation();
+export function PayAtPickupCard({ booking, format, itemCheck, pickupDay, timeZone }: Props) {
+  const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const total = Number(booking.total_amount) || 0;
   const fee = reservationFee(booking);
@@ -68,14 +71,14 @@ export function PayAtPickupCard({ booking, format, itemCheck, pickupDay }: Props
           icon="clock-outline"
           text={
             fee > 0
-              ? oneDot(t('rentals.payAtPickup.comeByFee', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.', { day: pickupDay }))
-              : oneDot(t('rentals.payAtPickup.comeBy', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled.', { day: pickupDay }))
+              ? oneDot(t('rentals.payAtPickup.comeByFee', 'Come by {{deadline}} on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.', { day: pickupDay, deadline: dayEndDeadline(i18n.language, timeZone) }))
+              : oneDot(t('rentals.payAtPickup.comeBy', 'Come by {{deadline}} on {{day}}. If you don’t, the reservation is cancelled.', { day: pickupDay, deadline: dayEndDeadline(i18n.language, timeZone) }))
           }
         />
       ) : null}
       {fee > 0 ? (
         <>
-          <IconLine icon="cash-refund" text={t('rentals.payAtPickup.feeRefunded', 'Fee refunded if you cancel before {{day}}, if the business cancels, or if the item doesn’t match.', { day: pickupDay })} />
+          <IconLine icon="cash-refund" text={t('rentals.payAtPickup.feeRefunded', 'Fee refunded if you cancel before {{day}}, if the business cancels, or if the item doesn’t match.', { day: pickupDay, deadline: dayEndDeadline(i18n.language, timeZone) })} />
           <IconLine icon="alert-circle-outline" text={t('rentals.payAtPickup.feeKept', 'Fee kept if you cancel on the pickup day or don’t come.')} />
         </>
       ) : null}

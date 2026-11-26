@@ -35,8 +35,7 @@ import {
   type RentalHubGroup,
 } from '../../utils/rentalPhase';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
-import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
-import { reservationFee, reserveMode } from '../../utils/rentals/reservationFee';
+import { reserveMode } from '../../utils/rentals/reservationFee';
 import { parseRentalPricingSnapshot, parseRentalSelectionWindows, proposedContractDeadlineIso } from '../../utils/rentalRequestDisplay';
 import {
   isPriceChangeUnseenError,
@@ -253,11 +252,6 @@ const ClientRentalRequestsPage: React.FC = () => {
       })
     : null;
   const bookBusiness = bookConfirmRow?.rental_location_listing?.rental_item?.business?.name || bookConfirmRow?.rental_location_listing?.business_location?.name;
-  const bookFeeLabel = formatConfirmationMoney(
-    reservationFee(bookConfirmRow?.rental_booking),
-    bookFeeQuote?.currency ?? bookConfirmRow?.rental_location_listing?.rental_item?.currency ?? 'XAF',
-    i18n.language
-  );
 
   if (!isAuthenticated) {
     return (
@@ -421,13 +415,6 @@ const ClientRentalRequestsPage: React.FC = () => {
               summary={bookSummary}
               itemName={bookConfirmRow.rental_location_listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental')}
               business={bookBusiness ? t('rentals.reserve.offerFrom', 'Offer accepted by {{business}}', { business: bookBusiness }) : null}
-              note={
-                bookMode === 'fee'
-                  ? isStripeRail
-                    ? t('rentals.payAtPickup.reserveFeeBodyWebCard', 'Pay a {{fee}} reservation fee now to hold the item (card, on a secure Stripe page). It counts toward your total. You pay the rest at pickup, after you check the item.', { fee: bookFeeLabel })
-                    : t('rentals.payAtPickup.reserveFeeBodyWebMomo', 'Pay a {{fee}} reservation fee now to hold the item (Mobile Money or your wallet). It counts toward your total. You pay the rest at pickup, after you check the item.', { fee: bookFeeLabel })
-                  : null
-              }
             />
           ) : bookConfirmRow ? (
             <RentalBookConfirmSummary

@@ -10,6 +10,7 @@ import { earlyReturnLine, earlyReturnPreview } from '../../utils/rentals/returnD
 import { waitingForRenterTitle } from '../../utils/rentals/frenchElision';
 import { payBreakdown } from '../../utils/rentals/payBreakdown';
 import { PayBreakdownBox, PayFooter } from './PayBreakdownBox';
+import { clockRange } from '../../utils/rentals/reserveSummary';
 
 export interface StartPanelBooking {
   status: string;
@@ -107,9 +108,9 @@ export function RentalStartPanel(props: Props) {
       ) : null}
       <Typography variant="body2">
         {props.role === 'business' && phase !== 'started'
-          ? t('rentals.start.bookedWindow', 'Booked {{start}} – {{end}}', {
-              start: time,
-              end: formatZonedTime(props.booking.end_at, BOOKING_CLOCK, i18n.language, props.timeZone),
+          ? t('rentals.start.bookedDay', 'Booked {{day}} · {{range}}', {
+              day: formatZonedWeekdayDay(props.booking.start_at, BOOKING_CLOCK, i18n.language),
+              range: clockRange(props.booking.start_at, props.booking.end_at, i18n.language, props.timeZone),
             })
           : props.role === 'business'
             ? t('rentals.start.returnDueBusiness', 'Return by {{when}}', { when: props.returnLabel })
@@ -171,8 +172,10 @@ export function RentalStartPanel(props: Props) {
           </Typography>
         </DialogContent>
         <DialogActions sx={{ flexDirection: 'column', px: 3, pb: 2 }}>
-          <Button fullWidth variant="contained" startIcon={card ? <LockOutlined /> : momo ? <PhoneIphone /> : <PlayArrow />} disabled={props.starting} onClick={() => { setOpen(false); props.onConfirm(); }}>
-            {pays
+          <Button fullWidth variant="contained" sx={{ whiteSpace: 'nowrap' }} startIcon={card ? <LockOutlined /> : momo ? <PhoneIphone /> : <PlayArrow />} disabled={props.starting} onClick={() => { setOpen(false); props.onConfirm(); }}>
+            {pays && momo
+              ? t('rentals.payAtPickup.payButtonMomo', 'Pay {{amount}} & start', { amount: props.money })
+              : pays
               ? t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money })
               : t('rentals.actions.startRental', 'Start rental')}
           </Button>

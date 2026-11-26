@@ -6,6 +6,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { MobileMoneyConfirmIllustration } from '../../illustrations/MobileMoneyConfirmIllustration';
 import type { PayBreakdown } from '../../../utils/rentals/payBreakdown';
 import { PayBreakdownView } from '../PayBreakdownView';
+import { dayEndDeadline } from '../../../utils/rentals/reserveSummary';
 
 export type PayWaitingPhase = 'waiting' | 'failed' | 'stalled';
 
@@ -14,6 +15,8 @@ interface Props {
   rail: 'card' | 'momo' | 'wallet';
   breakdown?: PayBreakdown | null;
   place?: string;
+  /** Listing zone for the retry deadline (11:59 PM for English in the Americas). */
+  timeZone?: string | null;
   starting: boolean;
   onRetry: () => void;
   onSupport: () => void;
@@ -21,7 +24,7 @@ interface Props {
 
 /** Pay & start after the tap: card confirming / failed / retry, MoMo "Approve on your phone" (05b). */
 export function PayWaitingPanel(props: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, typography, borderRadius } = useTheme();
   const card = props.rail === 'card';
   const waiting = props.phase === 'waiting';
@@ -68,7 +71,7 @@ export function PayWaitingPanel(props: Props) {
             {t('common.retry', 'Retry')}
           </Button>
           <Text testID="pay-retry-until" style={{ color: colors.text.secondary, textAlign: 'center', fontSize: 13 }}>
-            {t('rentals.pay.retryUntil', 'You can try again until 23:59 today.')}
+            {t('rentals.pay.retryUntil', 'You can try again until {{deadline}} today.', { deadline: dayEndDeadline(i18n.language, props.timeZone) })}
           </Text>
         </>
       ) : null}

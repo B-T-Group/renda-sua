@@ -112,6 +112,11 @@ export function windowLabel(w: ReserveWindow, language: string, listingZone?: st
   return `${weekdayDay(w.start_at, language)} · ${clockTime(w.start_at, language, listingZone)} – ${weekdayDay(w.end_at, language)} · ${clockTime(w.end_at, language, listingZone)}`;
 }
 
+/** End of the listing day for deadline copy: "11:59 PM" for English in the Americas, else "23:59". */
+export function dayEndDeadline(language: string, zone?: string | null): string {
+  return uses12hClock(language, zone) ? '11:59\u00a0PM' : '23:59';
+}
+
 /** The day before the (wall-clock) start: free cancellation ends at 23:59 that day. */
 export function dayBefore(startIso: string, language: string): string {
   const prev = new Date(Date.parse(startIso) - 86_400_000).toISOString();
@@ -210,7 +215,7 @@ export function buildReserveSummary(input: ReserveSummaryInput): ReserveSummary 
   return {
     rows,
     box,
-    cancelLine: first ? t('rentals.reserve.freeCancelUntil', 'Free cancellation until {{day}} · 23:59', { day: dayBefore(first.start_at, language) }) : '',
+    cancelLine: first ? t('rentals.reserve.freeCancelUntil', 'Free cancellation until {{day}} · {{deadline}}', { day: dayBefore(first.start_at, language), deadline: dayEndDeadline(language, zone) }) : '',
     footer:
       input.mode === 'fee'
         ? { title: t('rentals.reserve.payToday', 'Pay today'), sub: t('rentals.reserve.payTodayFeeSub', 'Reservation fee · {{rail}}', { rail }), amount: money(fee) }

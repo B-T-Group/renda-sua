@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { payBreakdown } from './payBreakdown';
 import { cancelFeeResult } from './reservationFee';
-import { buildReserveSummary, clockRange, dayBefore, weekdayDay, windowLabel } from './reserveSummary';
+import { buildReserveSummary, clockRange, dayBefore, dayEndDeadline, weekdayDay, windowLabel } from './reserveSummary';
+import { formatPhotoStamp, photosTakenStamp } from './rentalStartWindow';
 
 const t = (_key: string, fallback: string, vars?: Record<string, unknown>) =>
   fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(vars?.[k] ?? ''));
@@ -95,5 +96,34 @@ describe('cancel fee result', () => {
   });
   it('has nothing to say without a paid fee', () => {
     expect(cancelFeeResult({ ...(b as object), reservation_fee_status: 'pending' } as never, Date.now(), 'Africa/Douala')).toBe('none');
+  });
+});
+
+describe('v3: listing-clock deadlines and same-day photo stamps', () => {
+  it('reads 11:59 PM for English in the Americas, 23:59 elsewhere', () => {
+    expect(dayEndDeadline('en', 'America/Toronto')).toBe('11:59\u00a0PM');
+    expect(dayEndDeadline('fr', 'America/Toronto')).toBe('23:59');
+    expect(dayEndDeadline('en', 'Africa/Douala')).toBe('23:59');
+  });
+  it('free cancellation line on the Montréal listing', () => {
+    const s = buildReserveSummary({
+      mode: 'free',
+      windows: [W],
+      quote: { currency: 'CAD', total: 60, securityDeposit: 180, lines: [] },
+      booking: { reservation_fee_amount: 0 },
+      listingZone: 'America/Toronto',
+      isStripeRail: true,
+      language: 'en',
+      t,
+    });
+    expect(s.cancelLine).toBe('Free cancellation until Fri 27 Nov · 11:59\u00a0PM');
+  });
+  it('shows only the time for a photo taken today, the date for an older one', () => {
+    const now = Date.parse('2026-11-28T19:00:00Z');
+    expect(formatPhotoStamp('2026-11-28T18:52:00Z', 'America/Toronto', 'en', now)).toBe('1:52 PM');
+    expect(formatPhotoStamp('2026-11-28T12:52:00Z', 'Africa/Douala', 'fr', Date.parse('2026-11-28T13:00:00Z'))).toBe('13:52');
+    expect(formatPhotoStamp('2026-11-26T18:52:00Z', 'America/Toronto', 'en', now)).toBe('26 Nov');
+    expect(photosTakenStamp(['2026-11-28T18:40:00Z', '2026-11-28T18:52:00Z'], 'America/Toronto', 'en')).toBe('Sat 28 Nov · 1:52 PM');
+    expect(photosTakenStamp(['2026-11-28T12:52:00Z'], 'Africa/Douala', 'fr')).toBe('sam.\u00a028\u00a0nov. · 13:52');
   });
 });

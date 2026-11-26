@@ -19,6 +19,7 @@ import { earlyReturnLine, earlyReturnPreview } from '../../utils/rentals/returnD
 import { waitingForRenterTitle } from '../../utils/rentals/frenchElision';
 import { payBreakdown } from '../../utils/rentals/payBreakdown';
 import { PayBreakdownView, PayFooter } from './PayBreakdownView';
+import { payLabelStyle } from '../../utils/rentals/payButtonLabel';
 
 export interface StartCardBooking {
   status: string;
@@ -195,7 +196,9 @@ function SheetRow({ icon, label }: { icon: React.ComponentProps<typeof MaterialC
 
 /** The sheet's one pay label (the card uses "Pay & start · …"). */
 function confirmLabel(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
-  if (isCardDue(props.booking) || isMomoDue(props.booking)) return t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money });
+  if (isCardDue(props.booking)) return t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money });
+  // MoMo: the short label fits one line in FR too (P&UX R2-2).
+  if (isMomoDue(props.booking)) return t('rentals.payAtPickup.payButtonMomo', 'Pay {{amount}} & start', { amount: props.money });
   return t('rentals.actions.startRental', 'Start rental');
 }
 
@@ -263,7 +266,7 @@ function ConfirmSheet(props: Props) {
           <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 8 }]}>
             {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30\u00a0minutes.")}
           </Text>
-          <Button mode="contained" icon={card ? 'lock-outline' : pays ? 'cellphone' : 'play'} buttonColor={colors.primary.main} loading={props.starting} onPress={props.onConfirm} style={{ marginTop: 16, minHeight: 48 }}>
+          <Button mode="contained" icon={card ? 'lock-outline' : pays ? 'cellphone' : 'play'} buttonColor={colors.primary.main} loading={props.starting} onPress={props.onConfirm} style={{ marginTop: 16, minHeight: 48 }} labelStyle={payLabelStyle(confirmLabel(props, t))} maxFontSizeMultiplier={1.2}>
             {confirmLabel(props, t)}
           </Button>
           {breakdown ? <PayFooter breakdown={breakdown} /> : null}

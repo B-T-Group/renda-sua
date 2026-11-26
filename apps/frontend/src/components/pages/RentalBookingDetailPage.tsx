@@ -890,6 +890,7 @@ const RentalBookingDetailPage: React.FC = () => {
               format={(value) => formatConfirmationMoney(value, booking.currency, i18n.language)}
               itemCheck={inspection.enrolled}
               pickupDay={formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
+              timeZone={listingZone}
             />
           ) : null}
           {showStartPanel ? (

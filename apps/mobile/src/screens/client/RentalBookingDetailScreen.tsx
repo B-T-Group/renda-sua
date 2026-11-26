@@ -613,6 +613,7 @@ export default function RentalBookingDetailScreen() {
               format={formatDetailMoney}
               itemCheck={snapshot.enrolled}
               pickupDay={pickupDay}
+              timeZone={confirmationTimeZone(listingCountry, booking.currency)}
             />
           </View>
         ) : null}

@@ -7,8 +7,9 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { createRentalInspectionApi } from '../../services/rentalInspectionApi';
 import type { InspectionPhoto } from '../../utils/rentalInspection';
 import { splitCorrectionReason } from '../../utils/rentalInspection';
-import { formatListingStamp, listingCity, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
-import { formatPhotoStamp } from '../../utils/rentalStartWindow';
+import { listingCity, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
+import { formatPhotoStamp, photosTakenStamp } from '../../utils/rentalStartWindow';
+import { dayEndDeadline } from '../../utils/rentals/reserveSummary';
 import { elidesBefore } from '../../utils/rentals/frenchElision';
 
 interface Props {
@@ -33,7 +34,8 @@ export function BusinessPhotoRequest(props: Props) {
   const zone = props.timeZone || 'America/Toronto';
   const parts = splitCorrectionReason(props.reason, reasonLabels(t));
   const que = elidesBefore(props.renterName) ? 'qu’' : 'que ';
-  const asked = props.askedAt ? formatListingStamp(props.askedAt, zone, i18n.language) : '';
+  const asked = props.askedAt ? photosTakenStamp([props.askedAt], zone, i18n.language) : '';
+  const taken = photosTakenStamp(props.photos.map((p) => p.capturedAt), zone, i18n.language);
   return (
     <Box sx={{ p: 2, mb: 2, borderRadius: 2, border: 1, borderColor: 'warning.main', bgcolor: (theme) => alpha(theme.palette.warning.main, 0.16), color: 'text.primary' }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} data-testid="check-flagged">
@@ -43,8 +45,8 @@ export function BusinessPhotoRequest(props: Props) {
       {props.fixDay ? (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }} data-testid="check-flagged-deadline">
           {props.fee
-            ? t('rentals.business.fixByFee', 'Fix it by 23:59 today ({{day}}), or the booking is cancelled and {{name}} gets the {{fee}} fee back. Nothing can be paid or handed over until {{name}} accepts.', { day: props.fixDay, name: props.renterName, fee: props.fee, que })
-            : t('rentals.business.fixBy', 'Fix it by 23:59 today ({{day}}), or the booking is cancelled. Nothing can be paid or handed over until {{name}} accepts.', { day: props.fixDay, name: props.renterName, que })}
+            ? t('rentals.business.fixByFee', 'Fix it by {{deadline}} today ({{day}}), or the booking is cancelled and {{name}} gets the {{fee}} fee back. Nothing can be paid or handed over until {{name}} accepts.', { deadline: dayEndDeadline(i18n.language, zone), day: props.fixDay, name: props.renterName, fee: props.fee, que })
+            : t('rentals.business.fixBy', 'Fix it by {{deadline}} today ({{day}}), or the booking is cancelled. Nothing can be paid or handed over until {{name}} accepts.', { deadline: dayEndDeadline(i18n.language, zone), day: props.fixDay, name: props.renterName, que })}
         </Typography>
       ) : null}
       <Typography>
@@ -61,7 +63,12 @@ export function BusinessPhotoRequest(props: Props) {
           {t('rentals.business.askedAt', 'Asked {{when}} ({{zone}} time)', { when: asked, zone: listingCity(zone) })}
         </Typography>
       ) : null}
-      <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
+      {taken ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }} data-testid="photos-taken">
+          {t('rentalInspection.photosTaken', 'Photos taken {{when}}', { when: taken })}
+        </Typography>
+      ) : null}
+      <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
         {props.photos.map((photo) => (
           <PhotoUpload key={photo.id} photo={photo} bookingId={props.bookingId} onError={setError} language={i18n.language} timeZone={zone} />
         ))}
@@ -102,7 +109,7 @@ function PhotoUpload({
     <Stack alignItems="center" spacing={0.5} sx={{ width: 148 }}>
       {photo.url ? <Box component="img" src={photo.url} alt={slotTileLabel(photo.role, language)} sx={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 1 }} /> : null}
       <Typography variant="caption" align="center">{slotTileLabel(photo.role, language)}</Typography>
-      <Typography variant="caption" color="text.secondary" align="center" sx={{ whiteSpace: 'normal', overflowWrap: 'break-word', lineHeight: 1.3 }}>
+      <Typography variant="caption" color="text.secondary" align="center" noWrap sx={{ lineHeight: 1.3, maxWidth: '100%' }}>
         {photoBadge(photo, language, timeZone, t)}
       </Typography>
       <Stack direction="row">

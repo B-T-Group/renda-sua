@@ -8,10 +8,11 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import type { InspectionPhoto, InspectionView } from '../../../utils/rentals/rentalInspection';
 import { listingCity } from '../../../utils/rentals/pickupPhotoTime';
 import { splitCorrectionReason } from '../../../utils/rentals/rentalInspection';
-import { formatPhotoStamp, formatZonedTime, pickupPhase } from '../../../utils/rentals/rentalStartWindow';
+import { formatPhotoStamp, formatZonedTime, photosTakenStamp, pickupPhase } from '../../../utils/rentals/rentalStartWindow';
 import { earlyReturnLine, earlyReturnPreview } from '../../../utils/rentals/returnDue';
 import type { PayBreakdown } from '../../../utils/rentals/payBreakdown';
 import { PayBreakdownView, PayFooter } from '../PayBreakdownView';
+import { payLabelStyle } from '../../../utils/rentals/payButtonLabel';
 
 const REASON_ORDER = ['photo_mismatch', 'wear_hidden', 'missing_accessory', 'wrong_unit'] as const;
 
@@ -121,13 +122,29 @@ function StepDot({ n, label, on, done }: { n: number; label: string; on: boolean
 function PhotoRow({ photos, timeZone }: { photos: InspectionPhoto[]; timeZone: string }) {
   const { i18n } = useTranslation();
   return (
-    <View style={styles.photos}>
-      {photos.map((photo) => (
-        <PhotoTile key={photo.id} photo={photo} timeZone={timeZone} language={i18n.language} />
-      ))}
+    <View style={{ gap: 6 }}>
+      <PhotosTaken photos={photos} timeZone={timeZone} />
+      <View style={styles.photos}>
+        {photos.map((photo) => (
+          <PhotoTile key={photo.id} photo={photo} timeZone={timeZone} language={i18n.language} />
+        ))}
+      </View>
     </View>
   );
 }
+
+function PhotosTaken({ photos, timeZone }: { photos: InspectionPhoto[]; timeZone: string }) {
+  const { t, i18n } = useTranslation();
+  const { colors } = useTheme();
+  const when = photosTakenStamp(photos.map((p) => p.capturedAt), timeZone, i18n.language);
+  if (!when) return null;
+  return (
+    <Text testID="photos-taken" numberOfLines={1} style={{ color: colors.text.secondary, fontSize: 13 }}>
+      {t('rentalInspection.photosTaken', 'Photos taken {{when}}', { when })}
+    </Text>
+  );
+}
+
 
 function PhotoTile({ photo, timeZone, language }: { photo: InspectionPhoto; timeZone: string; language: string }) {
   const { t } = useTranslation();
@@ -140,7 +157,7 @@ function PhotoTile({ photo, timeZone, language }: { photo: InspectionPhoto; time
         {photo.url ? <Image source={{ uri: photo.url }} style={styles.image} /> : null}
       </View>
       <Text style={{ textAlign: 'center', color: colors.text.primary }}>{roleLabel(photo.role, t)}</Text>
-      <Text style={{ textAlign: 'center', color: colors.text.secondary, fontSize: 11 }}>{`${badge}${when ? ` · ${when}` : ''}`}</Text>
+      <Text numberOfLines={1} style={{ textAlign: 'center', color: colors.text.secondary, fontSize: 11 }}>{`${badge}${when ? ` · ${when}` : ''}`}</Text>
     </View>
   );
 }
@@ -156,7 +173,7 @@ function CheckActions(props: Props) {
         {props.pay ? t('rentals.payAtPickup.matchesPay', 'Matches · go to payment') : t('rentalInspection.matches', 'Matches')}
       </Button>
       <Button mode="outlined" icon="camera" textColor={colors.text.secondary} onPress={() => setOpen(true)}>
-        {t('rentalInspection.askPhotos', "Doesn't match · ask for new photos")}
+        {t('rentalInspection.askPhotos', 'Doesn’t match · ask for new photos')}
       </Button>
       {props.showDecline ? (
         <Button textColor={colors.error.main} onPress={props.onDecline}>
@@ -299,6 +316,12 @@ function StartStep(props: Props) {
     timeZone: props.timeZone,
   });
   const locked = phase === 'before' || phase === 'closed';
+  const payLabel =
+    props.pay && props.breakdown && props.breakdown.rail !== 'card'
+      ? t('rentals.payAtPickup.payButtonMomo', 'Pay {{amount}} & start', { amount: props.money })
+      : props.pay
+        ? t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money })
+        : t('rentals.actions.startRental', 'Start rental');
   return (
     <View style={{ gap: 8 }}>
       <View style={[styles.row, { alignItems: 'flex-start' }]} testID="pickup-checked-line">
@@ -321,10 +344,8 @@ function StartStep(props: Props) {
       ) : (
         <MoneyLines lines={props.moneyLines ?? { main: t('rentals.start.held', '{{amount}} held on your card', { amount: props.money }), sub: null, icon: 'card' }} />
       )}
-      <Button testID="pickup-start-button" mode="contained" icon={locked ? 'lock' : props.breakdown?.rail === 'card' ? 'lock-outline' : props.breakdown ? 'cellphone' : props.pay ? 'credit-card-outline' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart}>
-        {props.pay
-          ? t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money })
-          : t('rentals.actions.startRental', 'Start rental')}
+      <Button testID="pickup-start-button" mode="contained" icon={locked ? 'lock' : props.breakdown?.rail === 'card' ? 'lock-outline' : props.breakdown ? 'cellphone' : props.pay ? 'credit-card-outline' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart} labelStyle={payLabelStyle(payLabel)} maxFontSizeMultiplier={1.2}>
+        {payLabel}
       </Button>
       {props.breakdown ? <PayFooter breakdown={props.breakdown} /> : null}
       <Button mode="outlined" icon="flag-outline" textColor={colors.primary.main} style={{ borderColor: colors.primary.main }} onPress={props.onReport}>

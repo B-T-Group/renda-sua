@@ -18,8 +18,10 @@ interface Props {
 
 /** Renter cancel sheet with the fee refund / keep copy (README §4). */
 export function CancelBookingDialog(props: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
+  // FR labels are too long side by side: stack them, the destructive action on top (P&UX R2-3).
+  const stacked = i18n.language.toLowerCase().startsWith('fr');
   const body =
     props.fee === 'refund'
       ? props.flagged
@@ -43,12 +45,21 @@ export function CancelBookingDialog(props: Props) {
             <Text style={{ marginLeft: 8, flex: 1, color: props.fee === 'keep' ? colors.warning.dark : colors.text.primary }}>{body}</Text>
           </View>
         </Dialog.Content>
-        <Dialog.Actions>
-          <Button onPress={props.onDismiss} disabled={props.loading}>{t('rentals.cancelSheet.keepBooking', 'Keep booking')}</Button>
-          <Button onPress={props.onConfirm} loading={props.loading} textColor={colors.error.main}>
-            {t('rentals.cancelBooking', 'Cancel booking')}
-          </Button>
-        </Dialog.Actions>
+        {stacked ? (
+          <Dialog.Actions testID="cancel-actions-stacked" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+            <Button onPress={props.onConfirm} loading={props.loading} textColor={colors.error.main}>
+              {t('rentals.cancelBooking', 'Cancel booking')}
+            </Button>
+            <Button onPress={props.onDismiss} disabled={props.loading}>{t('rentals.cancelSheet.keepBooking', 'Keep booking')}</Button>
+          </Dialog.Actions>
+        ) : (
+          <Dialog.Actions>
+            <Button onPress={props.onDismiss} disabled={props.loading}>{t('rentals.cancelSheet.keepBooking', 'Keep booking')}</Button>
+            <Button onPress={props.onConfirm} loading={props.loading} textColor={colors.error.main}>
+              {t('rentals.cancelBooking', 'Cancel booking')}
+            </Button>
+          </Dialog.Actions>
+        )}
       </Dialog>
     </Portal>
   );

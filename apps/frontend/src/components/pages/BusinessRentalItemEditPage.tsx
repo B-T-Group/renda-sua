@@ -832,7 +832,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
                   }
                   label={
                     <Box>
-                      <Typography variant="body2">{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Typography>
+                      <Typography variant="body2" color="text.primary" fontWeight={600}>{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Typography>
                       <Typography variant="caption" color="text.secondary">
                         {['XAF', 'XOF'].includes((item?.currency || lockedCurrency || '').toUpperCase())
                           ? t('business.rentals.reservationFee.helpFcfa', '10% of the rental, at least 150\u00a0FCFA. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.')

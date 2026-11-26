@@ -7223,7 +7223,8 @@
       "didntReceiveLeft": "Pas reçu l’article ? · {{minutes}} min",
       "notYet": "Pas encore",
       "startedBanner": "Location démarrée à {{time}}. Le commerce a été prévenu pour remettre l’article.",
-      "pickupOpens": "Retrait dès le {{day}}"
+      "pickupOpens": "Retrait dès le {{day}}",
+      "bookedDay": "Réservé le {{day}} · {{range}}"
     },
     "business": {
       "waitingTitle": "En attente que {{name}} démarre",
@@ -7239,8 +7240,8 @@
       "askedAt": "Demandé le {{when}} (heure de {{zone}})",
       "photosPill": "Nouvelles photos demandées",
       "checkFlagged": "Contrôle signalé",
-      "fixByFee": "Corrigez d’ici 23:59 aujourd’hui ({{day}}), sinon la réservation est annulée et {{name}} récupère les frais de {{fee}}. Rien ne peut être payé ni remis avant {{que}}{{name}} accepte.",
-      "fixBy": "Corrigez d’ici 23:59 aujourd’hui ({{day}}), sinon la réservation est annulée. Rien ne peut être payé ni remis avant {{que}}{{name}} accepte."
+      "fixByFee": "Corrigez d’ici {{deadline}} aujourd’hui ({{day}}), sinon la réservation est annulée et {{name}} récupère les frais de {{fee}}. Rien ne peut être payé ni remis avant {{que}}{{name}} accepte.",
+      "fixBy": "Corrigez d’ici {{deadline}} aujourd’hui ({{day}}), sinon la réservation est annulée. Rien ne peut être payé ni remis avant {{que}}{{name}} accepte."
     },
     "journey": {
       "offerReady": "Offre prête",
@@ -7452,11 +7453,12 @@
       "reserveFeeBodyWeb": "Payez maintenant {{fee}} de frais de réservation pour bloquer l’article (par carte sur une page Stripe sécurisée, ou par Mobile Money). Ils comptent dans votre total. Vous payez le reste au retrait, après avoir vérifié l’article.",
       "cardDueNow": "{{amount}} débités maintenant",
       "declineFree": "Pas conforme ? Annulez gratuitement",
-      "comeByFee": "Venez avant 23:59 le {{day}}. Sinon, la réservation est annulée et le commerce garde les frais.",
-      "comeBy": "Venez avant 23:59 le {{day}}. Sinon, la réservation est annulée.",
+      "comeByFee": "Venez avant {{deadline}} le {{day}}. Sinon, la réservation est annulée et le commerce garde les frais.",
+      "comeBy": "Venez avant {{deadline}} le {{day}}. Sinon, la réservation est annulée.",
       "reserveFeeBodyWebCard": "Payez maintenant {{fee}} de frais de réservation pour bloquer l’article (par carte, sur une page Stripe sécurisée). Ils comptent dans votre total. Vous payez le reste au retrait, après avoir vérifié l’article.",
       "reserveFeeBodyWebMomo": "Payez maintenant {{fee}} de frais de réservation pour bloquer l’article (par Mobile Money ou avec votre portefeuille). Ils comptent dans votre total. Vous payez le reste au retrait, après avoir vérifié l’article.",
-      "payBody": "Payez maintenant et le commerce vous remet l’article. La location démarre dès que le paiement passe."
+      "payBody": "Payez maintenant et le commerce vous remet l’article. La location démarre dès que le paiement passe.",
+      "payButtonMomo": "Payer {{amount}} et démarrer"
     },
     "reserve": {
       "dates": "Dates",
@@ -7470,17 +7472,17 @@
       "cardNothingHeld": "Rien n’est bloqué sur votre carte aujourd’hui. Au retrait, après le contrôle de l’article, nous débitons {{due}} et bloquons une caution de {{deposit}}. La réservation doit se terminer sous 6 jours.",
       "feeTitle": "Frais de réservation · {{fee}}",
       "feeCounts": "Déduits de votre total · À payer au retrait {{due}}, après avoir vérifié l’article.",
-      "feeRefunded": "Remboursés si vous annulez avant le {{day}}, si l’entreprise annule ou si l’article ne correspond pas.",
-      "feeKept": "Conservés par l’entreprise si vous ne venez pas récupérer l’article.",
+      "feeRefunded": "Remboursés si vous annulez avant le {{day}}, si le commerce annule ou si l’article ne correspond pas.",
+      "feeKept": "Conservés par le commerce si vous ne venez pas récupérer l’article.",
       "nothingTitle": "Rien à payer aujourd’hui",
       "nothingBody": "Vous payez au commerce, après avoir vu l’article et vérifié qu’il correspond aux photos.",
       "railCard": "Carte",
       "railMomo": "Mobile Money",
-      "freeCancelUntil": "Annulation gratuite jusqu’au {{day}} · 23:59",
+      "freeCancelUntil": "Annulation gratuite jusqu’au {{day}} · {{deadline}}",
       "payToday": "À payer aujourd’hui",
       "payTodayFeeSub": "Frais de réservation · {{rail}}",
       "payTodayZero": "À payer aujourd’hui : {{zero}}",
-      "payAtPickupSub": "À payer au retrait · après avoir vérifié l’article",
+      "payAtPickupSub": "Après le contrôle de l’article",
       "fullDay": "Journée complète",
       "offerFrom": "Offre acceptée par {{business}}"
     },
@@ -7494,7 +7496,7 @@
       "depositReleased": "libérée après le contrôle au retour",
       "cardFooter": "{{total}} sur votre carte aujourd’hui, dont {{deposit}} bloqués",
       "stayCounter": "Restez au comptoir. {{place}} vous remet l’article dès que le paiement passe.",
-      "retryUntil": "Vous pouvez réessayer jusqu’à 23:59 aujourd’hui."
+      "retryUntil": "Vous pouvez réessayer jusqu’à {{deadline}} aujourd’hui."
     },
     "cancelSheet": {
       "refundFlag": "Votre signalement sur le contrôle de l’article est toujours ouvert, les frais de réservation de {{fee}} vous sont donc remboursés.",
@@ -10094,7 +10096,8 @@
     "unitProgress": "En cours",
     "unitTodo": "À faire",
     "adminOvertime": "Ajuster les heures supplémentaires",
-    "adminOvertimeAmount": "Montant des heures supplémentaires"
+    "adminOvertimeAmount": "Montant des heures supplémentaires",
+    "photosTaken": "Photos prises le {{when}}"
   },
   "pickupDecline": {
     "cta": "Ce n’est pas conforme ? Refuser",

@@ -86,8 +86,23 @@ export function formatZonedTime(iso: string, timeZone: string, language?: string
   return `${pad(parts.hour)}:${pad(parts.minute)}`;
 }
 
-export function formatPhotoStamp(iso: string, timeZone: string, language: string): string {
-  return `${formatZonedDay(iso, timeZone, language)} ${formatZonedTime(iso, timeZone, language, timeZone)}`;
+/**
+ * Per-tile photo stamp (P&UX R2-4): time only for a photo taken on the listing's current day
+ * ("1:52 PM" / "13:52"); an older photo keeps its date without the time ("28 Nov" / "28 nov.").
+ */
+export function formatPhotoStamp(iso: string, timeZone: string, language: string, nowMs: number = Date.now()): string {
+  const a = zonedParts(new Date(iso), timeZone);
+  const b = zonedParts(new Date(nowMs), timeZone);
+  const sameDay = a.year === b.year && a.month === b.month && a.day === b.day;
+  return sameDay ? formatZonedTime(iso, timeZone, language, timeZone) : formatZonedDay(iso, timeZone, language);
+}
+
+/** Grid caption value: the latest photo as "Sat 28 Nov · 1:52 PM" / "sam. 28 nov. · 13:52" (listing clock). */
+export function photosTakenStamp(isos: Array<string | null | undefined>, timeZone: string, language: string): string {
+  const times = isos.map((iso) => Date.parse(iso ?? '')).filter((n) => Number.isFinite(n));
+  if (!times.length) return '';
+  const latest = new Date(Math.max(...times)).toISOString();
+  return `${formatZonedWeekdayDay(latest, timeZone, language)} · ${formatZonedTime(latest, timeZone, language, timeZone)}`;
 }
 
 export function pickupClockLabel(

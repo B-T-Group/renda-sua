@@ -7503,7 +7503,8 @@
       "didntReceiveLeft": "Didn't receive the item? · {{minutes}} min",
       "notYet": "Not yet",
       "startedBanner": "Rental started at {{time}}. The business has been notified to hand over the item.",
-      "pickupOpens": "Pickup opens {{day}}"
+      "pickupOpens": "Pickup opens {{day}}",
+      "bookedDay": "Booked {{day}} · {{range}}"
     },
     "business": {
       "waitingTitle": "Waiting for {{name}} to start",
@@ -7519,8 +7520,8 @@
       "askedAt": "Asked {{when}} ({{zone}} time)",
       "photosPill": "New photos asked",
       "checkFlagged": "Check flagged",
-      "fixByFee": "Fix it by 23:59 today ({{day}}), or the booking is cancelled and {{name}} gets the {{fee}} fee back. Nothing can be paid or handed over until {{name}} accepts.",
-      "fixBy": "Fix it by 23:59 today ({{day}}), or the booking is cancelled. Nothing can be paid or handed over until {{name}} accepts."
+      "fixByFee": "Fix it by {{deadline}} today ({{day}}), or the booking is cancelled and {{name}} gets the {{fee}} fee back. Nothing can be paid or handed over until {{name}} accepts.",
+      "fixBy": "Fix it by {{deadline}} today ({{day}}), or the booking is cancelled. Nothing can be paid or handed over until {{name}} accepts."
     },
     "journey": {
       "offerReady": "Offer ready",
@@ -7732,11 +7733,12 @@
       "reserveFeeBodyWeb": "Pay a {{fee}} reservation fee now to hold the item (card on a secure Stripe page, or Mobile Money). It counts toward your total. You pay the rest at pickup, after you check the item.",
       "cardDueNow": "{{amount}} charged now",
       "declineFree": "Not as described? Cancel for free",
-      "comeByFee": "Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.",
-      "comeBy": "Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled.",
+      "comeByFee": "Come by {{deadline}} on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.",
+      "comeBy": "Come by {{deadline}} on {{day}}. If you don’t, the reservation is cancelled.",
       "reserveFeeBodyWebCard": "Pay a {{fee}} reservation fee now to hold the item (card, on a secure Stripe page). It counts toward your total. You pay the rest at pickup, after you check the item.",
       "reserveFeeBodyWebMomo": "Pay a {{fee}} reservation fee now to hold the item (Mobile Money or your wallet). It counts toward your total. You pay the rest at pickup, after you check the item.",
-      "payBody": "Pay now and the business hands you the item. The rental starts when the payment goes through."
+      "payBody": "Pay now and the business hands you the item. The rental starts when the payment goes through.",
+      "payButtonMomo": "Pay {{amount}} & start"
     },
     "reserve": {
       "dates": "Dates",
@@ -7756,11 +7758,11 @@
       "nothingBody": "You pay at the shop, after you’ve seen the item and it matches the photos.",
       "railCard": "Card",
       "railMomo": "Mobile Money",
-      "freeCancelUntil": "Free cancellation until {{day}} · 23:59",
+      "freeCancelUntil": "Free cancellation until {{day}} · {{deadline}}",
       "payToday": "Pay today",
       "payTodayFeeSub": "Reservation fee · {{rail}}",
       "payTodayZero": "Pay today: {{zero}}",
-      "payAtPickupSub": "Pay at pickup · after you check the item",
+      "payAtPickupSub": "After you check the item",
       "fullDay": "Full day",
       "offerFrom": "Offer accepted by {{business}}"
     },
@@ -7774,7 +7776,7 @@
       "depositReleased": "released after the return check",
       "cardFooter": "{{total}} on your card today · {{deposit}} of it is a hold",
       "stayCounter": "Stay at the counter. {{place}} hands you the item as soon as the payment goes through.",
-      "retryUntil": "You can try again until 23:59 today."
+      "retryUntil": "You can try again until {{deadline}} today."
     },
     "cancelSheet": {
       "refundFlag": "Your flag on the item check is still open, so you get the {{fee}} reservation fee back.",
@@ -10086,7 +10088,8 @@
     "unitProgress": "In progress",
     "unitTodo": "To do",
     "adminOvertime": "Adjust overtime",
-    "adminOvertimeAmount": "Overtime amount"
+    "adminOvertimeAmount": "Overtime amount",
+    "photosTaken": "Photos taken {{when}}"
   },
   "pickupDecline": {
     "cta": "Not as described? Decline",

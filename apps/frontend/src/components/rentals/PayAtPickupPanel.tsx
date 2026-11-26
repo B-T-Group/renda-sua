@@ -10,6 +10,7 @@ import {
   reservationFee,
   type PayAtPickupFields,
 } from '../../utils/rentals/reservationFee';
+import { dayEndDeadline } from '../../utils/rentals/reserveSummary';
 
 interface Props {
   booking: PayAtPickupFields;
@@ -17,11 +18,13 @@ interface Props {
   /** The business photographs the item and the renter checks it before paying. */
   itemCheck: boolean;
   pickupDay: string;
+  /** Listing zone: the start-day deadline reads 11:59 PM for English in the Americas. */
+  timeZone?: string | null;
 }
 
 /** Web booking page (09): what is paid, what is due at pickup, and the fee rules. */
-export function PayAtPickupPanel({ booking, format, itemCheck, pickupDay }: Props) {
-  const { t } = useTranslation();
+export function PayAtPickupPanel({ booking, format, itemCheck, pickupDay, timeZone }: Props) {
+  const { t, i18n } = useTranslation();
   const total = Number(booking.total_amount) || 0;
   const fee = reservationFee(booking);
   const outcome = feeOutcome(booking);
@@ -63,14 +66,14 @@ export function PayAtPickupPanel({ booking, format, itemCheck, pickupDay }: Prop
           icon={<AccessTime fontSize="small" />}
           text={
             fee > 0
-              ? oneDot(t('rentals.payAtPickup.comeByFee', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.', { day: pickupDay }))
-              : oneDot(t('rentals.payAtPickup.comeBy', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled.', { day: pickupDay }))
+              ? oneDot(t('rentals.payAtPickup.comeByFee', 'Come by {{deadline}} on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.', { day: pickupDay, deadline: dayEndDeadline(i18n.language, timeZone) }))
+              : oneDot(t('rentals.payAtPickup.comeBy', 'Come by {{deadline}} on {{day}}. If you don’t, the reservation is cancelled.', { day: pickupDay, deadline: dayEndDeadline(i18n.language, timeZone) }))
           }
         />
       ) : null}
       {fee > 0 ? (
         <Box sx={{ mt: 1 }}>
-          <Line icon={<CurrencyExchange fontSize="small" />} text={t('rentals.payAtPickup.feeRefunded', 'Fee refunded if you cancel before {{day}}, if the business cancels, or if the item doesn’t match.', { day: pickupDay })} />
+          <Line icon={<CurrencyExchange fontSize="small" />} text={t('rentals.payAtPickup.feeRefunded', 'Fee refunded if you cancel before {{day}}, if the business cancels, or if the item doesn’t match.', { day: pickupDay, deadline: dayEndDeadline(i18n.language, timeZone) })} />
           <Line icon={<ErrorOutline fontSize="small" />} text={t('rentals.payAtPickup.feeKept', 'Fee kept if you cancel on the pickup day or don’t come.')} />
         </Box>
       ) : null}

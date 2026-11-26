@@ -227,6 +227,7 @@ export default function ClientInspectionScreen() {
           rail={startRail === 'card' ? 'card' : money?.kind === 'wallet_due' ? 'wallet' : 'momo'}
           breakdown={breakdown}
           place={model.booking?.rental_location_listing?.business_location?.name ?? ''}
+          timeZone={photoZone}
           starting={starting}
           onRetry={() => void confirmStart()}
           onSupport={() => navigation.navigate('SupportTickets')}
