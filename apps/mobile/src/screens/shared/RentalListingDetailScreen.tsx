@@ -595,7 +595,7 @@ export default function RentalListingDetailScreen() {
             {acceptsOrders
               ? t(
                   'rentals.detail.requestCtaBody',
-                  'Tap Request rental below to pick your dates. Nothing is charged until the business accepts.'
+                  'Tap Request this rental below to pick your days and hours. Nothing is charged until the business accepts.'
                 )
               : t(
                   'checkout.merchantNotAcceptingOrders',

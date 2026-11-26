@@ -6452,6 +6452,7 @@
       }
     },
     "detail": {
+      "weeklyHours": "Weekly hours",
       "backToRentals": "Back to rentals",
       "overview": "About this rental",
       "pricing": "Pricing",
@@ -6476,7 +6477,7 @@
       "depositBarHint": "Deposit held on card · Nothing charged until accepted",
       "noChargeUntilAccepted": "Nothing charged until the business accepts your request",
       "requestCtaTitle": "Ready to book?",
-      "requestCtaBody": "Tap Request rental below to pick your dates. Nothing is charged until the business accepts.",
+      "requestCtaBody": "Tap Request this rental below to pick your days and hours. Nothing is charged until the business accepts.",
       "notFoundTitle": "We couldn’t find this listing",
       "notFoundBody": "It may have been removed or is no longer available.",
       "browseRentals": "Browse rentals",
