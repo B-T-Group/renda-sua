@@ -40,3 +40,22 @@ export function brandFaceStyle(
   const family = fontFamilyForWeight(weight);
   return os === 'android' ? { fontFamily: family, fontWeight: 'normal' } : { fontFamily: family };
 }
+
+/**
+ * Map a react-native-paper typescale (from configureFonts) onto the loaded Inter
+ * faces. Medium variants use Inter_500Medium; regular variants use Inter_400Regular.
+ * Sizes, line heights and letter spacing are left unchanged. On Android the weight
+ * is reset to normal so the platform does not look up a missing bold/medium variant
+ * and fall back to Roboto.
+ */
+export function withBrandPaperFonts<T extends Record<string, { fontWeight?: string | number }>>(
+  typescale: T,
+  os: string = Platform.OS
+): T {
+  return Object.fromEntries(
+    Object.entries(typescale).map(([variant, style]) => [
+      variant,
+      { ...style, ...brandFaceStyle(style.fontWeight, os) },
+    ])
+  ) as unknown as T;
+}

@@ -1,11 +1,16 @@
-import { MD3DarkTheme, MD3LightTheme } from 'react-native-paper';
+import { MD3DarkTheme, MD3LightTheme, configureFonts } from 'react-native-paper';
 import { darkColors, lightColors, type ThemeColors } from './colors';
 import { paperRoundness } from './spacing';
+import { withBrandPaperFonts } from './fonts';
+
+/** Inter typescale for every Paper Text, Dialog, Portal and Button. Shared by light and dark. */
+const paperFonts = withBrandPaperFonts(configureFonts());
 
 function buildPaperTheme(base: typeof MD3LightTheme, palette: ThemeColors) {
   return {
     ...base,
     roundness: paperRoundness,
+    fonts: paperFonts,
     colors: {
       ...base.colors,
       primary: palette.primary.main,
