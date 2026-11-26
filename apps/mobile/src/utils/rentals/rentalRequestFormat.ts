@@ -1,5 +1,6 @@
 import { formatSelectionLabel, localDateKey, type SelectionRange } from './rentalRequestScheduleUtils';
 import { formatConfirmationMoney } from './confirmationFormat';
+import { withRateUnit } from './moneyRateUnit';
 import { listingNowMs } from './dayHoursPicker';
 import { pickerLang, uses12h } from './dayHoursCopy';
 
@@ -69,10 +70,7 @@ export function formatRequestDay(iso: string, locale: string): string {
   const date = utcDate(iso);
   if (!date) return iso;
   const weekday = capitalizeFirst(shortPart(date, locale, 'weekday'));
-  const monthRaw = shortPart(date, locale, 'month');
-  const french = locale.toLowerCase().startsWith('fr');
-  const month = french ? monthRaw : capitalizeFirst(monthRaw);
-  return `${weekday} ${date.getUTCDate()} ${month}`;
+  return `${weekday} ${date.getUTCDate()} ${formatRentalShortMonth(iso, locale)}`;
 }
 
 export function formatRequestChipWeekday(iso: string, locale: string): string {
@@ -170,8 +168,9 @@ function dailyPriceCopy(
   totalAmount: string
 ) {
   const days = input.t('rentals.requestForm.dayCount', '{{count}} days', { count: requestDayCount(input.rows) });
-  const rate = formatRequestAmount(input.dayRate, input.currency, input.language);
-  const line = input.t('rentals.requestForm.dailyBreakdown', '{{days}} × {{rate}} / day', { days, rate });
+  const unit = input.language.toLowerCase().startsWith('fr') ? 'jour' : 'day';
+  const rate = withRateUnit(formatRequestAmount(input.dayRate, input.currency, input.language), unit);
+  const line = input.t('rentals.requestForm.dailyBreakdown', '{{days}} × {{rate}}', { days, rate });
   return { priceLabel: withUnits(line, input.units), priceAmount: totalAmount, totalAmount };
 }
 
@@ -179,8 +178,9 @@ function hourlyPriceCopy(
   input: { hours: number; units: number; hourRate: number; currency: string; language: string; t: Copy },
   totalAmount: string
 ) {
-  const rate = formatRequestAmount(input.hourRate, input.currency, input.language);
-  const line = input.t('rentals.requestForm.hourlyBreakdown', '{{h}} h × {{rate}} / hour', { h: input.hours, rate });
+  const unit = input.language.toLowerCase().startsWith('fr') ? 'heure' : 'hour';
+  const rate = withRateUnit(formatRequestAmount(input.hourRate, input.currency, input.language), unit);
+  const line = input.t('rentals.requestForm.hourlyBreakdown', '{{h}} h × {{rate}}', { h: input.hours, rate });
   return {
     priceLabel: withUnits(line, input.units),
     priceAmount: totalAmount,
@@ -219,12 +219,19 @@ export function rentalEditWindowOpen(
   return Number.isFinite(start) && start > listingNowMs(now, timeZone) + RENTAL_EDIT_LEAD_MS;
 }
 
-function monthLabel(isoDate: string, locale: string): string {
-  const date = utcDate(isoDate);
+const EN_SHORT_MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+const FR_SHORT_MONTH = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'] as const;
+
+/** `Nov` / `nov.` House short months. FR uses typographic abbreviations (period only when truncated). */
+export function formatRentalShortMonth(iso: string, locale: string): string {
+  const date = utcDate(iso.slice(0, 10));
   if (!date) return '';
-  const french = locale.toLowerCase().startsWith('fr');
-  const raw = new Intl.DateTimeFormat(french ? 'fr' : 'en', { month: 'short', timeZone: 'UTC' }).format(date);
-  return french ? raw : capitalizeFirst(raw.replace(/\./g, ''));
+  const months = locale.toLowerCase().startsWith('fr') ? FR_SHORT_MONTH : EN_SHORT_MONTH;
+  return months[date.getUTCMonth()];
+}
+
+function monthLabel(isoDate: string, locale: string): string {
+  return formatRentalShortMonth(isoDate, locale);
 }
 
 function dayNum(isoDate: string): number {
@@ -240,6 +247,39 @@ export function formatRentalDay(iso: string, locale: string): string {
   const day = iso.slice(0, 10);
   if (!ISO_DATE.test(day)) return iso;
   return `${dayNum(day)} ${monthLabel(day, locale)}`;
+}
+
+/** Exclusive-end return morning: `Return 29 Nov` / `Retour le 29\u00A0nov.` */
+export function formatReturnDay(iso: string, locale: string): string {
+  const day = iso.slice(0, 10);
+  if (!ISO_DATE.test(day)) return iso;
+  const label = `${dayNum(day)}\u00A0${monthLabel(day, locale)}`;
+  return locale.toLowerCase().startsWith('fr') ? `Retour le ${label}` : `Return ${label}`;
+}
+
+/** Calendar day after the last booked day (the exclusive end / return morning). */
+export function returnDateAfterBookedDays(booked: string[]): string | undefined {
+  if (!booked.length) return undefined;
+  return addUtcDays(booked[booked.length - 1], 1);
+}
+
+export function appendReturnDay(line: string, returnIso: string | undefined, locale: string): string {
+  if (!returnIso || !line || line === '—' || line === '\u2014') return line;
+  return `${line} · ${formatReturnDay(returnIso, locale)}`;
+}
+
+function periodLineWithReturn(windows: PeriodWindow[], locale: string, line: string): string {
+  const booked = bookedCalendarDates(windows);
+  return appendReturnDay(line, booked ? returnDateAfterBookedDays(booked) : undefined, locale);
+}
+
+/** Daily request/booking summary: booked days, count, and the return morning. Hourly is unchanged. */
+export function formatRequestedPeriod(
+  windows: PeriodWindow[],
+  locale: string,
+  dayCountLabel: (count: number) => string
+): string {
+  return periodLineWithReturn(windows, locale, formatRentalPeriod(windows, locale, dayCountLabel));
 }
 
 /**
@@ -360,7 +400,7 @@ export function clientRequestPeriodLines(
 ): string[] {
   if (!windows.length) return [];
   if (isSingleRequestedPeriod(windows)) {
-    return [formatRentalPeriod(windows, locale, dayCountLabel)];
+    return [formatRequestedPeriod(windows, locale, dayCountLabel)];
   }
   return windows.map((window, index) => numberedPeriodLine(window, index, locale, dayCountLabel));
 }
@@ -371,7 +411,7 @@ function numberedPeriodLine(
   locale: string,
   dayCountLabel: (count: number) => string
 ): string {
-  return `${index + 1}. ${formatRentalPeriod([window], locale, dayCountLabel)}`;
+  return periodLineWithReturn([window], locale, `${index + 1}. ${formatRentalPeriod([window], locale, dayCountLabel)}`);
 }
 
 /** Selection windows when the booking has them; otherwise the booked start–end span. */
@@ -391,6 +431,23 @@ export function bookingRequestedPeriodLines(
   dayCountLabel: (count: number) => string
 ): string[] {
   return clientRequestPeriodLines(bookingPeriodWindows(windows, span), locale, dayCountLabel);
+}
+
+/** Booking detail: keep a cross-day clock span when present, and append the return morning for a daily stay. */
+export function bookingDetailPeriodLines(
+  windows: PeriodWindow[],
+  span: { start_at?: string | null; end_at?: string | null } | null | undefined,
+  locale: string,
+  dayCountLabel: (count: number) => string,
+  bookedSpan?: string | null
+): string[] {
+  if (bookedSpan) {
+    const resolved = bookingPeriodWindows(windows, span);
+    const booked = bookedCalendarDates(resolved);
+    const ret = booked && isContiguous(booked) ? returnDateAfterBookedDays(booked) : undefined;
+    return [appendReturnDay(bookedSpan, ret, locale)];
+  }
+  return bookingRequestedPeriodLines(windows, span, locale, dayCountLabel);
 }
 
 /** `Fri 20 Nov, 10:00` / `ven. 20 nov., 10:00`. Clock is the listing wall time stored on the Z timestamp. */

@@ -7,6 +7,7 @@ import { formatSearchMoney } from '../../../utils/rentals';
 import { formatCatalogMoney } from '../../../utils/rentals/rentalRequestFormat';
 import { formatRentalDay } from '../../../utils/rentals/rentalRequestFormat';
 import { fromHourlyPrice, pickerLang } from '../../../utils/rentals/dayHoursCopy';
+import { withRateUnit } from '../../../utils/rentals/moneyRateUnit';
 
 export interface RentalSearchCardModel {
   id: string;
@@ -83,7 +84,7 @@ export function RentalSearchResultCard({
         {place ? <Text style={{ color: colors.text.secondary }}>{place}</Text> : null}
         {showAvailability && card.available ? (
           <Text style={[styles.badge, { backgroundColor: colors.cta.soft, color: colors.cta.dark }]}>
-            {t('rentals.searchFirst.freeFor', 'Free {{range}}', { range: card.rangeLabel })}
+            {t('rentals.searchFirst.freeFor', 'Available {{range}}', { range: card.rangeLabel })}
           </Text>
         ) : null}
         {showAvailability && card.available === false ? (
@@ -94,9 +95,9 @@ export function RentalSearchResultCard({
           </Text>
         ) : null}
         <Text testID={`rental-search-price-${card.id}`} style={{ color: colors.text.primary, fontWeight: '700', marginTop: 6 }}>
-          {card.hourlyOnly ? fromHourlyPrice(card.pricePerHour ?? 0, card.currency, pickerLang(i18n.language)) : daily}
-          {card.hourlyOnly ? null : ' '}
-          {card.hourlyOnly ? null : t('rentals.searchFirst.perDay', '/ day')}
+          {card.hourlyOnly
+            ? fromHourlyPrice(card.pricePerHour ?? 0, card.currency, pickerLang(i18n.language))
+            : withRateUnit(daily, t('rentals.searchFirst.perDay', '/ day'))}
         </Text>
         {!card.hourlyOnly && card.available && card.totalForDates != null && card.dayCount ? (
           <Text style={{ color: colors.text.secondary }} testID={`rental-search-total-${card.id}`}>

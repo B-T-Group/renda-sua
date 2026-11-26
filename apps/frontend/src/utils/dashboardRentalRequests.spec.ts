@@ -47,7 +47,7 @@ describe('dashboard rental request display', () => {
       'All day',
       (count) => `${count} days`
     );
-    expect(allDay).toBe('14 Nov · All day');
+    expect(allDay).toBe('14 Nov · All day · Return 15\u00A0Nov');
     const stay = dashboardPeriodLabel(
       [
         { billing: 'all_day', calendar_date: '2026-11-17', start_at: 'a', end_at: 'b' },
@@ -57,7 +57,7 @@ describe('dashboard rental request display', () => {
       'All day',
       (count) => `${count} days`
     );
-    expect(stay).toBe('17 Nov – 19 Nov · 2 days');
+    expect(stay).toBe('17 Nov – 18 Nov · 2 days · Return 19\u00A0Nov');
   });
 
   it('formats CAD for English and French', () => {

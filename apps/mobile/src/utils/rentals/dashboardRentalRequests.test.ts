@@ -31,7 +31,7 @@ describe('dashboard rental requests', () => {
     expect(totalOverrideTooHigh(0, 60_000, 50_000)).toBe(true);
   });
 
-  it('shows an exclusive end for a multi-day stay', () => {
+  it('shows booked days and the return morning for a multi-day stay', () => {
     const label = dashboardPeriodLabel(
       [
         { billing: 'all_day', calendar_date: '2026-11-17', start_at: 'a', end_at: 'b' },
@@ -41,7 +41,7 @@ describe('dashboard rental requests', () => {
       'All day',
       (count) => `${count} days`
     );
-    expect(label).toBe('17 Nov – 19 Nov · 2 days');
+    expect(label).toBe('17 Nov – 18 Nov · 2 days · Return 19\u00A0Nov');
   });
 
   it('sorts the soonest start first', () => {

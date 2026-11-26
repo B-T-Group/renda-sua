@@ -33,6 +33,7 @@ import type {
   BusinessRentalItemDetail,
 } from '../../types/rentals';
 import { formatRentalMoney, rentalListingModerationColors, rentalListingModerationLabelKey, aggregateListingModerationStatus, findFirstProposalPendingListingId } from '../../utils/rentals';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalItemDetail'>;
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
@@ -415,11 +416,9 @@ export default function BusinessRentalItemDetailScreen() {
               {listing.business_location?.name ?? listing.business_location_id}
             </Text>
             <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
-              {formatRentalMoney(Number(listing.base_price_per_hour), item.currency)} /{' '}
-              {t('rentals.perHour', 'hr')}
+              {withRateUnit(formatRentalMoney(Number(listing.base_price_per_hour), item.currency), t('rentals.perHour', 'hr'))}
               {' · '}
-              {formatRentalMoney(Number(listing.base_price_per_day), item.currency)} /{' '}
-              {t('rentals.perDay', 'day')}
+              {withRateUnit(formatRentalMoney(Number(listing.base_price_per_day), item.currency), t('rentals.perDay', 'day'))}
             </Text>
             <StatusPill
               compact

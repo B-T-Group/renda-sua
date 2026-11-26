@@ -4,6 +4,8 @@
  * Copied from apps/mobile/src/utils/rentals/dayHoursCopy.ts; keep both in sync.
  */
 import type { BlockNote, DayInfo, PickedDay } from './rentalDayHoursPicker';
+import { withRateUnit } from './rentals/moneyRateUnit';
+import { formatRentalShortMonth } from './rentalRequestFormat';
 
 export type PickerLang = 'en' | 'fr';
 
@@ -14,8 +16,8 @@ export function pickerLang(language?: string | null): PickerLang {
 const EN = {
   title: 'When do you need it?',
   subtitle: 'Tap the days you need. Times are {{city}} time.',
-  perDay: '{{amount}} / day',
-  perHour: '{{amount}} / h',
+  perDay: '{{amount}}',
+  perHour: '{{amount}}',
   minHours: 'Min {{count}}\u00A0h',
   someBooked: 'Some hours booked',
   unavailable: 'Unavailable',
@@ -35,7 +37,7 @@ const EN = {
   lockToday: 'Full day isn’t possible today: it has already started.',
   lockTodaySoon: 'Full day isn’t possible today: it starts in less than 2\u00A0h.',
   sharedLockBooked: 'Full day isn’t possible: {{day}} is partly booked.',
-  fromPerHour: 'from\u00A0{{amount}} / h',
+  fromPerHour: 'from\u00A0{{amount}}',
   stretched: 'Minimum {{count}}\u00A0h, so the end moved to {{time}}.',
   capped: 'Maximum {{count}}\u00A0h, so the end moved to {{time}}.',
   tooShort: 'Not enough free hours from {{time}}. Pick another start.',
@@ -66,8 +68,8 @@ const EN = {
 const FR: Record<keyof typeof EN, string> = {
   title: 'Quand en avez-vous besoin\u00A0?',
   subtitle: 'Touchez les jours voulus. Heures de {{city}}.',
-  perDay: '{{amount}} / jour',
-  perHour: '{{amount}} / h',
+  perDay: '{{amount}}',
+  perHour: '{{amount}}',
   minHours: 'Min.\u00A0{{count}}\u00A0h',
   someBooked: 'Quelques heures prises',
   unavailable: 'Indisponible',
@@ -86,7 +88,7 @@ const FR: Record<keyof typeof EN, string> = {
   lockToday: 'Journée impossible aujourd’hui\u00A0: elle a déjà commencé.',
   lockTodaySoon: 'Journée impossible aujourd’hui\u00A0: elle commence dans moins de 2\u00A0h.',
   sharedLockBooked: 'Journée impossible\u00A0: {{day}} est en partie réservé.',
-  fromPerHour: 'dès\u00A0{{amount}} / h',
+  fromPerHour: 'dès\u00A0{{amount}}',
   stretched: 'Minimum {{count}}\u00A0h\u00A0: la fin passe à {{time}}.',
   capped: 'Maximum {{count}}\u00A0h\u00A0: la fin passe à {{time}}.',
   tooShort: 'Pas assez d’heures libres à partir de {{time}}. Choisissez un autre début.',
@@ -199,8 +201,6 @@ export function rangeLabel(start: number, end: number, lang: PickerLang, timeZon
 
 const EN_WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const FR_WD = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
-const EN_MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const FR_MO = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const EN_MONTH = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const FR_MONTH = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -208,8 +208,7 @@ const FR_MONTH = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juille
 export function dayLabel(key: string, lang: PickerLang): string {
   const d = new Date(`${key}T00:00:00.000Z`);
   const wd = (lang === 'fr' ? FR_WD : EN_WD)[d.getUTCDay()];
-  const mo = (lang === 'fr' ? FR_MO : EN_MO)[d.getUTCMonth()];
-  return `${wd}\u00A0${d.getUTCDate()}\u00A0${mo}`;
+  return `${wd}\u00A0${d.getUTCDate()}\u00A0${formatRentalShortMonth(key, lang)}`;
 }
 
 export function monthTitle(year: number, month0: number, lang: PickerLang): string {
@@ -321,7 +320,15 @@ export function sharedLockReason(infos: DayInfo[], lang: PickerLang): string | n
 
 /** Hourly-only listings never show a day price: "from 3 000 FCFA / h". */
 export function fromHourlyPrice(hourRate: number, currency: string, lang: PickerLang): string {
-  return pickerText(lang, 'fromPerHour', { amount: pickerMoney(hourRate, currency, lang) });
+  return pickerText(lang, 'fromPerHour', {
+    amount: withRateUnit(pickerMoney(hourRate, currency, lang), 'h'),
+  });
+}
+
+/** Rate chips and labels: `15 000 FCFA / day`, `3 000 FCFA / h`. */
+export function pickerRate(amount: string, lang: PickerLang, kind: 'day' | 'hour'): string {
+  const unit = kind === 'hour' ? 'h' : lang === 'fr' ? 'jour' : 'day';
+  return withRateUnit(amount, unit);
 }
 
 const SERVER_RULES: Record<string, { en: string; fr: string }> = {

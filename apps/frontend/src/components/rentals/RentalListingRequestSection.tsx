@@ -24,6 +24,7 @@ import type { RentalTakenWindow } from '../../hooks/useRentalApi';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { SITE_EVENT_ASSISTANT_RENTAL_REQUEST_CREATED, useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { consumeRentalRequestAttribution } from '../../utils/rentalAssistantAttribution';
+import { formatCatalogMoney } from '../../utils/rentalRequestDisplay';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { CardWindowBanner, CardWindowCalendar } from './CardWindowCalendar';
 import {
@@ -62,19 +63,6 @@ function exclusiveDays(start: string, end: string): string[] {
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return days;
-}
-
-
-function formatMoney(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency.length === 3 ? currency : 'XAF',
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `${amount} ${currency}`;
-  }
 }
 
 export interface RentalListingRequestSectionProps {
@@ -475,7 +463,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                                     ? t('rentals.requestForm.allDayRateLine', 'All day — daily rate')
                                     : t('rentals.requestForm.lineHourly', '{{h}} h × {{rate}}', {
                                         h: rentalBillableHours(r.startMs, r.endMs),
-                                        rate: formatMoney(basePricePerHour, currency),
+                                        rate: formatCatalogMoney(basePricePerHour, currency, i18n.language),
                                       })}
                                 </Typography>
                                 <Typography
@@ -483,7 +471,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                                   variant="caption"
                                   sx={{ ml: 1, fontWeight: 800, color: 'success.dark' }}
                                 >
-                                  {formatMoney(estimateLines[idx]?.subtotal ?? 0, currency)}
+                                  {formatCatalogMoney(estimateLines[idx]?.subtotal ?? 0, currency, i18n.language)}
                                 </Typography>
                               </>
                             }
@@ -511,7 +499,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                     />
                     <Typography variant="body2" color="text.secondary">
                       {t('rentals.requestForm.runningTotal', 'Estimated total')}:{' '}
-                      <strong>{formatMoney(estimatedTotal, currency)}</strong>
+                      <strong>{formatCatalogMoney(estimatedTotal, currency, i18n.language)}</strong>
                       {' · '}
                       {t('rentals.requestForm.totalHoursLineShort', '{{h}} billable hours total', {
                         h: hoursTotal,
@@ -651,10 +639,10 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                         })
                       : t('rentals.requestForm.lineHourly', '{{h}} h × {{rate}}', {
                           h: line.billableHours,
-                          rate: formatMoney(line.ratePerHour, currency),
+                          rate: formatCatalogMoney(line.ratePerHour, currency, i18n.language),
                         })
                   }
-                  secondary={formatMoney(line.subtotal, currency)}
+                  secondary={formatCatalogMoney(line.subtotal, currency, i18n.language)}
                 />
               </ListItem>
             ))}
@@ -666,7 +654,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
             {t('rentals.requestForm.confirmUnits', 'Quantity')}: {unitsRequested}
           </Typography>
           <Typography variant="h6" fontWeight={800} color="primary" sx={{ mt: 1 }}>
-            {t('rentals.requestForm.confirmPrice', 'Estimated price')}: {formatMoney(estimatedTotal, currency)}
+            {t('rentals.requestForm.confirmPrice', 'Estimated price')}: {formatCatalogMoney(estimatedTotal, currency, i18n.language)}
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             {t(

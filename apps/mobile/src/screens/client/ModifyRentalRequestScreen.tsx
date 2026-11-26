@@ -17,6 +17,7 @@ import type { SelectionRange } from '../../utils/rentals';
 import { allDaySelectionsForRange } from '../../utils/rentals/rentalSearchPreset';
 import type { RentalDateRange } from '../../utils/rentals/rentalSearchDates';
 import { fromHourlyPrice, pickerLang } from '../../utils/rentals/dayHoursCopy';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 import { RequestAppBar } from '../shared/RentalRequestScreen';
 
 type Route = { ModifyRentalRequest: { requestId: string } };
@@ -256,10 +257,9 @@ function itemMeta(
     const currency = rates.rental_item?.currency || 'XAF';
     return [place, fromHourlyPrice(Number(rates.base_price_per_hour) || 0, currency, pickerLang(language))].filter(Boolean).join(' · ');
   }
-  const rate = t('rentals.modify.perDay', '{{amount}} / day', {
-    amount: `${dayRate} FCFA`,
-  });
-  return [place, language.toLowerCase().startsWith('fr') ? rate.replace('/ day', '/ jour') : rate]
+  const unit = language.toLowerCase().startsWith('fr') ? 'jour' : 'day';
+  const rate = withRateUnit(`${dayRate} FCFA`, unit);
+  return [place, rate]
     .filter(Boolean)
     .join(' · ');
 }

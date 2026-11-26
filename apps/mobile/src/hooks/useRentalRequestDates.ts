@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useRentalCatalogGeoParams } from './useRentalCatalogGeoParams';
 import type { RentalListingRow } from '../types/rentals';
 import { allDaySelectionsForRange } from '../utils/rentals/rentalSearchPreset';
+import { appendReturnDay } from '../utils/rentals/rentalRequestFormat';
 import {
-  formatRangeDates,
+  formatSearchStayRange,
   marketTimeZone,
   rangeFromSearchParams,
   type RentalDateRange,
@@ -50,8 +51,12 @@ function dateLineFor(
 ): string | undefined {
   if (!stay) return undefined;
   const days = t('rentals.requestForm.dayCount', '{{count}} days', { count: stay.dayCount });
-  return t('rentals.searchFirst.sheetDateLine', '{{range}} · {{days}}', {
-    range: formatRangeDates(stay, language),
-    days,
-  });
+  return appendReturnDay(
+    t('rentals.searchFirst.sheetDateLine', '{{range}} · {{days}}', {
+      range: formatSearchStayRange(stay, language),
+      days,
+    }),
+    stay.endDate,
+    language
+  );
 }

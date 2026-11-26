@@ -22,7 +22,7 @@ const canon: RentalSearchCardModel = {
   totalIsEstimate: false,
   dayCount: 3,
   nextAvailableDate: null,
-  rangeLabel: '12–15 Nov',
+  rangeLabel: '12–14 Nov',
 };
 
 const nikon: RentalSearchCardModel = {
@@ -173,7 +173,7 @@ describe('search-first rentals', () => {
     });
     expect(view.getByText('2 matches · available for your dates first')).toBeTruthy();
     expect(view.getByText('Canon EOS R50 kit')).toBeTruthy();
-    expect(view.getByText('Free 12–15 Nov')).toBeTruthy();
+    expect(view.getByText('Available 12–14 Nov')).toBeTruthy();
     expect(view.getByText(/Total ·/)).toBeTruthy();
     expect(view.getByText(/75/)).toBeTruthy();
     expect(view.queryByText(/Est\./)).toBeNull();
@@ -225,9 +225,9 @@ describe('search-first rentals', () => {
       onNotify,
       onNearby,
     });
-    expect(view.getByText('Nothing free for those dates')).toBeTruthy();
+    expect(view.getByText('Nothing available for those dates')).toBeTruthy();
     await act(async () => {
-      fireEvent.press(view.getByText(/16–19/));
+      fireEvent.press(view.getByText(/16–18/));
     });
     expect(onNearby).toHaveBeenCalledWith(nearby[0]);
     await act(async () => {
@@ -402,7 +402,7 @@ describe('search-first rentals', () => {
       mode: 'results',
       query: 'scaffold',
       dates: { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 },
-      cards: [{ ...canon, totalForDates: 760, dayCount: 2, totalIsEstimate: true, rangeLabel: '14–16 Nov' }],
+      cards: [{ ...canon, totalForDates: 760, dayCount: 2, totalIsEstimate: true, rangeLabel: '14–15 Nov' }],
     });
     expect(view.getByText(/Est\./)).toBeTruthy();
   });
@@ -500,7 +500,7 @@ describe('search-first rentals', () => {
       dates: { startDate: '2026-11-10', endDate: '2026-11-17', dayCount: 7 },
       cards: [canon, nikon],
     });
-    expect(view.getByText("2 résultats · les dates libres d'abord")).toBeTruthy();
+    expect(view.getByText("2 résultats · disponibles d’abord")).toBeTruthy();
   });
 
   it('shows the My rentals caption, badge, and next card', async () => {
@@ -700,7 +700,21 @@ describe('default rental list', () => {
 
   it('formats XAF with a non-breaking space', async () => {
     const xaf = await renderSearch({ defaultList: true, cards: [sony] });
-    expect(moneyText(xaf.getByText(/FCFA/))).toBe('45\u00A0000\u00A0FCFA');
+    expect(moneyText(xaf.getByText(/FCFA/))).toBe('45\u00A0000\u00A0FCFA\u00A0/\u00A0day');
+  });
+
+  it('formats dated search XAF as amount then FCFA in English', async () => {
+    const view = await renderSearch({
+      mode: 'results',
+      dates: { startDate: '2026-11-12', endDate: '2026-11-15', dayCount: 3 },
+      cards: [canon],
+    });
+    expect(moneyText(view.getByTestId('rental-search-price-canon'))).toBe('25\u00A0000\u00A0FCFA\u00A0/\u00A0day');
+    expect(view.getByTestId('rental-search-total-canon').props.children).toEqual(
+      expect.stringMatching(/75\u00A0000\u00A0FCFA/)
+    );
+    expect(view.queryByText(/FCFA 25/)).toBeNull();
+    expect(view.queryByText(/FCFA 75/)).toBeNull();
   });
 
   it('formats French CAD with a non-breaking space', async () => {
@@ -709,6 +723,6 @@ describe('default rental list', () => {
       defaultList: true,
       cards: [{ ...sony, id: 'jbl', name: 'JBL', pricePerDay: 45, currency: 'CAD', inspection: false, business: 'Parkdale', city: 'Toronto' }],
     });
-    expect(moneyText(cad.getByText(/45,00/))).toBe('45,00\u00A0$');
+    expect(moneyText(cad.getByText(/45,00/))).toBe('45,00\u00A0$\u00A0/\u00A0jour');
   });
 });

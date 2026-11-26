@@ -1,4 +1,4 @@
-import { formatRentalDateRange, formatRentalPeriod, type PeriodWindow } from './rentalRequestFormat';
+import { formatRentalDateRange, formatRentalPeriod, formatRentalShortMonth, type PeriodWindow } from './rentalRequestFormat';
 
 export const MAX_RENTAL_SEARCH_DAYS = 30;
 
@@ -129,11 +129,6 @@ export function nearbyRanges(range: RentalDateRange, now = new Date()): RentalDa
   });
 }
 
-/** "14–16 Nov · 2 days" — `daysLabel` is already translated. */
-export function formatSheetDateLine(range: RentalDateRange, locale: string, daysLabel: string): string {
-  return `${formatRangeDates(range, locale)} · ${daysLabel}`;
-}
-
 type StayListener = (range: RentalDateRange) => void;
 const stayListeners = new Set<StayListener>();
 
@@ -155,12 +150,11 @@ export function formatRangeDates(range: RentalDateRange, locale: string): string
   if (startMs == null || endMs == null) return `${range.startDate} – ${range.endDate}`;
   const start = new Date(startMs);
   const end = new Date(endMs);
-  const month = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' });
   const sameMonth = start.getUTCMonth() === end.getUTCMonth() && start.getUTCFullYear() === end.getUTCFullYear();
   if (sameMonth) {
-    return `${start.getUTCDate()}–${end.getUTCDate()} ${month.format(end)}`;
+    return `${start.getUTCDate()}–${end.getUTCDate()} ${formatRentalShortMonth(range.endDate, locale)}`;
   }
-  return `${start.getUTCDate()} ${month.format(start)} – ${end.getUTCDate()} ${month.format(end)}`;
+  return `${start.getUTCDate()} ${formatRentalShortMonth(range.startDate, locale)} – ${end.getUTCDate()} ${formatRentalShortMonth(range.endDate, locale)}`;
 }
 
 const MARKET_TIME_ZONES: Record<string, string> = {
@@ -221,6 +215,11 @@ export function formatSearchStay(
 /** Same booked days, without the count (`22–24 Nov`). */
 export function formatSearchStayRange(range: RentalDateRange, locale: string): string {
   return formatRentalDateRange(bookedStayWindows(range), locale);
+}
+
+/** "14–15 Nov · 2 days" — booked days, matching the priced day count. `daysLabel` is already translated. */
+export function formatSheetDateLine(range: RentalDateRange, locale: string, daysLabel: string): string {
+  return `${formatSearchStayRange(range, locale)} · ${daysLabel}`;
 }
 
 function bookedStayWindows(range: RentalDateRange): PeriodWindow[] {

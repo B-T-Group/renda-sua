@@ -7204,8 +7204,8 @@
       "dayCount_one": "{{count}} day",
       "dayCount_other": "{{count}} days",
       "dayCount_plural": "{{count}} days",
-      "dailyBreakdown": "{{days}} × {{rate}} / day",
-      "hourlyBreakdown": "{{h}} h × {{rate}} / hour"
+      "dailyBreakdown": "{{days}} × {{rate}}",
+      "hourlyBreakdown": "{{h}} h × {{rate}}"
     },
     "fillDates": "Choose start and end",
     "requestSent": "Request sent. The business will respond.",
@@ -7372,7 +7372,7 @@
       "subtitleAt": "Showing rentals in {{market}}",
       "listPlaceholder": "Search cameras, tools, sound...",
       "datesOptional": "DATES (OPTIONAL)",
-      "addToSee": "Add to see what's free",
+      "addToSee": "Add to see what's available",
       "add": "Add",
       "edit": "Edit",
       "yourDates": "YOUR DATES",
@@ -7387,7 +7387,7 @@
       "countOnly": "{{count}} rentals · add dates to sort by availability",
       "matches": "{{count}} matches · available for your dates first",
       "inspection": "Inspection",
-      "freeRange": "Free {{range}}",
+      "freeRange": "Available {{range}}",
       "availableFrom": "Available from {{date}}",
       "totalFor": "Total · {{amount}} for {{count}} days",
       "perDayShort": "/ day",
