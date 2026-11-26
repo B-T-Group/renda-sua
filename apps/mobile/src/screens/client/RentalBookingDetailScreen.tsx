@@ -642,7 +642,7 @@ export default function RentalBookingDetailScreen() {
                 ) : undefined
               }
               missing={
-                reportedMissingItem || (didntWindowOpen && !windowForcedClosed) ? (
+                reportedMissingItem || (didntWindowOpen && !windowForcedClosed && !booking.renter_reported_returned_at) ? (
                   <DidntReceiveReportButton
                     bookingId={booking.id}
                     startedAt={booking.actual_start_at}

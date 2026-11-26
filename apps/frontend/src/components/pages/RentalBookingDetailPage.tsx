@@ -977,7 +977,7 @@ const RentalBookingDetailPage: React.FC = () => {
           {isClient &&
           bookingId &&
           !showStartPanel &&
-          (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
+          (reportedMissingItem || (didntWindowOpen && !windowForcedClosed && !booking.renter_reported_returned_at)) ? (
             <DidntReceiveReportButton
               bookingId={bookingId}
               startedAt={booking.actual_start_at}
@@ -1020,7 +1020,7 @@ const RentalBookingDetailPage: React.FC = () => {
                 });
               } : undefined}
               missing={
-                isClient && bookingId && (reportedMissingItem || (didntWindowOpen && !windowForcedClosed)) ? (
+                isClient && bookingId && (reportedMissingItem || (didntWindowOpen && !windowForcedClosed && !booking.renter_reported_returned_at)) ? (
                   <DidntReceiveReportButton
                     bookingId={bookingId}
                     startedAt={booking.actual_start_at}
