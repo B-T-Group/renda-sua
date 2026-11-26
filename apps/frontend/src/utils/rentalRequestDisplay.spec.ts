@@ -1,4 +1,4 @@
-import { businessChangedThePrice, formatAssistantMoney, formatRequestAmount } from './rentalRequestDisplay';
+import { businessChangedThePrice, formatAssistantMoney, formatRentalMoney, formatRequestAmount } from './rentalRequestDisplay';
 
 const NBSP = '\u00A0';
 
@@ -53,5 +53,21 @@ describe('formatRequestAmount', () => {
     expect(formatRequestAmount(0, 'XOF', 'en')).toBe(joined('0 FCFA'));
     expect(formatRequestAmount(-2500, 'XAF', 'fr')).toBe(joined('-2 500 FCFA'));
     expect(formatRequestAmount(1000000, 'FCFA', 'en')).toBe(joined('1 000 000 FCFA'));
+  });
+});
+
+describe('formatRentalMoney', () => {
+  it('formats XAF, XOF, and FCFA as amount then FCFA with non-breaking spaces', () => {
+    expect(formatRentalMoney(2500, 'XAF')).toBe(joined('2 500 FCFA'));
+    expect(formatRentalMoney(15000, 'XAF')).toBe(joined('15 000 FCFA'));
+    expect(formatRentalMoney(20000, 'xaf')).toBe(joined('20 000 FCFA'));
+    expect(formatRentalMoney(55000, 'XOF')).toBe(joined('55 000 FCFA'));
+    expect(formatRentalMoney(10000, 'FCFA')).toBe(joined('10 000 FCFA'));
+    expect(formatRentalMoney(2500, 'XAF').startsWith('FCFA')).toBe(false);
+  });
+
+  it('leaves CAD and USD on the currency formatter', () => {
+    expect(formatRentalMoney(45, 'CAD')).not.toMatch(/FCFA/);
+    expect(formatRentalMoney(45, 'USD')).not.toMatch(/FCFA/);
   });
 });

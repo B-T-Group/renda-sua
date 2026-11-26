@@ -87,8 +87,6 @@ export function parseRentalPricingSnapshot(
   return { total, currency, securityDeposit, lines };
 }
 
-const NARROW_NO_BREAK_SPACE = '\u202f';
-
 function groupedDigits(amount: number, separator: string): string {
   const rounded = Math.round(amount);
   const sign = rounded < 0 ? '-' : '';
@@ -97,20 +95,22 @@ function groupedDigits(amount: number, separator: string): string {
 }
 
 /**
- * Search cards and date totals.
- * English keeps the code in front (`FCFA 1,140`). French puts it after the
- * amount, with a narrow no-break space as the thousands separator and before FCFA.
- * The request screen uses `formatRequestAmount` (`760 FCFA`) instead.
+ * Search cards and date totals. Matches the catalog and request formatters:
+ * XAF, XOF, and FCFA use `45 000 FCFA` (non-breaking spaces) in English and French.
+ * CAD uses `$45.00` / `45,00 $`.
  */
 export function formatSearchMoney(amount: number, currency: string, language: string): string {
-  const code = currency.toUpperCase();
-  if (code === 'XAF' || code === 'FCFA') {
-    if (language.toLowerCase().startsWith('fr')) {
-      return `${groupedDigits(amount, NARROW_NO_BREAK_SPACE)}${NARROW_NO_BREAK_SPACE}FCFA`;
-    }
-    return `FCFA ${groupedDigits(amount, ',')}`;
+  const code = (currency || '').trim().toUpperCase();
+  const value = Number.isFinite(amount) ? amount : 0;
+  if (code === 'CAD') {
+    const digits = value.toFixed(2);
+    if (language.toLowerCase().startsWith('fr')) return `${digits.replace('.', ',')}\u00A0$`;
+    return `$${digits}`;
   }
-  return formatRentalMoney(amount, currency);
+  if (code === 'XAF' || code === 'XOF' || code === 'FCFA' || !code) {
+    return `${groupedDigits(value, '\u00A0')}\u00A0FCFA`;
+  }
+  return formatRentalMoney(value, currency);
 }
 
 /** CAD matches the other Stripe screens: `$25.00` / `25,00 $`. */
@@ -131,11 +131,20 @@ function formatCadAmount(amount: number, locale: string): string {
   }).format(amount);
 }
 
+/**
+ * XAF, XOF, and FCFA use `45 000 FCFA` (non-breaking spaces) in every locale.
+ * Other currencies keep the runtime Intl currency format.
+ */
 export function formatRentalMoney(amount: number, currency: string): string {
+  const code = (currency || 'XAF').toUpperCase();
+  const iso = code.length === 3 ? code : 'XAF';
+  if (iso === 'XAF' || iso === 'XOF' || code === 'FCFA') {
+    return `${groupedDigits(Number.isFinite(amount) ? amount : 0, '\u00A0')}\u00A0FCFA`;
+  }
   try {
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
-      currency: currency.length === 3 ? currency : 'XAF',
+      currency: iso,
       maximumFractionDigits: 0,
     }).format(amount);
   } catch {

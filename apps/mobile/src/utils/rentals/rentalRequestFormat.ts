@@ -1,5 +1,6 @@
 import { formatSelectionLabel, localDateKey, type SelectionRange } from './rentalRequestScheduleUtils';
 import { formatConfirmationMoney } from './confirmationFormat';
+import { withRateUnit } from './moneyRateUnit';
 import { listingNowMs } from './dayHoursPicker';
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -68,10 +69,7 @@ export function formatRequestDay(iso: string, locale: string): string {
   const date = utcDate(iso);
   if (!date) return iso;
   const weekday = capitalizeFirst(shortPart(date, locale, 'weekday'));
-  const monthRaw = shortPart(date, locale, 'month');
-  const french = locale.toLowerCase().startsWith('fr');
-  const month = french ? monthRaw : capitalizeFirst(monthRaw);
-  return `${weekday} ${date.getUTCDate()} ${month}`;
+  return `${weekday} ${date.getUTCDate()} ${formatRentalShortMonth(iso, locale)}`;
 }
 
 export function formatRequestChipWeekday(iso: string, locale: string): string {
@@ -169,8 +167,9 @@ function dailyPriceCopy(
   totalAmount: string
 ) {
   const days = input.t('rentals.requestForm.dayCount', '{{count}} days', { count: requestDayCount(input.rows) });
-  const rate = formatRequestAmount(input.dayRate, input.currency, input.language);
-  const line = input.t('rentals.requestForm.dailyBreakdown', '{{days}} × {{rate}} / day', { days, rate });
+  const unit = input.language.toLowerCase().startsWith('fr') ? 'jour' : 'day';
+  const rate = withRateUnit(formatRequestAmount(input.dayRate, input.currency, input.language), unit);
+  const line = input.t('rentals.requestForm.dailyBreakdown', '{{days}} × {{rate}}', { days, rate });
   return { priceLabel: withUnits(line, input.units), priceAmount: totalAmount, totalAmount };
 }
 
@@ -178,8 +177,9 @@ function hourlyPriceCopy(
   input: { hours: number; units: number; hourRate: number; currency: string; language: string; t: Copy },
   totalAmount: string
 ) {
-  const rate = formatRequestAmount(input.hourRate, input.currency, input.language);
-  const line = input.t('rentals.requestForm.hourlyBreakdown', '{{h}} h × {{rate}} / hour', { h: input.hours, rate });
+  const unit = input.language.toLowerCase().startsWith('fr') ? 'heure' : 'hour';
+  const rate = withRateUnit(formatRequestAmount(input.hourRate, input.currency, input.language), unit);
+  const line = input.t('rentals.requestForm.hourlyBreakdown', '{{h}} h × {{rate}}', { h: input.hours, rate });
   return {
     priceLabel: withUnits(line, input.units),
     priceAmount: totalAmount,
@@ -218,12 +218,19 @@ export function rentalEditWindowOpen(
   return Number.isFinite(start) && start > listingNowMs(now, timeZone) + RENTAL_EDIT_LEAD_MS;
 }
 
-function monthLabel(isoDate: string, locale: string): string {
-  const date = utcDate(isoDate);
+const EN_SHORT_MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+const FR_SHORT_MONTH = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'] as const;
+
+/** `Nov` / `nov.` House short months. FR uses typographic abbreviations (period only when truncated). */
+export function formatRentalShortMonth(iso: string, locale: string): string {
+  const date = utcDate(iso.slice(0, 10));
   if (!date) return '';
-  const french = locale.toLowerCase().startsWith('fr');
-  const raw = new Intl.DateTimeFormat(french ? 'fr' : 'en', { month: 'short', timeZone: 'UTC' }).format(date);
-  return french ? raw : capitalizeFirst(raw.replace(/\./g, ''));
+  const months = locale.toLowerCase().startsWith('fr') ? FR_SHORT_MONTH : EN_SHORT_MONTH;
+  return months[date.getUTCMonth()];
+}
+
+function monthLabel(isoDate: string, locale: string): string {
+  return formatRentalShortMonth(isoDate, locale);
 }
 
 function dayNum(isoDate: string): number {

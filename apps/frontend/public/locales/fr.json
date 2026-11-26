@@ -6924,8 +6924,8 @@
       "dayCount_one": "{{count}} jour",
       "dayCount_other": "{{count}} jours",
       "dayCount_plural": "{{count}} jours",
-      "dailyBreakdown": "{{days}} × {{rate}} / jour",
-      "hourlyBreakdown": "{{h}} h × {{rate}} / heure"
+      "dailyBreakdown": "{{days}} × {{rate}}",
+      "hourlyBreakdown": "{{h}} h × {{rate}}"
     },
     "fillDates": "Choisissez le début et la fin",
     "requestSent": "Demande envoyée. L'entreprise répondra.",

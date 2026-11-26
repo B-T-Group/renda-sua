@@ -38,6 +38,7 @@ describe('rental search dates', () => {
     expect(formatSearchStay(range, 'en', days)).toBe('22\u201324 Nov · 3 days');
     expect(formatSearchStay(range, 'fr', jours)).toBe('22\u201324 nov. · 3 jours');
     expect(formatSearchStayRange(range, 'en')).toBe('22\u201324 Nov');
+    expect(formatSearchStayRange(range, 'fr')).toBe('22\u201324 nov.');
   });
 
   it('labels a 27–29 exclusive stay as the two booked days, matching the priced count', () => {
