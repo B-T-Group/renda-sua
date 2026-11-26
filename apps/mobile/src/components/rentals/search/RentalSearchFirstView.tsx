@@ -58,7 +58,8 @@ export interface RentalSearchFirstViewProps {
   onBrowseAll: () => void;
   onSuggestion: (row: RentalSearchSuggestionRow) => void;
   onRecent: (term: string) => void;
-  onRent: (id: string) => void;
+  /** Card tap: the listing's details page (renting starts there). */
+  onOpenListing: (id: string) => void;
   onSeeDates: (id: string) => void;
   onToggleTakeHome: () => void;
   onToggleCheapest: () => void;
@@ -432,7 +433,7 @@ function ResultList(props: RentalSearchFirstViewProps) {
           : t('rentals.searchFirst.countOnly', '{{count}} rentals · add dates to sort by availability', { count: props.cards.length })}
       </Text>
       {props.cards.map((card) => (
-        <RentalSearchResultCard key={card.id} card={card} onRent={props.onRent} onSeeDates={props.onSeeDates} />
+        <RentalSearchResultCard key={card.id} card={card} onOpen={props.onOpenListing} onSeeDates={props.onSeeDates} />
       ))}
       {props.dates && available === 0 && props.cards.length > 0 ? (
         <Button mode="contained" buttonColor={colors.primary.main} onPress={props.onNotify} testID="rental-search-notify" style={{ borderRadius: borderRadius.md }}>
@@ -498,7 +499,7 @@ function CatalogRows(props: RentalSearchFirstViewProps) {
         </Pressable>
       </View>
       {props.cards.map((card) => (
-        <RentalSearchResultCard key={card.id} card={card} onRent={props.onRent} onSeeDates={props.onSeeDates} />
+        <RentalSearchResultCard key={card.id} card={card} onOpen={props.onOpenListing} onSeeDates={props.onSeeDates} />
       ))}
       {props.loadingMore ? (
         <Text testID="rental-search-loading-more" style={{ color: colors.text.secondary, textAlign: 'center', marginVertical: 12 }}>

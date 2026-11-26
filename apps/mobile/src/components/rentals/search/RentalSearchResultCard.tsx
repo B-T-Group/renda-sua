@@ -1,4 +1,4 @@
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
@@ -32,11 +32,12 @@ export interface RentalSearchCardModel {
 
 export function RentalSearchResultCard({
   card,
-  onRent,
+  onOpen,
   onSeeDates,
 }: {
   card: RentalSearchCardModel;
-  onRent: (id: string) => void;
+  /** Opens the listing's details page; renting starts there. */
+  onOpen: (id: string) => void;
   onSeeDates: (id: string) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -46,14 +47,19 @@ export function RentalSearchResultCard({
   const place = [card.business, card.city].filter(Boolean).join(', ');
   const showAvailability = card.available != null && card.rangeLabel;
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={() => onOpen(card.id)}
+      accessibilityRole="button"
+      accessibilityLabel={t('rentals.searchFirst.viewDetailsFor', 'View details for {{name}}', { name: card.name })}
+      testID={`rental-search-card-${card.id}`}
+      style={({ pressed }) => [
         styles.card,
         {
           backgroundColor: colors.surface,
           borderColor: colors.divider,
           borderRadius: borderRadius.lg,
           marginBottom: spacing.sm,
+          opacity: pressed ? 0.85 : 1,
         },
       ]}
     >
@@ -122,18 +128,21 @@ export function RentalSearchResultCard({
           </Button>
         ) : (
           <Button
-            mode="contained"
-            icon="key-variant"
-            buttonColor={colors.primary.main}
-            onPress={() => onRent(card.id)}
-            style={styles.action}
-            testID={`rental-search-rent-${card.id}`}
+            mode="outlined"
+            icon="eye-outline"
+            textColor={colors.primary.main}
+            onPress={() => onOpen(card.id)}
+            style={[styles.action, { borderColor: colors.primary.main }]}
+            testID={`rental-search-view-${card.id}`}
           >
-            {t('rentals.searchFirst.rent', 'Rent')}
+            {t('rentals.searchFirst.viewDetails', 'View details')}
           </Button>
         )}
       </View>
-    </View>
+      <View style={styles.chevron}>
+        <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.secondary} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -157,4 +166,5 @@ const styles = StyleSheet.create({
   body: { flex: 1, minWidth: 0 },
   badge: { alignSelf: 'flex-start', overflow: 'hidden', borderRadius: 8, marginTop: 6, paddingHorizontal: 8, paddingVertical: 3, fontWeight: '600' },
   action: { alignSelf: 'flex-start', marginTop: 8 },
+  chevron: { alignSelf: 'center', marginLeft: -4 },
 });

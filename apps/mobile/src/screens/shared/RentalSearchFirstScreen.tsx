@@ -191,12 +191,11 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   }, [mode, query, geo.ready, geo.country_code, geo.state]);
 
   const openListing = useCallback(
-    (listingId: string, range: RentalDateRange | null, openRequest: boolean) => {
+    (listingId: string, range: RentalDateRange | null) => {
       const parent = navigation.getParent() ?? navigation;
       (parent as { navigate: (name: string, params: object) => void }).navigate('RentalListingDetail', {
         listingId,
         ...(range ? { startDate: range.startDate, endDate: range.endDate } : {}),
-        ...(openRequest ? { openRequest: true } : {}),
       });
     },
     [navigation]
@@ -318,9 +317,9 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
           setQuery(term);
           commitQuery(term);
         }}
-        onRent={(id) => {
-          // The request screen opens the day-and-hours picker (with the search dates, if any).
-          openListing(id, dates, true);
+        onOpenListing={(id) => {
+          // Details first (photos, prices, deposit); its Rent button opens the request screen with these dates.
+          openListing(id, dates);
         }}
         onSeeDates={(id) => {
           const hit = visibleHits.find((row) => row.listing.id === id);

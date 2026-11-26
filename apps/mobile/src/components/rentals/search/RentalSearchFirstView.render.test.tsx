@@ -71,7 +71,7 @@ function props(over: Partial<RentalSearchFirstViewProps> = {}): RentalSearchFirs
     onBrowseAll: jest.fn(),
     onSuggestion: jest.fn(),
     onRecent: jest.fn(),
-    onRent: jest.fn(),
+    onOpenListing: jest.fn(),
     onSeeDates: jest.fn(),
     onToggleTakeHome: jest.fn(),
     onToggleCheapest: jest.fn(),
@@ -161,15 +161,15 @@ describe('search-first rentals', () => {
     expect(onRecent).toHaveBeenCalledWith('Speaker system');
   });
 
-  it('lists a free camera with Rent and an unavailable body with See dates', async () => {
-    const onRent = jest.fn();
+  it('lists a free camera with View details and an unavailable body with See dates; the whole card opens details', async () => {
+    const onOpenListing = jest.fn();
     const onSeeDates = jest.fn();
     const view = await renderSearch({
       mode: 'results',
       query: 'camera',
       dates: { startDate: '2026-11-12', endDate: '2026-11-15', dayCount: 3 },
       cards: [canon, nikon],
-      onRent,
+      onOpenListing,
       onSeeDates,
     });
     expect(view.getByText('2 matches · available for your dates first')).toBeTruthy();
@@ -179,15 +179,37 @@ describe('search-first rentals', () => {
     expect(view.getByText(/75/)).toBeTruthy();
     expect(view.queryByText(/Est\./)).toBeNull();
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-rent-canon'));
+      fireEvent.press(view.getByTestId('rental-search-view-canon'));
     });
-    expect(onRent).toHaveBeenCalledWith('canon');
+    expect(onOpenListing).toHaveBeenCalledWith('canon');
+    expect(view.queryByText('Rent')).toBeNull();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-card-nikon'));
+    });
+    expect(onOpenListing).toHaveBeenCalledWith('nikon');
     expect(view.getByText(/Available from/)).toBeTruthy();
     await act(async () => {
       fireEvent.press(view.getByTestId('rental-search-see-dates-nikon'));
     });
     expect(onSeeDates).toHaveBeenCalledWith('nikon');
-    expect(view.queryByTestId('rental-search-rent-nikon')).toBeNull();
+    // See dates only changes the search dates; it doesn't also open the details page.
+    expect(onOpenListing).toHaveBeenCalledTimes(2);
+    expect(view.queryByTestId('rental-search-view-nikon')).toBeNull();
+  });
+
+  it('reads View details in French and names the item for screen readers', async () => {
+    await i18n.changeLanguage('fr');
+    const view = await renderSearch({
+      mode: 'results',
+      query: 'camera',
+      dates: { startDate: '2026-11-12', endDate: '2026-11-15', dayCount: 3 },
+      cards: [canon],
+    });
+    expect(view.getByText('Voir les détails')).toBeTruthy();
+    expect(view.queryByText('Louer')).toBeNull();
+    expect(view.getByTestId('rental-search-card-canon').props.accessibilityLabel).toBe(
+      'Voir les détails de Canon EOS R50 kit'
+    );
   });
 
   it('offers nearby dates and a one-time notify when nothing matches', async () => {
@@ -221,7 +243,7 @@ describe('search-first rentals', () => {
     expect(view.getByText('DATES (OPTIONAL)')).toBeTruthy();
     expect(view.getByText('Take-home')).toBeTruthy();
     expect(view.getByText('Totals appear once you add dates')).toBeTruthy();
-    expect(view.getByTestId('rental-search-rent-canon')).toBeTruthy();
+    expect(view.getByTestId('rental-search-view-canon')).toBeTruthy();
   });
 
   it('opens the date picker blank, then fills a quick pick', async () => {
