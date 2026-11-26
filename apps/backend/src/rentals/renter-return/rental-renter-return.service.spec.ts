@@ -221,6 +221,24 @@ describe('RentalRenterReturnService.report', () => {
     await expect(late.service.report('b1', NOW)).resolves.toMatchObject({ wasOverdue: true });
   });
 
+  it('reads a Toronto end_at on the Toronto clock, not as UTC', async () => {
+    const toronto = (endAt: string) =>
+      setup({
+        booking: {
+          end_at: endAt,
+          rental_location_listing: {
+            rental_item: { name: 'Drill' },
+            business_location: { address: { country: 'CA' } },
+          },
+        },
+      });
+    // NOW (18:00Z) is 13:00 in Toronto (EST). Before the fix a 14:00 end read as 14:00Z.
+    const early = toronto('2026-11-12T14:00:00.000Z');
+    await expect(early.service.report('b1', NOW)).resolves.toMatchObject({ wasOverdue: false });
+    const late = toronto('2026-11-12T12:59:00.000Z');
+    await expect(late.service.report('b1', NOW)).resolves.toMatchObject({ wasOverdue: true });
+  });
+
   it('uses the early-start return due before the booked end', async () => {
     const wallNow = new Date(NOW.getTime() + 3_600_000);
     const early = setup({

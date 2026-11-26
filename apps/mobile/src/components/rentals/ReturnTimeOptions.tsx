@@ -11,8 +11,10 @@ interface Props {
   /** Listing time zone: 12-hour clock for English in the Americas. */
   timeZone: string;
   busy: boolean;
-  /** The chosen return time; the due option passes the stored wall-clock due like before. */
-  onPick: (at: Date) => void;
+  /** "Use current time": the screen fills the inputs with now on the listing clock. */
+  onUseNow: () => void;
+  /** "Use due time": the screen fills the inputs with the stored wall-clock due. */
+  onUseDue: (dueWallIso: string) => void;
 }
 
 /**
@@ -30,7 +32,7 @@ export function ReturnDialogTitle() {
 }
 
 /** Business "Confirm return" dialog: the overtime hint and the "Use current time" / "Use due time · 1:00 PM" shortcuts. */
-export function ReturnTimeOptions({ dueAt, timeZone, busy, onPick }: Props) {
+export function ReturnTimeOptions({ dueAt, timeZone, busy, onUseNow, onUseDue }: Props) {
   const { t, i18n } = useTranslation();
   const { colors, typography } = useTheme();
   const label = [brandFaceStyle('600')];
@@ -46,11 +48,11 @@ export function ReturnTimeOptions({ dueAt, timeZone, busy, onPick }: Props) {
               'Select when the item was returned. Early returns still pay the full rental total; time after the booked end is billed as overtime.'
             )}
       </Text>
-      <Button mode="outlined" style={{ marginBottom: 10 }} labelStyle={label} disabled={busy} onPress={() => onPick(new Date())}>
+      <Button mode="outlined" style={{ marginBottom: 10 }} labelStyle={label} disabled={busy} onPress={onUseNow}>
         {t('rentals.returnUseNow', 'Use current time')}
       </Button>
       {dueAt ? (
-        <Button mode="outlined" style={{ marginBottom: 10 }} labelStyle={label} disabled={busy} onPress={() => onPick(new Date(dueAt))}>
+        <Button mode="outlined" style={{ marginBottom: 10 }} labelStyle={label} disabled={busy} onPress={() => onUseDue(dueAt)}>
           {dueTimeOptionLabel(dueAt, i18n.language, timeZone, t)}
         </Button>
       ) : null}

@@ -649,6 +649,7 @@ export default function RentalBookingDetailScreen() {
             phone={booking.return_place?.phone ?? null}
             endAt={returnDueAt ?? booking.end_at}
             reportedAt={booking.renter_reported_returned_at}
+            timeZone={startZone}
             depositLabel={hold.showDeposit ? formatDetailMoney(depositAmount) : ''}
             onReported={() => void refetch()}
             onAlreadyConfirmed={() => void refetch()}

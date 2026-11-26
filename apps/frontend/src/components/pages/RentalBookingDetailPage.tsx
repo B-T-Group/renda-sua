@@ -52,7 +52,8 @@ import {
 } from '../../utils/rentalRequestDisplay';
 import { cardHoldLines, holdPresentation, showsCardDeposit, type HoldPresentation } from '../../utils/rentals/cardDeposit';
 import { bookingDetailPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
-import { formatDoualaStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
+import { formatReturnStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
+import { dateTimeLocalToInstantIso, listingDateTimeLocal } from '../../utils/rentals/returnClock';
 import {
   REPORT_REVIEW_STEP,
   bookingDetailStatusLabelKey,
@@ -112,12 +113,6 @@ function apiErrorMessage(
       : message;
   }
   return message.trim() ? message : fallback;
-}
-
-/** Local `datetime-local` value (YYYY-MM-DDTHH:mm) from a Date. */
-function toDateTimeLocalValue(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const DETAIL_STATUS_DEFAULTS: Record<string, string> = {
@@ -247,9 +242,8 @@ const RentalBookingDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
-  const [returnAtLocal, setReturnAtLocal] = useState(() =>
-    toDateTimeLocalValue(new Date())
-  );
+  // Typed on the listing clock (like end_at); set when the return dialog opens.
+  const [returnAtLocal, setReturnAtLocal] = useState('');
   const [returning, setReturning] = useState(false);
   const [sharingPin, setSharingPin] = useState(false);
   const [momoWaiting, setMomoWaiting] = useState(false);
@@ -740,7 +734,7 @@ const RentalBookingDetailPage: React.FC = () => {
                     variant="contained"
                     color="success"
                     onClick={() => {
-                      setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                      setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
                       setReturnDialogOpen(true);
                     }}
                   >
@@ -800,6 +794,7 @@ const RentalBookingDetailPage: React.FC = () => {
               phone={booking.return_place?.phone ?? null}
               endAt={returnDueAt}
               reportedAt={booking.renter_reported_returned_at}
+              timeZone={listingZone}
               depositLabel={depositAmount > 0 ? formatDetailMoney(depositAmount) : ''}
               onChanged={() => void load()}
             />
@@ -808,7 +803,7 @@ const RentalBookingDetailPage: React.FC = () => {
             <Alert severity="success" sx={{ mb: 2 }} data-testid="business-return-report">
               <Typography fontWeight={700}>
                 {t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
-                  time: formatDoualaStamp(booking.renter_reported_returned_at, i18n.language),
+                  time: formatReturnStamp(booking.renter_reported_returned_at, i18n.language, listingZone),
                 })}
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -825,7 +820,7 @@ const RentalBookingDetailPage: React.FC = () => {
                   sx={{ minHeight: 48 }}
                   onClick={() => {
                     if (inspection.showLegacyReturn) {
-                      setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                      setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
                       setReturnDialogOpen(true);
                       return;
                     }
@@ -1240,7 +1235,7 @@ const RentalBookingDetailPage: React.FC = () => {
               variant="contained"
               color="success"
               onClick={() => {
-                setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
                 setReturnDialogOpen(true);
               }}
             >
@@ -1287,7 +1282,11 @@ const RentalBookingDetailPage: React.FC = () => {
               if (!bookingId || !returnAtLocal) return;
               setReturning(true);
               try {
-                const actualEndAt = new Date(returnAtLocal).toISOString();
+                const actualEndAt = dateTimeLocalToInstantIso(returnAtLocal, listingZone);
+                if (!actualEndAt) {
+                  setError(t('rentals.returnAtInvalid', 'Enter a valid return date and time'));
+                  return;
+                }
                 const res = await confirmReturn(bookingId, { actualEndAt });
                 setReturnDialogOpen(false);
                 if (res.paymentPending || res.overtimeDue) {

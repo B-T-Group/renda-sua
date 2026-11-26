@@ -7378,6 +7378,7 @@
     "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué.",
     "returnAt": "Date et heure de retour",
     "returnAtHint": "Indiquez quand l’article a été rendu. Un retour anticipé paie toujours le total de la location ; le temps après la fin prévue est facturé en heures supplémentaires.",
+    "returnAtInvalid": "Saisissez une date et une heure de retour valides",
     "modify": {
       "changed": "Modifié : {{detail}}",
       "staleBanner": "Cette demande a été mise à jour. Relisez la dernière version."
