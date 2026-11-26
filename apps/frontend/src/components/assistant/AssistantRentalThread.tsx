@@ -17,6 +17,7 @@ import { useAssistantChat } from '../../contexts/AssistantChatContext';
 import { useTrackSiteEvent, SITE_EVENT_ASSISTANT_DEEPLINK_SHOWN, SITE_EVENT_ASSISTANT_DEEPLINK_TAP } from '../../hooks/useTrackSiteEvent';
 import { rememberRentalCardTap } from '../../utils/rentalAssistantAttribution';
 import { formatAssistantMoney } from '../../utils/rentalRequestDisplay';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 import { formatRentalDay } from '../../utils/rentalRequestFormat';
 import { AssistantEntityCards } from './AssistantEntityCards';
 import type { AssistantRentalChip, AssistantRentalMeta, AssistantResultCard } from './assistantResultCards';
@@ -303,7 +304,7 @@ function priceLine(rental: NonNullable<AssistantResultCard['rental']>, locale: s
     const unit = rental.dayCount === 1 ? (locale.startsWith('fr') ? 'jour' : 'day') : locale.startsWith('fr') ? 'jours' : 'days';
     return `${prefix} ${formatAssistantMoney(rental.quoteTotal, rental.currency, locale)} · ${rental.dayCount} ${unit}`;
   }
-  return rental.perDay != null ? `${formatAssistantMoney(rental.perDay, rental.currency, locale)}/${locale.startsWith('fr') ? 'jour' : 'day'}` : '';
+  return rental.perDay != null ? withRateUnit(formatAssistantMoney(rental.perDay, rental.currency, locale), locale.startsWith('fr') ? 'jour' : 'day') : '';
 }
 
 function formatShift(rental: NonNullable<AssistantResultCard['rental']>, locale: string) {

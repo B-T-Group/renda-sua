@@ -20,24 +20,9 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RentalListingRow } from '../../hooks/useRentalListings';
 import { formatCatalogMoney } from '../../utils/rentalRequestDisplay';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 import { fromHourlyPrice, pickerLang } from '../../utils/rentalDayHoursCopy';
 import { formatRentalDay } from '../../utils/rentalRequestFormat';
-
-function formatListingPrice(amount: string | number, currency: string): string {
-  const n = typeof amount === 'string' ? parseFloat(amount) : amount;
-  if (Number.isNaN(n)) {
-    return `${amount} ${currency}`;
-  }
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency.length === 3 ? currency : 'XAF',
-      maximumFractionDigits: 0,
-    }).format(n);
-  } catch {
-    return `${n} ${currency}`;
-  }
-}
 
 function formatLocationAddressLines(
   addr: RentalListingRow['business_location']['address'] | undefined
@@ -99,7 +84,11 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
   const addr = listing.business_location.address;
   const { line1, line2 } = formatLocationAddressLines(addr);
   const dailyOnly = listing.offers_hourly === false && listing.offers_daily !== false;
-  const price = formatListingPrice(dailyOnly ? listing.base_price_per_day : listing.base_price_per_hour, item.currency);
+  const rawPrice = dailyOnly ? listing.base_price_per_day : listing.base_price_per_hour;
+  const parsedPrice = typeof rawPrice === 'string' ? parseFloat(rawPrice) : Number(rawPrice);
+  const price = Number.isNaN(parsedPrice)
+    ? `${rawPrice} ${item.currency}`
+    : formatCatalogMoney(parsedPrice, item.currency, i18n.language);
   const hasRoute =
     Boolean(listing.distance_text?.trim()) &&
     Boolean(listing.duration_text?.trim());
@@ -187,16 +176,10 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
           }}
         >
           <Typography variant="subtitle1" fontWeight={800} color="primary.main">
-            {price}
-            <Typography
-              component="span"
-              variant="caption"
-              color="text.secondary"
-              fontWeight={600}
-              sx={{ ml: 0.5 }}
-            >
-              {dailyOnly ? t('rentals.catalog.perDayShort', '/ day') : t('rentals.perHour', '/ hour')}
-            </Typography>
+            {withRateUnit(
+              price,
+              dailyOnly ? t('rentals.catalog.perDayShort', '/ day') : t('rentals.perHour', '/ hour')
+            )}
           </Typography>
         </Box>
       </Box>
@@ -355,7 +338,7 @@ function DailyRentalCard({
   const hourlyOnly = listing.offers_daily === false;
   const price = hourlyOnly
     ? fromHourlyPrice(Number(listing.base_price_per_hour) || 0, item.currency, pickerLang(locale))
-    : `${formatCatalogMoney(Number(listing.base_price_per_day) || 0, item.currency, locale)} ${perDay}`;
+    : withRateUnit(formatCatalogMoney(Number(listing.base_price_per_day) || 0, item.currency, locale), perDay);
   const place = catalogPlace(listing);
   const total =
     !hourlyOnly &&

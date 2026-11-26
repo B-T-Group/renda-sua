@@ -1,5 +1,6 @@
 import { rentalBillableHours } from '../components/rentals/rentalRequestScheduleUtils';
 import { formatRequestAmount } from './rentalRequestDisplay';
+import { withRateUnit } from './rentals/moneyRateUnit';
 import {
   formatRentalDateRange,
   formatRentalDay as formatRequestDay,
@@ -474,13 +475,15 @@ function requestPriceCopy(input: {
 
 function dayLine(input: { rows: unknown[]; dayRate: number; currency: string; language: string; t: Copy }): string {
   const days = input.t('rentals.requestForm.dayCount', '{{count}} days', { count: input.rows.length });
-  const rate = formatRequestAmount(input.dayRate, input.currency, input.language);
-  return input.t('rentals.requestForm.dailyBreakdown', '{{days}} × {{rate}} / day', { days, rate });
+  const unit = input.language.toLowerCase().startsWith('fr') ? 'jour' : 'day';
+  const rate = withRateUnit(formatRequestAmount(input.dayRate, input.currency, input.language), unit);
+  return input.t('rentals.requestForm.dailyBreakdown', '{{days}} × {{rate}}', { days, rate });
 }
 
 function hourLine(input: { hours: number; hourRate: number; currency: string; language: string; t: Copy }): string {
-  const rate = formatRequestAmount(input.hourRate, input.currency, input.language);
-  return input.t('rentals.requestForm.hourlyBreakdown', '{{h}} h × {{rate}} / hour', { h: input.hours, rate });
+  const unit = input.language.toLowerCase().startsWith('fr') ? 'heure' : 'hour';
+  const rate = withRateUnit(formatRequestAmount(input.hourRate, input.currency, input.language), unit);
+  return input.t('rentals.requestForm.hourlyBreakdown', '{{h}} h × {{rate}}', { h: input.hours, rate });
 }
 
 function withUnits(line: string, units: number): string {

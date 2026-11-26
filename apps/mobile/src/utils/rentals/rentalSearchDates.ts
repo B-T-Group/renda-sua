@@ -1,4 +1,4 @@
-import { formatRentalDateRange, formatRentalPeriod, type PeriodWindow } from './rentalRequestFormat';
+import { formatRentalDateRange, formatRentalPeriod, formatRentalShortMonth, type PeriodWindow } from './rentalRequestFormat';
 
 export const MAX_RENTAL_SEARCH_DAYS = 30;
 
@@ -150,12 +150,11 @@ export function formatRangeDates(range: RentalDateRange, locale: string): string
   if (startMs == null || endMs == null) return `${range.startDate} – ${range.endDate}`;
   const start = new Date(startMs);
   const end = new Date(endMs);
-  const month = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' });
   const sameMonth = start.getUTCMonth() === end.getUTCMonth() && start.getUTCFullYear() === end.getUTCFullYear();
   if (sameMonth) {
-    return `${start.getUTCDate()}–${end.getUTCDate()} ${month.format(end)}`;
+    return `${start.getUTCDate()}–${end.getUTCDate()} ${formatRentalShortMonth(range.endDate, locale)}`;
   }
-  return `${start.getUTCDate()} ${month.format(start)} – ${end.getUTCDate()} ${month.format(end)}`;
+  return `${start.getUTCDate()} ${formatRentalShortMonth(range.startDate, locale)} – ${end.getUTCDate()} ${formatRentalShortMonth(range.endDate, locale)}`;
 }
 
 const MARKET_TIME_ZONES: Record<string, string> = {

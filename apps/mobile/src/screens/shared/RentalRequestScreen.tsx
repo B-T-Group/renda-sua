@@ -26,6 +26,7 @@ import {
 import { requestWindowIso } from '../../utils/rentals/rentalSearchPreset';
 import { formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
 import { fromHourlyPrice, pickerLang } from '../../utils/rentals/dayHoursCopy';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 
 type RequestRoute = { RentalRequest: RentalRequestParams };
 
@@ -173,7 +174,7 @@ function itemMeta(
 ): string {
   if (daily <= 0) return [businessName, fromHourlyPrice(hourly, currency, pickerLang(language))].filter(Boolean).join(' · ');
   const amount = formatRequestAmount(daily, currency, language);
-  return [businessName, `${amount} ${t('rentals.searchFirst.perDay', '/ day')}`].filter(Boolean).join(' · ');
+  return [businessName, withRateUnit(amount, t('rentals.searchFirst.perDay', '/ day'))].filter(Boolean).join(' · ');
 }
 
 function selectionEndIso(rows: Array<{ startMs: number; endMs: number; billing?: string; calendarDate?: string }>): string | null {

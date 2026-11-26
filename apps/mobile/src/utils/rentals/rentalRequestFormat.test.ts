@@ -17,6 +17,7 @@ import {
   formatListingDeadline,
   formatListingDue,
   formatRentalDateRange,
+  formatRentalDay,
   formatRentalPeriod,
   formatReturnDay,
   formatRequestedPeriod,
@@ -29,6 +30,7 @@ import {
   rentalSelectionFingerprint,
   RENTAL_EDIT_LEAD_MS,
   readPriceConfirmQuote,
+  formatRentalShortMonth,
 } from './rentalRequestFormat';
 
 const NBSP = '\u00A0';
@@ -36,6 +38,21 @@ const NBSP = '\u00A0';
 function joined(text: string): string {
   return text.replace(/ /g, NBSP);
 }
+
+
+describe('formatRentalShortMonth', () => {
+  it('uses typographic French abbreviations, lowercase with a period when truncated', () => {
+    expect(formatRentalShortMonth('2026-11-27', 'en')).toBe('Nov');
+    expect(formatRentalShortMonth('2026-11-27', 'fr')).toBe('nov.');
+    expect(formatRentalShortMonth('2026-11-27', 'fr-FR')).toBe('nov.');
+    expect(formatRentalShortMonth('2026-06-01', 'fr')).toBe('juin');
+    expect(formatRentalDay('2026-11-28', 'fr')).toBe('28 nov.');
+    expect(formatRentalDateRange([
+      { calendar_date: '2026-11-27', start_at: '', end_at: '' },
+      { calendar_date: '2026-11-29', start_at: '', end_at: '' },
+    ], 'fr')).toBe('27\u201329 nov.');
+  });
+});
 
 describe('formatRequestAmount', () => {
   it('puts the amount before FCFA in English and French', () => {
@@ -204,7 +221,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(one.priceLabel).toBe(`2 days × 380${NBSP}FCFA / day`);
+    expect(one.priceLabel).toBe(`2 days × 380${NBSP}FCFA${NBSP}/${NBSP}day`);
     expect(one.priceAmount).toBe(`760${NBSP}FCFA`);
     expect(one.hoursCaption).toBeUndefined();
 
@@ -219,7 +236,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(two.priceLabel).toBe(`1 days × 380${NBSP}FCFA / day × 2`);
+    expect(two.priceLabel).toBe(`1 days × 380${NBSP}FCFA${NBSP}/${NBSP}day × 2`);
   });
 
   it('keeps the hourly caption and a negative total sign', () => {
@@ -234,7 +251,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(hourly.priceLabel).toBe(`8 h × 16${NBSP}FCFA / hour × 3`);
+    expect(hourly.priceLabel).toBe(`8 h × 16${NBSP}FCFA${NBSP}/${NBSP}hour × 3`);
     expect(hourly.hoursCaption).toBe('8 billable hours total');
     expect(hourly.totalAmount).toBe(`-128${NBSP}FCFA`);
     expect(hourly.priceLabel?.startsWith('FCFA')).toBe(false);

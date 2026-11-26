@@ -42,6 +42,7 @@ import {
   formatRentalMoney,
   rentalListingModerationColors,
 } from '../../utils/rentals';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 
 const PAGE_SIZE = 20;
 
@@ -183,8 +184,7 @@ export default function AdminRentalListingsModerationScreen() {
             {item.business_location?.name ?? '—'}
           </Text>
           <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
-            {formatRentalMoney(Number(item.base_price_per_hour), 'XAF')} /{' '}
-            {t('rentals.perHour', 'hr')}
+            {withRateUnit(formatRentalMoney(Number(item.base_price_per_hour), 'XAF'), t('rentals.perHour', 'hr'))}
           </Text>
           <StatusPill
             compact
