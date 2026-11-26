@@ -57,8 +57,10 @@ import { listingDashboardFlag, type DashboardRequestFlagRow } from './rental-das
 import {
   dayHoursPickerViolation,
   depositHourRate,
+  isFutureWallClockStart,
   listingModesViolation,
   modeViolation,
+  wallClockNowMs,
   type DayHoursViolation,
 } from './day-hours/day-hours.rules';
 import { RentalCardWindowService } from './inspection/rental-card-window.service';
@@ -433,11 +435,13 @@ export interface ClientRentalRequestRow {
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
   expires_at?: string | null;
+  /** Listing zone; request times are this zone's wall clock stored as UTC components. */
+  listing_timezone?: string;
   rental_location_listing: {
     id: string;
     base_price_per_hour: number | string;
     base_price_per_day?: number | string;
-    business_location?: { name: string } | null;
+    business_location?: { name: string; address?: { city?: string | null; country?: string | null } | null } | null;
     rental_item: { name: string; currency: string };
   } | null;
   rental_booking?: {
@@ -1336,7 +1340,7 @@ export class RentalsService {
       expectedVersion,
       currentStartIso: earliestWindowIso(this.windowSnapshots(req)),
       nextStartIso,
-      nowMs: Date.now(),
+      nowMs: wallClockNowMs(Date.now(), this.listingTimeZone(req.rental_location_listing)),
       unitsFree: true,
     });
     if (block !== 'ok') throw this.editHttpError(block);
@@ -2207,7 +2211,10 @@ export class RentalsService {
     const r = await this.hasuraUserService.executeQuery<{
       rental_requests: ClientRentalRequestRow[];
     }>(Q.GET_CLIENT_RENTAL_REQUESTS, {});
-    return r.rental_requests ?? [];
+    return (r.rental_requests ?? []).map((row) => ({
+      ...row,
+      listing_timezone: this.listingTimeZone(row.rental_location_listing ?? {}),
+    }));
   }
 
   async getClientRentalBookings(): Promise<any[]> {
@@ -5381,8 +5388,12 @@ export class RentalsService {
     return marketTimeZone(country) ?? 'Africa/Douala';
   }
 
-  private assertRentalRequestStartsInFuture(start: Date) {
-    if (start.getTime() <= Date.now()) {
+  /**
+   * `start` is listing wall clock stored as UTC components (Toronto 12:00 is
+   * `T12:00:00Z`), so compare it with "now" read on the listing's wall clock.
+   */
+  private assertRentalRequestStartsInFuture(start: Date, timeZone: string) {
+    if (!isFutureWallClockStart(start, Date.now(), timeZone)) {
       throw new HttpException('Start must be in the future', HttpStatus.BAD_REQUEST);
     }
   }
@@ -5476,7 +5487,7 @@ export class RentalsService {
     const earliest = new Date(
       Math.min(...plan.windows.map((w) => w.start.getTime()))
     );
-    this.assertRentalRequestStartsInFuture(earliest);
+    this.assertRentalRequestStartsInFuture(earliest, this.listingTimeZone(listing));
     this.throwDayHours(modeViolation(plan.windows, listing));
     this.throwDayHours(
       dayHoursPickerViolation({

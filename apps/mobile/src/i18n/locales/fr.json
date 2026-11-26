@@ -6193,8 +6193,6 @@
       "nothingCharged": "Rien n’est débité tant que l’entreprise n’a pas accepté.",
       "signInToRequest": "Se connecter pour demander",
       "totalsAfterDates": "Les totaux apparaissent lorsque vous ajoutez des dates",
-      "rent": "Louer",
-      "viewDetails": "Voir les détails",
       "viewDetailsFor": "Voir les détails de {{name}}",
       "seeDates": "Voir les dates",
       "matches": "{{count}} résultat · les dates libres d'abord",

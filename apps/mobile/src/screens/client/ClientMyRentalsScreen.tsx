@@ -62,7 +62,7 @@ function modifyStateFor(row: ClientRentalRequestRow, enabled: boolean): 'hidden'
   if (!enabled || row.status !== 'pending') return 'hidden';
   const windows = parseRentalSelectionWindows(row.rental_selection_windows);
   const start = windows[0]?.start_at;
-  if (start && !rentalEditWindowOpen(start)) return 'closed';
+  if (start && !rentalEditWindowOpen(start, row.listing_timezone)) return 'closed';
   return 'open';
 }
 

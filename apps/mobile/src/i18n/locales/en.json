@@ -6247,8 +6247,6 @@
       "nothingCharged": "Nothing is charged until the business accepts.",
       "signInToRequest": "Sign in to request a rental",
       "totalsAfterDates": "Totals appear once you add dates",
-      "rent": "Rent",
-      "viewDetails": "View details",
       "viewDetailsFor": "View details for {{name}}",
       "seeDates": "See dates",
       "matches": "{{count}} match · available for your dates first",

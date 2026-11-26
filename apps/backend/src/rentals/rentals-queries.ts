@@ -1283,7 +1283,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
         security_deposit_amount
         business_location {
           name
-          address { city }
+          address { city country }
         }
         rental_item {
           name
