@@ -212,6 +212,7 @@ function bodyText(phase: string, role: string, momo: boolean, t: (key: string, f
   if (role === 'business' && phase !== 'started' && payAtPickup) {
     return t('rentals.payAtPickup.businessWaitingBody', 'The renter checks the item and pays here. Don’t hand over the item until you see “Paid”.');
   }
+  if (phase === 'started') return '';
   if (role === 'business' && phase !== 'started') {
     return t('rentals.business.waitingBody', 'Hand over the item only after you get “Rental started”. No PIN needed.');
   }
