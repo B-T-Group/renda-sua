@@ -199,6 +199,22 @@ describe('price confirm quote', () => {
     expect(parsePriceConfirmQuote('rental_request_stale_version')).toBeNull();
   });
 
+  it('drops a quote the renter cannot confirm and keeps a zero previous total', () => {
+    expect(parsePriceConfirmQuote(
+      'Hasura error: rental_request_price_confirm_required {"total":"1140.5","currency":"XAF"} trailing'
+    )).toEqual({ total: 1140.5, currency: 'XAF', previousTotal: null });
+    expect(parsePriceConfirmQuote(
+      'rental_request_price_confirm_required {"total":10,"currency":"XAF","previousTotal":0}'
+    )).toEqual({ total: 10, currency: 'XAF', previousTotal: 0 });
+    expect(parsePriceConfirmQuote(
+      'rental_request_price_confirm_required {"total":1140,"currency":"XAF","previousTotal":"nope"}'
+    )).toEqual({ total: 1140, currency: 'XAF', previousTotal: null });
+    expect(parsePriceConfirmQuote('rental_request_price_confirm_required {"total":1140}')).toBeNull();
+    expect(parsePriceConfirmQuote('rental_request_price_confirm_required {"total":1140,"currency":""}')).toBeNull();
+    expect(parsePriceConfirmQuote('rental_request_price_confirm_required {"total":"x","currency":"XAF"}')).toBeNull();
+    expect(parsePriceConfirmQuote('rental_request_price_confirm_required {not json}')).toBeNull();
+  });
+
   it('keeps the pre-Nest-deploy nine-argument call working', () => {
     expect(sql).toContain('p_confirmed_amount numeric DEFAULT NULL');
     expect(sql).toContain('p_confirmed_currency text DEFAULT NULL');
