@@ -58,4 +58,16 @@ describe('card deposit field', () => {
     expect(depositOnSave('CAD', '75', 40, { daily: 300, offersHourly: false })).toBe(75);
     expect(depositHourRate(0, {})).toBe(0);
   });
+
+  it('does not default a card deposit from a negative rate or a stale hourly price', () => {
+    expect(depositHourRate(-40, {})).toBe(0);
+    expect(depositHourRate(40, { offersHourly: false })).toBe(0);
+    expect(depositHourRate(-40, { daily: 240 })).toBe(20);
+    expect(depositHourRate(Number.NaN, {})).toBeNaN();
+    expect(depositOnSave('CAD', '', -40)).toBe(0);
+    expect(depositOnSave('CAD', '', 40, { offersHourly: false })).toBe(0);
+    expect(depositOnSave('CAD', '', -40, { daily: 240 })).toBe(160);
+    expect(depositOnSave('CAD', '', Number.NaN)).toBeUndefined();
+    expect(depositOnSave('CAD', '', Number.POSITIVE_INFINITY)).toBeUndefined();
+  });
 });

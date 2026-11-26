@@ -89,7 +89,8 @@ export function depositHourRate(hourly: number, rates: DepositRates = {}): numbe
   if (rates.offersHourly !== false && Number.isFinite(hourly) && hourly > 0) return hourly;
   const daily = Number(rates.daily);
   if (Number.isFinite(daily) && daily > 0) return daily / 12;
-  return hourly;
+  if (!Number.isFinite(hourly)) return hourly;
+  return 0;
 }
 
 /** Empty XAF/XOF stays unset. Empty card deposits use 8 × depositHourRate. */
@@ -107,7 +108,7 @@ export function depositOnSave(
 }
 
 function defaultDeposit(rate: number): number | undefined {
-  if (!Number.isFinite(rate)) return undefined;
+  if (!Number.isFinite(rate) || rate < 0) return undefined;
   return Number((rate * 8).toFixed(2));
 }
 
