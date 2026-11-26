@@ -83,10 +83,10 @@ describe('hourly early start return preview', () => {
   });
 
   it('labels the business return option with the due time', () => {
-    const fr = (_k: string, _f: string, vars: Record<string, string> = {}) => `Utiliser l’heure de retour prévue · ${vars.time}`;
+    const fr = (_k: string, _f: string, vars: Record<string, string> = {}) => `Heure prévue · ${vars.time}`;
     expect(dueTimeOptionLabel('2026-11-26T13:00:00.000Z', 'en', 'America/Toronto', t)).toBe('Use due time · 1:00 PM');
     expect(dueTimeOptionLabel('2026-11-26T13:00:00.000Z', 'fr', 'America/Toronto', fr)).toBe(
-      'Utiliser l’heure de retour prévue · 13:00'
+      'Heure prévue · 13:00'
     );
   });
 

@@ -7,6 +7,7 @@ import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat'
 import { startMoney, startMoneyLines, type StartMoneyBooking } from '../../utils/rentals/startMoney';
 import { BOOKING_CLOCK, formatZonedDay, formatZonedTime, formatZonedWeekdayDay, formatZonedWhen, pickupPhase } from '../../utils/rentalStartWindow';
 import { earlyReturnLine, earlyReturnPreview } from '../../utils/rentals/returnDue';
+import { waitingForRenterTitle } from '../../utils/rentals/frenchElision';
 
 export interface StartPanelBooking {
   status: string;
@@ -94,15 +95,16 @@ export function RentalStartPanel(props: Props) {
           {lines.sub ? <Typography variant="caption" color="text.secondary" display="block">{lines.sub}</Typography> : null}
         </Box>
       ) : null}
-      {props.role === 'business' && phase !== 'started' ? (
-        <Typography variant="body2">
-          {t('rentals.start.bookedWindow', 'Booked {{start}} – {{end}}', {
-            start: time,
-            end: formatZonedTime(props.booking.end_at, BOOKING_CLOCK, i18n.language, props.timeZone),
-          })}
-        </Typography>
-      ) : null}
-      <Typography variant="body2">{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Typography>
+      <Typography variant="body2">
+        {props.role === 'business' && phase !== 'started'
+          ? t('rentals.start.bookedWindow', 'Booked {{start}} – {{end}}', {
+              start: time,
+              end: formatZonedTime(props.booking.end_at, BOOKING_CLOCK, i18n.language, props.timeZone),
+            })
+          : props.role === 'business'
+            ? t('rentals.start.returnDueBusiness', 'Return by {{when}}', { when: props.returnLabel })
+            : t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
+      </Typography>
       {props.role === 'client' && phase !== 'started' ? (
         <Button
           variant="contained"
@@ -177,7 +179,7 @@ function titleText(
   language: string
 ): string {
   if (role === 'business' && phase !== 'started') {
-    return t('rentals.business.waitingTitle', 'Waiting for {{name}} to start', { name: name || 'the renter' });
+    return waitingForRenterTitle(name || 'the renter', language, t);
   }
   if (phase === 'started') {
     const at = startedAt ? formatZonedTime(startedAt, zone, language, zone) : time;

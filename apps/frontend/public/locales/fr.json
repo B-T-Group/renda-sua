@@ -7205,6 +7205,7 @@
       "paidMomo": "{{amount}} payés par Mobile Money",
       "paidWallet": "{{amount}} payés depuis votre portefeuille",
       "returnBy": "Retournez avant le {{when}}",
+      "returnDueBusiness": "Retour prévu le {{when}}",
       "returnByEarly": "Retour avant {{time}} (dans {{duration}}) · réservé {{start}} – {{end}}",
       "bookedWindow": "Réservé {{start}} – {{end}}",
       "lateStill": "Réservé pour {{time}} · vous pouvez encore démarrer jusqu’au {{until}}",
@@ -7219,6 +7220,7 @@
     },
     "business": {
       "waitingTitle": "En attente que {{name}} démarre",
+      "waitingTitleElided": "En attente qu’{{name}} démarre",
       "waitingBody": "Remettez l’article seulement après « Location démarrée ». Aucun code PIN n’est nécessaire.",
       "startedLine": "Démarrée à {{time}} · remettez l’article",
       "photosAsked": "{{name}} a demandé de nouvelles photos avant le démarrage.",

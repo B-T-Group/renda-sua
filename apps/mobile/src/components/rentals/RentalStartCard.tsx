@@ -16,6 +16,7 @@ import {
 import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
 import { startMoney, startMoneyLines, type StartMoneyBooking } from '../../utils/rentals/startMoney';
 import { earlyReturnLine, earlyReturnPreview } from '../../utils/rentals/returnDue';
+import { waitingForRenterTitle } from '../../utils/rentals/frenchElision';
 
 export interface StartCardBooking {
   status: string;
@@ -96,12 +97,7 @@ function StartBody(props: Props & { phase: PickupPhase }) {
       <Text style={[typography.body2, { color: colors.text.secondary }]}>{bodyFor(props, momo, t)}</Text>
       <LateLine {...props} />
       <MoneyLine {...props} momo={momo} />
-      {props.role === 'business' && props.phase !== 'started' ? (
-        <Text style={[typography.body2, { color: colors.text.primary }]}>{bookedWindow(props, t, i18n.language)}</Text>
-      ) : null}
-      <Text style={[typography.body2, { color: colors.text.primary }]}>
-        {t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
-      </Text>
+      <Text style={[typography.body2, { color: colors.text.primary }]}>{cardReturnLine(props, t, i18n.language)}</Text>
       <StartButton {...props} day={day} momo={momo} />
       <NotCollected {...props} />
       {props.phase === 'started' && props.role === 'client' ? props.missing : null}
@@ -208,6 +204,16 @@ function LateLine(props: Props & { phase: PickupPhase }) {
   );
 }
 
+/**
+ * Card return line. Business: only "Booked 2:00 PM – 4:00 PM" before the start, then
+ * "Return by …" / "Retour prévu le …" (the due time). Renter: "Return by …" / "Retournez avant le …".
+ */
+function cardReturnLine(props: Props & { phase: PickupPhase }, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
+  if (props.role === 'business' && props.phase !== 'started') return bookedWindow(props, t, language);
+  if (props.role === 'business') return t('rentals.start.returnDueBusiness', 'Return by {{when}}', { when: props.returnLabel });
+  return t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel });
+}
+
 /** Business before the start: the booked window ("Booked 2:00 PM – 4:00 PM"), no early preview. */
 function bookedWindow(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
   return t('rentals.start.bookedWindow', 'Booked {{start}} – {{end}}', {
@@ -260,7 +266,7 @@ function pillText(phase: PickupPhase, day: string, t: (key: string, fallback: st
 
 function titleFor(phase: PickupPhase, when: string, time: string, props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
   if (props.role === 'business' && phase !== 'started') {
-    return t('rentals.business.waitingTitle', 'Waiting for {{name}} to start', { name: props.renterName || t('rentals.renter', 'the renter') });
+    return waitingForRenterTitle(props.renterName || t('rentals.renter', 'the renter'), language, t);
   }
   if (phase === 'started') {
     const at = props.booking.actual_start_at ? formatZonedTime(props.booking.actual_start_at, props.timeZone, language, props.timeZone) : time;

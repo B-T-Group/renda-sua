@@ -62,7 +62,7 @@ import {
 import { RentalHandoverNotice } from '../../components/rentals/RentalHandoverNotice';
 import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
 import { bookingReturnDue } from '../../utils/rentals/returnDue';
-import { ReturnTimeOptions } from '../../components/rentals/ReturnTimeOptions';
+import { ReturnDialogTitle, ReturnTimeOptions } from '../../components/rentals/ReturnTimeOptions';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalBookingDetail'>;
 
@@ -663,7 +663,7 @@ export default function BusinessRentalBookingDetailScreen() {
           visible={returnDialog}
           onDismiss={() => !busy && setReturnDialog(false)}
         >
-          <Dialog.Title>{t('rentals.confirmReturn', 'Confirm return')}</Dialog.Title>
+          <ReturnDialogTitle />
           <Dialog.Content>
             <ReturnTimeOptions
               dueAt={booking.end_at ? bookingReturnDue(booking) ?? booking.end_at : null}

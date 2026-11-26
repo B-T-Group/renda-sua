@@ -97,7 +97,7 @@ export function earlyReturnLine(preview: EarlyReturnPreview, language: string, t
   });
 }
 
-/** "Use due time · 1:00 PM" / "Utiliser l’heure de retour prévue · 13:00" (business return dialog). */
+/** "Use due time · 1:00 PM" / "Heure prévue · 13:00" (business return dialog). */
 export function dueTimeOptionLabel(dueWallIso: string, language: string, timeZone: string | null | undefined, t: Translate): string {
   return t('rentals.returnUseDueTime', 'Use due time · {{time}}', { time: formatReturnClock(dueWallIso, language, timeZone) });
 }
