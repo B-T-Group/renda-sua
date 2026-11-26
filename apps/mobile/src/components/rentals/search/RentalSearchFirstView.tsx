@@ -218,7 +218,7 @@ function DateRow({ dates, mode, datesSkipped, onOpenDates, onSkipDates, label, d
         </Text>
         <Text style={{ color: colors.text.primary, fontWeight: '700' }}>
           {label ?? (optional
-            ? t('rentals.searchFirst.addToSee', "Add to see what's free")
+            ? t('rentals.searchFirst.addToSee', "Add to see what's available")
             : t('rentals.searchFirst.addDates', 'Add start & end dates'))}
         </Text>
       </View>
@@ -257,7 +257,7 @@ function Landing(props: RentalSearchFirstViewProps) {
         <Text style={{ color: colors.text.primary }}>
           {t(
             'rentals.searchFirst.tip',
-            "Tip: add dates to see what's free for your trip. You can skip and filter later."
+            "Tip: add dates to see what's available for your trip. You can skip and filter later."
           )}
         </Text>
       </View>
@@ -380,7 +380,7 @@ function ResultList(props: RentalSearchFirstViewProps) {
     return (
       <View testID="rental-search-empty">
         <Text variant="titleMedium" style={{ color: colors.text.primary, marginTop: spacing.lg, textAlign: 'center' }}>
-          {t('rentals.searchFirst.nothingFree', 'Nothing free for those dates')}
+          {t('rentals.searchFirst.nothingFree', 'Nothing available for those dates')}
         </Text>
         <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: 4 }}>
           {t('rentals.searchFirst.nothingFreeBody', 'No “{{query}}” listings are available {{range}}.', {
@@ -541,7 +541,7 @@ function NoCatalogMatches() {
   const { colors, spacing } = useTheme();
   return (
     <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: spacing.lg }}>
-      {t('rentals.searchFirst.nothingFree', 'Nothing free for those dates')}
+      {t('rentals.searchFirst.nothingFree', 'Nothing available for those dates')}
     </Text>
   );
 }

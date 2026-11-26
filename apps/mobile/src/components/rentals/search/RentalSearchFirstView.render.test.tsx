@@ -225,7 +225,7 @@ describe('search-first rentals', () => {
       onNotify,
       onNearby,
     });
-    expect(view.getByText('Nothing free for those dates')).toBeTruthy();
+    expect(view.getByText('Nothing available for those dates')).toBeTruthy();
     await act(async () => {
       fireEvent.press(view.getByText(/16–18/));
     });
@@ -500,7 +500,7 @@ describe('search-first rentals', () => {
       dates: { startDate: '2026-11-10', endDate: '2026-11-17', dayCount: 7 },
       cards: [canon, nikon],
     });
-    expect(view.getByText("2 résultats · les dates libres d'abord")).toBeTruthy();
+    expect(view.getByText("2 résultats · disponibles d’abord")).toBeTruthy();
   });
 
   it('shows the My rentals caption, badge, and next card', async () => {

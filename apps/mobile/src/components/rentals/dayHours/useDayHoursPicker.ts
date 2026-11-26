@@ -9,6 +9,7 @@ import {
   type PickedDay,
 } from '../../../utils/rentals/dayHoursPicker';
 import { dayLabel, pickerLang, summaryLine } from '../../../utils/rentals/dayHoursCopy';
+import { appendReturnDay, returnDateAfterBookedDays } from '../../../utils/rentals/rentalRequestFormat';
 
 function num(value: unknown): number {
   const n = typeof value === 'string' ? parseFloat(value) : Number(value);
@@ -69,9 +70,14 @@ export function useDayHoursPicker(input: {
   }, [listing?.timezone, model, seed]);
   const lang = pickerLang(language);
   const days = picked?.days ?? seedDays;
-  const dateLine = days.length
+  const dateRange = days.length
     ? `${dayLabel(days[0].key, lang)}${days.length > 1 ? ` – ${dayLabel(days[days.length - 1].key, lang)}` : ''} · ${summaryLine(days, lang)}`
     : undefined;
+  const allDaily = days.length > 0 && days.every((d) => d.mode === 'full');
+  const dateLine =
+    allDaily && dateRange
+      ? appendReturnDay(dateRange, returnDateAfterBookedDays(days.map((d) => d.key)), language)
+      : dateRange;
   const onContinue = useCallback((rows: SelectionRange[], next: PickedDay[]) => {
     setPicked({ rows, days: next });
     setServerError(null);

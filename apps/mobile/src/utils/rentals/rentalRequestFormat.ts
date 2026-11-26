@@ -241,6 +241,39 @@ export function formatRentalDay(iso: string, locale: string): string {
   return `${dayNum(day)} ${monthLabel(day, locale)}`;
 }
 
+/** Exclusive-end return morning: `Return 29 Nov` / `Retour le 29\u00A0nov.` */
+export function formatReturnDay(iso: string, locale: string): string {
+  const day = iso.slice(0, 10);
+  if (!ISO_DATE.test(day)) return iso;
+  const label = `${dayNum(day)}\u00A0${monthLabel(day, locale)}`;
+  return locale.toLowerCase().startsWith('fr') ? `Retour le ${label}` : `Return ${label}`;
+}
+
+/** Calendar day after the last booked day (the exclusive end / return morning). */
+export function returnDateAfterBookedDays(booked: string[]): string | undefined {
+  if (!booked.length) return undefined;
+  return addUtcDays(booked[booked.length - 1], 1);
+}
+
+export function appendReturnDay(line: string, returnIso: string | undefined, locale: string): string {
+  if (!returnIso || !line || line === '—' || line === '\u2014') return line;
+  return `${line} · ${formatReturnDay(returnIso, locale)}`;
+}
+
+function periodLineWithReturn(windows: PeriodWindow[], locale: string, line: string): string {
+  const booked = bookedCalendarDates(windows);
+  return appendReturnDay(line, booked ? returnDateAfterBookedDays(booked) : undefined, locale);
+}
+
+/** Daily request/booking summary: booked days, count, and the return morning. Hourly is unchanged. */
+export function formatRequestedPeriod(
+  windows: PeriodWindow[],
+  locale: string,
+  dayCountLabel: (count: number) => string
+): string {
+  return periodLineWithReturn(windows, locale, formatRentalPeriod(windows, locale, dayCountLabel));
+}
+
 /**
  * `12 Nov` or `15–17 Nov`. `calendar_date` values are booked days, and the last one is included.
  * Listing wall clock is the Z components (Africa/Douala stored as UTC).
@@ -351,7 +384,7 @@ export function clientRequestPeriodLines(
 ): string[] {
   if (!windows.length) return [];
   if (isSingleRequestedPeriod(windows)) {
-    return [formatRentalPeriod(windows, locale, dayCountLabel)];
+    return [formatRequestedPeriod(windows, locale, dayCountLabel)];
   }
   return windows.map((window, index) => numberedPeriodLine(window, index, locale, dayCountLabel));
 }
@@ -362,7 +395,7 @@ function numberedPeriodLine(
   locale: string,
   dayCountLabel: (count: number) => string
 ): string {
-  return `${index + 1}. ${formatRentalPeriod([window], locale, dayCountLabel)}`;
+  return periodLineWithReturn([window], locale, `${index + 1}. ${formatRentalPeriod([window], locale, dayCountLabel)}`);
 }
 
 /** Selection windows when the booking has them; otherwise the booked start–end span. */
@@ -382,6 +415,23 @@ export function bookingRequestedPeriodLines(
   dayCountLabel: (count: number) => string
 ): string[] {
   return clientRequestPeriodLines(bookingPeriodWindows(windows, span), locale, dayCountLabel);
+}
+
+/** Booking detail: keep a cross-day clock span when present, and append the return morning for a daily stay. */
+export function bookingDetailPeriodLines(
+  windows: PeriodWindow[],
+  span: { start_at?: string | null; end_at?: string | null } | null | undefined,
+  locale: string,
+  dayCountLabel: (count: number) => string,
+  bookedSpan?: string | null
+): string[] {
+  if (bookedSpan) {
+    const resolved = bookingPeriodWindows(windows, span);
+    const booked = bookedCalendarDates(resolved);
+    const ret = booked && isContiguous(booked) ? returnDateAfterBookedDays(booked) : undefined;
+    return [appendReturnDay(bookedSpan, ret, locale)];
+  }
+  return bookingRequestedPeriodLines(windows, span, locale, dayCountLabel);
 }
 
 /** `Fri 20 Nov, 10:00` / `ven. 20 nov., 10:00`. Clock is the listing wall time stored on the Z timestamp. */

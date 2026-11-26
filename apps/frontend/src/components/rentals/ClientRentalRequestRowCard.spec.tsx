@@ -115,7 +115,7 @@ describe('ClientRentalRequestRowCard period', () => {
 
   it('shows one daily stay once and leaves Book now without an icon', () => {
     const { onBookRequest } = renderCard(row([day('2026-11-12'), day('2026-11-13'), day('2026-11-14')]));
-    expect(screen.getByText('12–14 Nov · 3 days')).toBeInTheDocument();
+    expect(screen.getByText(/12–14 Nov · 3 days · Return 15\sNov/)).toBeInTheDocument();
     expect(screen.queryByText(/^1\./)).toBeNull();
     expect(screen.queryByText(/08:00/)).toBeNull();
 
@@ -155,7 +155,7 @@ describe('ClientRentalRequestRowCard period', () => {
   it('localizes a single daily period in French', async () => {
     await i18n.changeLanguage('fr');
     renderCard(row([day('2026-11-12')]));
-    expect(screen.getByText('12 nov. · 1 jour')).toBeInTheDocument();
+    expect(screen.getByText(/12 nov\. · 1 jour · Retour le 13\snov\./)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Réserver' })).toBeInTheDocument();
   });
 
@@ -172,7 +172,7 @@ describe('ClientRentalRequestRowCard period', () => {
     item.quoted_total = 2500;
     item.rental_pricing_snapshot = { total: 3000, currency: 'XAF' };
     renderCard(item);
-    expect(screen.getByText('17 Nov · 1 day')).toBeInTheDocument();
+    expect(screen.getByText(/17 Nov · 1 day · Return 18\sNov/)).toBeInTheDocument();
     expect(screen.queryByText('Requested period unavailable')).toBeNull();
     expect(screen.getAllByText(/3\s000\sFCFA/)).toHaveLength(2);
     expect(screen.getByText(/2\s500\sFCFA/)).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe('ClientRentalRequestRowCard period', () => {
     item.quoted_total = 2500;
     item.rental_pricing_snapshot = { total: 3000, currency: 'XAF' };
     renderCard(item);
-    expect(screen.getByText('17 nov. · 1 jour')).toBeInTheDocument();
+    expect(screen.getByText(/17 nov\. · 1 jour · Retour le 18\snov\./)).toBeInTheDocument();
     expect(screen.getAllByText(/3\s000\sFCFA/)).toHaveLength(2);
     expect(screen.queryByText(/FCFA\s*3[,.]?000/)).toBeNull();
   });

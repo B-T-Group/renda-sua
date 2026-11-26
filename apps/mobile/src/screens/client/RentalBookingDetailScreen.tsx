@@ -49,7 +49,7 @@ import {
   rentalBookingStatusColors,
 } from '../../utils/rentals';
 import {
-  bookingRequestedPeriodLines,
+  bookingDetailPeriodLines,
   formatListingDeadline,
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
@@ -186,9 +186,13 @@ export default function RentalBookingDetailScreen() {
     i18n.language,
     confirmationZoneDefault(listingCountry, booking?.currency, i18n.language)
   );
-  const periodLines = bookedSpan
-    ? [bookedSpan]
-    : bookingRequestedPeriodLines(windows, booking, i18n.language, dayCountLabel);
+  const periodLines = bookingDetailPeriodLines(
+    windows,
+    booking,
+    i18n.language,
+    dayCountLabel,
+    bookedSpan
+  );
   const returnByLabel = booking?.end_at
     ? formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language)
     : '—';
