@@ -120,7 +120,7 @@ describe('user-role write permissions on orders and money tables (#630)', () => 
       business_inventory: ['selling_price', 'unit_cost'],
       business_inventory_variant_price_overrides: ['selling_price'],
       // reservation_fee_enabled: the business turns its own listing's reservation fee on/off.
-      // The amount is computed server-side (10%, floor 150 FCFA / 2.00) and snapshotted on the booking.
+      // The amount is computed server-side (flat 1.00 on the Stripe rail, 150 FCFA on Mobile Money) and snapshotted on the booking.
       rental_location_listings: [
         'base_price_per_day',
         'base_price_per_hour',

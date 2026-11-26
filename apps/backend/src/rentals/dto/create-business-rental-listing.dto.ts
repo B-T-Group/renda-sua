@@ -96,7 +96,7 @@ export class CreateBusinessRentalListingDto {
     required: false,
     default: false,
     description:
-      'Charge a reservation fee at Reserve (10% of the rental, at least 150 FCFA or 2.00, counts toward the total). Off by default.',
+      'Charge a reservation fee at Reserve (flat 1.00 on the Stripe rail or 150 FCFA on Mobile Money, capped at the rental, counts toward the total). Off by default.',
   })
   @IsOptional()
   @IsBoolean()

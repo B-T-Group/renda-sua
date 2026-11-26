@@ -6,7 +6,7 @@
 --   start, after the renter accepts the item check. Bookings created before (false)
 --   keep authorizing at reserve. The flag is never re-read for a booking.
 -- * Reservation fee: optional per listing (reservation_fee_enabled, off by default).
---   10% of the rental, at least 150 FCFA or 2.00, capped at the total. Snapshotted
+--   Flat 1.00 on the Stripe rail or 150 FCFA on Mobile Money, capped at the total. Snapshotted
 --   on the booking at creation (reservation_fee_amount). It counts toward the total.
 --   Status reuses order_deposit_status_enum:
 --   none / pending / paid (held in the renter wallet) / applied (counted at settlement)
@@ -20,7 +20,7 @@ ALTER TABLE public.rental_location_listings
   ADD COLUMN IF NOT EXISTS reservation_fee_enabled boolean NOT NULL DEFAULT false;
 
 COMMENT ON COLUMN public.rental_location_listings.reservation_fee_enabled IS
-  'Charge a reservation fee at Reserve: 10% of the rental, at least 150 FCFA / 2.00, counts toward the total. Off by default.';
+  'Charge a reservation fee at Reserve: flat 1.00 on the Stripe rail or 150 FCFA on Mobile Money, capped at the rental, counts toward the total. Off by default.';
 
 ALTER TABLE public.rental_bookings
   ADD COLUMN IF NOT EXISTS card_pay_at_pickup boolean NOT NULL DEFAULT false,

@@ -3453,7 +3453,7 @@ export class RentalsService {
   }
 
   /** Card pay-at-pickup and the reservation fee are decided once, when the booking is created. */
-  private async stampReservePath(bookingId: string, req: any, total: number, currency: string): Promise<void> {
+  private async stampReservePath(bookingId: string, req: any, total: number): Promise<void> {
     try {
       const listing = req.rental_location_listing ?? {};
       const country = resolveItemCountry(listing.business_location?.address?.country);
@@ -3461,7 +3461,7 @@ export class RentalsService {
       const cardPath = rail === 'stripe' && (await this.inspectionFlags.cardChargeAtPickupEnabled(country));
       const feeApplies = rail !== 'stripe' || cardPath;
       const fee = feeApplies
-        ? reservationFeeFor({ enabled: listing.reservation_fee_enabled, total, currency })
+        ? reservationFeeFor({ enabled: listing.reservation_fee_enabled, total, rail })
         : 0;
       if (!cardPath && fee <= 0) return;
       await this.patchBooking(bookingId, {
@@ -6398,7 +6398,7 @@ export class RentalsService {
     const object = this.proposedBookingInsert(req, clientId, snap, total, contractExpiresAt, envelope, unitsBooked);
     if (policyVersion != null) object.inspection_policy_version = policyVersion;
     const row = await this.reserveProposedBooking(object);
-    await this.stampReservePath(row.insert_rental_bookings_one.id, req, total, snap.currency);
+    await this.stampReservePath(row.insert_rental_bookings_one.id, req, total);
     return row;
   }
 

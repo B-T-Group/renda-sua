@@ -215,21 +215,22 @@ beforeEach(() => {
 afterEach(() => jest.useRealTimers());
 
 describe('reservation fee policy', () => {
-  it('is 10% of the rental with a 150 FCFA / 2.00 floor, capped at the total', () => {
-    expect(reservationFeeFor({ enabled: true, total: 12000, currency: 'XAF' })).toBe(1200);
-    expect(reservationFeeFor({ enabled: true, total: 1000, currency: 'XOF' })).toBe(150);
-    expect(reservationFeeFor({ enabled: true, total: 100, currency: 'XAF' })).toBe(100);
-    expect(reservationFeeFor({ enabled: true, total: 60, currency: 'CAD' })).toBe(6);
-    expect(reservationFeeFor({ enabled: true, total: 12.5, currency: 'CAD' })).toBe(2);
-    expect(reservationFeeFor({ enabled: true, total: 33.33, currency: 'USD' })).toBe(3.33);
-    expect(reservationFeeFor({ enabled: false, total: 12000, currency: 'XAF' })).toBe(0);
-    expect(reservationFeeFor({ enabled: undefined, total: 12000, currency: 'XAF' })).toBe(0);
+  it('is a flat 1.00 on the Stripe rail and 150 on Mobile Money, capped at the total', () => {
+    expect(reservationFeeFor({ enabled: true, total: 60, rail: 'stripe' })).toBe(1);
+    expect(reservationFeeFor({ enabled: true, total: 0.5, rail: 'stripe' })).toBe(0.5);
+    expect(reservationFeeFor({ enabled: true, total: 12000, rail: 'mobile_money' })).toBe(150);
+    expect(reservationFeeFor({ enabled: true, total: 1000, rail: 'mobile_money' })).toBe(150);
+    expect(reservationFeeFor({ enabled: true, total: 100, rail: 'mobile_money' })).toBe(100);
+    expect(reservationFeeFor({ enabled: true, total: 12000, rail: null })).toBe(150);
+    expect(reservationFeeFor({ enabled: false, total: 12000, rail: 'mobile_money' })).toBe(0);
+    expect(reservationFeeFor({ enabled: undefined, total: 60, rail: 'stripe' })).toBe(0);
+    expect(reservationFeeFor({ enabled: true, total: 0, rail: 'stripe' })).toBe(0);
   });
 
   it('counts a paid fee toward the total and ignores an unpaid one', () => {
-    expect(dueAtPickup({ total: 12000, feeAmount: 1200, feeStatus: 'paid' })).toBe(10800);
-    expect(dueAtPickup({ total: 12000, feeAmount: 1200, feeStatus: 'pending' })).toBe(12000);
-    expect(dueAtPickup({ total: 60, feeAmount: 6, feeStatus: 'paid' })).toBe(54);
+    expect(dueAtPickup({ total: 12000, feeAmount: 150, feeStatus: 'paid' })).toBe(11850);
+    expect(dueAtPickup({ total: 12000, feeAmount: 150, feeStatus: 'pending' })).toBe(12000);
+    expect(dueAtPickup({ total: 60, feeAmount: 1, feeStatus: 'paid' })).toBe(59);
   });
 
   it('refunds or keeps the fee by the README table', () => {
@@ -349,7 +350,7 @@ describe('3. inspection rejected (flag)', () => {
 
   it('refunds the fee when the flag is still open at the end of the start day', async () => {
     const { svc, row, ledger } = harness(
-      momoBooking({ reservation_fee_amount: 1200, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'mobile_money' }),
+      momoBooking({ reservation_fee_amount: 150, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'mobile_money' }),
       { flaggedPickup: true }
     );
     const outcome = await svc.settleReservationFeeAfterExpiry(row);
@@ -390,7 +391,7 @@ function cronOver(h: ReturnType<typeof harness>) {
 describe('3b. unresolved flag at 23:59 on the start day (cron)', () => {
   // Douala UTC+1: 23:30Z on 27 Nov = 00:30 on 28 Nov, past the 27 Nov start day.
   const AFTER_START_DAY = new Date('2026-11-27T23:30:00.000Z');
-  const paidFee = { reservation_fee_amount: 1200, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'mobile_money' };
+  const paidFee = { reservation_fee_amount: 150, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'mobile_money' };
 
   it('cancels the booking and refunds the fee when the flag was never fixed', async () => {
     jest.setSystemTime(AFTER_START_DAY);
@@ -448,21 +449,21 @@ describe('4. payment failure', () => {
 
   it('a Mobile Money failure leaves the booking reserved; unpaid at the end of the start day keeps the fee', async () => {
     const { svc, row, ledger } = harness(
-      momoBooking({ reservation_fee_amount: 1200, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'mobile_money' })
+      momoBooking({ reservation_fee_amount: 150, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'mobile_money' })
     );
     const pay = await svc.startRental('b1');
-    expect(pay).toMatchObject({ payment_rail: 'mobile_money', paymentPending: true, amount_due_at_pickup: 10800 });
+    expect(pay).toMatchObject({ payment_rail: 'mobile_money', paymentPending: true, amount_due_at_pickup: 11850 });
     expect(row.status).toBe('reserved');
     const outcome = await svc.settleReservationFeeAfterExpiry(row);
     expect(outcome).toBe('forfeit');
     expect(row.reservation_fee_status).toBe('forfeited');
-    expect(ledger.map((l) => `${l.type}:${l.amount}`)).toEqual(['release:1200', 'payment:1200', 'deposit:1200']);
+    expect(ledger.map((l) => `${l.type}:${l.amount}`)).toEqual(['release:150', 'payment:150', 'deposit:150']);
   });
 
   it('pushes only the remainder (rental - fee) at pickup', async () => {
-    const { svc } = harness(momoBooking({ reservation_fee_amount: 1200, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1' }));
+    const { svc } = harness(momoBooking({ reservation_fee_amount: 150, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1' }));
     await svc.pushMomoPickupPayment(await svc.fetchBooking('b1'), 'acc-client', 'client-user');
-    expect(svc.initiateRentalBookingPayment).toHaveBeenCalledWith(expect.objectContaining({ amount: 10800, purpose: 'contract' }));
+    expect(svc.initiateRentalBookingPayment).toHaveBeenCalledWith(expect.objectContaining({ amount: 11850, purpose: 'contract' }));
   });
 });
 
@@ -472,7 +473,7 @@ describe('5. unpaid booking cancel', () => {
       cardBooking({
         start_at: '2026-11-29T09:00:00.000Z',
         end_at: '2026-11-29T18:00:00.000Z',
-        reservation_fee_amount: 6,
+        reservation_fee_amount: 1,
         reservation_fee_status: 'paid',
         reservation_fee_ref: 'ref-1',
         reservation_fee_rail: 'card',
@@ -486,7 +487,7 @@ describe('5. unpaid booking cancel', () => {
 
   it('renter cancel on the start day keeps the fee for the business', async () => {
     const { svc, row } = harness(
-      momoBooking({ reservation_fee_amount: 1200, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'wallet' })
+      momoBooking({ reservation_fee_amount: 150, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'wallet' })
     );
     await svc.cancelRentalBooking('b1');
     expect(row.reservation_fee_status).toBe('forfeited');
@@ -494,7 +495,7 @@ describe('5. unpaid booking cancel', () => {
 
   it('business cancel always refunds', async () => {
     const { svc, row } = harness(
-      momoBooking({ reservation_fee_amount: 1200, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'wallet' })
+      momoBooking({ reservation_fee_amount: 150, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'wallet' })
     );
     svc.hasuraUserService.getUser.mockResolvedValue({ id: 'biz-user', active_persona: 'business', business: { id: 'biz' } });
     await svc.cancelRentalBooking('b1');
@@ -506,7 +507,7 @@ describe('5. unpaid booking cancel', () => {
       cardBooking({
         start_at: '2026-11-29T09:00:00.000Z',
         end_at: '2026-11-29T18:00:00.000Z',
-        reservation_fee_amount: 6,
+        reservation_fee_amount: 1,
         reservation_fee_status: 'paid',
         reservation_fee_ref: 'ref-1',
         reservation_fee_rail: 'card',
@@ -524,7 +525,7 @@ describe('reserve with a fee', () => {
       status: 'proposed',
       payment_timing: 'pay_now',
       contract_expires_at: '2026-11-28T00:00:00Z',
-      reservation_fee_amount: 1200,
+      reservation_fee_amount: 150,
       reservation_fee_ref: 'ref-1',
       ...over,
     });
@@ -534,44 +535,44 @@ describe('reserve with a fee', () => {
     const result = await svc.acceptProposedBookingByRail({ bookingId: 'b1', bookingNumber: 'RB-1', requestId: 'req-1', req: CM_REQ, userId: 'client-user' });
     expect(result.reserved).toBe(true);
     expect(row).toMatchObject({ status: 'reserved', reservation_fee_status: 'paid', reservation_fee_rail: 'wallet' });
-    expect(ledger).toEqual([expect.objectContaining({ type: 'hold', amount: 1200 })]);
+    expect(ledger).toEqual([expect.objectContaining({ type: 'hold', amount: 150 })]);
   });
 
   it('Mobile Money: push the fee, stay proposed, reserve on the callback', async () => {
     const { svc, row, ledger } = harness(proposed());
     const result = await svc.acceptProposedBookingByRail({ bookingId: 'b1', bookingNumber: 'RB-1', requestId: 'req-1', req: CM_REQ, userId: 'client-user' });
-    expect(result).toMatchObject({ paymentPending: true, payment_rail: 'mobile_money', reservation_fee: { amount: 1200 } });
+    expect(result).toMatchObject({ paymentPending: true, payment_rail: 'mobile_money', reservation_fee: { amount: 150 } });
     expect(svc.initiateRentalBookingPayment).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 1200, purpose: 'reservation_fee', entityId: 'fee:RB-1' })
+      expect.objectContaining({ amount: 150, purpose: 'reservation_fee', entityId: 'fee:RB-1' })
     );
     expect(row.status).toBe('proposed');
-    await svc.processRentalBookingPayment({ entity_id: 'fee:RB-1', amount: 1200 });
+    await svc.processRentalBookingPayment({ entity_id: 'fee:RB-1', amount: 150 });
     expect(row).toMatchObject({ status: 'reserved', reservation_fee_status: 'paid' });
-    expect(ledger).toEqual([expect.objectContaining({ type: 'hold', amount: 1200 })]);
+    expect(ledger).toEqual([expect.objectContaining({ type: 'hold', amount: 150 })]);
   });
 
   it('card: a PaymentIntent for the fee only (automatic capture)', async () => {
-    const { svc, row } = harness(cardBooking({ status: 'proposed', payment_timing: 'pay_now', contract_expires_at: '2026-11-28T00:00:00Z', reservation_fee_amount: 6, reservation_fee_ref: 'ref-1' }));
+    const { svc, row } = harness(cardBooking({ status: 'proposed', payment_timing: 'pay_now', contract_expires_at: '2026-11-28T00:00:00Z', reservation_fee_amount: 1, reservation_fee_ref: 'ref-1' }));
     const result = await svc.acceptProposedBookingByRail({
       bookingId: 'b1', bookingNumber: 'RB-1', requestId: 'req-1', req: CA_REQ, userId: 'client-user', stripePaymentMethod: 'payment_sheet',
     });
     expect(result.payment_intent_client_secret).toBe('pi_secret');
     expect(svc.stripeCheckoutService.createPaymentIntent).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 6, captureMethod: 'automatic', entityId: 'fee:RB-1' })
+      expect.objectContaining({ amount: 1, captureMethod: 'automatic', entityId: 'fee:RB-1' })
     );
     expect(row).toMatchObject({ status: 'proposed', reservation_fee_rail: 'card', reservation_fee_status: 'pending' });
-    await svc.processRentalBookingPayment({ entity_id: 'fee:RB-1', amount: 6 });
+    await svc.processRentalBookingPayment({ entity_id: 'fee:RB-1', amount: 1 });
     expect(row.status).toBe('reserved');
-    // Pay and start then authorizes 60 - 6 + 180.
+    // Pay and start then authorizes 60 - 1 + 180.
     await svc.startRental('b1', 'payment_sheet');
     expect(svc.stripeCheckoutService.createPaymentIntent).toHaveBeenLastCalledWith(
-      expect.objectContaining({ amount: 234, captureMethod: 'manual', entityId: 'RB-1' })
+      expect.objectContaining({ amount: 239, captureMethod: 'manual', entityId: 'RB-1' })
     );
   });
 
   it('a fee that lands after the offer expired is refunded', async () => {
     const { svc, row } = harness(proposed({ contract_expires_at: '2026-11-27T14:00:00Z', reservation_fee_rail: 'mobile_money', reservation_fee_status: 'pending' }));
-    await svc.processRentalBookingPayment({ entity_id: 'fee:RB-1', amount: 1200 });
+    await svc.processRentalBookingPayment({ entity_id: 'fee:RB-1', amount: 150 });
     expect(row.status).toBe('proposed');
     expect(row.reservation_fee_status).toBe('refunded');
   });
@@ -583,8 +584,8 @@ describe('6. return check and settlement', () => {
       cardBooking({
         status: 'awaiting_return',
         payment_status: 'authorized',
-        authorized_amount: 234,
-        reservation_fee_amount: 6,
+        authorized_amount: 239,
+        reservation_fee_amount: 1,
         reservation_fee_status: 'paid',
         reservation_fee_ref: 'ref-1',
         reservation_fee_rail: 'card',
@@ -593,14 +594,14 @@ describe('6. return check and settlement', () => {
     svc.resolveBookingHourlyRate = jest.fn(() => 10);
     // 19:10 Toronto wall clock (#885 reads the return instant on the listing clock).
     const settlement = svc.computeRentalSettlement(row, '2026-11-28T00:10:00.000Z');
-    expect(settlement).toMatchObject({ contract: 54, overtimeAmount: 20, stripeCharge: 74 });
+    expect(settlement).toMatchObject({ contract: 59, overtimeAmount: 20, stripeCharge: 79 });
     await svc.settleStripeAuthorizedBooking(row, settlement);
-    expect(svc.stripeCaptureService.captureRentalBookingPaymentIntent).toHaveBeenCalledWith(expect.objectContaining({ amountToCapture: 74 }));
+    expect(svc.stripeCaptureService.captureRentalBookingPaymentIntent).toHaveBeenCalledWith(expect.objectContaining({ amountToCapture: 79 }));
     expect(row.reservation_fee_status).toBe('applied');
     expect(ledger.filter((l) => String(l.key).includes(':fee:')).map((l) => `${l.type}:${l.amount}`)).toEqual([
-      'release:6',
-      'payment:6',
-      'deposit:6',
+      'release:1',
+      'payment:1',
+      'deposit:1',
     ]);
   });
 
@@ -609,16 +610,16 @@ describe('6. return check and settlement', () => {
       momoBooking({
         status: 'awaiting_return',
         payment_status: 'paid',
-        reservation_fee_amount: 1200,
+        reservation_fee_amount: 150,
         reservation_fee_status: 'paid',
         reservation_fee_ref: 'ref-1',
         reservation_fee_rail: 'mobile_money',
       })
     );
-    row.__hold = { id: 'h1', client_hold_amount: 10800, status: 'active', ledger_attempt_id: 'att-1' };
+    row.__hold = { id: 'h1', client_hold_amount: 11850, status: 'active', ledger_attempt_id: 'att-1' };
     await svc.settleBooking(row);
     const moves = ledger.map((l) => `${l.type}:${l.amount}`);
-    expect(moves).toEqual(['release:10800', 'release:1200', 'payment:12000', 'deposit:12000']);
+    expect(moves).toEqual(['release:11850', 'release:150', 'payment:12000', 'deposit:12000']);
     expect(row.reservation_fee_status).toBe('applied');
   });
 });
@@ -671,25 +672,25 @@ describe('the path is decided once, at booking creation', () => {
 
   it('card market with the flag on: card pay at pickup, plus the listing fee', async () => {
     const { svc, row } = harness(cardBooking({ status: 'proposed', card_pay_at_pickup: false }));
-    await svc.stampReservePath('b1', req('CA', true), 60, 'CAD');
-    expect(row).toMatchObject({ card_pay_at_pickup: true, reservation_fee_amount: 6 });
+    await svc.stampReservePath('b1', req('CA', true), 60);
+    expect(row).toMatchObject({ card_pay_at_pickup: true, reservation_fee_amount: 1 });
     expect(row.reservation_fee_ref).toEqual(expect.any(String));
   });
 
   it('card market with the flag off: legacy path, no fee', async () => {
     const { svc, row } = harness(cardBooking({ status: 'proposed', card_pay_at_pickup: false }));
     svc.inspectionFlags.cardChargeAtPickupEnabled.mockResolvedValue(false);
-    await svc.stampReservePath('b1', req('CA', true), 60, 'CAD');
+    await svc.stampReservePath('b1', req('CA', true), 60);
     expect(row).toMatchObject({ card_pay_at_pickup: false, reservation_fee_amount: 0 });
     expect(svc.hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
   it('Mobile Money market: fee only when the listing turned it on', async () => {
     const on = harness(momoBooking({ status: 'proposed' }));
-    await on.svc.stampReservePath('b1', req('CM', true), 12000, 'XAF');
-    expect(on.row).toMatchObject({ card_pay_at_pickup: false, reservation_fee_amount: 1200 });
+    await on.svc.stampReservePath('b1', req('CM', true), 12000);
+    expect(on.row).toMatchObject({ card_pay_at_pickup: false, reservation_fee_amount: 150 });
     const off = harness(momoBooking({ status: 'proposed' }));
-    await off.svc.stampReservePath('b1', req('CM', false), 12000, 'XAF');
+    await off.svc.stampReservePath('b1', req('CM', false), 12000);
     expect(off.svc.hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
