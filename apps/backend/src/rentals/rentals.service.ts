@@ -106,6 +106,7 @@ import {
   startOpensAt,
   startWindowState,
 } from './simple-start/simple-start.policy';
+import { bookingReturnDueInstantMs } from './return-due';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import {
   fetchStripeEnabledCountries,
@@ -4863,7 +4864,8 @@ export class RentalsService {
   /**
    * Return-time math (per rental deposit policy):
    * - early return still pays the full contract;
-   * - late return owes ceil(hours past booked end) at the listing hourly rate;
+   * - late return owes ceil(hours past the booked end) at the listing hourly rate,
+   *   with end_at read on the listing clock;
    * - on Stripe the overtime comes out of the deposit (capped by it).
    */
   private computeRentalSettlement(
@@ -4874,9 +4876,10 @@ export class RentalsService {
     const deposit = Math.max(0, Number(booking.security_deposit_amount) || 0);
     const units = Math.max(1, Number(booking.units_booked) || 1);
     const hourly = this.resolveBookingHourlyRate(booking);
-    const lateMs =
-      new Date(actualEndAtIso).getTime() - new Date(booking.end_at).getTime();
-    const overtimeHours = Math.max(0, Math.ceil(lateMs / 3600000));
+    // The due time is listing wall clock; the return is a real instant.
+    const dueMs = bookingReturnDueInstantMs(booking, listingZoneFor(this.bookingCountry(booking)));
+    const lateMs = new Date(actualEndAtIso).getTime() - dueMs;
+    const overtimeHours = Number.isFinite(lateMs) ? Math.max(0, Math.ceil(lateMs / 3600000)) : 0;
     const overtimeAmount = Number((overtimeHours * hourly * units).toFixed(2));
     return {
       contract,
