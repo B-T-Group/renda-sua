@@ -514,7 +514,8 @@ describe('6. return check and settlement', () => {
       })
     );
     svc.resolveBookingHourlyRate = jest.fn(() => 10);
-    const settlement = svc.computeRentalSettlement(row, '2026-11-27T19:10:00.000Z');
+    // 19:10 Toronto wall clock (#885 reads the return instant on the listing clock).
+    const settlement = svc.computeRentalSettlement(row, '2026-11-28T00:10:00.000Z');
     expect(settlement).toMatchObject({ contract: 54, overtimeAmount: 20, stripeCharge: 74 });
     await svc.settleStripeAuthorizedBooking(row, settlement);
     expect(svc.stripeCaptureService.captureRentalBookingPaymentIntent).toHaveBeenCalledWith(expect.objectContaining({ amountToCapture: 74 }));

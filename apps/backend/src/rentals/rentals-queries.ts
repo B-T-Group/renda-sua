@@ -599,6 +599,7 @@ export const GET_RENTAL_BOOKING_FULL = `
       reservation_fee_rail
       reservation_fee_settled_at
       actual_start_at
+      return_due_at
       actual_end_at
       pickup_inspection_pending
       end_reminder_sent_at
@@ -650,6 +651,7 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       reservation_fee_rail
       reservation_fee_settled_at
       actual_start_at
+      return_due_at
       actual_end_at
       renter_reported_returned_at
       renter_return_escalated_at
@@ -737,6 +739,7 @@ export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
       reservation_fee_settled_at
       condition_declined_at
       actual_start_at
+      return_due_at
       actual_end_at
       rental_pricing_snapshot
       rental_start_pin_hash
@@ -1055,12 +1058,16 @@ export const LIST_ACTIVE_BOOKINGS_ENDING_SOON = `
     rental_bookings(
       where: {
         status: { _eq: active }
-        end_at: { _gt: $now, _lte: $until }
         end_reminder_sent_at: { _is_null: true }
+        _or: [
+          { end_at: { _gt: $now, _lte: $until } }
+          { return_due_at: { _gt: $now, _lte: $until } }
+        ]
       }
     ) {
       id
       end_at
+      return_due_at
     }
   }
 `;
@@ -1070,12 +1077,13 @@ export const LIST_ACTIVE_BOOKINGS_PAST_END = `
     rental_bookings(
       where: {
         status: { _eq: active }
-        end_at: { _lte: $now }
+        _or: [{ end_at: { _lte: $now } }, { return_due_at: { _lte: $now } }]
         period_ended_notified_at: { _is_null: true }
       }
     ) {
       id
       end_at
+      return_due_at
       period_ended_notified_at
     }
   }
@@ -1318,6 +1326,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
         id
         status
         end_at
+        return_due_at
         contract_expires_at
         payment_timing
         payment_status
@@ -1339,6 +1348,7 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
       status
       start_at
       end_at
+      return_due_at
       total_amount
       currency
       units_booked
@@ -1501,6 +1511,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         booking_number
         end_at
         actual_start_at
+        return_due_at
         payment_timing
         payment_status
         total_amount
@@ -1932,6 +1943,7 @@ export const GET_BUSINESS_RENTAL_ITEM_ACTIVITY_BOOKINGS = `
       start_at
       end_at
       actual_start_at
+      return_due_at
       actual_end_at
       total_amount
       overtime_amount

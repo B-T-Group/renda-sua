@@ -1,4 +1,5 @@
 import { listingNowMs } from './rentalDayHoursPicker';
+import { pickerLang, uses12h } from './rentalDayHoursCopy';
 
 export type PickupPhase = 'before' | 'today' | 'late' | 'closed' | 'started';
 
@@ -86,8 +87,16 @@ export function formatZonedWeekdayDay(iso: string, timeZone: string, language: s
   return language.toLowerCase().startsWith('fr') ? text.replace(/ /g, '\u00a0') : text;
 }
 
-export function formatZonedTime(iso: string, timeZone: string): string {
+/**
+ * "14:00", or "2:00 PM" when `language` and the listing's `listingZone` are given and that
+ * listing uses a 12-hour clock (English in the Americas, same rule as the day-hours picker).
+ */
+export function formatZonedTime(iso: string, timeZone: string, language?: string, listingZone?: string | null): string {
   const parts = zonedParts(new Date(iso), timeZone);
+  if (language && listingZone && uses12h(pickerLang(language), listingZone)) {
+    const suffix = parts.hour < 12 ? 'AM' : 'PM';
+    return `${parts.hour % 12 || 12}:${pad(parts.minute)} ${suffix}`;
+  }
   return `${pad(parts.hour)}:${pad(parts.minute)}`;
 }
 
@@ -103,11 +112,11 @@ export function pickupClockLabel(
 ): string {
   const clock = actualStartAt ? timeZone : BOOKING_CLOCK;
   const iso = actualStartAt || startAt;
-  return `${formatZonedDay(iso, clock, language)} ${formatZonedTime(iso, clock)}`;
+  return `${formatZonedDay(iso, clock, language)} ${formatZonedTime(iso, clock, language, timeZone)}`;
 }
 
-export function formatZonedWhen(iso: string, timeZone: string, language: string): string {
-  return `${formatZonedWeekdayDay(iso, timeZone, language)} · ${formatZonedTime(iso, timeZone)}`;
+export function formatZonedWhen(iso: string, timeZone: string, language: string, listingZone?: string | null): string {
+  return `${formatZonedWeekdayDay(iso, timeZone, language)} · ${formatZonedTime(iso, timeZone, language, listingZone)}`;
 }
 
 function pad(value: number): string {

@@ -19,6 +19,7 @@ import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { getBooking, getPaymentStatus, startRental } from '../../services/rentalsApi';
 import { settlePickupCardPayment, useRentalStripePayment } from '../../hooks/useRentalStripePayment';
 import { BOOKING_CLOCK, formatZonedWhen } from '../../utils/rentals/rentalStartWindow';
+import { bookingReturnDue, earlyReturnPreview, formatReturnClock } from '../../utils/rentals/returnDue';
 import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
 import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import {
@@ -86,7 +87,11 @@ export default function ClientInspectionScreen() {
     model.booking?.rental_location_listing?.business_location?.address?.country,
     model.booking?.currency
   );
-  const dueLabel = model.booking?.end_at ? formatZonedWhen(model.booking.end_at, BOOKING_CLOCK, i18n.language) : '';
+  const dueAt = bookingReturnDue(model.booking);
+  const dueLabel = dueAt ? formatZonedWhen(dueAt, BOOKING_CLOCK, i18n.language, photoZone) : '';
+  // Hourly early start: due at start + booked hours if the renter starts now.
+  const earlyDue = earlyReturnPreview(model.booking, Date.now(), photoZone);
+  const sheetDueLabel = earlyDue ? formatReturnClock(earlyDue.dueAt, i18n.language, photoZone) : dueLabel;
   const pickupStart = stage === 'pickup' && !damaged;
 
   useEffect(() => {
@@ -189,7 +194,7 @@ export default function ClientInspectionScreen() {
 
   if (started && model.booking) {
     const country = model.booking.rental_location_listing?.business_location?.address?.country;
-    const due = formatConfirmationDue(model.booking.end_at, BOOKING_CLOCK, i18n.language);
+    const due = formatConfirmationDue(bookingReturnDue(model.booking) ?? model.booking.end_at, BOOKING_CLOCK, i18n.language);
     const paid = formatConfirmationMoney(Number(model.booking.total_amount) || 0, model.booking.currency, i18n.language);
     const depositAmount = Number(model.booking.security_deposit_amount) || 0;
     const deposit = depositAmount > 0 && showsCardDeposit(model.booking.currency)
@@ -205,7 +210,7 @@ export default function ClientInspectionScreen() {
         depositHeld={confirmationDepositHeld(model.booking.payment_status)}
         title={model.booking.rental_location_listing?.rental_item?.name || t('rentals.booking', 'Rental')}
         startAt={model.booking.start_at}
-        endAt={model.booking.end_at}
+        endAt={bookingReturnDue(model.booking) ?? model.booking.end_at}
         location={model.booking.rental_location_listing?.business_location?.name}
         onBack={() => navigation.goBack()}
       />
@@ -289,6 +294,7 @@ export default function ClientInspectionScreen() {
           moneyLines={moneyLines}
           startAt={model.booking?.start_at ?? ''}
           endAt={model.booking?.end_at ?? ''}
+          pricingSnapshot={model.booking?.rental_pricing_snapshot}
           startOpensAt={model.booking?.start_opens_at}
           pay={payAtStep}
           busy={model.busy}
@@ -487,7 +493,7 @@ export default function ClientInspectionScreen() {
               {t('rentalInspection.sheetTitle', 'Start this rental?')}
             </Text>
             <Text style={[typography.body1, { color: colors.text.secondary, marginTop: 8 }]}>
-              {t('rentalInspection.sheetBody', 'The rental clock starts now. Return is due by {{due}}.', { due: dueLabel })}
+              {t('rentalInspection.sheetBody', 'The rental clock starts now. Return is due by {{due}}.', { due: sheetDueLabel })}
             </Text>
             {preview?.payment_rail === 'mobile_money' && amountDue > 0 ? (
               <View style={[styles.payLine, { backgroundColor: colors.infoTint, borderRadius: borderRadius.md, marginTop: 12 }]}>

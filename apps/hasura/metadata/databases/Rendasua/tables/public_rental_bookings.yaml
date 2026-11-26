@@ -64,6 +64,7 @@ select_permissions:
         - rental_start_overwrite_code_used_at
         - period_ended_notified_at
         - actual_start_at
+        - return_due_at
         - actual_end_at
         - renter_reported_returned_at
         - renter_return_escalated_at
@@ -115,6 +116,7 @@ select_permissions:
         - payment_status
         - period_ended_notified_at
         - actual_start_at
+        - return_due_at
         - actual_end_at
         - renter_reported_returned_at
         - renter_return_escalated_at

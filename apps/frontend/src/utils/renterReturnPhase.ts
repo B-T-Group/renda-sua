@@ -29,17 +29,22 @@ export function listReturnChip(input: RenterReturnInput): 'overdue' | 'waiting' 
   return returnByPassed(input.endAt, input.now ?? new Date(), input.timeZone) ? 'overdue' : null;
 }
 
-export function formatDoualaStamp(iso: string, language: string): string {
+/**
+ * A real instant (e.g. renter_reported_returned_at) as "26 Nov · 15:40" on the
+ * listing clock. Pass the listing zone; Africa/Douala is the fallback for unknown.
+ */
+export function formatReturnStamp(iso: string, language: string, timeZone?: string | null): string {
+  const zone = timeZone || 'Africa/Douala';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   const french = language.toLowerCase().startsWith('fr');
   const day = new Intl.DateTimeFormat(french ? 'fr-FR' : 'en-GB', {
-    timeZone: 'Africa/Douala',
+    timeZone: zone,
     day: 'numeric',
     month: 'short',
   }).format(date);
   const time = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Africa/Douala',
+    timeZone: zone,
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',

@@ -57,6 +57,8 @@ interface BookingRow {
   settlement_claimed_at?: string | null;
   booking_number: string;
   end_at?: string | null;
+  /** Set at start for an hourly early start; listing wall clock like end_at. */
+  return_due_at?: string | null;
   client: { user_id: string; user?: { first_name?: string | null } | null };
   business: { user_id: string };
   rental_location_listing?: {
@@ -742,7 +744,7 @@ export class RentalInspectionService {
       rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
       bookingId: booking.id,
       renterName: booking.client.user?.first_name,
-      endAt: booking.end_at,
+      endAt: booking.return_due_at || booking.end_at,
       countryCode: this.bookingCountry(booking),
     });
   }
@@ -890,7 +892,7 @@ export class RentalInspectionService {
           id status business_id client_id units_booked allocation_version
           inspection_policy_version pickup_current_version_id pickup_ack_current
           pickup_accepted_version_id return_current_version_id return_resolution
-          settlement_claimed_at booking_number end_at
+          settlement_claimed_at booking_number end_at return_due_at
           client { user_id user { first_name } }
           business { user_id }
           rental_location_listing {
