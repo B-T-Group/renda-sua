@@ -73,6 +73,7 @@ import {
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
 import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
+import { bookingReturnDue } from '../../utils/rentals/returnDue';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 import {
   isPriceChangeUnseenError,
@@ -451,9 +452,11 @@ const RentalBookingDetailPage: React.FC = () => {
   const periodLines = bookedSpan
     ? [bookedSpan]
     : bookingRequestedPeriodLines(selectionWindows, booking, i18n.language, dayCountLabel);
+  // Return due: return_due_at after an hourly early start, else the booked end.
+  const returnDueAt = bookingReturnDue(booking) ?? booking.end_at;
   const returnPhase = renterReturnPhase({
     status: booking.status,
-    endAt: booking.end_at,
+    endAt: returnDueAt,
     reportedAt: booking.renter_reported_returned_at,
     escalatedAt: booking.renter_return_escalated_at,
     timeZone: confirmationTimeZone(listingCountry, booking.currency),
@@ -466,9 +469,9 @@ const RentalBookingDetailPage: React.FC = () => {
     flags.rentals_renter_return_report_enabled &&
     Boolean(booking.renter_reported_returned_at);
   const returnLocation = booking.return_place?.name || locationName;
-  const returnByLabel = booking.end_at
+  const returnByLabel = returnDueAt
     ? formatRentalPeriod(
-        [{ start_at: booking.end_at, end_at: booking.end_at }],
+        [{ start_at: returnDueAt, end_at: returnDueAt }],
         i18n.language,
         dayCountLabel
       )
@@ -791,7 +794,7 @@ const RentalBookingDetailPage: React.FC = () => {
               location={returnLocation}
               address={booking.return_place?.address ?? returnLocation}
               phone={booking.return_place?.phone ?? null}
-              endAt={booking.end_at}
+              endAt={returnDueAt}
               reportedAt={booking.renter_reported_returned_at}
               depositLabel={depositAmount > 0 ? formatDetailMoney(depositAmount) : ''}
               onChanged={() => void load()}
@@ -887,7 +890,7 @@ const RentalBookingDetailPage: React.FC = () => {
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ')}
               place={booking.rental_location_listing?.business_location?.name ?? ''}
               money={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
-              returnLabel={formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language)}
+              returnLabel={formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language)}
               starting={sharingPin}
               onNotCollected={isBusiness && status === 'active' && bookingId ? () => {
                 void reportItemNotCollected(bookingId).then(() => {
@@ -1347,7 +1350,7 @@ function BookingConfirmation({
   const theme = useTheme();
   const country = booking.rental_location_listing?.business_location?.address?.country;
   const zoneId = confirmationTimeZone(country, booking.currency);
-  const due = formatConfirmationDue(booking.end_at, 'UTC', language);
+  const due = formatConfirmationDue(bookingReturnDue(booking) ?? booking.end_at, 'UTC', language);
   const zone = t(
     confirmationZoneKey(country, booking.currency),
     confirmationZoneDefault(country, booking.currency, language)
@@ -1377,7 +1380,7 @@ function BookingConfirmation({
             depositHeld={confirmationDepositHeld(booking.payment_status)}
             title={booking.rental_location_listing?.rental_item?.name || 'Rental'}
             startAt={booking.start_at}
-            endAt={booking.end_at}
+            endAt={bookingReturnDue(booking) ?? booking.end_at}
             location={booking.rental_location_listing?.business_location?.name}
             onBack={onBack}
           />

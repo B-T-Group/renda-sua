@@ -61,6 +61,7 @@ import {
 } from '../../utils/rentals/rentalInspection';
 import { RentalHandoverNotice } from '../../components/rentals/RentalHandoverNotice';
 import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { bookingReturnDue } from '../../utils/rentals/returnDue';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalBookingDetail'>;
 
@@ -134,10 +135,11 @@ export default function BusinessRentalBookingDetailScreen() {
   }, []);
 
   const returnIsOvertime = (() => {
-    if (!booking?.end_at || !returnDate || !returnTime) return false;
+    const dueAt = bookingReturnDue(booking);
+    if (!dueAt || !returnDate || !returnTime) return false;
     const iso = combineLocalDateTime(returnDate, returnTime);
     if (!iso) return false;
-    return new Date(iso).getTime() > new Date(booking.end_at).getTime();
+    return new Date(iso).getTime() > new Date(dueAt).getTime();
   })();
 
   const reportNotCollected = useCallback(async () => {
@@ -239,7 +241,7 @@ export default function BusinessRentalBookingDetailScreen() {
     started: booking.status === 'active' || Boolean(booking.actual_start_at),
   });
   const pickupDay = formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language);
-  const returnWhen = formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language);
+  const returnWhen = formatZonedWhen(bookingReturnDue(booking) ?? booking.end_at, BOOKING_CLOCK, i18n.language);
   const bookedSpan = formatBookedSpan(
     booking.start_at,
     booking.end_at,
@@ -686,7 +688,7 @@ export default function BusinessRentalBookingDetailScreen() {
                 style={{ marginBottom: 10 }}
                 disabled={busy}
                 onPress={() => {
-                  const parts = localDateTimeParts(new Date(booking.end_at));
+                  const parts = localDateTimeParts(new Date(bookingReturnDue(booking) ?? booking.end_at));
                   setReturnDate(parts.date);
                   setReturnTime(parts.time);
                 }}
@@ -776,7 +778,7 @@ function BusinessAcceptStartHero({
     (booking.status === 'reserved' || booking.status === 'confirmed');
   if (!started && !waiting) return null;
   const name = booking.client?.user?.first_name || t('rentalInspection.renterFallback', 'The renter');
-  const due = formatListingDue(booking.end_at, i18n.language);
+  const due = formatListingDue(bookingReturnDue(booking) ?? booking.end_at, i18n.language);
   const paid =
     (booking.currency || '').toUpperCase() === 'CAD'
       ? formatConfirmationMoney(Number(booking.total_amount) || 0, 'CAD', i18n.language)

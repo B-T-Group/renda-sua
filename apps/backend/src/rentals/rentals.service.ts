@@ -106,6 +106,7 @@ import {
   startOpensAt,
   startWindowState,
 } from './simple-start/simple-start.policy';
+import { bookingReturnDueAt, bookingReturnDueInstantMs } from './return-due';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import {
   fetchStripeEnabledCountries,
@@ -489,6 +490,8 @@ const RELEASABLE_REQUEST_BOOKING_STATUSES = new Set(['proposed', 'cancelled']);
 @Injectable()
 export class RentalsService {
   private readonly logger = new Logger(RentalsService.name);
+  /** return_due_at written by rental_mark_started, read once by the start notices. */
+  private startedReturnDue?: Map<string, string>;
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
@@ -4573,8 +4576,11 @@ export class RentalsService {
   }
 
   private async notifyRentalActivated(booking: any): Promise<void> {
-    await this.notifyBusinessRentalStarted(booking);
-    await this.notifyRentalStartedIfEnabled(booking);
+    const due = this.startedReturnDue?.get(booking.id);
+    this.startedReturnDue?.delete(booking.id);
+    const started = due ? { ...booking, return_due_at: due } : booking;
+    await this.notifyBusinessRentalStarted(started);
+    await this.notifyRentalStartedIfEnabled(started);
   }
 
   private async notifyBusinessRentalStarted(booking: any): Promise<void> {
@@ -4587,7 +4593,7 @@ export class RentalsService {
         rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
         bookingId: booking.id,
         renterName: booking.client?.user?.first_name,
-        endAt: booking.end_at,
+        endAt: bookingReturnDueAt(booking) ?? booking.end_at,
         countryCode: country,
       });
     } catch (error: any) {
@@ -4605,7 +4611,7 @@ export class RentalsService {
         clientUserId: userId,
         rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
         bookingId: booking.id,
-        endAt: booking.end_at,
+        endAt: bookingReturnDueAt(booking) ?? booking.end_at,
         countryCode: country,
       });
     } catch (error: any) {
@@ -4852,7 +4858,9 @@ export class RentalsService {
   /**
    * Return-time math (per rental deposit policy):
    * - early return still pays the full contract;
-   * - late return owes ceil(hours past booked end) at the listing hourly rate;
+   * - late return owes ceil(hours past the return due) at the listing hourly rate.
+   *   The due is return_due_at after an hourly early start, else the booked end,
+   *   both read on the listing clock;
    * - on Stripe the overtime comes out of the deposit (capped by it).
    */
   private computeRentalSettlement(
@@ -4863,9 +4871,10 @@ export class RentalsService {
     const deposit = Math.max(0, Number(booking.security_deposit_amount) || 0);
     const units = Math.max(1, Number(booking.units_booked) || 1);
     const hourly = this.resolveBookingHourlyRate(booking);
-    const lateMs =
-      new Date(actualEndAtIso).getTime() - new Date(booking.end_at).getTime();
-    const overtimeHours = Math.max(0, Math.ceil(lateMs / 3600000));
+    // The due time is listing wall clock; the return is a real instant.
+    const dueMs = bookingReturnDueInstantMs(booking, listingZoneFor(this.bookingCountry(booking)));
+    const lateMs = new Date(actualEndAtIso).getTime() - dueMs;
+    const overtimeHours = Number.isFinite(lateMs) ? Math.max(0, Math.ceil(lateMs / 3600000)) : 0;
     const overtimeAmount = Number((overtimeHours * hourly * units).toFixed(2));
     return {
       contract,
@@ -5211,15 +5220,17 @@ export class RentalsService {
     const at = new Date().toISOString();
     try {
       const result = await this.hasuraSystemService.executeMutation<{
-        rental_mark_started?: Array<{ id: string }>;
+        rental_mark_started?: Array<{ id: string; return_due_at?: string | null }>;
       }>(
         `mutation MarkStarted($id: uuid!, $at: timestamptz!) {
-          rental_mark_started(args: { p_booking_id: $id, p_at: $at }) { id }
+          rental_mark_started(args: { p_booking_id: $id, p_at: $at }) { id return_due_at }
         }`,
         { id: bookingId, at }
       );
       if (Object.prototype.hasOwnProperty.call(result ?? {}, 'rental_mark_started')) {
-        return (result.rental_mark_started?.length ?? 0) > 0;
+        const row = result.rental_mark_started?.[0];
+        if (row?.return_due_at) (this.startedReturnDue ??= new Map()).set(bookingId, row.return_due_at);
+        return Boolean(row);
       }
       return this.legacyStartIfUnenrolled(policy, bookingId, at);
     } catch (error: any) {

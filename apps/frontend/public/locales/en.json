@@ -7475,6 +7475,7 @@
       "momoWaitingBody": "Approve the request on your phone. This page updates when the payment goes through.",
       "held": "{{amount}} held on your card",
       "returnBy": "Return by {{when}}",
+      "returnByEarly": "Return by {{time}} ({{duration}} from now)",
       "lateStill": "Booked for {{time}} · you can still start until {{until}}",
       "locked": "Start rental · from {{day}}",
       "button": "Start rental{{amount}}",

@@ -7195,6 +7195,7 @@
       "momoWaitingBody": "Approuvez la demande sur votre téléphone. Cette page se met à jour quand le paiement est accepté.",
       "held": "{{amount}} retenus sur votre carte",
       "returnBy": "Retournez avant le {{when}}",
+      "returnByEarly": "Retour avant {{time}} (dans {{duration}})",
       "lateStill": "Réservé pour {{time}} · vous pouvez encore démarrer jusqu'au {{until}}",
       "locked": "Démarrer · dès\u00a0le\u00a0{{day}}",
       "button": "Démarrer la location{{amount}}",

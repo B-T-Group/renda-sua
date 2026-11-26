@@ -187,7 +187,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             ? (() => {
                 const chip = listReturnChip({
                   status: row.rental_booking.status,
-                  endAt: row.rental_booking.end_at,
+                  endAt: row.rental_booking.return_due_at || row.rental_booking.end_at,
                   reportedAt: row.rental_booking.renter_reported_returned_at,
                   escalatedAt: row.rental_booking.renter_return_escalated_at,
                   timeZone: row.listing_timezone,

@@ -4,6 +4,7 @@ import { alpha } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BOOKING_CLOCK, formatZonedDay, formatZonedTime, formatZonedWeekday, formatZonedWhen, pickupPhase } from '../../utils/rentalStartWindow';
+import { earlyReturnLine, earlyReturnPreview } from '../../utils/rentals/returnDue';
 
 export interface StartPanelBooking {
   status: string;
@@ -13,6 +14,8 @@ export interface StartPanelBooking {
   actual_start_at?: string | null;
   currency: string;
   payment_status?: string | null;
+  return_due_at?: string | null;
+  rental_pricing_snapshot?: unknown;
 }
 
 interface Props {
@@ -55,6 +58,11 @@ export function RentalStartPanel(props: Props) {
       : phase === 'started'
         ? t('rentals.journey.inProgress', 'In progress')
         : t('rentals.start.pickupToday', 'Pickup today');
+  // Hourly early start: the due time if the renter starts now (Start dialog, business mirror).
+  const early = phase !== 'started' ? earlyReturnPreview(props.booking, Date.now(), props.timeZone) : null;
+  const returnLine = early
+    ? earlyReturnLine(early, i18n.language, t)
+    : t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel });
   const title = titleText(phase, props.role, props.renterName, when, time, props.booking.actual_start_at, props.timeZone, t);
   return (
     <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: (theme) => alpha(late ? theme.palette.warning.main : theme.palette.success.main, 0.12), border: 1, borderColor: tone, color: 'text.primary' }}>
@@ -79,7 +87,9 @@ export function RentalStartPanel(props: Props) {
             : t('rentals.start.held', '{{amount}} held on your card', { amount: props.money })}
         </Typography>
       ) : null}
-      <Typography variant="body2">{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Typography>
+      <Typography variant="body2">
+        {props.role === 'business' ? returnLine : t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
+      </Typography>
       {props.role === 'client' && phase !== 'started' ? (
         <Button
           variant="contained"
@@ -110,7 +120,7 @@ export function RentalStartPanel(props: Props) {
           </Stack>
           <Stack spacing={1} sx={{ mt: 2 }}>
             <Stack direction="row" spacing={1}><Storefront fontSize="small" color="action" /><Typography>{props.place}</Typography></Stack>
-            <Stack direction="row" spacing={1}><CalendarMonth fontSize="small" color="action" /><Typography>{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Typography></Stack>
+            <Stack direction="row" spacing={1}><CalendarMonth fontSize="small" color="action" /><Typography>{returnLine}</Typography></Stack>
             <Stack direction="row" spacing={1}>{momo ? <PhoneIphone fontSize="small" color="action" /> : <CreditCard fontSize="small" color="action" />}<Typography>{momo ? t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: props.money }) : t('rentals.start.held', '{{amount}} held on your card', { amount: props.money })}</Typography></Stack>
           </Stack>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>

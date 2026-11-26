@@ -13,6 +13,7 @@ import {
   pickupPhase,
   type PickupPhase,
 } from '../../utils/rentals/rentalStartWindow';
+import { earlyReturnLine, earlyReturnPreview } from '../../utils/rentals/returnDue';
 
 export interface StartCardBooking {
   status: string;
@@ -26,6 +27,8 @@ export interface StartCardBooking {
   payment_timing?: string | null;
   authorized_amount?: number | string | null;
   security_deposit_amount?: number | string | null;
+  return_due_at?: string | null;
+  rental_pricing_snapshot?: unknown;
 }
 
 interface Props {
@@ -91,7 +94,9 @@ function StartBody(props: Props & { phase: PickupPhase }) {
       <LateLine {...props} />
       <MoneyLine {...props} momo={momo} />
       <Text style={[typography.body2, { color: colors.text.primary }]}>
-        {t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
+        {props.role === 'business' && props.phase !== 'started'
+          ? returnLine(props, t, i18n.language)
+          : t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
       </Text>
       <StartButton {...props} day={day} momo={momo} />
       <NotCollected {...props} />
@@ -179,8 +184,15 @@ function LateLine(props: Props & { phase: PickupPhase }) {
   );
 }
 
+/** Hourly early start: the due time if the renter starts now. Otherwise the booked return. */
+function returnLine(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
+  const preview = earlyReturnPreview(props.booking, props.now ?? Date.now(), props.timeZone);
+  if (preview) return earlyReturnLine(preview, language, t);
+  return t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel });
+}
+
 function ConfirmSheet(props: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, typography, borderRadius } = useTheme();
   return (
     <Modal visible={props.open} transparent animationType="slide" onRequestClose={props.onClose}>
@@ -192,7 +204,7 @@ function ConfirmSheet(props: Props) {
             {t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
           </Text>
           <SheetRow icon="store" label={props.place} />
-          <SheetRow icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
+          <SheetRow icon="calendar-clock" label={returnLine(props, t, i18n.language)} />
           <SheetRow icon={isMomoDue(props.booking) ? 'cellphone' : 'credit-card-outline'} label={sheetMoney(props, t)} />
           <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 8 }]}>
             {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30 minutes.")}
