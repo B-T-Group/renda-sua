@@ -17,6 +17,7 @@ import {
   formatRentalMoney,
   rentalListingModerationColors,
 } from '../../../utils/rentals';
+import { withRateUnit } from '../../../utils/rentals/moneyRateUnit';
 
 function toNumber(v: string | number): number {
   const n = typeof v === 'string' ? parseFloat(v) : v;
@@ -260,7 +261,7 @@ function BusinessRentalCatalogCardInner({
                 <Text
                   style={[typography.caption, { color: colors.text.secondary }]}
                 >
-                  {daily} {t('business.rentals.catalog.perDay', '/ day')}
+                  {withRateUnit(daily, t('business.rentals.catalog.perDay', '/ day'))}
                 </Text>
               ) : null}
             </View>

@@ -6125,8 +6125,8 @@
       "dayCount_plural": "{{count}} jours",
       "availableForDates": "{{remaining}} sur {{total}} disponible pour vos dates",
       "availableForDates_plural": "{{remaining}} sur {{total}} disponibles pour vos dates",
-      "dailyBreakdown": "{{days}} × {{rate}} / jour",
-      "hourlyBreakdown": "{{h}} h × {{rate}} / heure",
+      "dailyBreakdown": "{{days}} × {{rate}}",
+      "hourlyBreakdown": "{{h}} h × {{rate}}",
       "price": "Prix",
       "total": "Total",
       "removeDay": "Retirer {{day}}",
@@ -6388,8 +6388,8 @@
       }
     },
     "detail": {
-      "fromHourly": "Dès {{price}}/h",
-      "fromDaily": "Dès {{price}}/jour",
+      "fromHourly": "Dès {{price}}",
+      "fromDaily": "Dès {{price}}",
       "openTodayUntil": "Ouvert aujourd’hui jusqu’à {{time}}",
       "minHoursSnapshot": "{{h}} h minimum",
       "depositBarHint": "Caution bloquée sur la carte · Rien n’est débité avant l’acceptation",

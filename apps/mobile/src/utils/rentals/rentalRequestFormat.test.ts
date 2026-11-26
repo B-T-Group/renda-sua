@@ -204,7 +204,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(one.priceLabel).toBe(`2 days × 380${NBSP}FCFA / day`);
+    expect(one.priceLabel).toBe(`2 days × 380${NBSP}FCFA${NBSP}/${NBSP}day`);
     expect(one.priceAmount).toBe(`760${NBSP}FCFA`);
     expect(one.hoursCaption).toBeUndefined();
 
@@ -219,7 +219,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(two.priceLabel).toBe(`1 days × 380${NBSP}FCFA / day × 2`);
+    expect(two.priceLabel).toBe(`1 days × 380${NBSP}FCFA${NBSP}/${NBSP}day × 2`);
   });
 
   it('keeps the hourly caption and a negative total sign', () => {
@@ -234,7 +234,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(hourly.priceLabel).toBe(`8 h × 16${NBSP}FCFA / hour × 3`);
+    expect(hourly.priceLabel).toBe(`8 h × 16${NBSP}FCFA${NBSP}/${NBSP}hour × 3`);
     expect(hourly.hoursCaption).toBe('8 billable hours total');
     expect(hourly.totalAmount).toBe(`-128${NBSP}FCFA`);
     expect(hourly.priceLabel?.startsWith('FCFA')).toBe(false);

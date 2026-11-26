@@ -41,6 +41,7 @@ import {
   noteText,
   pickerLang,
   pickerMoney,
+  pickerRate,
   pickerText,
   rangeLabel,
   sharedLockReason,
@@ -385,10 +386,10 @@ function PriceChips({ listing, currency, lang }: { listing: DayHoursListing; cur
   return (
     <View style={styles.chips}>
       {listing.offersDaily ? (
-        <Chip icon="white-balance-sunny" text={pickerText(lang, 'perDay', { amount: pickerMoney(listing.dayRate, currency, lang) })} />
+        <Chip icon="white-balance-sunny" text={pickerRate(pickerMoney(listing.dayRate, currency, lang), lang, 'day')} />
       ) : null}
       {listing.offersHourly ? (
-        <Chip icon="clock-outline" text={pickerText(lang, 'perHour', { amount: pickerMoney(listing.hourRate, currency, lang) })} />
+        <Chip icon="clock-outline" text={pickerRate(pickerMoney(listing.hourRate, currency, lang), lang, 'hour')} />
       ) : null}
       {listing.offersHourly && listing.minHours > 1 ? (
         <View style={[styles.chip, { backgroundColor: colors.surfaceInput }]}>

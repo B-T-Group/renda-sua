@@ -8,6 +8,7 @@ import { AssistantEntityCards } from '@/components/assistant/AssistantEntityCard
 import { useTheme } from '@/contexts/ThemeContext';
 import { spacing } from '@/theme/spacing';
 import { formatAssistantMoney } from '@/utils/rentals/rentalRequestDisplay';
+import { withRateUnit } from '@/utils/rentals/moneyRateUnit';
 import { formatRentalDay } from '@/utils/rentals/rentalRequestFormat';
 import type { AssistantRentalChip, AssistantRentalMeta, AssistantResultCard } from '@/utils/assistantResultCards';
 
@@ -239,7 +240,7 @@ function priceLine(rental: NonNullable<AssistantResultCard['rental']>, locale: s
     const unit = rental.dayCount === 1 ? (locale.startsWith('fr') ? 'jour' : 'day') : locale.startsWith('fr') ? 'jours' : 'days';
     return `${prefix} ${formatAssistantMoney(rental.quoteTotal, rental.currency, locale)} · ${rental.dayCount} ${unit}`;
   }
-  return rental.perDay != null ? `${formatAssistantMoney(rental.perDay, rental.currency, locale)}/${locale.startsWith('fr') ? 'jour' : 'day'}` : '';
+  return rental.perDay != null ? withRateUnit(formatAssistantMoney(rental.perDay, rental.currency, locale), locale.startsWith('fr') ? 'jour' : 'day') : '';
 }
 
 function formatShift(rental: NonNullable<AssistantResultCard['rental']>, locale: string) {

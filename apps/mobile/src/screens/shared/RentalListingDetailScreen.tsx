@@ -28,9 +28,24 @@ import type { ClientRootStackParamList } from '../../navigation/types';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
 import { formatRentalMoney } from '../../utils/rentals';
 import { showsRentalDetailsDeposit } from '../../utils/rentals/cardDeposit';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 import { confirmationTimeZone } from '../../utils/rentals/confirmationFormat';
 import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
 import { listingRentModes } from '../../utils/rentals/listingRentModes';
+
+function fromRateLabel(
+  t: (key: string, fallback: string, vars?: Record<string, string>) => string,
+  kind: 'hourly' | 'daily',
+  amount: number,
+  currency: string,
+  language: string
+): string {
+  const unit = kind === 'hourly' ? 'h' : language.toLowerCase().startsWith('fr') ? 'jour' : 'day';
+  const price = withRateUnit(formatRentalMoney(amount, currency), unit);
+  return kind === 'hourly'
+    ? t('rentals.detail.fromHourly', 'From {{price}}', { price })
+    : t('rentals.detail.fromDaily', 'From {{price}}', { price });
+}
 
 type DetailParams = {
   RentalListingDetail: { listingId: string; startDate?: string; endDate?: string; openRequest?: boolean };
@@ -93,7 +108,7 @@ function todayCloseLabel(
 const BOTTOM_BAR_HEIGHT = 120;
 
 export default function RentalListingDetailScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -203,8 +218,8 @@ export default function RentalListingDetailScreen() {
   const closeToday = todayCloseLabel(weeklySorted);
   const priceSnapshotParts = [
     modes.hourly
-      ? t('rentals.detail.fromHourly', 'From {{price}}/h', { price: formatRentalMoney(hourlyPrice, currency) })
-      : t('rentals.detail.fromDaily', 'From {{price}}/day', { price: formatRentalMoney(dailyPrice, currency) }),
+      ? fromRateLabel(t, 'hourly', hourlyPrice, currency, i18n.language)
+      : fromRateLabel(t, 'daily', dailyPrice, currency, i18n.language),
     closeToday
       ? t('rentals.detail.openTodayUntil', 'Open today until {{time}}', { time: closeToday })
       : null,
@@ -584,8 +599,8 @@ export default function RentalListingDetailScreen() {
       <View style={{ alignItems: 'center', marginBottom: spacing.sm }}>
         <Text style={[typography.subtitle1, { color: colors.text.primary, fontWeight: '700' }]}>
           {[
-            modes.hourly ? t('rentals.detail.fromHourly', 'From {{price}}/h', { price: formatRentalMoney(hourlyPrice, currency) }) : null,
-            modes.daily ? t('rentals.detail.fromDaily', 'From {{price}}/day', { price: formatRentalMoney(dailyPrice, currency) }) : null,
+            modes.hourly ? fromRateLabel(t, 'hourly', hourlyPrice, currency, i18n.language) : null,
+            modes.daily ? fromRateLabel(t, 'daily', dailyPrice, currency, i18n.language) : null,
           ]
             .filter(Boolean)
             .join(' · ')}

@@ -11,8 +11,8 @@ import {
 const copy = (key: string, fallback: string, options?: Record<string, unknown>) => {
   const table: Record<string, string> = {
     'rentals.requestForm.dayCount': '{{count}} days',
-    'rentals.requestForm.dailyBreakdown': '{{days}} × {{rate}} / day',
-    'rentals.requestForm.hourlyBreakdown': '{{h}} h × {{rate}} / hour',
+    'rentals.requestForm.dailyBreakdown': '{{days}} × {{rate}}',
+    'rentals.requestForm.hourlyBreakdown': '{{h}} h × {{rate}}',
   };
   const template = table[key] ?? fallback;
   return template.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(options?.[name] ?? ''));
@@ -21,8 +21,8 @@ const copy = (key: string, fallback: string, options?: Record<string, unknown>) 
 const fr = (key: string, fallback: string, options?: Record<string, unknown>) => {
   const table: Record<string, string> = {
     'rentals.requestForm.dayCount': '{{count}} jours',
-    'rentals.requestForm.dailyBreakdown': '{{days}} × {{rate}} / jour',
-    'rentals.requestForm.hourlyBreakdown': '{{h}} h × {{rate}} / heure',
+    'rentals.requestForm.dailyBreakdown': '{{days}} × {{rate}}',
+    'rentals.requestForm.hourlyBreakdown': '{{h}} h × {{rate}}',
     'rentals.requestCard.youReceive': 'Vous recevez {{amount}}',
     'rentals.requestCard.allDay': 'Toute la journée',
     'rentals.requestCard.seeTimes': '{{count}} jours · voir les horaires',
@@ -74,7 +74,7 @@ describe('request card money', () => {
     const model = buildRequestCardModel(request(), 'en', now, copy);
     expect(model.receiveLine).toBe('You receive 760\u00A0FCFA');
     expect(model.receiveAmount).toBe('760\u00A0FCFA');
-    expect(model.breakdown).toBe('2 days × 380\u00A0FCFA / day');
+    expect(model.breakdown).toBe('2 days × 380\u00A0FCFA\u00A0/\u00A0day');
     expect(model.breakdown).not.toMatch(/fee|Renter pays/i);
     expect(model.quoteMissing).toBe(false);
   });
@@ -100,7 +100,7 @@ describe('request card money', () => {
       copy
     );
     expect(three.receiveAmount).toBe('1\u00A0140\u00A0FCFA');
-    expect(three.breakdown).toBe('3 days × 380\u00A0FCFA / day');
+    expect(three.breakdown).toBe('3 days × 380\u00A0FCFA\u00A0/\u00A0day');
     expect(three.quantity).toBeNull();
 
     const pair = buildRequestCardModel(
@@ -110,7 +110,7 @@ describe('request card money', () => {
       copy
     );
     expect(pair.receiveAmount).toBe('1\u00A0520\u00A0FCFA');
-    expect(pair.breakdown).toBe('2 days × 380\u00A0FCFA / day × 2');
+    expect(pair.breakdown).toBe('2 days × 380\u00A0FCFA\u00A0/\u00A0day × 2');
     expect(pair.quantity).toBe(2);
   });
 
@@ -133,7 +133,7 @@ describe('request card money', () => {
       copy
     );
     expect(hourly.receiveLine).toBe('You receive 800\u00A0FCFA');
-    expect(hourly.breakdown).toBe('8 h × 100\u00A0FCFA / hour');
+    expect(hourly.breakdown).toBe('8 h × 100\u00A0FCFA\u00A0/\u00A0hour');
 
     const missing = buildRequestCardModel(
       request({ quoted_total: null, rental_pricing_snapshot: null }),

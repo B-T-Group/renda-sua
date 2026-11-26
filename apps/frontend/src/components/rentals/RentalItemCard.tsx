@@ -20,6 +20,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RentalListingRow } from '../../hooks/useRentalListings';
 import { formatCatalogMoney } from '../../utils/rentalRequestDisplay';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 import { fromHourlyPrice, pickerLang } from '../../utils/rentalDayHoursCopy';
 import { formatRentalDay } from '../../utils/rentalRequestFormat';
 
@@ -175,16 +176,10 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
           }}
         >
           <Typography variant="subtitle1" fontWeight={800} color="primary.main">
-            {price}
-            <Typography
-              component="span"
-              variant="caption"
-              color="text.secondary"
-              fontWeight={600}
-              sx={{ ml: 0.5 }}
-            >
-              {dailyOnly ? t('rentals.catalog.perDayShort', '/ day') : t('rentals.perHour', '/ hour')}
-            </Typography>
+            {withRateUnit(
+              price,
+              dailyOnly ? t('rentals.catalog.perDayShort', '/ day') : t('rentals.perHour', '/ hour')
+            )}
           </Typography>
         </Box>
       </Box>
@@ -343,7 +338,7 @@ function DailyRentalCard({
   const hourlyOnly = listing.offers_daily === false;
   const price = hourlyOnly
     ? fromHourlyPrice(Number(listing.base_price_per_hour) || 0, item.currency, pickerLang(locale))
-    : `${formatCatalogMoney(Number(listing.base_price_per_day) || 0, item.currency, locale)} ${perDay}`;
+    : withRateUnit(formatCatalogMoney(Number(listing.base_price_per_day) || 0, item.currency, locale), perDay);
   const place = catalogPlace(listing);
   const total =
     !hourlyOnly &&

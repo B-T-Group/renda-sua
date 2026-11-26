@@ -4,6 +4,7 @@
  * A copy lives in apps/frontend/src/utils/rentalDayHoursCopy.ts.
  */
 import type { BlockNote, DayInfo, PickedDay } from './dayHoursPicker';
+import { withRateUnit } from './moneyRateUnit';
 
 export type PickerLang = 'en' | 'fr';
 
@@ -14,8 +15,8 @@ export function pickerLang(language?: string | null): PickerLang {
 const EN = {
   title: 'When do you need it?',
   subtitle: 'Tap the days you need. Times are {{city}} time.',
-  perDay: '{{amount}} / day',
-  perHour: '{{amount}} / h',
+  perDay: '{{amount}}',
+  perHour: '{{amount}}',
   minHours: 'Min {{count}}\u00A0h',
   someBooked: 'Some hours booked',
   unavailable: 'Unavailable',
@@ -35,7 +36,7 @@ const EN = {
   lockToday: 'Full day isn’t possible today: it has already started.',
   lockTodaySoon: 'Full day isn’t possible today: it starts in less than 2\u00A0h.',
   sharedLockBooked: 'Full day isn’t possible: {{day}} is partly booked.',
-  fromPerHour: 'from\u00A0{{amount}} / h',
+  fromPerHour: 'from\u00A0{{amount}}',
   stretched: 'Minimum {{count}}\u00A0h, so the end moved to {{time}}.',
   capped: 'Maximum {{count}}\u00A0h, so the end moved to {{time}}.',
   tooShort: 'Not enough free hours from {{time}}. Pick another start.',
@@ -66,8 +67,8 @@ const EN = {
 const FR: Record<keyof typeof EN, string> = {
   title: 'Quand en avez-vous besoin\u00A0?',
   subtitle: 'Touchez les jours voulus. Heures de {{city}}.',
-  perDay: '{{amount}} / jour',
-  perHour: '{{amount}} / h',
+  perDay: '{{amount}}',
+  perHour: '{{amount}}',
   minHours: 'Min.\u00A0{{count}}\u00A0h',
   someBooked: 'Quelques heures prises',
   unavailable: 'Indisponible',
@@ -86,7 +87,7 @@ const FR: Record<keyof typeof EN, string> = {
   lockToday: 'Journée impossible aujourd’hui\u00A0: elle a déjà commencé.',
   lockTodaySoon: 'Journée impossible aujourd’hui\u00A0: elle commence dans moins de 2\u00A0h.',
   sharedLockBooked: 'Journée impossible\u00A0: {{day}} est en partie réservé.',
-  fromPerHour: 'dès\u00A0{{amount}} / h',
+  fromPerHour: 'dès\u00A0{{amount}}',
   stretched: 'Minimum {{count}}\u00A0h\u00A0: la fin passe à {{time}}.',
   capped: 'Maximum {{count}}\u00A0h\u00A0: la fin passe à {{time}}.',
   tooShort: 'Pas assez d’heures libres à partir de {{time}}. Choisissez un autre début.',
@@ -321,7 +322,15 @@ export function sharedLockReason(infos: DayInfo[], lang: PickerLang): string | n
 
 /** Hourly-only listings never show a day price: "from 3 000 FCFA / h". */
 export function fromHourlyPrice(hourRate: number, currency: string, lang: PickerLang): string {
-  return pickerText(lang, 'fromPerHour', { amount: pickerMoney(hourRate, currency, lang) });
+  return pickerText(lang, 'fromPerHour', {
+    amount: withRateUnit(pickerMoney(hourRate, currency, lang), 'h'),
+  });
+}
+
+/** Rate chips and labels: `15 000 FCFA / day`, `3 000 FCFA / h`. */
+export function pickerRate(amount: string, lang: PickerLang, kind: 'day' | 'hour'): string {
+  const unit = kind === 'hour' ? 'h' : lang === 'fr' ? 'jour' : 'day';
+  return withRateUnit(amount, unit);
 }
 
 const SERVER_RULES: Record<string, { en: string; fr: string }> = {

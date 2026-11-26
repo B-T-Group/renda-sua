@@ -700,7 +700,7 @@ describe('default rental list', () => {
 
   it('formats XAF with a non-breaking space', async () => {
     const xaf = await renderSearch({ defaultList: true, cards: [sony] });
-    expect(moneyText(xaf.getByText(/FCFA/))).toBe('45\u00A0000\u00A0FCFA');
+    expect(moneyText(xaf.getByText(/FCFA/))).toBe('45\u00A0000\u00A0FCFA\u00A0/\u00A0day');
   });
 
   it('formats dated search XAF as amount then FCFA in English', async () => {
@@ -709,7 +709,7 @@ describe('default rental list', () => {
       dates: { startDate: '2026-11-12', endDate: '2026-11-15', dayCount: 3 },
       cards: [canon],
     });
-    expect(moneyText(view.getByTestId('rental-search-price-canon'))).toBe('25\u00A0000\u00A0FCFA');
+    expect(moneyText(view.getByTestId('rental-search-price-canon'))).toBe('25\u00A0000\u00A0FCFA\u00A0/\u00A0day');
     expect(view.getByTestId('rental-search-total-canon').props.children).toEqual(
       expect.stringMatching(/75\u00A0000\u00A0FCFA/)
     );
@@ -723,6 +723,6 @@ describe('default rental list', () => {
       defaultList: true,
       cards: [{ ...sony, id: 'jbl', name: 'JBL', pricePerDay: 45, currency: 'CAD', inspection: false, business: 'Parkdale', city: 'Toronto' }],
     });
-    expect(moneyText(cad.getByText(/45,00/))).toBe('45,00\u00A0$');
+    expect(moneyText(cad.getByText(/45,00/))).toBe('45,00\u00A0$\u00A0/\u00A0jour');
   });
 });

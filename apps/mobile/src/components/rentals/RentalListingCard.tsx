@@ -8,6 +8,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useImageFallback } from '../../hooks/useImageFallback';
 import type { RentalListingRow } from '../../types/rentals';
 import { formatRentalMoney } from '../../utils/rentals';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
 import { listingRentModes } from '../../utils/rentals/listingRentModes';
 
@@ -120,7 +121,7 @@ function RentalListingCardInner({ listing, onPress }: RentalListingCardProps) {
             ) : null}
             {modes.daily ? (
               <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                {daily} {t('rentals.perDay', '/ day')}
+                {withRateUnit(daily, t('rentals.perDay', '/ day'))}
               </Text>
             ) : null}
           </View>

@@ -60,7 +60,7 @@ describe('rental request screen', () => {
     expect(view.getByTestId('rental-request-dates').props.children).toBe('11–13 Nov · 2 days');
     expect(view.getByText('Wed 11 Nov · All day')).toBeTruthy();
     expect(view.getByText('Thu 12 Nov · All day')).toBeTruthy();
-    expect(view.getByText('2 days × 380\u00A0FCFA / day')).toBeTruthy();
+    expect(view.getByText('2 days × 380\u00A0FCFA\u00A0/\u00A0day')).toBeTruthy();
     expect(view.getAllByText('760\u00A0FCFA').length).toBeGreaterThan(0);
     expect(view.queryByText('FCFA 760')).toBeNull();
     expect(view.queryByText(/billable hours/i)).toBeNull();
@@ -90,7 +90,7 @@ describe('rental request screen', () => {
     expect(view.getByText('Jeu. 12 nov. · Toute la journée')).toBeTruthy();
     expect(view.getByText('Modifier')).toBeTruthy();
     expect(view.getByText('Modifier les jours et les heures')).toBeTruthy();
-    expect(view.getByText('2 jours × 380\u00A0FCFA / jour')).toBeTruthy();
+    expect(view.getByText('2 jours × 380\u00A0FCFA\u00A0/\u00A0jour')).toBeTruthy();
     expect(view.getByText('1 sur 1 disponible pour vos dates')).toBeTruthy();
     expect(view.getByPlaceholderText('Notes facultatives pour l’entreprise')).toBeTruthy();
     expect(view.getByText('Envoyer la demande')).toBeTruthy();
@@ -106,7 +106,7 @@ describe('rental request screen', () => {
       basePricePerHour: 100,
       basePricePerDay: 0,
     });
-    expect(view.getByText('3 h × 100\u00A0FCFA / hour')).toBeTruthy();
+    expect(view.getByText('3 h × 100\u00A0FCFA\u00A0/\u00A0hour')).toBeTruthy();
     expect(view.getByTestId('rental-request-hours').props.children).toBe('3 billable hours total');
     expect(view.queryByText(/× .* \/ day/)).toBeNull();
   });
