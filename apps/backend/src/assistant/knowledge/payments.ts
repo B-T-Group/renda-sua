@@ -31,7 +31,7 @@ function countrySection(country: string | null | undefined, locale: KnowledgeLoc
     return `For ${label}: card payments via Stripe. Pay-at-delivery is not available for Stripe-rail sellers.`;
   }
   if (code === 'CD') {
-    return `For the Democratic Republic of the Congo (RDC): there is no local marketplace payment. Shoppers open export interest or an export order; export deposits/balances are settled in CAD by wire (recorded by Rendasua finance), not local mobile money. This is not Congo-Brazzaville.`;
+    return `For the Democratic Republic of the Congo (RDC): there is no local payment on the marketplace. Shoppers open export interest or an export order; export deposits/balances are settled in CAD by wire (recorded by Rendasua finance), not local mobile money. This is not Congo-Brazzaville.`;
   }
   return `Payment rails: Central/West Africa (GA/CM) use mobile money; CA/US/PH use Stripe cards. Pay-at-delivery is blocked for Stripe-rail sellers.`;
 }
