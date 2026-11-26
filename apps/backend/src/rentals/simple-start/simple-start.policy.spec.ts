@@ -98,6 +98,14 @@ describe('unpaid Mobile Money cutoff', () => {
   const due = (now: string, startAt: Date, timeZone: string, pending = false, policyVersion: number | null = null) =>
     reservedUnpaidDue({ now: at(now), startAt, timeZone, policyVersion, pickupInspectionPending: pending });
 
+  it('an open pickup check pauses the cutoff, but a flagged one (correction requested) does not', () => {
+    const start = at('2026-11-24T08:00:00.000Z');
+    const base = { now: at('2026-11-24T23:00:00.000Z'), startAt: start, timeZone: DOUALA, policyVersion: 1, pickupInspectionPending: true };
+    expect(reservedUnpaidDue(base)).toBe(false);
+    expect(reservedUnpaidDue({ ...base, pickupCheckFlagged: true })).toBe(true);
+    expect(reservedUnpaidDue({ ...base, now: at('2026-11-24T22:59:59.999Z'), pickupCheckFlagged: true })).toBe(false);
+  });
+
   it('cancels a Douala reservation at Douala midnight after the start day', () => {
     const start = at('2026-11-24T08:00:00.000Z');
     expect(due('2026-11-24T10:00:00.000Z', start, DOUALA)).toBe(false);

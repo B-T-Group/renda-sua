@@ -3491,7 +3491,8 @@ export class RentalsService {
     return this.settleReservationFeeOnCancel(booking, flagged ? 'unresolved_flag' : 'unpaid_expired');
   }
 
-  private async pickupCheckFlagged(bookingId: string): Promise<boolean> {
+  /** The renter asked for new photos (correction_requested) and the business hasn't resent them. */
+  async pickupCheckFlagged(bookingId: string): Promise<boolean> {
     const result = await this.hasuraSystemService.executeQuery<{
       rental_inspections: Array<{ status: string }>;
     }>(
@@ -3501,6 +3502,13 @@ export class RentalsService {
       { id: bookingId }
     );
     return result.rental_inspections?.[0]?.status === 'correction_requested';
+  }
+
+  /** A renter cancelling while their flag is still open gets the fee back, like an unresolved flag at 23:59. */
+  private async cancelFeeReason(booking: any, isClient: boolean): Promise<FeeCancelReason> {
+    if (!isClient) return 'business_cancel';
+    if (booking?.reservation_fee_status !== 'paid') return 'renter_cancel';
+    return (await this.pickupCheckFlagged(booking.id)) ? 'unresolved_flag' : 'renter_cancel';
   }
 
   /** Refund or keep a paid fee when a booking is cancelled (README §4 table). */
@@ -4310,7 +4318,7 @@ export class RentalsService {
       // A hold placed after this read is released by the paid-stamp compare-and-set.
       await this.releaseHoldIfNeeded(bookingId, booking);
       await this.cancelStripeAuthorizationIfAny(booking);
-      fee = await this.settleReservationFeeOnCancel(booking, isClient ? 'renter_cancel' : 'business_cancel');
+      fee = await this.settleReservationFeeOnCancel(booking, await this.cancelFeeReason(booking, isClient));
     } catch (error) {
       await this.casBooking(bookingId, ['cancelled'], {
         status: from,
@@ -7598,13 +7606,14 @@ export class RentalsService {
     return this.finishNoShow(booking);
   }
 
-  unpaidReservationDue(booking: any, now = new Date()): boolean {
+  unpaidReservationDue(booking: any, now = new Date(), pickupCheckFlagged = false): boolean {
     return reservedUnpaidDue({
       now,
       startAt: new Date(booking?.start_at),
       timeZone: listingZoneFor(this.bookingCountry(booking)),
       policyVersion: booking?.inspection_policy_version ?? null,
       pickupInspectionPending: !!booking?.pickup_inspection_pending,
+      pickupCheckFlagged,
     });
   }
 

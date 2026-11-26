@@ -5,6 +5,8 @@
  */
 import { HttpException } from '@nestjs/common';
 import { RentalsService } from '../rentals.service';
+import { RentalsCronService } from '../rentals-cron.service';
+import * as Q from '../rentals-queries';
 import {
   bookingNumberFromFeeEntity,
   dueAtPickup,
@@ -354,6 +356,81 @@ describe('3. inspection rejected (flag)', () => {
     expect(outcome).toBe('refund');
     expect(row.reservation_fee_status).toBe('refunded');
     expect(ledger.map((l) => l.type)).toEqual(['release']);
+  });
+});
+
+/** The real end-of-day job (RentalsCronService.expireReservedRentalBookings) over the harness row. */
+function cronOver(h: ReturnType<typeof harness>) {
+  const history: Row[] = [];
+  const pushes: Row[] = [];
+  const hasura = {
+    executeQuery: jest.fn(async (query: string, vars: Row) => {
+      if (query === Q.LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS) return { rental_bookings: h.row.status === 'reserved' ? [{ id: h.row.id }] : [] };
+      if (query === Q.GET_RENTAL_BOOKING_FULL) return { rental_bookings_by_pk: JSON.parse(JSON.stringify(h.row)) };
+      return h.svc.hasuraSystemService.executeQuery(query, vars);
+    }),
+    executeMutation: jest.fn(async (query: string, vars: Row) => {
+      if (query === Q.CAS_UPDATE_RENTAL_BOOKING) {
+        if (!vars.from.includes(h.row.status)) return { update_rental_bookings: { affected_rows: 0 } };
+        Object.assign(h.row, vars.set);
+        return { update_rental_bookings: { affected_rows: 1 } };
+      }
+      if (query === Q.INSERT_RENTAL_STATUS_HISTORY) {
+        history.push(vars.object);
+        return {};
+      }
+      return h.svc.hasuraSystemService.executeMutation(query, vars);
+    }),
+  };
+  const notifications = { sendRentalBookingCancelledPush: jest.fn(async (p: Row) => void pushes.push(p)) };
+  const cron = new RentalsCronService(hasura as any, notifications as any, {} as any, h.svc, {} as any, {} as any);
+  return { cron, history, pushes };
+}
+
+describe('3b. unresolved flag at 23:59 on the start day (cron)', () => {
+  // Douala UTC+1: 23:30Z on 27 Nov = 00:30 on 28 Nov, past the 27 Nov start day.
+  const AFTER_START_DAY = new Date('2026-11-27T23:30:00.000Z');
+  const paidFee = { reservation_fee_amount: 1200, reservation_fee_status: 'paid', reservation_fee_ref: 'ref-1', reservation_fee_rail: 'mobile_money' };
+
+  it('cancels the booking and refunds the fee when the flag was never fixed', async () => {
+    jest.setSystemTime(AFTER_START_DAY);
+    const h = harness(momoBooking({ ...paidFee, inspection_policy_version: 1, pickup_inspection_pending: true }), { flaggedPickup: true });
+    const { cron, history, pushes } = cronOver(h);
+    await expect(cron.expireReservedRentalBookings()).resolves.toBe(1);
+    expect(h.row).toMatchObject({ status: 'cancelled', payment_status: 'cancelled', reservation_fee_status: 'refunded' });
+    expect(h.ledger.map((l) => l.type)).toEqual(['release']);
+    expect(history[0].notes).toMatch(/flag not fixed.*refunded/);
+    expect(pushes).toHaveLength(2);
+  });
+
+  it('still pauses while the business photos wait for the renter (not flagged)', async () => {
+    jest.setSystemTime(AFTER_START_DAY);
+    const h = harness(momoBooking({ ...paidFee, inspection_policy_version: 1, pickup_inspection_pending: true }), { flaggedPickup: false });
+    const { cron } = cronOver(h);
+    await expect(cron.expireReservedRentalBookings()).resolves.toBe(0);
+    expect(h.row).toMatchObject({ status: 'reserved', reservation_fee_status: 'paid' });
+  });
+
+  it('does nothing before 23:59 on the start day, even when flagged', async () => {
+    jest.setSystemTime(new Date('2026-11-27T21:00:00.000Z'));
+    const h = harness(momoBooking({ ...paidFee, inspection_policy_version: 1, pickup_inspection_pending: true }), { flaggedPickup: true });
+    const { cron } = cronOver(h);
+    await expect(cron.expireReservedRentalBookings()).resolves.toBe(0);
+    expect(h.row.status).toBe('reserved');
+  });
+
+  it('plain unpaid at the end of the start day still keeps the fee', async () => {
+    jest.setSystemTime(AFTER_START_DAY);
+    const h = harness(momoBooking({ ...paidFee, reservation_fee_rail: 'wallet' }));
+    const { cron } = cronOver(h);
+    await expect(cron.expireReservedRentalBookings()).resolves.toBe(1);
+    expect(h.row).toMatchObject({ status: 'cancelled', reservation_fee_status: 'forfeited' });
+  });
+
+  it('a renter cancelling on the start day while the flag is open gets the fee back', async () => {
+    const h = harness(momoBooking({ ...paidFee, reservation_fee_rail: 'wallet', inspection_policy_version: 1, pickup_inspection_pending: true }), { flaggedPickup: true });
+    await h.svc.cancelRentalBooking('b1');
+    expect(h.row).toMatchObject({ status: 'cancelled', reservation_fee_status: 'refunded' });
   });
 });
 

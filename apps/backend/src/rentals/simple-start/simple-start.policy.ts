@@ -59,9 +59,11 @@ export function reservedUnpaidDue(input: {
   timeZone: string;
   policyVersion: number | null;
   pickupInspectionPending: boolean;
+  /** The renter flagged the pickup check and the business hasn't fixed it: expire anyway (mockup 07). */
+  pickupCheckFlagged?: boolean;
 }): boolean {
   if (Number.isNaN(input.startAt.getTime())) return false;
-  if (input.policyVersion != null && input.pickupInspectionPending) return false;
+  if (input.policyVersion != null && input.pickupInspectionPending && !input.pickupCheckFlagged) return false;
   const deadline = endOfStartDay(input.startAt, input.timeZone);
   if (Number.isNaN(deadline.getTime())) return false;
   return wallNow(input.now, input.timeZone).getTime() >= deadline.getTime();
