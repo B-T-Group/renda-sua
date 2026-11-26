@@ -7544,6 +7544,9 @@
       "paidMomo": "{{amount}} paid with Mobile Money",
       "paidWallet": "{{amount}} paid from your wallet",
       "returnBy": "Return by {{when}}",
+      "returnDueBusiness": "Return by {{when}}",
+      "returnByEarly": "Return by {{time}} ({{duration}} from now) · booked {{start}} – {{end}}",
+      "bookedWindow": "Booked {{start}} – {{end}}",
       "lateStill": "Booked for {{time}} · you can still start until {{until}}",
       "locked": "Start rental · from {{day}}",
       "button": "Start rental{{amount}}",
@@ -7556,6 +7559,7 @@
     },
     "business": {
       "waitingTitle": "Waiting for {{name}} to start",
+      "waitingTitleElided": "Waiting for {{name}} to start",
       "waitingBody": "Hand over the item only after you get “Rental started”. No PIN needed.",
       "startedLine": "Started at {{time}} · hand over the item",
       "photosAsked": "{{name}} asked for new photos before starting.",
@@ -7713,6 +7717,7 @@
     "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid.",
     "returnAt": "Return date and time",
     "returnAtHint": "Select when the item was returned. Early returns still pay the full rental total; time after the booked end is billed as overtime.",
+    "returnAtInvalid": "Enter a valid return date and time",
     "modify": {
       "changed": "Changed: {{detail}}",
       "staleBanner": "This request was updated. Review the latest version."

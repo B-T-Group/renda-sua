@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { reportReturned } from '../../services/rentalsApi';
-import { formatDoualaStamp, type RenterReturnPhase } from '../../utils/rentals/renterReturnPhase';
+import { formatReturnStamp, type RenterReturnPhase } from '../../utils/rentals/renterReturnPhase';
 import { instantClock } from '../../utils/rentals/earlyReturn';
 
 export interface RenterReturnCardProps {
@@ -18,11 +18,11 @@ export interface RenterReturnCardProps {
   phone: string | null;
   endAt: string;
   reportedAt?: string | null;
+  /** Listing zone, for the report time (a real instant). */
+  timeZone?: string | null;
   depositLabel: string;
   /** The renter tapped Return early (report before the due): early waiting copy (mock 05a). */
   early?: boolean;
-  /** Listing zone for the early report time. */
-  timeZone?: string;
   onReported: () => void;
   onAlreadyConfirmed: () => void;
   onMessage: () => void;
@@ -36,8 +36,9 @@ export function RenterReturnCard(props: RenterReturnCardProps) {
   const [retry, setRetry] = useState(false);
   const overdue = props.phase === 'overdue';
   const tint = overdue ? colors.error.main : '#0A4FB5';
-  const when = formatDoualaStamp(props.reportedAt || props.endAt, i18n.language);
-  const due = formatDoualaStamp(props.endAt, i18n.language);
+  // endAt is listing wall clock (UTC components); reportedAt is a real instant.
+  const due = formatReturnStamp(props.endAt, i18n.language, 'UTC');
+  const when = props.reportedAt ? formatReturnStamp(props.reportedAt, i18n.language, props.timeZone) : due;
   const body = props.early && props.phase === 'waiting'
     ? earlyWaitingBody(t, instantClock(props.reportedAt, i18n.language, props.timeZone), props.depositLabel)
     : bodyFor(props.phase, t, props.location, when, props.depositLabel);

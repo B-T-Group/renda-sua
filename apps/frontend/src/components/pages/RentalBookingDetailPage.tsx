@@ -67,7 +67,8 @@ import {
 } from '../../utils/rentals/earlyReturn';
 import { cardHoldLines, holdPresentation, showsCardDeposit, type HoldPresentation } from '../../utils/rentals/cardDeposit';
 import { bookingDetailPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
-import { formatDoualaStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
+import { formatReturnStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
+import { dateTimeLocalToInstantIso, listingDateTimeLocal } from '../../utils/rentals/returnClock';
 import {
   REPORT_REVIEW_STEP,
   bookingDetailStatusLabelKey,
@@ -88,6 +89,7 @@ import {
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
 import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
+import { bookingReturnDue } from '../../utils/rentals/returnDue';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 import {
   isPriceChangeUnseenError,
@@ -126,12 +128,6 @@ function apiErrorMessage(
       : message;
   }
   return message.trim() ? message : fallback;
-}
-
-/** Local `datetime-local` value (YYYY-MM-DDTHH:mm) from a Date. */
-function toDateTimeLocalValue(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const DETAIL_STATUS_DEFAULTS: Record<string, string> = {
@@ -261,9 +257,8 @@ const RentalBookingDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
-  const [returnAtLocal, setReturnAtLocal] = useState(() =>
-    toDateTimeLocalValue(new Date())
-  );
+  // Typed on the listing clock (like end_at); set when the return dialog opens.
+  const [returnAtLocal, setReturnAtLocal] = useState('');
   const [returning, setReturning] = useState(false);
   const [earlyDialogOpen, setEarlyDialogOpen] = useState(false);
   const [earlyBusy, setEarlyBusy] = useState(false);
@@ -472,9 +467,11 @@ const RentalBookingDetailPage: React.FC = () => {
     dayCountLabel,
     bookedSpan
   );
+  // Return due: return_due_at after an hourly early start, else the booked end.
+  const returnDueAt = bookingReturnDue(booking) ?? booking.end_at;
   const returnPhase = renterReturnPhase({
     status: booking.status,
-    endAt: booking.end_at,
+    endAt: returnDueAt,
     reportedAt: booking.renter_reported_returned_at,
     escalatedAt: booking.renter_return_escalated_at,
     timeZone: confirmationTimeZone(listingCountry, booking.currency),
@@ -487,9 +484,9 @@ const RentalBookingDetailPage: React.FC = () => {
     flags.rentals_renter_return_report_enabled &&
     Boolean(booking.renter_reported_returned_at);
   const returnLocation = booking.return_place?.name || locationName;
-  const returnByLabel = booking.end_at
+  const returnByLabel = returnDueAt
     ? formatRentalPeriod(
-        [{ start_at: booking.end_at, end_at: booking.end_at }],
+        [{ start_at: returnDueAt, end_at: returnDueAt }],
         i18n.language,
         dayCountLabel
       )
@@ -817,7 +814,7 @@ const RentalBookingDetailPage: React.FC = () => {
                     variant="contained"
                     color="success"
                     onClick={() => {
-                      setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                      setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
                       setReturnDialogOpen(true);
                     }}
                   >
@@ -895,11 +892,11 @@ const RentalBookingDetailPage: React.FC = () => {
               location={returnLocation}
               address={booking.return_place?.address ?? returnLocation}
               phone={booking.return_place?.phone ?? null}
-              endAt={booking.end_at}
+              endAt={returnDueAt}
               reportedAt={booking.renter_reported_returned_at}
+              timeZone={listingZone}
               depositLabel={depositAmount > 0 ? formatDetailMoney(depositAmount) : ''}
               early={earlyPending}
-              timeZone={listingZone}
               onChanged={() => void load()}
             />
           ) : null}
@@ -916,7 +913,7 @@ const RentalBookingDetailPage: React.FC = () => {
             <Alert severity="success" sx={{ mb: 2 }} data-testid="business-return-report">
               <Typography fontWeight={700}>
                 {t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
-                  time: formatDoualaStamp(booking.renter_reported_returned_at, i18n.language),
+                  time: formatReturnStamp(booking.renter_reported_returned_at, i18n.language, listingZone),
                 })}
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -933,7 +930,7 @@ const RentalBookingDetailPage: React.FC = () => {
                   sx={{ minHeight: 48 }}
                   onClick={() => {
                     if (inspection.showLegacyReturn) {
-                      setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                      setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
                       setReturnDialogOpen(true);
                       return;
                     }
@@ -1002,7 +999,7 @@ const RentalBookingDetailPage: React.FC = () => {
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ')}
               place={booking.rental_location_listing?.business_location?.name ?? ''}
               money={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
-              returnLabel={formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language)}
+              returnLabel={formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language, listingZone)}
               starting={sharingPin}
               actions={
                 canItemReturned ? (
@@ -1357,7 +1354,7 @@ const RentalBookingDetailPage: React.FC = () => {
               variant="contained"
               color="success"
               onClick={() => {
-                setReturnAtLocal(toDateTimeLocalValue(new Date()));
+                setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
                 setReturnDialogOpen(true);
               }}
             >
@@ -1404,7 +1401,11 @@ const RentalBookingDetailPage: React.FC = () => {
               if (!bookingId || !returnAtLocal) return;
               setReturning(true);
               try {
-                const actualEndAt = new Date(returnAtLocal).toISOString();
+                const actualEndAt = dateTimeLocalToInstantIso(returnAtLocal, listingZone);
+                if (!actualEndAt) {
+                  setError(t('rentals.returnAtInvalid', 'Enter a valid return date and time'));
+                  return;
+                }
                 const res = await confirmReturn(bookingId, { actualEndAt });
                 setReturnDialogOpen(false);
                 if (res.paymentPending || res.overtimeDue) {
@@ -1471,7 +1472,7 @@ function BookingConfirmation({
   const theme = useTheme();
   const country = booking.rental_location_listing?.business_location?.address?.country;
   const zoneId = confirmationTimeZone(country, booking.currency);
-  const due = formatConfirmationDue(booking.end_at, 'UTC', language);
+  const due = formatConfirmationDue(bookingReturnDue(booking) ?? booking.end_at, 'UTC', language);
   const zone = t(
     confirmationZoneKey(country, booking.currency),
     confirmationZoneDefault(country, booking.currency, language)
@@ -1501,7 +1502,7 @@ function BookingConfirmation({
             depositHeld={confirmationDepositHeld(booking.payment_status)}
             title={booking.rental_location_listing?.rental_item?.name || 'Rental'}
             startAt={booking.start_at}
-            endAt={booking.end_at}
+            endAt={bookingReturnDue(booking) ?? booking.end_at}
             location={booking.rental_location_listing?.business_location?.name}
             onBack={onBack}
           />

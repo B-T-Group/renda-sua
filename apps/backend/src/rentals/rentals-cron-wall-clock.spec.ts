@@ -1,5 +1,6 @@
 import { RentalsCronService, endsWithinOnListingClock, wallClockHorizon } from './rentals-cron.service';
 import { RentalsService } from './rentals.service';
+import * as Q from './rentals-queries';
 
 /**
  * Booking start_at / end_at are the listing's wall clock stored as UTC components.
@@ -58,6 +59,33 @@ describe('rental crons on the listing clock', () => {
     jest.setSystemTime(new Date('2026-11-26T21:00:00.000Z'));
     await expect(cron.processEndedActiveBookings()).resolves.toBe(1);
     expect(cron.notificationsService.sendRentalPeriodEndedEmails).toHaveBeenCalledTimes(1);
+  });
+
+  it('hourly early start: moves to awaiting return at the return due (1 PM Toronto), not the booked 4 PM', async () => {
+    const cron = cronWith(booking({ return_due_at: '2026-11-26T13:00:00.000Z' }));
+    jest.useFakeTimers().setSystemTime(new Date('2026-11-26T17:59:59.000Z'));
+    await expect(cron.processEndedActiveBookings()).resolves.toBe(0);
+    jest.setSystemTime(new Date('2026-11-26T18:00:00.000Z'));
+    await expect(cron.processEndedActiveBookings()).resolves.toBe(1);
+    expect(cron.notificationsService.sendRentalPeriodEndedEmails).toHaveBeenCalledWith(
+      expect.objectContaining({ endAt: '2026-11-26T13:00:00.000Z' })
+    );
+  });
+
+  it('hourly early start: ending-soon reminder 30 minutes before the return due', async () => {
+    const cron = cronWith(booking({ return_due_at: '2026-11-26T13:00:00.000Z' }));
+    jest.useFakeTimers().setSystemTime(new Date('2026-11-26T17:29:59.000Z'));
+    await expect(cron.sendEndingSoonReminders()).resolves.toBe(0);
+    jest.setSystemTime(new Date('2026-11-26T17:30:00.000Z'));
+    await expect(cron.sendEndingSoonReminders()).resolves.toBe(1);
+    expect(cron.notificationsService.sendRentalEndingSoonNotifications).toHaveBeenCalledWith(
+      expect.objectContaining({ endAt: '2026-11-26T13:00:00.000Z' })
+    );
+  });
+
+  it('candidate queries also match return_due_at', () => {
+    expect(Q.LIST_ACTIVE_BOOKINGS_PAST_END).toContain('{ return_due_at: { _lte: $now } }');
+    expect(Q.LIST_ACTIVE_BOOKINGS_ENDING_SOON).toContain('{ return_due_at: { _gt: $now, _lte: $until } }');
   });
 
   it('moves a Manila rental at the Manila end time', async () => {

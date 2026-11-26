@@ -1,5 +1,4 @@
-import { listingTimeZone } from '../inspection/listing-time-zone';
-import { wallClockToInstantMs } from '../wall-clock';
+import { bookingReturnDueInstantMs, bookingTimeZone, type ReturnDueBooking } from '../return-due';
 
 /**
  * Early return: the renter (or the business) ends an active rental before the
@@ -8,17 +7,11 @@ import { wallClockToInstantMs } from '../wall-clock';
  * (actual_end_at, or the renter's report) is before the due instant.
  *
  * The due is listing wall clock written as UTC components (end_at, and
- * return_due_at after an hourly early start once that column exists), so it is
+ * return_due_at after an hourly early start, #881), so it is
  * read on the listing clock before it is compared with a real instant.
  */
 
-export interface EarlyReturnBooking {
-  end_at?: string | null;
-  return_due_at?: string | null;
-  rental_location_listing?: {
-    business_location?: { address?: { country?: string | null } | null } | null;
-  } | null;
-}
+export type EarlyReturnBooking = ReturnDueBooking;
 
 export interface OvertimeSettlement {
   overtimeHours: number;
@@ -28,7 +21,7 @@ export interface OvertimeSettlement {
 }
 
 export function earlyReturnZone(booking: EarlyReturnBooking | null | undefined): string {
-  return listingTimeZone(booking?.rental_location_listing?.business_location?.address?.country);
+  return bookingTimeZone(booking);
 }
 
 /** Real instant (ms) when the return is due; NaN when unknown. */
@@ -36,9 +29,7 @@ export function returnDueInstantMs(
   booking: EarlyReturnBooking | null | undefined,
   timeZone = earlyReturnZone(booking)
 ): number {
-  const due = booking?.return_due_at || booking?.end_at;
-  if (!due) return Number.NaN;
-  return wallClockToInstantMs(Date.parse(due), timeZone);
+  return bookingReturnDueInstantMs(booking, timeZone);
 }
 
 /** True when a real return instant is strictly before the due instant. */

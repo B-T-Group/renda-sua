@@ -18,7 +18,7 @@ function booking(overrides: Record<string, unknown> = {}) {
     security_deposit_amount: 0,
     units_booked: 1,
     currency: 'XAF',
-    end_at: '2026-07-17T12:00:00.000Z',
+    end_at: '2026-07-17T13:00:00.000Z', // 13:00 on the Douala clock (no country) = 12:00Z
     client: { user_id: 'client-user' },
     rental_pricing_snapshot: {
       total: 160,
