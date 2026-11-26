@@ -255,6 +255,7 @@ export default function RentalBookingDetailScreen() {
     endAt: booking?.end_at,
     reportedAt: booking?.renter_reported_returned_at,
     escalatedAt: booking?.renter_return_escalated_at,
+    timeZone: booking ? confirmationTimeZone(listingCountry, booking.currency) : null,
   });
   const showReturnReport = !flagsLoading && flags.rentals_renter_return_report_enabled && returnPhase !== 'hidden';
   const headerOverdue = showReturnReport && returnPhase === 'overdue';

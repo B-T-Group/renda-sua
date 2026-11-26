@@ -565,7 +565,10 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
   });
 
   it('ends the contract at the start when the rental is under an hour away', async () => {
-    const start = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+    // No country falls back to Africa/Douala (UTC+1): the stored wall clock is one hour
+    // ahead of the real start, and the contract ends at the real start instant.
+    const realStart = Date.now() + 20 * 60 * 1000;
+    const start = new Date(realStart + 60 * 60 * 1000).toISOString();
     const { service } = responder(pendingRequest({
       requested_start_at: start,
       rental_selection_windows: [{ billing: 'all_day', calendar_date: '2026-11-18', start_at: start, end_at: start }],
@@ -576,7 +579,7 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      new Date(start).toISOString()
+      new Date(realStart).toISOString()
     );
   });
 

@@ -190,6 +190,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
                   endAt: row.rental_booking.end_at,
                   reportedAt: row.rental_booking.renter_reported_returned_at,
                   escalatedAt: row.rental_booking.renter_return_escalated_at,
+                  timeZone: row.listing_timezone,
                 });
                 if (!chip) return null;
                 const overdue = chip === 'overdue';

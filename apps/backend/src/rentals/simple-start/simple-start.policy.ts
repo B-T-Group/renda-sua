@@ -1,4 +1,5 @@
 import { listingTimeZone } from '../inspection/listing-time-zone';
+import { wallClockToInstant, wallNow } from '../wall-clock';
 
 export const PIN_RETIRED_MESSAGE = 'Update the app to start this rental';
 export const START_WINDOW_CODE = 'RENTAL_START_WINDOW';
@@ -20,6 +21,13 @@ export function endOfStartDay(startAt: Date, timeZone?: string): Date {
   return new Date(opens.getTime() + 86_400_000);
 }
 
+/** Real instant the start day ends on the listing clock (shown as a countdown). */
+export function endOfStartDayInstant(startAt: Date, timeZone: string): Date {
+  const wall = endOfStartDay(startAt, timeZone);
+  if (Number.isNaN(wall.getTime())) return wall;
+  return wallClockToInstant(wall, timeZone);
+}
+
 export type StartWindowState = 'before' | 'open' | 'after' | 'unknown';
 
 export function startWindowState(input: {
@@ -33,8 +41,10 @@ export function startWindowState(input: {
   }
   const opens = startOpensAt(input.startAt, input.timeZone);
   if (Number.isNaN(opens.getTime())) return 'unknown';
-  if (input.now.getTime() < opens.getTime()) return 'before';
-  if (input.now.getTime() >= input.endAt.getTime()) return 'after';
+  // start/end are listing wall clock; read "now" on that clock too.
+  const now = wallNow(input.now, input.timeZone).getTime();
+  if (now < opens.getTime()) return 'before';
+  if (now >= input.endAt.getTime()) return 'after';
   return 'open';
 }
 
@@ -54,21 +64,30 @@ export function reservedUnpaidDue(input: {
   if (input.policyVersion != null && input.pickupInspectionPending) return false;
   const deadline = endOfStartDay(input.startAt, input.timeZone);
   if (Number.isNaN(deadline.getTime())) return false;
-  return input.now.getTime() >= deadline.getTime();
+  return wallNow(input.now, input.timeZone).getTime() >= deadline.getTime();
 }
 
+/** Confirmed, never started, and the listing clock has reached end_at. */
 export function isNoShow(input: {
   status: string;
   actualStartAt: string | null | undefined;
   endAt: Date;
   now: Date;
+  timeZone: string;
 }): boolean {
   if (input.status !== 'confirmed' || input.actualStartAt) return false;
   if (Number.isNaN(input.endAt.getTime())) return false;
-  return input.now.getTime() >= input.endAt.getTime();
+  return wallNow(input.now, input.timeZone).getTime() >= input.endAt.getTime();
 }
 
-export function isStartDay(startAt: Date, now: Date, _timeZone?: string): boolean {
+/** True when today on the listing clock is the stored start date. */
+export function isStartDay(startAt: Date, now: Date, timeZone: string): boolean {
   if (Number.isNaN(startAt.getTime()) || Number.isNaN(now.getTime())) return false;
-  return startAt.toISOString().slice(0, 10) === now.toISOString().slice(0, 10);
+  return startAt.toISOString().slice(0, 10) === wallNow(now, timeZone).toISOString().slice(0, 10);
+}
+
+/** True when the listing clock has reached the stored wall-clock time `at`. */
+export function wallClockReached(at: Date, now: Date, timeZone: string): boolean {
+  if (Number.isNaN(at.getTime()) || Number.isNaN(now.getTime())) return false;
+  return wallNow(now, timeZone).getTime() >= at.getTime();
 }

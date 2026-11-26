@@ -71,3 +71,17 @@ describe('dashboard rental request display', () => {
     expect([later, sooner].sort(compareSoonestRequestStart)[0]).toBe(sooner);
   });
 });
+
+describe('contractHoursOffer on the listing clock', () => {
+  // Samuel's case: 14:00 Toronto start stored as 14:00Z; at 11:10 AM Toronto there are ~2h50 left.
+  it('offers whole hours until a Toronto start, not "expired"', () => {
+    const offer = contractHoursOffer('2026-11-26T14:00:00.000Z', new Date('2026-11-26T16:10:00.000Z'), 'America/Toronto');
+    expect(offer.hidden).toBe(false);
+    expect(offer.maxHours).toBe(2);
+  });
+
+  it('hides the hours picker in the last hour before a Douala start', () => {
+    const offer = contractHoursOffer('2026-11-26T14:00:00.000Z', new Date('2026-11-26T12:30:00.000Z'), 'Africa/Douala');
+    expect(offer.hidden).toBe(true);
+  });
+});

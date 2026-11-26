@@ -47,11 +47,11 @@ export function calendarDay(instant: Date, timeZone: string): string {
 
 /**
  * Pickup day is the stored UTC calendar date of start_at, same as isStartDay.
- * start_at is listing wall clock written as UTC components, so a listing-zone
- * conversion shifts a Manila afternoon booking onto the next local day.
+ * start_at is listing wall clock written as UTC components; `now` (or a photo's
+ * capture instant) is a real instant, read on the listing clock before comparing.
  */
-export function isPickupPhotoDay(startAt: Date, now: Date, _timeZone?: string): boolean {
-  return isStartDay(startAt, now, _timeZone);
+export function isPickupPhotoDay(startAt: Date, now: Date, timeZone: string): boolean {
+  return isStartDay(startAt, now, timeZone);
 }
 
 export function parseSlotKey(value: string | null | undefined): string | null {
@@ -181,9 +181,9 @@ function sameSkip(row: { unitId: string; slotKey: string; reason: string }, unit
 export function captureOutsidePickupDay(
   photos: Array<{ capturedAt: string | null }>,
   startAt: Date,
-  _timeZone?: string
+  timeZone: string
 ): boolean {
-  return photos.some((photo) => !isPickupPhotoDay(startAt, new Date(photo.capturedAt ?? ''), _timeZone));
+  return photos.some((photo) => !isPickupPhotoDay(startAt, new Date(photo.capturedAt ?? ''), timeZone));
 }
 
 /** Drop ASCII control characters, then trim. Length is capped by skipDecision. */

@@ -64,3 +64,20 @@ describe('renterReturnPhase', () => {
     })).toBeNull();
   });
 });
+
+describe('renterReturnPhase on the listing clock', () => {
+  // 15:00 Toronto wall clock stored as UTC components = 20:00Z real.
+  const torontoEnd = '2026-11-26T15:00:00.000Z';
+  it('is not overdue in Toronto until 3 PM Toronto', () => {
+    const at = (iso: string) => renterReturnPhase({ status: 'active', endAt: torontoEnd, now: new Date(iso), timeZone: 'America/Toronto' });
+    expect(at('2026-11-26T15:00:00.000Z')).toBe('hidden');
+    expect(at('2026-11-26T19:59:00.000Z')).toBe('hidden');
+    expect(at('2026-11-26T20:00:00.000Z')).toBe('overdue');
+  });
+
+  it('flags a Manila return at 3 PM Manila, not 11 PM', () => {
+    const chip = (iso: string) => listReturnChip({ status: 'active', endAt: torontoEnd, now: new Date(iso), timeZone: 'Asia/Manila' });
+    expect(chip('2026-11-26T06:59:00.000Z')).toBeNull();
+    expect(chip('2026-11-26T07:00:00.000Z')).toBe('overdue');
+  });
+});

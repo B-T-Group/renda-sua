@@ -206,7 +206,9 @@ describe('rental cron compare-and-set', () => {
       }),
     };
     cron.notifyReservationExpired = jest.fn();
+    cron.rentalsService = { unpaidReservationDue: jest.fn().mockReturnValue(true) };
     await cron.expireOneReservedBooking('b1');
+    expect(cron.hasuraSystemService.executeMutation).toHaveBeenCalled();
     expect(cron.logHistory).not.toHaveBeenCalled();
     expect(cron.notifyReservationExpired).not.toHaveBeenCalled();
   });

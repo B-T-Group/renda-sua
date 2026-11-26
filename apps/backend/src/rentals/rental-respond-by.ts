@@ -1,4 +1,11 @@
-/** Business must answer within 24 hours, or by the rental start if that is sooner. */
+import { wallClockToInstantMs } from './wall-clock';
+
+/**
+ * Business must answer within 24 hours, or by the rental start if that is sooner.
+ * respond_by is a real instant. Request starts are listing wall clock stored as
+ * UTC components (Toronto 14:00 is `T14:00:00Z`), so the start cap converts them
+ * to the real instant on the listing clock first.
+ */
 export const RENTAL_RESPOND_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type RentalRespondWindow = 'sla' | 'start';
@@ -6,10 +13,11 @@ export type RentalRespondWindow = 'sla' | 'start';
 export function computeRespondBy(input: {
   createdAt: string;
   startAt: string | null;
+  timeZone: string;
 }): { respondBy: string; window: RentalRespondWindow } {
   const created = Date.parse(input.createdAt);
   const sla = (Number.isFinite(created) ? created : Date.now()) + RENTAL_RESPOND_WINDOW_MS;
-  const start = input.startAt ? Date.parse(input.startAt) : Number.NaN;
+  const start = startInstantMs(input.startAt, input.timeZone);
   if (Number.isFinite(start) && start < sla) {
     return { respondBy: new Date(start).toISOString(), window: 'start' };
   }
@@ -21,40 +29,59 @@ export function effectiveRespondBy(input: {
   createdAt: string;
   respondBy?: string | null;
   startAt: string | null;
+  timeZone: string;
 }): { respondBy: string; window: RentalRespondWindow } {
-  const computed = computeRespondBy({ createdAt: input.createdAt, startAt: input.startAt });
+  const computed = computeRespondBy({
+    createdAt: input.createdAt,
+    startAt: input.startAt,
+    timeZone: input.timeZone,
+  });
   const stored = input.respondBy && Number.isFinite(Date.parse(input.respondBy)) ? input.respondBy : null;
   if (!stored) return computed;
-  const atStart = input.startAt != null && Date.parse(stored) === Date.parse(input.startAt);
+  const atStart = Date.parse(stored) === startInstantMs(input.startAt, input.timeZone);
   return { respondBy: stored, window: atStart ? 'start' : 'sla' };
+}
+
+/** Real instant of a wall-clock start; NaN when missing or unparsable. */
+export function startInstantMs(startIso: string | null | undefined, timeZone: string): number {
+  if (!startIso) return Number.NaN;
+  return wallClockToInstantMs(Date.parse(startIso), timeZone);
 }
 
 const CONTRACT_HOUR_CAP = 48;
 
 /** Default and maximum contract length: min(48, whole hours until start). Hidden under 1 hour. */
-export function contractHoursOffer(startIso: string | null, now = new Date()): {
+export function contractHoursOffer(startIso: string | null, now: Date, timeZone: string): {
   hidden: boolean;
   hours: number;
   maxHours: number;
 } {
-  const remaining = hoursUntil(startIso, now);
+  const remaining = hoursUntil(startIso, now, timeZone);
   if (remaining == null) return { hidden: false, hours: CONTRACT_HOUR_CAP, maxHours: CONTRACT_HOUR_CAP };
   if (remaining < 1) return { hidden: true, hours: Math.max(0, remaining), maxHours: 0 };
   const maxHours = Math.min(CONTRACT_HOUR_CAP, Math.floor(remaining));
   return { hidden: false, hours: maxHours, maxHours };
 }
 
-function hoursUntil(startIso: string | null, now: Date): number | null {
+function hoursUntil(startIso: string | null, now: Date, timeZone: string): number | null {
   if (!startIso) return null;
-  const start = Date.parse(startIso);
+  const start = startInstantMs(startIso, timeZone);
   if (!Number.isFinite(start)) return null;
   return (start - now.getTime()) / (60 * 60 * 1000);
 }
 
-/** When the start is under an hour away, the contract ends at that start. */
-export function cappedContractExpiry(startIso: string | null, hours: number, now = new Date()): string | null {
-  const offer = contractHoursOffer(startIso, now);
-  if (offer.hidden) return startIso;
+/** When the start is under an hour away, the contract ends at that start (as a real instant). */
+export function cappedContractExpiry(
+  startIso: string | null,
+  hours: number,
+  now: Date,
+  timeZone: string
+): string | null {
+  const offer = contractHoursOffer(startIso, now, timeZone);
+  if (offer.hidden) {
+    const start = startInstantMs(startIso, timeZone);
+    return Number.isFinite(start) ? new Date(start).toISOString() : startIso;
+  }
   if (!Number.isInteger(hours) || hours < 1 || hours > offer.maxHours) return null;
   return new Date(now.getTime() + hours * 60 * 60 * 1000).toISOString();
 }

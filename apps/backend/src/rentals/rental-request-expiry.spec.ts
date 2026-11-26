@@ -37,6 +37,7 @@ function row(overrides: Partial<UnansweredRentalRequest> = {}): UnansweredRental
     businessName: 'Atelier Nord',
     renterName: 'Marie Dubois',
     listingId: 'listing-1',
+    timeZone: 'UTC',
     ...overrides,
   };
 }
@@ -107,6 +108,31 @@ describe('expireUnansweredRentalRequests', () => {
     ]);
     await tools.run(now);
     expect(tools.notify).toHaveBeenCalledWith(expect.anything(), 'start');
+  });
+
+  it('does not auto-decline a Toronto same-day request before its real start', async () => {
+    // 14:00 Toronto is stored as T14:00:00Z; at 11:10 AM Toronto (16:10Z) the start is 3 h away.
+    const sameDay = row({
+      created_at: '2026-11-26T16:08:35.768Z',
+      requested_start_at: '2026-11-26T14:00:00.000Z',
+      timeZone: 'America/Toronto',
+    });
+    const tools = harness([sameDay]);
+    await expect(tools.run(new Date('2026-11-26T16:10:00.000Z'))).resolves.toBe(0);
+    await expect(tools.run(new Date('2026-11-26T18:59:59.000Z'))).resolves.toBe(0);
+    await expect(tools.run(new Date('2026-11-26T19:00:00.000Z'))).resolves.toBe(1);
+    expect(tools.notify).toHaveBeenCalledWith(expect.anything(), 'start');
+  });
+
+  it('declines a Manila request when the Manila start passes, not 8 hours later', async () => {
+    const manila = row({
+      created_at: '2026-11-26T00:00:00.000Z',
+      requested_start_at: '2026-11-26T14:00:00.000Z',
+      timeZone: 'Asia/Manila',
+    });
+    const tools = harness([manila]);
+    await expect(tools.run(new Date('2026-11-26T05:59:59.000Z'))).resolves.toBe(0);
+    await expect(tools.run(new Date('2026-11-26T06:00:00.000Z'))).resolves.toBe(1);
   });
 });
 
@@ -317,6 +343,7 @@ describe('N5 stored respond_by after an edit', () => {
       createdAt: '2026-11-01T00:00:00.000Z',
       respondBy: '2026-11-02T20:00:00.000Z',
       startAt: '2026-11-10T00:00:00.000Z',
+      timeZone: 'UTC',
     });
     expect(edited.respondBy).toBe('2026-11-02T20:00:00.000Z');
     const now = new Date('2026-11-02T01:00:00.000Z');
