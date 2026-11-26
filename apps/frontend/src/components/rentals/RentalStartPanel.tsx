@@ -1,9 +1,11 @@
-import { CalendarMonth, CreditCard, HelpOutline, Lock, PhoneIphone, PlayArrow, Storefront } from '@mui/icons-material';
+import { AccountBalanceWallet, CalendarMonth, CreditCard, HelpOutline, Lock, PhoneIphone, PlayArrow, Storefront } from '@mui/icons-material';
 import { Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BOOKING_CLOCK, formatZonedDay, formatZonedTime, formatZonedWeekday, formatZonedWhen, pickupPhase } from '../../utils/rentalStartWindow';
+import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
+import { startMoney, startMoneyLines, type StartMoneyBooking } from '../../utils/rentals/startMoney';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedTime, formatZonedWeekdayDay, formatZonedWhen, pickupPhase } from '../../utils/rentalStartWindow';
 
 export interface StartPanelBooking {
   status: string;
@@ -13,6 +15,10 @@ export interface StartPanelBooking {
   actual_start_at?: string | null;
   currency: string;
   payment_status?: string | null;
+  total_amount?: number | string | null;
+  security_deposit_amount?: number | string | null;
+  authorized_amount?: number | string | null;
+  accept_start_preview?: StartMoneyBooking['accept_start_preview'];
 }
 
 interface Props {
@@ -42,10 +48,12 @@ export function RentalStartPanel(props: Props) {
     started,
   });
   const day = formatZonedDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
-  const when = `${formatZonedWeekday(props.booking.start_at, BOOKING_CLOCK, i18n.language)} ${day}`;
+  const when = formatZonedWeekdayDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
   const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
   const locked = phase === 'before' || phase === 'closed';
-  const momo = (props.booking.currency === 'XAF' || props.booking.currency === 'XOF') && props.booking.payment_status !== 'paid';
+  const hold = startMoney(props.booking);
+  const momo = hold.kind === 'momo_due';
+  const lines = startMoneyLines(hold, (value) => formatConfirmationMoney(value, props.booking.currency, i18n.language), t);
   const late = phase === 'late';
   const tone = late ? 'warning.main' : 'success.main';
   const pill = phase === 'before'
@@ -73,11 +81,10 @@ export function RentalStartPanel(props: Props) {
         </Typography>
       ) : null}
       {phase !== 'started' && props.role === 'client' ? (
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          {momo
-            ? t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: props.money })
-            : t('rentals.start.held', '{{amount}} held on your card', { amount: props.money })}
-        </Typography>
+        <Box sx={{ mt: 1 }} data-testid="rental-start-money">
+          <Typography variant="body2">{lines.main}</Typography>
+          {lines.sub ? <Typography variant="caption" color="text.secondary" display="block">{lines.sub}</Typography> : null}
+        </Box>
       ) : null}
       <Typography variant="body2">{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Typography>
       {props.role === 'client' && phase !== 'started' ? (
@@ -111,10 +118,16 @@ export function RentalStartPanel(props: Props) {
           <Stack spacing={1} sx={{ mt: 2 }}>
             <Stack direction="row" spacing={1}><Storefront fontSize="small" color="action" /><Typography>{props.place}</Typography></Stack>
             <Stack direction="row" spacing={1}><CalendarMonth fontSize="small" color="action" /><Typography>{t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}</Typography></Stack>
-            <Stack direction="row" spacing={1}>{momo ? <PhoneIphone fontSize="small" color="action" /> : <CreditCard fontSize="small" color="action" />}<Typography>{momo ? t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: props.money }) : t('rentals.start.held', '{{amount}} held on your card', { amount: props.money })}</Typography></Stack>
+            <Stack direction="row" spacing={1} data-testid="rental-start-sheet-money">
+              <MoneyIcon icon={lines.icon} />
+              <Box>
+                <Typography>{lines.main}</Typography>
+                {lines.sub ? <Typography variant="caption" color="text.secondary" display="block">{lines.sub}</Typography> : null}
+              </Box>
+            </Stack>
           </Stack>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-            {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30 minutes.")}
+            {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30\u00a0minutes.")}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ flexDirection: 'column', px: 3, pb: 2 }}>
@@ -128,6 +141,12 @@ export function RentalStartPanel(props: Props) {
       </Dialog>
     </Box>
   );
+}
+
+function MoneyIcon({ icon }: { icon: 'card' | 'momo' | 'wallet' }) {
+  if (icon === 'momo') return <PhoneIphone fontSize="small" color="action" />;
+  if (icon === 'wallet') return <AccountBalanceWallet fontSize="small" color="action" />;
+  return <CreditCard fontSize="small" color="action" />;
 }
 
 function titleText(

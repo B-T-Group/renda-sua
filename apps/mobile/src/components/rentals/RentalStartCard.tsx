@@ -8,11 +8,13 @@ import {
   formatZonedDay,
   BOOKING_CLOCK,
   formatZonedTime,
-  formatZonedWeekday,
+  formatZonedWeekdayDay,
   formatZonedWhen,
   pickupPhase,
   type PickupPhase,
 } from '../../utils/rentals/rentalStartWindow';
+import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
+import { startMoney, startMoneyLines, type StartMoneyBooking } from '../../utils/rentals/startMoney';
 
 export interface StartCardBooking {
   status: string;
@@ -26,6 +28,7 @@ export interface StartCardBooking {
   payment_timing?: string | null;
   authorized_amount?: number | string | null;
   security_deposit_amount?: number | string | null;
+  accept_start_preview?: StartMoneyBooking['accept_start_preview'];
 }
 
 interface Props {
@@ -73,7 +76,7 @@ function StartBody(props: Props & { phase: PickupPhase }) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const day = formatZonedDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
-  const when = `${formatZonedWeekday(props.booking.start_at, BOOKING_CLOCK, i18n.language)} ${day}`;
+  const when = formatZonedWeekdayDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
   const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
   const pill = pillText(props.phase, day, t);
   const momo = isMomoDue(props.booking);
@@ -100,14 +103,39 @@ function StartBody(props: Props & { phase: PickupPhase }) {
   );
 }
 
-function MoneyLine({ booking, money, momo, role }: Props & { momo: boolean }) {
-  const { t } = useTranslation();
+function MoneyLine({ booking, role }: Props & { momo: boolean }) {
   const { colors, typography } = useTheme();
+  const lines = useStartMoneyLines(booking);
   if (role === 'business' || booking.status === 'active' || booking.actual_start_at) return null;
-  const label = momo
-    ? t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: money })
-    : t('rentals.start.held', '{{amount}} held on your card', { amount: money });
-  return <Text style={[typography.body2, { color: colors.text.primary }]}>{label}</Text>;
+  return (
+    <View testID="rental-start-money">
+      <Text style={[typography.body2, { color: colors.text.primary }]}>{lines.main}</Text>
+      {lines.sub ? <Text style={[typography.caption, { color: colors.text.secondary }]}>{lines.sub}</Text> : null}
+    </View>
+  );
+}
+
+/** Held or paid amount from the server booking fields, formatted with the confirmation formatter. */
+function useStartMoneyLines(booking: StartCardBooking) {
+  const { t, i18n } = useTranslation();
+  const format = (value: number) => formatConfirmationMoney(value, booking.currency, i18n.language);
+  return startMoneyLines(startMoney(booking), format, t);
+}
+
+const MONEY_ICONS = { card: 'credit-card-outline', momo: 'cellphone', wallet: 'wallet-outline' } as const;
+
+function SheetMoney({ booking }: { booking: StartCardBooking }) {
+  const { colors, typography } = useTheme();
+  const lines = useStartMoneyLines(booking);
+  return (
+    <View testID="rental-start-sheet-money" style={[styles.row, { alignItems: 'flex-start' }]}>
+      <MaterialCommunityIcons name={MONEY_ICONS[lines.icon]} size={18} color={colors.text.secondary} style={{ marginTop: 2 }} />
+      <View style={{ marginLeft: 8, flex: 1 }}>
+        <Text style={[typography.body2, { color: colors.text.primary }]}>{lines.main}</Text>
+        {lines.sub ? <Text style={[typography.caption, { color: colors.text.secondary }]}>{lines.sub}</Text> : null}
+      </View>
+    </View>
+  );
 }
 
 function StartButton(props: Props & { phase: PickupPhase; day: string; momo: boolean }) {
@@ -161,11 +189,6 @@ function confirmLabel(props: Props, t: (key: string, fallback: string, vars?: Re
   return t('rentals.start.button', 'Start rental{{amount}}', { amount: ` · ${props.money}` });
 }
 
-function sheetMoney(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
-  if (isMomoDue(props.booking)) return t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: props.money });
-  return t('rentals.start.held', '{{amount}} held on your card', { amount: props.money });
-}
-
 function LateLine(props: Props & { phase: PickupPhase }) {
   const { t, i18n } = useTranslation();
   const { colors, typography } = useTheme();
@@ -193,9 +216,9 @@ function ConfirmSheet(props: Props) {
           </Text>
           <SheetRow icon="store" label={props.place} />
           <SheetRow icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
-          <SheetRow icon={isMomoDue(props.booking) ? 'cellphone' : 'credit-card-outline'} label={sheetMoney(props, t)} />
+          <SheetMoney booking={props.booking} />
           <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 8 }]}>
-            {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30 minutes.")}
+            {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30\u00a0minutes.")}
           </Text>
           <Button mode="contained" icon="play" buttonColor={colors.primary.main} loading={props.starting} onPress={props.onConfirm} style={{ marginTop: 16, minHeight: 48 }}>
             {confirmLabel(props, t)}
@@ -239,9 +262,7 @@ function bodyFor(props: Props & { phase: PickupPhase }, momo: boolean, t: (key: 
 }
 
 function isMomoDue(booking: StartCardBooking): boolean {
-  const code = booking.currency.toUpperCase();
-  const momo = code === 'XAF' || code === 'XOF';
-  return momo && booking.payment_status !== 'paid' && booking.payment_status !== 'authorized';
+  return startMoney(booking).kind === 'momo_due';
 }
 
 const styles = StyleSheet.create({

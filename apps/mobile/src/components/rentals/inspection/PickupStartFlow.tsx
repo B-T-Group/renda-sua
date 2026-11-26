@@ -19,6 +19,8 @@ interface Props {
   place: string;
   returnLabel: string;
   money: string;
+  /** Held/paid lines from startMoneyLines; falls back to the card hold sentence. */
+  moneyLines?: { main: string; sub: string | null; icon: 'card' | 'momo' | 'wallet' };
   startAt: string;
   endAt: string;
   startOpensAt?: string | null;
@@ -298,13 +300,28 @@ function StartStep(props: Props) {
         {t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
       </Text>
       <IconLine icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
-      <IconLine icon="credit-card-outline" label={t('rentals.start.held', '{{amount}} held on your card', { amount: props.money })} />
+      <MoneyLines lines={props.moneyLines ?? { main: t('rentals.start.held', '{{amount}} held on your card', { amount: props.money }), sub: null, icon: 'card' }} />
       <Button mode="contained" icon={locked ? 'lock' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart}>
         {t('rentals.actions.startRental', 'Start rental')}
       </Button>
       <Button textColor={colors.primary.main} onPress={props.onReport}>
         {t('rentalInspection.reportProblem', 'Report a problem')}
       </Button>
+    </View>
+  );
+}
+
+const MONEY_ICONS = { card: 'credit-card-outline', momo: 'cellphone', wallet: 'wallet-outline' } as const;
+
+function MoneyLines({ lines }: { lines: NonNullable<Props['moneyLines']> }) {
+  const { colors } = useTheme();
+  return (
+    <View testID="pickup-start-money" style={[styles.row, { alignItems: 'flex-start' }]}>
+      <MaterialCommunityIcons name={MONEY_ICONS[lines.icon]} size={18} color={colors.text.secondary} style={{ marginTop: 2 }} />
+      <View style={{ marginLeft: 8, flex: 1 }}>
+        <Text style={{ color: colors.text.primary }}>{lines.main}</Text>
+        {lines.sub ? <Text style={{ color: colors.text.secondary, fontSize: 12 }}>{lines.sub}</Text> : null}
+      </View>
     </View>
   );
 }

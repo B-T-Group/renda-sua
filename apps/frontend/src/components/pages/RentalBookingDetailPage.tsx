@@ -1058,7 +1058,7 @@ const RentalBookingDetailPage: React.FC = () => {
                     business={Boolean(isBusiness)}
                     total={formatDetailMoney(Number(booking.total_amount) || 0)}
                     deposit={formatDetailMoney(depositAmount)}
-                    held={formatDetailMoney(presentation.mode === 'sentence' ? presentation.amount : 0)}
+                    held={formatDetailMoney(presentation.mode === 'sentence' ? presentation.amount : authorizedAmount)}
                   />
                   <Stack spacing={0.5} sx={{ mt: 1 }}>
                     {booking.payment_timing === 'pay_at_pickup' &&
@@ -1410,7 +1410,10 @@ function SummaryMoney(props: {
   if (props.presentation.mode === 'sentence') {
     return <HeldSentence business={props.business} held={props.held} />;
   }
-  return <TotalAndDeposit total={props.total} deposit={props.deposit} split={props.presentation.mode === 'split'} />;
+  if (props.presentation.mode === 'split') {
+    return <HeldWithParts business={props.business} held={props.held} total={props.total} deposit={props.deposit} />;
+  }
+  return <QuotedTotal total={props.total} />;
 }
 
 function HeldSentence({ business, held }: { business: boolean; held: string }) {
@@ -1424,7 +1427,23 @@ function HeldSentence({ business, held }: { business: boolean; held: string }) {
   );
 }
 
-function TotalAndDeposit({ total, deposit, split }: { total: string; deposit: string; split: boolean }) {
+/** Card hold that is rental + deposit: the held total first, then the two parts in grey. */
+function HeldWithParts(props: { business: boolean; held: string; total: string; deposit: string }) {
+  const { t } = useTranslation();
+  return (
+    <Box data-testid="booking-held-split">
+      <HeldSentence business={props.business} held={props.held} />
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        {t('rentals.start.heldSplit', '{{rental}} rental · {{deposit}} security deposit', {
+          rental: props.total,
+          deposit: props.deposit,
+        })}
+      </Typography>
+    </Box>
+  );
+}
+
+function QuotedTotal({ total }: { total: string }) {
   const { t } = useTranslation();
   return (
     <>
@@ -1432,11 +1451,6 @@ function TotalAndDeposit({ total, deposit, split }: { total: string; deposit: st
         {t('rentals.clientRequests.bookConfirmLabelTotal', 'Quoted total')}
       </Typography>
       <Typography variant="h5" fontWeight={900} color="success.dark">{total}</Typography>
-      {split ? (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}: <strong>{deposit}</strong>
-        </Typography>
-      ) : null}
     </>
   );
 }
