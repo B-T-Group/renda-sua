@@ -10,6 +10,7 @@ import type { InspectionPhoto } from '../../../utils/rentals/rentalInspection';
 import { formatListingStamp, listingCity, slotTileLabel } from '../../../utils/rentals/pickupPhotoTime';
 import { splitCorrectionReason } from '../../../utils/rentals/rentalInspection';
 import { formatPhotoStamp } from '../../../utils/rentals/rentalStartWindow';
+import { elidesBefore } from '../../../utils/rentals/frenchElision';
 import { filterSupportedImageAssets, IMAGE_LIBRARY_PICKER_OPTIONS } from '../../../utils/supportedImageFormats';
 
 interface Props {
@@ -19,8 +20,8 @@ interface Props {
   photos: Array<InspectionPhoto & { unitId: string }>;
   timeZone: string;
   askedAt?: string | null;
-  /** End of the start day (listing time); unresolved flags cancel the booking then. */
-  fixBy?: string;
+  /** Start day with weekday (listing clock), e.g. "Sat 28 Nov": an unresolved flag cancels the booking at 23:59. */
+  fixDay?: string;
   /** Formatted reservation fee, when the booking has one (refunded if the flag isn't fixed). */
   fee?: string;
   onSent: () => void;
@@ -41,11 +42,11 @@ export function BusinessPhotoRequest(props: Props) {
           {t('rentals.business.checkFlagged', 'Check flagged')}
         </Text>
       </View>
-      {props.fixBy ? (
-        <Text style={{ color: colors.text.secondary }}>
+      {props.fixDay ? (
+        <Text testID="check-flagged-deadline" style={{ color: colors.text.secondary }}>
           {props.fee
-            ? t('rentals.business.fixByFee', 'Fix it by {{time}} so the renter can pay and start. If the check isn’t resolved, the {{fee}} fee goes back to the renter.', { time: props.fixBy, fee: props.fee })
-            : t('rentals.business.fixBy', 'Fix it by {{time}} so the renter can pay and start.', { time: props.fixBy })}
+            ? t('rentals.business.fixByFee', 'Fix it by 23:59 today ({{day}}), or the booking is cancelled and {{name}} gets the {{fee}} fee back. Nothing can be paid or handed over until {{name}} accepts.', { day: props.fixDay, name: props.renterName, fee: props.fee, que: elidesBefore(props.renterName) ? 'qu’' : 'que ' })
+            : t('rentals.business.fixBy', 'Fix it by 23:59 today ({{day}}), or the booking is cancelled. Nothing can be paid or handed over until {{name}} accepts.', { day: props.fixDay, name: props.renterName, que: elidesBefore(props.renterName) ? 'qu’' : 'que ' })}
         </Text>
       ) : null}
       <View style={[styles.banner, { backgroundColor: colors.warning.main + '22', borderRadius: borderRadius.md, padding: spacing.md }]}>

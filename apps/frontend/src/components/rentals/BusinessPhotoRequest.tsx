@@ -9,6 +9,7 @@ import type { InspectionPhoto } from '../../utils/rentalInspection';
 import { splitCorrectionReason } from '../../utils/rentalInspection';
 import { formatListingStamp, listingCity, slotTileLabel } from '../../utils/rentals/pickupPhotoTime';
 import { formatPhotoStamp } from '../../utils/rentalStartWindow';
+import { elidesBefore } from '../../utils/rentals/frenchElision';
 
 interface Props {
   bookingId: string;
@@ -17,8 +18,8 @@ interface Props {
   photos: Array<InspectionPhoto & { unitId: string }>;
   timeZone?: string;
   askedAt?: string | null;
-  /** End of the start day (listing time). */
-  fixBy?: string;
+  /** Start day with weekday (listing clock), e.g. "Sat 28 Nov": an unresolved flag cancels the booking at 23:59. */
+  fixDay?: string;
   /** Formatted reservation fee, when the booking has one. */
   fee?: string;
   onSent: () => void;
@@ -31,6 +32,7 @@ export function BusinessPhotoRequest(props: Props) {
   const [error, setError] = useState('');
   const zone = props.timeZone || 'America/Toronto';
   const parts = splitCorrectionReason(props.reason, reasonLabels(t));
+  const que = elidesBefore(props.renterName) ? 'qu’' : 'que ';
   const asked = props.askedAt ? formatListingStamp(props.askedAt, zone, i18n.language) : '';
   return (
     <Box sx={{ p: 2, mb: 2, borderRadius: 2, border: 1, borderColor: 'warning.main', bgcolor: (theme) => alpha(theme.palette.warning.main, 0.16), color: 'text.primary' }}>
@@ -38,11 +40,11 @@ export function BusinessPhotoRequest(props: Props) {
         <OutlinedFlag sx={{ color: 'warning.dark' }} />
         <Typography variant="h6" fontWeight={800}>{t('rentals.business.checkFlagged', 'Check flagged')}</Typography>
       </Stack>
-      {props.fixBy ? (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      {props.fixDay ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }} data-testid="check-flagged-deadline">
           {props.fee
-            ? t('rentals.business.fixByFee', 'Fix it by {{time}} so the renter can pay and start. If the check isn’t resolved, the {{fee}} fee goes back to the renter.', { time: props.fixBy, fee: props.fee })
-            : t('rentals.business.fixBy', 'Fix it by {{time}} so the renter can pay and start.', { time: props.fixBy })}
+            ? t('rentals.business.fixByFee', 'Fix it by 23:59 today ({{day}}), or the booking is cancelled and {{name}} gets the {{fee}} fee back. Nothing can be paid or handed over until {{name}} accepts.', { day: props.fixDay, name: props.renterName, fee: props.fee, que })
+            : t('rentals.business.fixBy', 'Fix it by 23:59 today ({{day}}), or the booking is cancelled. Nothing can be paid or handed over until {{name}} accepts.', { day: props.fixDay, name: props.renterName, que })}
         </Typography>
       ) : null}
       <Typography>

@@ -64,13 +64,17 @@ describe('Reserve now, pay at pickup', () => {
     await renderSheet(offer('XAF', 12000, { id: 'b1', status: 'proposed', reservation_fee_amount: 1200 }), false);
     expect(screen.getByText('Pay 1\u00a0200\u00a0FCFA & reserve')).toBeTruthy();
     expect(screen.getByTestId('book-confirm-fee-rules')).toBeTruthy();
-    expect(screen.getByText('10\u00a0800\u00a0FCFA')).toBeTruthy();
+    expect(screen.getByText(/Pay at pickup 10.800.FCFA, after you check the item/)).toBeTruthy();
+    expect(screen.getByText(/Refunded if you cancel before Sat 28 Nov/)).toBeTruthy();
+    expect(screen.getByText('Free cancellation until Fri 27 Nov · 23:59')).toBeTruthy();
+    expect(screen.queryByText(/Window 1/i)).toBeNull();
   });
 
   it('card market on the new path: no up-front hold, deposit at pickup', async () => {
     await renderSheet(offer('CAD', 60, { id: 'b1', status: 'proposed', card_pay_at_pickup: true, reservation_fee_amount: 6 }), true);
     expect(screen.getByText('Pay $6.00 & reserve')).toBeTruthy();
-    expect(screen.getByText('Deposit hold on your card at pickup')).toBeTruthy();
+    expect(screen.getByText('Held on your card at pickup')).toBeTruthy();
+    expect(screen.getByText(/2:00–6:00 PM/)).toBeTruthy();
     expect(screen.queryByText('Held on card')).toBeNull();
   });
 
@@ -118,7 +122,7 @@ describe('Reserve now, pay at pickup', () => {
           role="client"
           place="Sono"
           money="$54.00"
-          returnLabel="Sat 28 Nov · 18:00"
+          returnLabel="Sat 28 Nov · 6:00 PM"
           open
           onOpen={() => undefined}
           onClose={() => undefined}
@@ -127,9 +131,14 @@ describe('Reserve now, pay at pickup', () => {
         />
       </ThemeProvider>
     );
-    expect(screen.getAllByText('$54.00 charged to your card at pickup').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('+ $180.00 deposit hold, released after the return').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Pay & start · $54.00').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Pay & start · $54.00').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Reservation fee paid')).toBeTruthy();
+    expect(screen.getByText('−$6.00')).toBeTruthy();
+    expect(screen.getByText('Charged now')).toBeTruthy();
+    expect(screen.getAllByText('$54.00').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Pay $54.00 · start rental')).toBeTruthy();
+    expect(screen.getByText('$234.00 on your card today · $180.00 of it is a hold')).toBeTruthy();
+    expect(screen.getByText('Pick up your item · 2:00 PM')).toBeTruthy();
     expect(screen.queryByText(/held on your card/)).toBeNull();
   });
 });

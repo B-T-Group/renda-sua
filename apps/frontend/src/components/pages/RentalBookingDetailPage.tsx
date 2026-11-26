@@ -41,7 +41,8 @@ import { BusinessDeclineBanner, DeclineOutcomeCard, declineCardView } from '../r
 import { RentalJourneyList } from '../rentals/RentalJourneyList';
 import { RentalStartPanel } from '../rentals/RentalStartPanel';
 import { PayAtPickupPanel } from '../rentals/PayAtPickupPanel';
-import { dueAtPickup, reservationFee, showsPayAtPickupCard } from '../../utils/rentals/reservationFee';
+import { CancelBookingDialog } from '../rentals/CancelBookingDialog';
+import { cancelFeeResult, dueAtPickup, reservationFee, showsPayAtPickupCard } from '../../utils/rentals/reservationFee';
 import { BusinessPhotoRequest } from '../rentals/BusinessPhotoRequest';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
 import { ReportSentConfirmation } from '../rentals/ReportSentConfirmation';
@@ -75,7 +76,7 @@ import {
   formatConfirmationDue,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
-import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedWeekdayDay, formatZonedWhen, pickupClockLabel, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
 import { bookingReturnDue } from '../../utils/rentals/returnDue';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 import {
@@ -888,7 +889,7 @@ const RentalBookingDetailPage: React.FC = () => {
               booking={booking}
               format={(value) => formatConfirmationMoney(value, booking.currency, i18n.language)}
               itemCheck={inspection.enrolled}
-              pickupDay={formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
+              pickupDay={formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
             />
           ) : null}
           {showStartPanel ? (
@@ -941,11 +942,11 @@ const RentalBookingDetailPage: React.FC = () => {
           {photosRequested && bookingId ? (
             <BusinessPhotoRequest
               bookingId={bookingId}
-              renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ') || t('rentals.renter', 'The renter')}
+              renterName={booking.client?.user?.first_name || t('rentals.renter', 'The renter')}
               reason={inspection.pickup?.correctionReason}
               timeZone={listingZone}
               askedAt={inspection.pickup?.askedAt || inspection.pickup?.submittedAt}
-              fixBy={`${formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language)}, 23:59`}
+              fixDay={formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
               fee={reservationFee(booking) > 0 ? formatConfirmationMoney(reservationFee(booking), booking.currency, i18n.language) : undefined}
               photos={(inspection.pickup.units[0]?.photos ?? []).map((photo) => ({
                 ...photo,
@@ -1179,23 +1180,14 @@ const RentalBookingDetailPage: React.FC = () => {
               </Paper>
             ) : null}
 
-            <Dialog open={cancelConfirm} onClose={() => setCancelConfirm(false)}>
-              <DialogTitle>{t('rentals.cancelBooking', 'Cancel booking')}</DialogTitle>
-              <DialogContent>
-                <Typography>
-                  {t(
-                    'rentals.bookingDetail.cancelBeforeStartMessage',
-                    'This booking has not started, so cancellation is free. Any card hold or wallet hold is released.'
-                  )}
-                </Typography>
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={() => setCancelConfirm(false)}>{t('common.cancel', 'Cancel')}</Button>
-                <Button color="error" onClick={() => { setCancelConfirm(false); void handleCancelBooking(); }}>
-                  {t('rentals.cancelBooking', 'Cancel booking')}
-                </Button>
-              </DialogActions>
-            </Dialog>
+            <CancelBookingDialog
+              open={cancelConfirm}
+              fee={cancelFeeResult(booking, Date.now(), listingZone, inspection.pickup?.status === 'correction_requested')}
+              feeLabel={formatConfirmationMoney(reservationFee(booking), booking.currency, i18n.language)}
+              flagged={inspection.pickup?.status === 'correction_requested'}
+              onClose={() => setCancelConfirm(false)}
+              onConfirm={() => { setCancelConfirm(false); void handleCancelBooking(); }}
+            />
 
             {bookingId && booking.status !== 'cancelled' ? (
               <Box id="rental-messages">

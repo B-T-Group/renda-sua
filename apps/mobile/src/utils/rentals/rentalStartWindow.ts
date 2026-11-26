@@ -87,7 +87,7 @@ export function formatZonedTime(iso: string, timeZone: string, language?: string
 }
 
 export function formatPhotoStamp(iso: string, timeZone: string, language: string): string {
-  return `${formatZonedDay(iso, timeZone, language)} ${formatZonedTime(iso, timeZone)}`;
+  return `${formatZonedDay(iso, timeZone, language)} ${formatZonedTime(iso, timeZone, language, timeZone)}`;
 }
 
 export function pickupClockLabel(

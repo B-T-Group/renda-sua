@@ -6,13 +6,14 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { ClientRentalRequestRow } from '../../types/rentals';
 import {
   formatRentalMoney,
-  formatRentalRequestLocalDateTime,
   parseRentalPricingSnapshot,
   parseRentalSelectionWindows,
   proposedContractDeadlineIso,
 } from '../../utils/rentals';
 import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
 import { reservationFee, reserveMode, type ReserveMode } from '../../utils/rentals/reservationFee';
+import { buildReserveSummary, clockTime, reserveZone, weekdayDay, windowLabel } from '../../utils/rentals/reserveSummary';
+import { ReserveFooter, ReserveSummaryView } from './ReserveSummaryView';
 
 export interface RentalBookConfirmSheetProps {
   visible: boolean;
@@ -46,12 +47,39 @@ export function RentalBookConfirmSheet({
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
   const deadlineIso = proposedContractDeadlineIso(row);
   const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
+  const zone = reserveZone({
+    listingZone: row.listing_timezone,
+    country: listing?.business_location?.address?.country,
+    quote,
+  });
+  // Listing clock with weekdays (B3): "Sat 28 Nov · 14:00–18:00" / "2:00–6:00 PM".
   const envelopePeriod = selectionWindows.length
-    ? `${formatRentalRequestLocalDateTime(selectionWindows[0].start_at)} — ${formatRentalRequestLocalDateTime(selectionWindows[selectionWindows.length - 1].end_at)}`
+    ? selectionWindows.length === 1
+      ? windowLabel(selectionWindows[0], i18n.language, zone)
+      : `${windowLabel(selectionWindows[0], i18n.language, zone)} – ${windowLabel(selectionWindows[selectionWindows.length - 1], i18n.language, zone)}`
     : '—';
+  const deadlineLabel = deadlineIso ? `${weekdayDay(deadlineIso, i18n.language, zone)} · ${clockTime(deadlineIso, i18n.language, zone, zone)}` : '';
   const mode = reserveMode(row.rental_booking, isStripeRail);
   const fee = reservationFee(row.rental_booking);
   const feeLabel = quote ? formatConfirmationMoney(fee, quote.currency, i18n.language) : String(fee);
+  const payAtPickup = mode !== 'card_upfront';
+  const summary = payAtPickup
+    ? buildReserveSummary({
+        mode,
+        windows: selectionWindows,
+        quote,
+        booking: row.rental_booking,
+        listingZone: row.listing_timezone,
+        country: listing?.business_location?.address?.country,
+        placeName: locName,
+        city: listing?.business_location?.address?.city,
+        deadlineIso,
+        isStripeRail,
+        language: i18n.language,
+        t,
+      })
+    : null;
+  const business = listing?.rental_item?.business?.name || locName;
   const detailRows = buildSummaryRows({
     mode,
     fee,
@@ -61,7 +89,7 @@ export function RentalBookConfirmSheet({
     locName,
     envelopePeriod,
     quote,
-    deadlineIso,
+    deadlineLabel,
     isStripeRail,
   });
 
@@ -114,65 +142,80 @@ export function RentalBookConfirmSheet({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text testID="book-confirm-message" style={[typography.body2, { color: colors.text.secondary }]}>
-            {mode === 'free'
-              ? t(
-                  'rentals.payAtPickup.reserveFreeBody',
-                  'Nothing to pay today. At pickup, the business shows you the item, you check it, then you pay and take it. Free cancellation before the rental starts.'
-                )
-              : mode === 'fee'
-                ? t(
-                    'rentals.payAtPickup.reserveFeeBody',
-                    'Pay a {{fee}} reservation fee now to hold the item. It counts toward your total. You pay the rest at pickup, after you check the item.',
-                    { fee: feeLabel }
-                  )
-                : isStripeRail
-              ? t(
-                  'rentals.clientRequests.bookConfirmMessageStripe',
-                  'By continuing, the rental total plus the security deposit is held on your card — nothing is charged until the item is returned, and the final charge is at least the rental total. Free cancellation before the rental starts.'
-                )
-              : t(
-                  'rentals.clientRequests.bookConfirmMessage',
-                  'By continuing, your reservation is held for free — no payment now. You pay the rental total at pickup (wallet or mobile money). Free cancellation before the rental starts.'
-                )}
-          </Text>
-          <Text
-            style={[
-              typography.caption,
-              {
-                color: colors.primary.main,
-                fontWeight: '800',
-                marginTop: spacing.md,
-                letterSpacing: 0.5,
-              },
-            ]}
-          >
-            {t(
-              'rentals.clientRequests.bookConfirmSummaryHeading',
-              'Reservation summary'
-            )}
-          </Text>
-          {mode === 'fee' ? (
-            <View testID="book-confirm-fee-rules" style={{ marginTop: spacing.sm, gap: 4 }}>
-              <RuleLine
-                icon="cash-refund"
-                text={t('rentals.payAtPickup.feeRefundedOffer', 'Fee refunded if you cancel before the pickup day, if the business cancels, or if the item doesn’t match.')}
-              />
-              <RuleLine
-                icon="alert-circle-outline"
-                text={t('rentals.payAtPickup.feeKept', 'Fee kept if you cancel on the pickup day or don’t come.')}
-              />
-            </View>
-          ) : null}
-          {detailRows.map((rowItem, idx) => (
-            <DetailRow
-              key={rowItem.key}
-              label={rowItem.label}
-              value={rowItem.value}
-              showDivider={idx < detailRows.length - 1}
+          {summary ? (
+            <ReserveSummaryView
+              summary={summary}
+              itemName={itemName}
+              business={business ? t('rentals.reserve.offerFrom', 'Offer accepted by {{business}}', { business }) : null}
             />
-          ))}
+          ) : (
+            <>
+            <Text testID="book-confirm-message" style={[typography.body2, { color: colors.text.secondary }]}>
+              {mode === 'free'
+                ? t(
+                    'rentals.payAtPickup.reserveFreeBody',
+                    'Nothing to pay today. At pickup, the business shows you the item, you check it, then you pay and take it. Free cancellation before the rental starts.'
+                  )
+                : mode === 'fee'
+                  ? t(
+                      'rentals.payAtPickup.reserveFeeBody',
+                      'Pay a {{fee}} reservation fee now to hold the item. It counts toward your total. You pay the rest at pickup, after you check the item.',
+                      { fee: feeLabel }
+                    )
+                  : isStripeRail
+                ? t(
+                    'rentals.clientRequests.bookConfirmMessageStripe',
+                    'By continuing, the rental total plus the security deposit is held on your card — nothing is charged until the item is returned, and the final charge is at least the rental total. Free cancellation before the rental starts.'
+                  )
+                : t(
+                    'rentals.clientRequests.bookConfirmMessage',
+                    'By continuing, your reservation is held for free — no payment now. You pay the rental total at pickup (wallet or mobile money). Free cancellation before the rental starts.'
+                  )}
+            </Text>
+            <Text
+              style={[
+                typography.caption,
+                {
+                  color: colors.primary.main,
+                  fontWeight: '800',
+                  marginTop: spacing.md,
+                  letterSpacing: 0.5,
+                },
+              ]}
+            >
+              {t(
+                'rentals.clientRequests.bookConfirmSummaryHeading',
+                'Reservation summary'
+              )}
+            </Text>
+            {mode === 'fee' ? (
+              <View testID="book-confirm-fee-rules" style={{ marginTop: spacing.sm, gap: 4 }}>
+                <RuleLine
+                  icon="cash-refund"
+                  text={t('rentals.payAtPickup.feeRefundedOffer', 'Fee refunded if you cancel before the pickup day, if the business cancels, or if the item doesn’t match.')}
+                />
+                <RuleLine
+                  icon="alert-circle-outline"
+                  text={t('rentals.payAtPickup.feeKept', 'Fee kept if you cancel on the pickup day or don’t come.')}
+                />
+              </View>
+            ) : null}
+            {detailRows.map((rowItem, idx) => (
+              <DetailRow
+                key={rowItem.key}
+                label={rowItem.label}
+                value={rowItem.value}
+                showDivider={idx < detailRows.length - 1}
+              />
+            ))}
+            </>
+          )}
         </ScrollView>
+        {summary ? (
+          <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, borderTopColor: colors.divider, borderTopWidth: StyleSheet.hairlineWidth }}>
+            <ReserveFooter summary={summary} />
+          </View>
+        ) : null}
         <View
           style={[
             styles.actions,
@@ -190,14 +233,13 @@ export function RentalBookConfirmSheet({
             testID="book-confirm-button"
             mode={mode === 'card_upfront' ? 'text' : 'contained'}
             buttonColor={mode === 'card_upfront' ? undefined : colors.primary.main}
+            icon={mode === 'fee' ? 'lock-outline' : mode === 'free' ? 'calendar-blank-outline' : undefined}
             loading={loading}
             onPress={onConfirm}
           >
-            {mode === 'free'
-              ? t('rentals.payAtPickup.reserveFreeButton', 'Reserve · pay at pickup')
-              : mode === 'fee'
-                ? t('rentals.payAtPickup.reserveFeeButton', 'Pay {{fee}} & reserve', { fee: feeLabel })
-                : isStripeRail
+            {summary
+              ? summary.button
+              : isStripeRail
               ? t(
                   'rentals.clientRequests.bookConfirmButtonStripe',
                   'Continue to payment'
@@ -222,10 +264,10 @@ function buildSummaryRows(params: {
   locName?: string | null;
   envelopePeriod: string;
   quote: ReturnType<typeof parseRentalPricingSnapshot>;
-  deadlineIso: string | null;
+  deadlineLabel: string;
   isStripeRail?: boolean;
 }): SummaryRow[] {
-  const { t, itemName, locName, envelopePeriod, quote, deadlineIso, isStripeRail, mode, fee, language } =
+  const { t, itemName, locName, envelopePeriod, quote, deadlineLabel, isStripeRail, mode, fee, language } =
     params;
   const rows: SummaryRow[] = [
     {
@@ -246,11 +288,11 @@ function buildSummaryRows(params: {
   ];
   if (mode === 'card_upfront') appendQuoteRows(rows, t, quote, isStripeRail);
   else appendPayAtPickupRows(rows, t, quote, mode, fee, language, isStripeRail);
-  if (deadlineIso) {
+  if (deadlineLabel) {
     rows.push({
       key: 'deadline',
       label: t('rentals.clientRequests.bookConfirmLabelAcceptBy', 'Offer valid until'),
-      value: formatRentalRequestLocalDateTime(deadlineIso),
+      value: deadlineLabel,
     });
   }
   return rows;

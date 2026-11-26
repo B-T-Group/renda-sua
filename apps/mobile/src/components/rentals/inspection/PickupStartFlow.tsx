@@ -10,6 +10,8 @@ import { listingCity } from '../../../utils/rentals/pickupPhotoTime';
 import { splitCorrectionReason } from '../../../utils/rentals/rentalInspection';
 import { formatPhotoStamp, formatZonedTime, pickupPhase } from '../../../utils/rentals/rentalStartWindow';
 import { earlyReturnLine, earlyReturnPreview } from '../../../utils/rentals/returnDue';
+import type { PayBreakdown } from '../../../utils/rentals/payBreakdown';
+import { PayBreakdownView, PayFooter } from '../PayBreakdownView';
 
 const REASON_ORDER = ['photo_mismatch', 'wear_hidden', 'missing_accessory', 'wrong_unit'] as const;
 
@@ -29,6 +31,8 @@ interface Props {
   startOpensAt?: string | null;
   /** Reserve now, pay at pickup: the renter still pays at this step (card, MoMo or wallet). */
   pay?: boolean;
+  /** Approved 05a/05b rows for the pay step (card or Mobile Money). */
+  breakdown?: PayBreakdown | null;
   busy: boolean;
   starting: boolean;
   showDecline: boolean;
@@ -103,7 +107,7 @@ function Stepper({ step, pay }: { step: string; pay?: boolean }) {
 
 function StepDot({ n, label, on, done }: { n: number; label: string; on: boolean; done: boolean }) {
   const { colors } = useTheme();
-  const tone = done ? colors.success.main : on ? colors.primary.main : colors.text.disabled;
+  const tone = done || on ? colors.primary.main : colors.text.disabled;
   return (
     <View style={styles.stepDot}>
       <View style={[styles.circle, { borderColor: tone, backgroundColor: done || on ? tone : 'transparent' }]}>
@@ -156,7 +160,7 @@ function CheckActions(props: Props) {
       </Button>
       {props.showDecline ? (
         <Button textColor={colors.error.main} onPress={props.onDecline}>
-          {t('pickupDecline.cta', 'Not as described? Decline')}
+          {props.pay ? t('rentals.payAtPickup.declineFree', 'Not as described? Cancel for free') : t('pickupDecline.cta', 'Not as described? Decline')}
         </Button>
       ) : null}
       <AskSheet open={open} busy={props.busy} onClose={() => setOpen(false)} onSend={props.onAsk} />
@@ -231,11 +235,11 @@ function ReasonChips({ selected, onToggle }: { selected: string[]; onToggle: (co
 }
 
 function Waiting(props: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const parts = splitCorrectionReason(props.view.correctionReason, reasonLabels(t));
   const askedAt = props.view.askedAt || props.view.submittedAt;
-  const asked = askedAt ? formatZonedTime(askedAt, props.timeZone) : '';
+  const asked = askedAt ? formatZonedTime(askedAt, props.timeZone, i18n.language, props.timeZone) : '';
   return (
     <View style={{ gap: 8 }}>
       <View style={styles.row}>
@@ -253,7 +257,7 @@ function Waiting(props: Props) {
       ) : null}
       {props.showDecline ? (
         <Button textColor={colors.error.main} onPress={props.onDecline}>
-          {t('pickupDecline.cta', 'Not as described? Decline')}
+          {props.pay ? t('rentals.payAtPickup.declineFree', 'Not as described? Cancel for free') : t('pickupDecline.cta', 'Not as described? Decline')}
         </Button>
       ) : null}
     </View>
@@ -297,9 +301,12 @@ function StartStep(props: Props) {
   const locked = phase === 'before' || phase === 'closed';
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: colors.success.dark ?? colors.success.main }}>
-        {t('rentalInspection.checkedAt', 'Item checked. The photos are locked as the pickup condition.')}
-      </Text>
+      <View style={[styles.row, { alignItems: 'flex-start' }]} testID="pickup-checked-line">
+        <MaterialCommunityIcons name="check-circle" size={18} color={colors.primary.main} style={{ marginTop: 1 }} />
+        <Text style={{ color: colors.text.primary, marginLeft: 8, flex: 1 }}>
+          {t('rentalInspection.checkedAt', 'Item checked. The photos are locked as the pickup condition.')}
+        </Text>
+      </View>
       <Text style={{ color: colors.text.primary, fontWeight: '700' }}>
         {props.pay ? t('rentals.payAtPickup.payTitle', 'Pay and start') : t('rentals.start.confirmTitle', 'Start rental?')}
       </Text>
@@ -309,13 +316,18 @@ function StartStep(props: Props) {
           : t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
       </Text>
       <IconLine icon="calendar-clock" label={startReturnLine(props, i18n.language, t)} />
-      <MoneyLines lines={props.moneyLines ?? { main: t('rentals.start.held', '{{amount}} held on your card', { amount: props.money }), sub: null, icon: 'card' }} />
-      <Button testID="pickup-start-button" mode="contained" icon={locked ? 'lock' : props.pay ? 'credit-card-outline' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart}>
+      {props.breakdown ? (
+        <PayBreakdownView breakdown={props.breakdown} />
+      ) : (
+        <MoneyLines lines={props.moneyLines ?? { main: t('rentals.start.held', '{{amount}} held on your card', { amount: props.money }), sub: null, icon: 'card' }} />
+      )}
+      <Button testID="pickup-start-button" mode="contained" icon={locked ? 'lock' : props.breakdown?.rail === 'card' ? 'lock-outline' : props.breakdown ? 'cellphone' : props.pay ? 'credit-card-outline' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart}>
         {props.pay
           ? t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money })
           : t('rentals.actions.startRental', 'Start rental')}
       </Button>
-      <Button textColor={colors.primary.main} onPress={props.onReport}>
+      {props.breakdown ? <PayFooter breakdown={props.breakdown} /> : null}
+      <Button mode="outlined" icon="flag-outline" textColor={colors.primary.main} style={{ borderColor: colors.primary.main }} onPress={props.onReport}>
         {t('rentalInspection.reportProblem', 'Report a problem')}
       </Button>
     </View>

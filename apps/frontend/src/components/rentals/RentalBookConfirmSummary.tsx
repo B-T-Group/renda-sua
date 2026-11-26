@@ -5,14 +5,13 @@ import { useTranslation } from 'react-i18next';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import type { RentalPricingSnapshotLine } from '../../hooks/useRentalApi';
 import {
-  formatRentalMoney,
-  formatRentalRequestLocalDateTime,
   parseRentalSelectionWindows,
   parseRentalPricingSnapshot,
   proposedContractDeadlineIso,
 } from '../../utils/rentalRequestDisplay';
 import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
 import { reservationFee, reserveMode } from '../../utils/rentals/reservationFee';
+import { clockTime, reserveZone, weekdayDay, windowLabel } from '../../utils/rentals/reserveSummary';
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -30,7 +29,8 @@ function DetailRow({ label, value }: { label: string; value: string }) {
         variant="caption"
         color="text.secondary"
         sx={{
-          minWidth: { sm: 152 },
+          width: { sm: 200 },
+          flexShrink: 0,
           fontWeight: 700,
           letterSpacing: 0.04,
           textTransform: 'uppercase',
@@ -105,8 +105,14 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
   const deadlineIso = proposedContractDeadlineIso(row);
   const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
+  // Listing clock with weekdays (B3); CAD keeps cents (S8b).
+  const zone = reserveZone({ listingZone: row.listing_timezone, quote });
+  const money = (value: number, currency: string) => formatConfirmationMoney(value, currency, i18n.language);
+  const formatRentalMoney = money;
   const envelopePeriod = selectionWindows.length
-    ? `${formatRentalRequestLocalDateTime(selectionWindows[0].start_at)} — ${formatRentalRequestLocalDateTime(selectionWindows[selectionWindows.length - 1].end_at)}`
+    ? selectionWindows.length === 1
+      ? windowLabel(selectionWindows[0], i18n.language, zone)
+      : `${windowLabel(selectionWindows[0], i18n.language, zone)} – ${windowLabel(selectionWindows[selectionWindows.length - 1], i18n.language, zone)}`
     : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable');
 
   return (
@@ -137,13 +143,13 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
           label={t('rentals.clientRequests.bookConfirmLabelPeriod', 'Rental period')}
           value={envelopePeriod}
         />
-        {selectionWindows.map((window, idx) => (
+        {selectionWindows.length > 1 && selectionWindows.map((window, idx) => (
           <DetailRow
             key={`${window.start_at}-${window.end_at}-${idx}`}
             label={t('rentals.clientRequests.bookConfirmLabelWindow', 'Window {{index}}', {
               index: idx + 1,
             })}
-            value={`${formatRentalRequestLocalDateTime(window.start_at)} — ${formatRentalRequestLocalDateTime(window.end_at)}`}
+            value={windowLabel(window, i18n.language, zone)}
           />
         ))}
         {quote?.lines?.length ? (
@@ -196,7 +202,7 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
         {deadlineIso ? (
           <DetailRow
             label={t('rentals.clientRequests.bookConfirmLabelAcceptBy', 'Offer valid until')}
-            value={formatRentalRequestLocalDateTime(deadlineIso)}
+            value={`${weekdayDay(deadlineIso, i18n.language, zone)} · ${clockTime(deadlineIso, i18n.language, zone, zone)}`}
           />
         ) : null}
       </Stack>

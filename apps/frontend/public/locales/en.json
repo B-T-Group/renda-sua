@@ -7350,7 +7350,8 @@
       "paymentTermsPickup": "Mobile money / wallet: reserve now for free and pay the rental total at pickup.",
       "freeCancelBeforeStart": "Free cancellation any time before the rental starts.",
       "bookReserved": "Reserved — pay at pickup to start your rental",
-      "bookConfirmButtonReserve": "Reserve now"
+      "bookConfirmButtonReserve": "Reserve now",
+      "bookConfirmLabelWindow": "Window {{index}}"
     },
     "loginToViewRequests": "Log in to view your requests",
     "catalog": {
@@ -7501,7 +7502,8 @@
       "didntHint": "Didn't get the item after starting? You can tell us within 30 minutes.",
       "didntReceiveLeft": "Didn't receive the item? · {{minutes}} min",
       "notYet": "Not yet",
-      "startedBanner": "Rental started at {{time}}. The business has been notified to hand over the item."
+      "startedBanner": "Rental started at {{time}}. The business has been notified to hand over the item.",
+      "pickupOpens": "Pickup opens {{day}}"
     },
     "business": {
       "waitingTitle": "Waiting for {{name}} to start",
@@ -7517,8 +7519,8 @@
       "askedAt": "Asked {{when}} ({{zone}} time)",
       "photosPill": "New photos asked",
       "checkFlagged": "Check flagged",
-      "fixByFee": "Fix it by {{time}} so the renter can pay and start. If the check isn’t resolved, the {{fee}} fee goes back to the renter.",
-      "fixBy": "Fix it by {{time}} so the renter can pay and start."
+      "fixByFee": "Fix it by 23:59 today ({{day}}), or the booking is cancelled and {{name}} gets the {{fee}} fee back. Nothing can be paid or handed over until {{name}} accepts.",
+      "fixBy": "Fix it by 23:59 today ({{day}}), or the booking is cancelled. Nothing can be paid or handed over until {{name}} accepts."
     },
     "journey": {
       "offerReady": "Offer ready",
@@ -7726,7 +7728,57 @@
       "businessPaid": "Paid at {{time}} · hand over the item",
       "businessWaitingBody": "The renter checks the item and pays here. Don’t hand over the item until you see “Paid”.",
       "payBodyWeb": "Pay now on a secure Stripe page and the business hands you the item. The rental starts when the payment goes through.",
-      "reserveFeeBodyWeb": "Pay a {{fee}} reservation fee now to hold the item (card on a secure Stripe page, or Mobile Money). It counts toward your total. You pay the rest at pickup, after you check the item."
+      "reserveFeeBodyWeb": "Pay a {{fee}} reservation fee now to hold the item (card on a secure Stripe page, or Mobile Money). It counts toward your total. You pay the rest at pickup, after you check the item.",
+      "cardDueNow": "{{amount}} charged now",
+      "declineFree": "Not as described? Cancel for free",
+      "comeByFee": "Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.",
+      "comeBy": "Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled.",
+      "reserveFeeBodyWebCard": "Pay a {{fee}} reservation fee now to hold the item (card, on a secure Stripe page). It counts toward your total. You pay the rest at pickup, after you check the item.",
+      "reserveFeeBodyWebMomo": "Pay a {{fee}} reservation fee now to hold the item (Mobile Money or your wallet). It counts toward your total. You pay the rest at pickup, after you check the item."
+    },
+    "reserve": {
+      "dates": "Dates",
+      "rental": "Rental",
+      "deposit": "Security deposit",
+      "none": "None",
+      "depositSub": "Held on your card at pickup",
+      "pickup": "Pickup",
+      "itemCheck": "Item check",
+      "photosAtPickup": "Photos at pickup",
+      "cardNothingHeld": "Nothing is held on your card today. At pickup, after you check the item, we charge {{due}} and hold a {{deposit}} deposit. Booking must end within 6 days.",
+      "feeTitle": "Reservation fee · {{fee}}",
+      "feeCounts": "Counts toward your total · Pay at pickup {{due}}, after you check the item.",
+      "feeRefunded": "Refunded if you cancel before {{day}}, or if the business cancels or the item doesn’t match.",
+      "feeKept": "Kept by the business if you don’t come to pick up.",
+      "nothingTitle": "Nothing to pay today",
+      "nothingBody": "You pay at the shop, after you’ve seen the item and it matches the photos.",
+      "railCard": "Card",
+      "railMomo": "Mobile Money",
+      "freeCancelUntil": "Free cancellation until {{day}} · 23:59",
+      "payToday": "Pay today",
+      "payTodayFeeSub": "Reservation fee · {{rail}}",
+      "payTodayZero": "Pay today: {{zero}}",
+      "payAtPickupSub": "Pay at pickup · after you check the item",
+      "fullDay": "Full day",
+      "offerFrom": "Offer accepted by {{business}}"
+    },
+    "pay": {
+      "rentalHours": "Rental · {{hours}} h",
+      "rental": "Rental",
+      "feePaid": "Reservation fee paid",
+      "chargedNow": "Charged now",
+      "toPayNow": "To pay now",
+      "depositHold": "Deposit hold",
+      "depositReleased": "released after the return check",
+      "cardFooter": "{{total}} on your card today · {{deposit}} of it is a hold",
+      "stayCounter": "Stay at the counter. {{place}} hands you the item as soon as the payment goes through.",
+      "retryUntil": "You can try again until 23:59 today."
+    },
+    "cancelSheet": {
+      "refundFlag": "Your flag on the item check is still open, so you get the {{fee}} reservation fee back.",
+      "refund": "This booking hasn’t started, so cancellation is free. You get the {{fee}} reservation fee back.",
+      "keep": "It’s the pickup day, so the business keeps the {{fee}} reservation fee. Nothing else is charged.",
+      "keepBooking": "Keep booking"
     }
   },
   "profile": {

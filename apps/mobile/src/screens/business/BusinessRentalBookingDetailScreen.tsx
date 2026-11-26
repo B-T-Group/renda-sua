@@ -67,7 +67,7 @@ import {
   showLegacyReturnPicker,
 } from '../../utils/rentals/rentalInspection';
 import { RentalHandoverNotice } from '../../components/rentals/RentalHandoverNotice';
-import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedWeekdayDay, formatZonedWhen, pickupClockLabel, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
 import { bookingReturnDue } from '../../utils/rentals/returnDue';
 import { ReturnDialogTitle, ReturnTimeOptions } from '../../components/rentals/ReturnTimeOptions';
 
@@ -544,7 +544,7 @@ export default function BusinessRentalBookingDetailScreen() {
           }))}
           timeZone={listingZone}
           askedAt={snapshot.pickup?.askedAt || snapshot.pickup?.submittedAt}
-          fixBy={`${pickupDay}, 23:59`}
+          fixDay={formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
           fee={feeLabel}
           onSent={() => void load({ soft: true })}
         />

@@ -111,3 +111,30 @@ export function feeOutcome(b: PayAtPickupFields | null | undefined): FeeOutcomeK
       return 'pending';
   }
 }
+
+/**
+ * What happens to a paid fee if the renter cancels now (README §4): back before the start day
+ * (listing clock) or while their flag on the pickup check is open; kept on the start day.
+ */
+export function cancelFeeResult(
+  b: (PayAtPickupFields & { start_at?: string | null }) | null | undefined,
+  nowMs: number,
+  listingZone: string,
+  flagged = false
+): 'none' | 'refund' | 'keep' {
+  if (!b || feePaid(b) <= 0 || b.reservation_fee_status !== 'paid') return 'none';
+  if (flagged) return 'refund';
+  const start = Date.parse(b.start_at ?? '');
+  if (!Number.isFinite(start)) return 'refund';
+  const d = new Date(start);
+  const startDay = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  return wallNowMs(nowMs, listingZone) < startDay ? 'refund' : 'keep';
+}
+
+function wallNowMs(nowMs: number, zone: string): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(nowMs));
+  const v = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return Date.UTC(v('year'), v('month') - 1, v('day'), v('hour'), v('minute'));
+}

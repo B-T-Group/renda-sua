@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MobileMoneyConfirmIllustration } from '../../components/illustrations/MobileMoneyConfirmIllustration';
+import { PayWaitingPanel } from '../../components/rentals/inspection/PayWaitingPanel';
+import { payBreakdown } from '../../utils/rentals/payBreakdown';
 import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
 import { DeclineConditionSheet } from '../../components/rentals/DeclinePickupScreens';
@@ -83,6 +84,7 @@ export default function ClientInspectionScreen() {
         t
       )
     : undefined;
+  const breakdown = model.booking && payAtStep ? payBreakdown(model.booking, i18n.language, t) : null;
   const photoZone = confirmationTimeZone(
     model.booking?.rental_location_listing?.business_location?.address?.country,
     model.booking?.currency
@@ -219,44 +221,16 @@ export default function ClientInspectionScreen() {
 
   if (momoPhase) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.pageBackground, padding: spacing.md, gap: spacing.md }]}>
-        {momoPhase === 'waiting' && startRail !== 'card' ? <MobileMoneyConfirmIllustration /> : null}
-        {momoPhase === 'waiting' && startRail === 'card' ? <ActivityIndicator color={colors.primary.main} /> : null}
-        <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center' }]}>
-          {momoPhase === 'waiting'
-            ? startRail === 'card'
-              ? t('rentals.payAtPickup.cardWaitingTitle', 'Confirming your card payment…')
-              : t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')
-            : momoPhase === 'failed'
-              ? t('orders.momoAwaiting.failedTitle', 'Payment failed')
-              : t('rentalInspection.startDelayedTitle', 'Payment succeeded, but the rental has not started.')}
-        </Text>
-        <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
-          {momoPhase === 'waiting'
-            ? startRail === 'card'
-              ? t('rentals.payAtPickup.cardWaitingBody', 'Stay at the counter. This page updates when the payment goes through, then the business hands you the item.')
-              : t('orders.momoAwaiting.waitingBody', 'Approve the request on your phone. This page updates when payment succeeds.')
-            : momoPhase === 'failed'
-              ? startRail === 'card'
-                ? t('rentals.payAtPickup.cardFailed', 'Card payment didn’t go through. Try again or use another card.')
-                : t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again.')
-              : t('rentalInspection.startDelayedBody', 'You can retry the start, or contact support.')}
-        </Text>
-        {momoPhase === 'failed' ? (
-          <Button mode="contained" buttonColor={colors.primary.main} loading={starting} onPress={() => void confirmStart()}>
-            {t('common.retry', 'Retry')}
-          </Button>
-        ) : null}
-        {momoPhase === 'stalled' ? (
-          <>
-            <Button mode="contained" buttonColor={colors.primary.main} loading={starting} onPress={() => void confirmStart()}>
-              {t('rentalInspection.retryStart', 'Retry start')}
-            </Button>
-            <Button mode="outlined" onPress={() => navigation.navigate('SupportTickets')}>
-              {t('rentalInspection.contactSupport', 'Contact support')}
-            </Button>
-          </>
-        ) : null}
+      <View style={[styles.center, { backgroundColor: colors.pageBackground }]}>
+        <PayWaitingPanel
+          phase={momoPhase}
+          rail={startRail === 'card' ? 'card' : money?.kind === 'wallet_due' ? 'wallet' : 'momo'}
+          breakdown={breakdown}
+          place={model.booking?.rental_location_listing?.business_location?.name ?? ''}
+          starting={starting}
+          onRetry={() => void confirmStart()}
+          onSupport={() => navigation.navigate('SupportTickets')}
+        />
       </View>
     );
   }
@@ -297,6 +271,7 @@ export default function ClientInspectionScreen() {
           pricingSnapshot={model.booking?.rental_pricing_snapshot}
           startOpensAt={model.booking?.start_opens_at}
           pay={payAtStep}
+          breakdown={breakdown}
           busy={model.busy}
           starting={starting}
           showDecline={Boolean(flags.rentals_pickup_decline_enabled)}

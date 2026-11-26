@@ -63,6 +63,16 @@ export function PayAtPickupCard({ booking, format, itemCheck, pickupDay }: Props
           </Text>
         </View>
       ) : null}
+      {booking.status === 'reserved' && booking.payment_status !== 'paid' && booking.payment_status !== 'authorized' ? (
+        <IconLine
+          icon="clock-outline"
+          text={
+            fee > 0
+              ? t('rentals.payAtPickup.comeByFee', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.', { day: pickupDay })
+              : t('rentals.payAtPickup.comeBy', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled.', { day: pickupDay })
+          }
+        />
+      ) : null}
       {fee > 0 ? (
         <>
           <IconLine icon="cash-refund" text={t('rentals.payAtPickup.feeRefunded', 'Fee refunded if you cancel before {{day}}, if the business cancels, or if the item doesn’t match.', { day: pickupDay })} />

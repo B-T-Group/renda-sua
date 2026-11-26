@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Button, Dialog, Portal, Snackbar, Text } from 'react-native-paper';
+import { Button, Snackbar, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageLightbox } from '../../components/common/ImageLightbox';
 import { StatusPill } from '../../components/common/StatusPill';
@@ -39,7 +39,8 @@ import {
   useRentalStripePayment,
 } from '../../hooks/useRentalStripePayment';
 import { PayAtPickupCard } from '../../components/rentals/PayAtPickupCard';
-import { cardDueAtPickup, dueAtPickup, showsPayAtPickupCard } from '../../utils/rentals/reservationFee';
+import { cancelFeeResult, cardDueAtPickup, dueAtPickup, reservationFee, showsPayAtPickupCard } from '../../utils/rentals/reservationFee';
+import { CancelBookingDialog } from '../../components/rentals/CancelBookingDialog';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import {
   REPORT_REVIEW_STEP,
@@ -69,7 +70,7 @@ import {
   PRICE_CHANGE_UNSEEN_KEY,
   PRICE_CHANGE_UNSEEN_TEXT,
 } from '../../utils/rentals/priceChangeUnseen';
-import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedWeekdayDay, formatZonedWhen, pickupClockLabel, pickupPhase } from '../../utils/rentals/rentalStartWindow';
 import { bookingReturnDue } from '../../utils/rentals/returnDue';
 import { RentalMomoWaiting } from '../../components/rentals/RentalMomoWaiting';
 import { BookingQuickActions } from '../../components/rentals/BookingQuickActions';
@@ -281,7 +282,10 @@ export default function RentalBookingDetailScreen() {
         timeZone: startZone,
       })
     : null;
-  const pickupDay = booking ? formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language) : '';
+  // Weekday dates (S6): "Sat 28 Nov" / "sam. 28 nov.".
+  const pickupDay = booking ? formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language) : '';
+  const pickupFlagged = snapshot.pickup?.status === 'correction_requested';
+  const cancelFee = booking ? cancelFeeResult(booking, Date.now(), startZone, pickupFlagged) : 'none';
   const paidSource = booking?.paid_at || booking?.created_at;
   const paidAside = paidSource && (booking?.payment_status === 'paid' || booking?.payment_status === 'authorized')
     ? formatZonedDay(paidSource, startZone, i18n.language)
@@ -1043,25 +1047,14 @@ export default function RentalBookingDetailScreen() {
         </View>
       ) : null}
 
-      <Portal>
-        <Dialog visible={cancelOpen} onDismiss={() => setCancelOpen(false)}>
-          <Dialog.Title>{t('rentals.cancelBooking', 'Cancel booking')}</Dialog.Title>
-          <Dialog.Content>
-            <Text>
-              {t(
-                'rentals.bookingDetail.cancelBeforeStartMessage',
-                'This booking has not started, so cancellation is free. Any card hold or wallet hold is released.'
-              )}
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setCancelOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
-            <Button onPress={() => void onCancel()} textColor={colors.error.main}>
-              {t('rentals.cancelBooking', 'Cancel booking')}
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      <CancelBookingDialog
+        visible={cancelOpen}
+        fee={cancelFee}
+        feeLabel={formatConfirmationMoney(reservationFee(booking), booking.currency, i18n.language)}
+        flagged={pickupFlagged}
+        onDismiss={() => setCancelOpen(false)}
+        onConfirm={() => void onCancel()}
+      />
 
       <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={3500}>
         {snack}

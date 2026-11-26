@@ -1,4 +1,4 @@
-import { CameraAltOutlined, CurrencyExchange, ErrorOutline, InfoOutlined } from '@mui/icons-material';
+import { AccessTime, CameraAltOutlined, CurrencyExchange, ErrorOutline, InfoOutlined } from '@mui/icons-material';
 import { Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -56,6 +56,16 @@ export function PayAtPickupPanel({ booking, format, itemCheck, pickupDay }: Prop
           color="primary"
           sx={{ mt: 1, fontWeight: 700 }}
           label={t('rentals.payAtPickup.itemCheck', 'Item check required')}
+        />
+      ) : null}
+      {booking.status === 'reserved' && booking.payment_status !== 'paid' && booking.payment_status !== 'authorized' ? (
+        <Line
+          icon={<AccessTime fontSize="small" />}
+          text={
+            fee > 0
+              ? t('rentals.payAtPickup.comeByFee', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled and the business keeps the fee.', { day: pickupDay })
+              : t('rentals.payAtPickup.comeBy', 'Come by 23:59 on {{day}}. If you don’t, the reservation is cancelled.', { day: pickupDay })
+          }
         />
       ) : null}
       {fee > 0 ? (

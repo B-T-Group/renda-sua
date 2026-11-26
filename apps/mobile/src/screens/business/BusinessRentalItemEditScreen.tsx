@@ -33,6 +33,7 @@ import {
 import { RentalWeeklyHoursEditor } from '../../components/business/rentals/RentalWeeklyHoursEditor';
 import { InspectionOptInCard } from '../../components/business/rentals/InspectionOptInCard';
 import { RentalModeSwitches } from '../../components/business/rentals/RentalModeSwitches';
+import { ReservationFeeToggle } from '../../components/business/rentals/ReservationFeeToggle';
 import type { RentalWeeklyAvailabilityRow } from '../../types/rentals';
 import { defaultWeeklyAvailability } from '../../utils/rentals';
 import { depositInputError, depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
@@ -460,25 +461,17 @@ export default function BusinessRentalItemEditScreen() {
               mode="outlined"
               style={styles.field}
             />
-            <View testID={`reservation-fee-${listingId}`} style={styles.switchRow}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text>{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Text>
-                <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-                  {item.currency?.toUpperCase() === 'XAF' || item.currency?.toUpperCase() === 'XOF'
-                    ? t('business.rentals.reservationFee.helpFcfa', '10% of the rental, at least 150 FCFA. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.')
-                    : t('business.rentals.reservationFee.help', '10% of the rental, at least $2.00. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.')}
-                </Text>
-              </View>
-              <Switch
-                value={edit.reservationFee}
-                onValueChange={(v) =>
-                  setListingEdits((prev) => ({
-                    ...prev,
-                    [listingId]: { ...prev[listingId], reservationFee: v },
-                  }))
-                }
-              />
-            </View>
+            <ReservationFeeToggle
+              listingId={listingId}
+              currency={item.currency}
+              value={edit.reservationFee}
+              onChange={(v) =>
+                setListingEdits((prev) => ({
+                  ...prev,
+                  [listingId]: { ...prev[listingId], reservationFee: v },
+                }))
+              }
+            />
             <View style={styles.switchRow}>
               <Text>{t('business.rentals.listingActive', 'Listing active')}</Text>
               <Switch

@@ -23,6 +23,8 @@ import {
 import ConfirmationModal from '../common/ConfirmationModal';
 import LoadingPage from '../common/LoadingPage';
 import { RentalBookConfirmSummary } from '../rentals/RentalBookConfirmSummary';
+import { ReserveSummaryPanel } from '../rentals/ReserveSummaryPanel';
+import { buildReserveSummary } from '../../utils/rentals/reserveSummary';
 import {
   ClientRentalRequestRowCard,
   isProposedContractOpen,
@@ -35,7 +37,7 @@ import {
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
 import { reservationFee, reserveMode } from '../../utils/rentals/reservationFee';
-import { parseRentalPricingSnapshot } from '../../utils/rentalRequestDisplay';
+import { parseRentalPricingSnapshot, parseRentalSelectionWindows, proposedContractDeadlineIso } from '../../utils/rentalRequestDisplay';
 import {
   isPriceChangeUnseenError,
   PRICE_CHANGE_UNSEEN_KEY,
@@ -236,6 +238,21 @@ const ClientRentalRequestsPage: React.FC = () => {
     : undefined;
   const bookMode = reserveMode(bookConfirmRow?.rental_booking, isStripeRail);
   const bookFeeQuote = parseRentalPricingSnapshot(bookConfirmRow?.rental_pricing_snapshot);
+  const bookSummary = bookConfirmRow && bookMode !== 'card_upfront'
+    ? buildReserveSummary({
+        mode: bookMode,
+        windows: parseRentalSelectionWindows(bookConfirmRow.rental_selection_windows),
+        quote: bookFeeQuote,
+        booking: bookConfirmRow.rental_booking,
+        listingZone: bookConfirmRow.listing_timezone,
+        placeName: bookConfirmRow.rental_location_listing?.business_location?.name,
+        deadlineIso: proposedContractDeadlineIso(bookConfirmRow),
+        isStripeRail,
+        language: i18n.language,
+        t,
+      })
+    : null;
+  const bookBusiness = bookConfirmRow?.rental_location_listing?.rental_item?.business?.name || bookConfirmRow?.rental_location_listing?.business_location?.name;
   const bookFeeLabel = formatConfirmationMoney(
     reservationFee(bookConfirmRow?.rental_booking),
     bookFeeQuote?.currency ?? bookConfirmRow?.rental_location_listing?.rental_item?.currency ?? 'XAF',
@@ -386,18 +403,9 @@ const ClientRentalRequestsPage: React.FC = () => {
           'Review and confirm your reservation'
         )}
         message={
-          bookMode === 'free'
-            ? t(
-                'rentals.payAtPickup.reserveFreeBody',
-                'Nothing to pay today. At pickup, the business shows you the item, you check it, then you pay and take it. Free cancellation before the rental starts.'
-              )
-            : bookMode === 'fee'
-              ? t(
-                  'rentals.payAtPickup.reserveFeeBodyWeb',
-                  'Pay a {{fee}} reservation fee now to hold the item (card on a secure Stripe page, or Mobile Money). It counts toward your total. You pay the rest at pickup, after you check the item.',
-                  { fee: bookFeeLabel }
-                )
-              : isStripeRail
+          bookSummary
+            ? ''
+            : isStripeRail
             ? t(
                 'rentals.clientRequests.bookConfirmMessageStripe',
                 'By continuing, you will be redirected to a secure Stripe Checkout page. The rental total plus the security deposit is held on your card — nothing is charged until the item is returned, and the final charge is at least the rental total. Free cancellation before the rental starts.'
@@ -408,7 +416,20 @@ const ClientRentalRequestsPage: React.FC = () => {
               )
         }
         additionalContent={
-          bookConfirmRow ? (
+          bookConfirmRow && bookSummary ? (
+            <ReserveSummaryPanel
+              summary={bookSummary}
+              itemName={bookConfirmRow.rental_location_listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental')}
+              business={bookBusiness ? t('rentals.reserve.offerFrom', 'Offer accepted by {{business}}', { business: bookBusiness }) : null}
+              note={
+                bookMode === 'fee'
+                  ? isStripeRail
+                    ? t('rentals.payAtPickup.reserveFeeBodyWebCard', 'Pay a {{fee}} reservation fee now to hold the item (card, on a secure Stripe page). It counts toward your total. You pay the rest at pickup, after you check the item.', { fee: bookFeeLabel })
+                    : t('rentals.payAtPickup.reserveFeeBodyWebMomo', 'Pay a {{fee}} reservation fee now to hold the item (Mobile Money or your wallet). It counts toward your total. You pay the rest at pickup, after you check the item.', { fee: bookFeeLabel })
+                  : null
+              }
+            />
+          ) : bookConfirmRow ? (
             <RentalBookConfirmSummary
               row={bookConfirmRow}
               isStripeRail={isStripeRail}
@@ -416,17 +437,16 @@ const ClientRentalRequestsPage: React.FC = () => {
           ) : null
         }
         confirmText={
-          bookMode === 'free'
-            ? t('rentals.payAtPickup.reserveFreeButton', 'Reserve · pay at pickup')
-            : bookMode === 'fee'
-              ? t('rentals.payAtPickup.reserveFeeButton', 'Pay {{fee}} & reserve', { fee: bookFeeLabel })
-              : isStripeRail
+          bookSummary
+            ? bookSummary.button
+            : isStripeRail
             ? t(
                 'rentals.clientRequests.bookConfirmButtonStripe',
                 'Continue to payment'
               )
             : t('rentals.clientRequests.bookConfirmButtonReserve', 'Reserve now')
         }
+        cancelText={t('common.cancel', 'Cancel')}
         confirmColor="primary"
         loading={Boolean(bookingId && bookingId === bookConfirmRequestId)}
         onConfirm={() => void confirmBook()}
