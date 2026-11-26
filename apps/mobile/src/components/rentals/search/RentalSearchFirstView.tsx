@@ -4,7 +4,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { rentalCategoryIcon, rentalCategoryLabel } from '../../../utils/rentals/rentalCategoryIcon';
-import { formatRangeDates, formatSearchStay, type RentalDateRange } from '../../../utils/rentals/rentalSearchDates';
+import { formatSearchStay, formatSearchStayRange, type RentalDateRange } from '../../../utils/rentals/rentalSearchDates';
 import { MyRentalsHeaderButton } from './MyRentalsHeaderButton';
 import { NextRentalCard } from './NextRentalCard';
 import { RentalSearchDateSheet } from './RentalSearchDateSheet';
@@ -218,7 +218,7 @@ function DateRow({ dates, mode, datesSkipped, onOpenDates, onSkipDates, label, d
         </Text>
         <Text style={{ color: colors.text.primary, fontWeight: '700' }}>
           {label ?? (optional
-            ? t('rentals.searchFirst.addToSee', "Add to see what's free")
+            ? t('rentals.searchFirst.addToSee', "Add to see what's available")
             : t('rentals.searchFirst.addDates', 'Add start & end dates'))}
         </Text>
       </View>
@@ -257,7 +257,7 @@ function Landing(props: RentalSearchFirstViewProps) {
         <Text style={{ color: colors.text.primary }}>
           {t(
             'rentals.searchFirst.tip',
-            "Tip: add dates to see what's free for your trip. You can skip and filter later."
+            "Tip: add dates to see what's available for your trip. You can skip and filter later."
           )}
         </Text>
       </View>
@@ -380,18 +380,18 @@ function ResultList(props: RentalSearchFirstViewProps) {
     return (
       <View testID="rental-search-empty">
         <Text variant="titleMedium" style={{ color: colors.text.primary, marginTop: spacing.lg, textAlign: 'center' }}>
-          {t('rentals.searchFirst.nothingFree', 'Nothing free for those dates')}
+          {t('rentals.searchFirst.nothingFree', 'Nothing available for those dates')}
         </Text>
         <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: 4 }}>
           {t('rentals.searchFirst.nothingFreeBody', 'No “{{query}}” listings are available {{range}}.', {
             query: props.query,
-            range: props.dates ? formatRangeDates(props.dates, i18n.language) : '',
+            range: props.dates ? formatSearchStayRange(props.dates, i18n.language) : '',
           })}
         </Text>
         <Text style={[styles.section, { color: colors.text.secondary }]}>{t('rentals.searchFirst.tryDates', 'TRY NEARBY DATES')}</Text>
         <View style={styles.chips}>
           {props.nearby.map((range) => (
-            <Chip key={`${range.startDate}-${range.endDate}`} label={formatRangeDates(range, i18n.language)} active={false} onPress={() => props.onNearby(range)} />
+            <Chip key={`${range.startDate}-${range.endDate}`} label={formatSearchStayRange(range, i18n.language)} active={false} onPress={() => props.onNearby(range)} />
           ))}
         </View>
         <Text style={[styles.section, { color: colors.text.secondary }]}>{t('rentals.searchFirst.similar', 'SIMILAR CATEGORIES')}</Text>
@@ -403,7 +403,7 @@ function ResultList(props: RentalSearchFirstViewProps) {
             </Text>
             <Text style={{ color: colors.text.secondary, marginVertical: 6 }}>
               {t('rentals.searchFirst.notifyBody', "We'll notify you if a matching rental opens for {{range}}.", {
-                range: formatRangeDates(props.dates, i18n.language),
+                range: formatSearchStayRange(props.dates, i18n.language),
               })}
             </Text>
             <Button mode="contained" buttonColor={colors.primary.main} onPress={props.onNotify} loading={props.notifyState === 'saving'} testID="rental-search-notify">
@@ -541,7 +541,7 @@ function NoCatalogMatches() {
   const { colors, spacing } = useTheme();
   return (
     <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: spacing.lg }}>
-      {t('rentals.searchFirst.nothingFree', 'Nothing free for those dates')}
+      {t('rentals.searchFirst.nothingFree', 'Nothing available for those dates')}
     </Text>
   );
 }

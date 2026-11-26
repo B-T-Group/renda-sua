@@ -41,7 +41,7 @@ import {
   rentalBookingStatusColors,
   resolveBookingPhase,
 } from '../../utils/rentals';
-import { bookingRequestedPeriodLines, formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
+import { bookingDetailPeriodLines, formatListingDue, formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
 import {
   confirmationTimeZone,
   confirmationZoneDefault,
@@ -247,14 +247,13 @@ export default function BusinessRentalBookingDetailScreen() {
     i18n.language,
     confirmationZoneDefault(listingCountry, booking.currency, i18n.language)
   );
-  const periodLines = bookedSpan
-    ? [bookedSpan]
-    : bookingRequestedPeriodLines(
-        parseRentalSelectionWindows(booking.rental_request?.rental_selection_windows),
-        booking,
-        i18n.language,
-        (count) => t('rentals.requestForm.dayCount', '{{count}} day', { count })
-      );
+  const periodLines = bookingDetailPeriodLines(
+    parseRentalSelectionWindows(booking.rental_request?.rental_selection_windows),
+    booking,
+    i18n.language,
+    (count) => t('rentals.requestForm.dayCount', '{{count}} day', { count }),
+    bookedSpan
+  );
   const detailMoney = (amount: number) =>
     (booking.currency || '').toUpperCase() === 'CAD'
       ? formatConfirmationMoney(amount, 'CAD', i18n.language)

@@ -51,7 +51,7 @@ import {
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
 import { cardHoldLines, holdPresentation, showsCardDeposit, type HoldPresentation } from '../../utils/rentals/cardDeposit';
-import { bookingRequestedPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
+import { bookingDetailPeriodLines, formatRentalPeriod } from '../../utils/rentalRequestFormat';
 import { formatDoualaStamp, renterReturnPhase } from '../../utils/renterReturnPhase';
 import {
   REPORT_REVIEW_STEP,
@@ -448,9 +448,13 @@ const RentalBookingDetailPage: React.FC = () => {
     i18n.language,
     confirmationZoneDefault(listingCountry, booking.currency, i18n.language)
   );
-  const periodLines = bookedSpan
-    ? [bookedSpan]
-    : bookingRequestedPeriodLines(selectionWindows, booking, i18n.language, dayCountLabel);
+  const periodLines = bookingDetailPeriodLines(
+    selectionWindows,
+    booking,
+    i18n.language,
+    dayCountLabel,
+    bookedSpan
+  );
   const returnPhase = renterReturnPhase({
     status: booking.status,
     endAt: booking.end_at,

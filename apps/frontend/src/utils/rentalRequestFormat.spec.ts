@@ -11,6 +11,10 @@ import {
   formatRentalDateRange,
   formatRentalDay,
   formatRentalPeriod,
+  formatReturnDay,
+  formatRequestedPeriod,
+  appendReturnDay,
+  bookingDetailPeriodLines,
   isSingleRequestedPeriod,
   type PeriodWindow,
 } from './rentalRequestFormat';
@@ -51,6 +55,9 @@ describe('formatRentalPeriod', () => {
     expect(formatExclusiveStay('2026-11-22', '2026-11-25', 'en', days)).toBe('22\u201324 Nov · 3 days');
     expect(formatExclusiveStay('2026-11-22', '2026-11-25', 'fr', jours)).toBe('22\u201324 nov. · 3 jours');
     expect(formatExclusiveStayRange('2026-11-22', '2026-11-25', 'en')).toBe('22\u201324 Nov');
+    expect(formatExclusiveStayRange('2026-11-27', '2026-11-29', 'en')).toBe('27\u201328 Nov');
+    expect(formatExclusiveStay('2026-11-27', '2026-11-29', 'en', days)).toBe('27\u201328 Nov · 2 days');
+    expect(formatExclusiveStay('2026-11-27', '2026-11-29', 'fr', jours)).toBe('27\u201328 nov. · 2 jours');
     expect(formatRentalDay('2026-11-28', 'en')).toBe('28 Nov');
     expect(formatRentalDay('2026-11-28', 'fr')).toBe('28 nov.');
   });
@@ -128,15 +135,15 @@ describe('Douala listing clock', () => {
 describe('clientRequestPeriodLines', () => {
   it('shows a single daily period once, with no numbered line and no times', () => {
     const lines = clientRequestPeriodLines([daily('2026-11-12')], 'en', days);
-    expect(lines).toEqual(['12 Nov · 1 day']);
+    expect(lines).toEqual(['12 Nov · 1 day · Return 13\u00A0Nov']);
     expect(lines.join(' ')).not.toMatch(/^1\.|08:00|18:00/);
     expect(isSingleRequestedPeriod([daily('2026-11-12')])).toBe(true);
   });
 
   it('shows a contiguous daily stay once, in English and French', () => {
     const stay = [daily('2026-11-12'), daily('2026-11-13'), daily('2026-11-14')];
-    expect(clientRequestPeriodLines(stay, 'en', days)).toEqual(['12\u201314 Nov · 3 days']);
-    expect(clientRequestPeriodLines(stay, 'fr', jours)).toEqual(['12\u201314 nov. · 3 jours']);
+    expect(clientRequestPeriodLines(stay, 'en', days)).toEqual(['12\u201314 Nov · 3 days · Return 15\u00A0Nov']);
+    expect(clientRequestPeriodLines(stay, 'fr', jours)).toEqual(['12\u201314 nov. · 3 jours · Retour le 15\u00A0nov.']);
     expect(clientRequestPeriodLines(stay, 'en', days)[0]).not.toMatch(/08:00|1\./);
   });
 
@@ -165,8 +172,8 @@ describe('clientRequestPeriodLines', () => {
   it('numbers gapped daily periods instead of implying one continuous stay', () => {
     const gaps = [daily('2026-11-12'), daily('2026-11-20')];
     expect(clientRequestPeriodLines(gaps, 'en', days)).toEqual([
-      '1. 12 Nov · 1 day',
-      '2. 20 Nov · 1 day',
+      '1. 12 Nov · 1 day · Return 13\u00A0Nov',
+      '2. 20 Nov · 1 day · Return 21\u00A0Nov',
     ]);
     expect(clientRequestPeriodLines(gaps, 'en', days).join(' ')).not.toContain('08:00');
   });
@@ -180,8 +187,8 @@ describe('bookingRequestedPeriodLines', () => {
   it('shows one booking span once instead of repeating it as line 1', () => {
     const span = { start_at: '2026-11-12T08:00:00.000Z', end_at: '2026-11-13T08:00:00.000Z' };
     expect(bookingPeriodWindows([], span)).toEqual([{ start_at: span.start_at, end_at: span.end_at }]);
-    expect(bookingRequestedPeriodLines([], span, 'en', days)).toEqual(['12 Nov · 1 day']);
-    expect(bookingRequestedPeriodLines([], span, 'fr', jours)).toEqual(['12 nov. · 1 jour']);
+    expect(bookingRequestedPeriodLines([], span, 'en', days)).toEqual(['12 Nov · 1 day · Return 13\u00A0Nov']);
+    expect(bookingRequestedPeriodLines([], span, 'fr', jours)).toEqual(['12 nov. · 1 jour · Retour le 13\u00A0nov.']);
   });
 
   it('keeps separate windows numbered and does not add the overall span', () => {
@@ -204,6 +211,45 @@ describe('bookingRequestedPeriodLines', () => {
   it('returns nothing when the booking has neither windows nor a span', () => {
     expect(bookingPeriodWindows([], null)).toEqual([]);
     expect(bookingRequestedPeriodLines([], { start_at: null, end_at: null }, 'en', days)).toEqual([]);
+  });
+});
+
+describe('return day', () => {
+  it('labels the exclusive end as Return / Retour le, with a narrow no-break space', () => {
+    expect(formatReturnDay('2026-11-29', 'en')).toBe('Return 29\u00A0Nov');
+    expect(formatReturnDay('2026-11-29', 'fr')).toBe('Retour le 29\u00A0nov.');
+    expect(appendReturnDay('27\u201328 Nov · 2 days', '2026-11-29', 'en')).toBe(
+      '27\u201328 Nov · 2 days · Return 29\u00A0Nov'
+    );
+    expect(appendReturnDay('27\u201328 nov. · 2 jours', '2026-11-29', 'fr')).toBe(
+      '27\u201328 nov. · 2 jours · Retour le 29\u00A0nov.'
+    );
+  });
+
+  it('adds the return morning on a daily request summary and leaves the catalog chip unchanged', () => {
+    const stay = [daily('2026-11-27'), daily('2026-11-28')];
+    expect(formatRequestedPeriod(stay, 'en', days)).toBe('27\u201328 Nov · 2 days · Return 29\u00A0Nov');
+    expect(formatRequestedPeriod(stay, 'fr', jours)).toBe('27\u201328 nov. · 2 jours · Retour le 29\u00A0nov.');
+    expect(formatRentalPeriod(stay, 'en', days)).toBe('27\u201328 Nov · 2 days');
+    expect(formatExclusiveStayRange('2026-11-27', '2026-11-29', 'en')).toBe('27\u201328 Nov');
+    expect(formatExclusiveStay('2026-11-27', '2026-11-29', 'en', days)).toBe('27\u201328 Nov · 2 days');
+  });
+
+  it('leaves hourly periods without a return day', () => {
+    const slot = [hourly('2026-11-12T09:00:00.000Z', '2026-11-12T13:00:00.000Z')];
+    expect(formatRequestedPeriod(slot, 'en', days)).toBe('12 Nov · 09:00\u201313:00');
+    expect(clientRequestPeriodLines(slot, 'en', days)).toEqual(['12 Nov · 09:00\u201313:00']);
+  });
+
+  it('appends the return morning to a cross-day booked span from the exclusive end', () => {
+    const stay = [daily('2026-11-27'), daily('2026-11-28')];
+    const span = { start_at: '2026-11-27T08:00:00.000Z', end_at: '2026-11-28T18:00:00.000Z' };
+    expect(bookingDetailPeriodLines(stay, span, 'en', days, '27 Nov 08:00 → 28 Nov 18:00')).toEqual([
+      '27 Nov 08:00 → 28 Nov 18:00 · Return 29\u00A0Nov',
+    ]);
+    expect(bookingDetailPeriodLines(stay, span, 'fr', jours, '27 nov. 08:00 → 28 nov. 18:00')).toEqual([
+      '27 nov. 08:00 → 28 nov. 18:00 · Retour le 29\u00A0nov.',
+    ]);
   });
 });
 

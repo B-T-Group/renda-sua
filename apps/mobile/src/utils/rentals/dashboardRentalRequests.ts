@@ -1,6 +1,6 @@
 import { listingNowMs } from './dayHoursPicker';
 import type { RentalSelectionWindow } from '../../types/rentals';
-import { formatRequestAmount, formatRentalDay } from './rentalRequestFormat';
+import { appendReturnDay, formatRequestAmount, formatRentalDay } from './rentalRequestFormat';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -89,10 +89,15 @@ export function dashboardPeriodLabel(
 ): string {
   const days = windows.map((row) => row.calendar_date).filter((day): day is string => Boolean(day)).sort();
   if (days.length === 1 && windows.every((row) => row.billing !== 'hourly')) {
-    return `${formatRentalDay(days[0], locale)} · ${allDay}`;
+    return appendReturnDay(`${formatRentalDay(days[0], locale)} · ${allDay}`, addUtcDay(days[0]), locale);
   }
   if (days.length > 1) {
-    return `${formatRentalDay(days[0], locale)} – ${formatRentalDay(addUtcDay(days[days.length - 1]), locale)} · ${dayCount(days.length)}`;
+    const last = days[days.length - 1];
+    return appendReturnDay(
+      `${formatRentalDay(days[0], locale)} – ${formatRentalDay(last, locale)} · ${dayCount(days.length)}`,
+      addUtcDay(last),
+      locale
+    );
   }
   return windows[0]?.start_at ? formatRentalDay(windows[0].start_at.slice(0, 10), locale) : '';
 }

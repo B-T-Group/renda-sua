@@ -2626,7 +2626,7 @@
         "operatedTitle": "Opéré sur place",
         "operatedBody": "Vous gérez la location avec le client sur place (véhicules, moteurs, matériel opéré).",
         "takeHomeTitle": "À emporter",
-        "takeHomeBody": "Le client récupère, utilise hors site et rend avant la fin réservée (outils, petit matériel).",
+        "takeHomeBody": "Le client récupère, utilise hors site et rend avant l’heure de fin réservée (outils, petit matériel).",
         "operatedShort": "Opéré",
         "takeHomeShort": "À emporter"
       },
@@ -6062,7 +6062,7 @@
     "loadingSubtitle": "Veuillez patienter",
     "metaDescription": "Parcourez les locations opérées par les entreprises sur Rendasua",
     "businessOperatedNotice": "Location opérée par l’entreprise : la prestation se fait avec vous sur place (pas d’emprunt non accompagné).",
-    "takeHomeNotice": "Location à emporter : récupérez l’article, utilisez-le hors site et rendez-le avant la fin réservée.",
+    "takeHomeNotice": "Location à emporter : récupérez l’article, utilisez-le hors site et rendez-le avant l’heure de fin réservée.",
     "modes": {
       "operatedShort": "Opéré",
       "takeHomeShort": "À emporter"
@@ -6154,7 +6154,7 @@
       "skip": "Ignorer",
       "yourDates": "VOS DATES",
       "datesOptional": "DATES (FACULTATIVES)",
-      "addToSee": "Ajoutez-les pour voir ce qui est libre",
+      "addToSee": "Ajoutez-les pour voir ce qui est disponible",
       "add": "Ajouter",
       "edit": "Modifier",
       "categories": "CATÉGORIES",
@@ -6174,7 +6174,7 @@
       "loadingMore": "Chargement…",
       "emptyMarketTitle": "Aucune location ici pour le moment",
       "emptyMarketBody": "Rien n'est encore proposé à {{city}}. Essayez une autre ville ou recherchez par nom.",
-      "tip": "Conseil : ajoutez des dates pour voir ce qui est libre pour vos dates. Vous pouvez ignorer et filtrer plus tard.",
+      "tip": "Conseil : ajoutez des dates pour voir ce qui est disponible pour vos dates. Vous pouvez ignorer et filtrer plus tard.",
       "emptyLanding": "Recherchez ou choisissez une catégorie",
       "noFeed": "Aucun fil à faire défiler sur cette page",
       "suggestions": "SUGGESTIONS",
@@ -6188,7 +6188,7 @@
       "nextRental": "Prochaine location",
       "dismissNext": "Masquer",
       "perDay": "/ jour",
-      "freeFor": "Libre {{range}}",
+      "freeFor": "Disponible {{range}}",
       "availableFrom": "Disponible à partir du {{date}}",
       "unavailableForDates": "Indisponible pour ces dates",
       "totalFor": "Total · {{amount}} pour {{count}} jours",
@@ -6200,11 +6200,11 @@
       "totalsAfterDates": "Les totaux apparaissent lorsque vous ajoutez des dates",
       "viewDetailsFor": "Voir les détails de {{name}}",
       "seeDates": "Voir les dates",
-      "matches": "{{count}} résultat · les dates libres d'abord",
-      "matches_plural": "{{count}} résultats · les dates libres d'abord",
+      "matches": "{{count}} résultat · disponibles d’abord",
+      "matches_plural": "{{count}} résultats · disponibles d’abord",
       "countOnly": "{{count}} location · ajoutez des dates pour trier par disponibilité",
       "countOnly_plural": "{{count}} locations · ajoutez des dates pour trier par disponibilité",
-      "nothingFree": "Rien de libre pour ces dates",
+      "nothingFree": "Rien de disponible pour ces dates",
       "nothingFreeBody": "Aucune location « {{query}} » n'est disponible {{range}}.",
       "tryDates": "ESSAYEZ DES DATES PROCHES",
       "similar": "CATÉGORIES SEMBLABLES",
@@ -6380,7 +6380,12 @@
       "requestRentalCta": "Demander une location",
       "results": "{{count}} annonces",
       "noResults": "Aucune annonce ne correspond à vos filtres",
-      "noResultsHint": "Modifiez votre recherche ou réinitialisez les filtres pour tout afficher."
+      "noResultsHint": "Modifiez votre recherche ou réinitialisez les filtres pour tout afficher.",
+      "modeInfo": {
+        "title": "Modes de location",
+        "operatedBody": "Le commerce gère cette location avec vous sur place — comme une location de matériel encadrée ou un service accompagné.",
+        "takeHomeBody": "Récupérez l’article, utilisez-le hors site et rendez-le avant l’heure de fin réservée."
+      }
     },
     "detail": {
       "fromHourly": "Dès {{price}}/h",
@@ -6419,7 +6424,7 @@
       "howItWorksStep3": "Le jour du retrait, touchez Démarrer la location lorsque vous êtes avec le commerce. Ramenez l’article avant la fin prévue.",
       "howItWorksStep3Inspected": "Au retrait, vérifiez l’article, puis touchez Démarrer la location. Ramenez l’article avant la fin prévue.",
       "howItWorksStep4": "Le jour du retrait, touchez Démarrer la location lorsque vous êtes avec le commerce. Ramenez l’article avant la fin prévue.",
-      "howItWorksStep4TakeHome": "Récupérez l’article, utilisez-le hors site et rendez-le avant la fin réservée.",
+      "howItWorksStep4TakeHome": "Récupérez l’article, utilisez-le hors site et rendez-le avant l’heure de fin réservée.",
       "securityDeposit": "Caution (locations par carte)",
       "securityDepositHint": "Retenue sur votre carte avec le total de la location et utilisée uniquement pour les heures supplémentaires après la fin prévue.",
       "securityDepositHintInspected": "Bloqué sur votre carte avec le total de la location. La location est débitée au retour. La caution est libérée sauf en cas de dommage ou de retard."

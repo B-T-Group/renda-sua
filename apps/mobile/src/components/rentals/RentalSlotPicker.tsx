@@ -21,7 +21,7 @@ import {
   type SelectionRange,
 } from '../../utils/rentals';
 import {
-  formatRentalPeriod,
+  formatRequestedPeriod,
   formatRequestAmount,
   modifySaveNeedsConfirm,
   readPriceConfirmQuote,
@@ -336,10 +336,10 @@ export function RentalSlotPicker({
   const dayCountLabel = (count: number) =>
     t('rentals.requestForm.dayCount', '{{count}} day', { count });
   const shownDateLine = modifying && effectiveSelections.length
-    ? formatRentalPeriod(selectionPeriodWindows(effectiveSelections), i18n.language, dayCountLabel)
+    ? formatRequestedPeriod(selectionPeriodWindows(effectiveSelections), i18n.language, dayCountLabel)
     : dateLine;
   const savedDateLine = modifying && savedSelections?.length
-    ? formatRentalPeriod(selectionPeriodWindows(savedSelections), i18n.language, dayCountLabel)
+    ? formatRequestedPeriod(selectionPeriodWindows(savedSelections), i18n.language, dayCountLabel)
     : dateLine;
   const price = requestBlocked
     ? { totalAmount: '—' }

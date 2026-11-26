@@ -20,9 +20,9 @@ import {
 } from '../../utils/rentals';
 import {
   businessChangedThePrice,
+  clientRequestPeriodLines,
   formatListingDeadline,
   formatRequestAmount,
-  formatRentalPeriod,
 } from '../../utils/rentals/rentalRequestFormat';
 import { rentalCategoryIcon } from '../../utils/rentals/rentalCategoryIcon';
 import { requestStartIso, respondWindow } from '../../utils/rentals/dashboardRentalRequests';
@@ -91,9 +91,9 @@ export function ClientRentalRequestRow({
   const canBookNow = row.status === 'available' && isProposedContractOpen(row);
   const bookingId = row.rental_booking?.id;
   const windows = parseRentalSelectionWindows(row.rental_selection_windows);
-  const period = formatRentalPeriod(windows, i18n.language, (count) =>
+  const period = clientRequestPeriodLines(windows, i18n.language, (count) =>
     t('rentals.requestForm.dayCount', '{{count}} day', { count })
-  );
+  ).join('\n');
   const total = quotedAmount(row, quote?.total);
   const currency = listing?.rental_item?.currency || quote?.currency || 'XAF';
   const amount = Number.isFinite(total)

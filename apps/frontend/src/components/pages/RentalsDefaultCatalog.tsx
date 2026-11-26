@@ -189,7 +189,7 @@ function DatesRow({ stay, locale, onOpen }: { stay: CatalogStay | null; locale: 
           {stay ? t('rentals.catalog.yourDates', 'YOUR DATES') : t('rentals.catalog.datesOptional', 'DATES (OPTIONAL)')}
         </Typography>
         <Typography fontWeight={700}>
-          {label ?? t('rentals.catalog.addToSee', "Add to see what's free")}
+          {label ?? t('rentals.catalog.addToSee', "Add to see what's available")}
         </Typography>
       </Box>
       <Button
