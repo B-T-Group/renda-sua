@@ -4630,13 +4630,24 @@ export class RentalsService {
       return { payment_rail: 'card' as const, amount_due_at_pickup: 0 };
     }
     if (booking.status === 'confirmed' && booking.payment_status === 'paid') {
-      return { payment_rail: 'wallet' as const, amount_due_at_pickup: 0 };
+      return { payment_rail: 'wallet' as const, amount_due_at_pickup: 0, paid_rail: await this.paidRail(booking) };
     }
     if (booking.status !== 'reserved') return null;
     return this.previewReservedRail(booking);
   }
 
-  private async previewReservedRail(booking: any) {
+  /** How a paid, not-yet-started booking was paid, for the renter's start card. Display only. */
+  private async paidRail(booking: any): Promise<'mobile_money' | 'wallet' | null> {
+    try {
+      const rail = await this.replayPaymentRail(booking);
+      return rail === 'card' ? null : rail;
+    } catch (error: any) {
+      this.logger?.warn(`paidRail ${booking?.id}: ${error?.message ?? error}`);
+      return null;
+    }
+  }
+
+    private async previewReservedRail(booking: any) {
     const total = Number(booking.total_amount) || 0;
     const userId = booking.client?.user?.id ?? booking.client?.user_id;
     if (!userId) return { payment_rail: 'mobile_money' as const, amount_due_at_pickup: total };

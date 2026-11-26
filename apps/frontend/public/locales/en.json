@@ -3109,7 +3109,12 @@
         "acceptedToast": "Request accepted for {{item}}",
         "declinedToast": "Request declined for {{item}}",
         "expiredSla": "Request expired — no response in 24h",
-        "expiredStart": "Request expired — no response before the start time"
+        "expiredStart": "Request expired — no response before the start time",
+        "expiredTitle": "Request expired",
+        "expiredStartReason": "You didn’t reply before the start time. The renter can send a new request.",
+        "expiredSlaReason": "You didn’t reply within 24 hours. The renter can send a new request.",
+        "viewRequest": "View request",
+        "dismissNotice": "Dismiss"
       },
       "welcome": "Welcome to your business dashboard",
       "accountSummary": "Account Summary",
@@ -7463,6 +7468,7 @@
     },
     "start": {
       "pillDay": "Pickup {{day}}",
+      "walletDue": "{{amount}} will be paid from your wallet",
       "pickupToday": "Pickup today",
       "latePickup": "Late pickup",
       "pickupOn": "Pickup on {{when}} · {{time}}",
@@ -7474,6 +7480,10 @@
       "momoWaitingTitle": "Approve on your phone",
       "momoWaitingBody": "Approve the request on your phone. This page updates when the payment goes through.",
       "held": "{{amount}} held on your card",
+      "heldSplit": "{{rental}} rental · {{deposit}} security deposit",
+      "paid": "{{amount}} paid",
+      "paidMomo": "{{amount}} paid with Mobile Money",
+      "paidWallet": "{{amount}} paid from your wallet",
       "returnBy": "Return by {{when}}",
       "returnByEarly": "Return by {{time}} ({{duration}} from now)",
       "lateStill": "Booked for {{time}} · you can still start until {{until}}",
@@ -7481,8 +7491,8 @@
       "button": "Start rental{{amount}}",
       "confirmTitle": "Start rental?",
       "confirmBody": "Only start once you are with the business. The business will hand over the item once you start.",
-      "didntHint": "Didn't get the item after starting? You can tell us within 30 minutes.",
-      "didntReceiveLeft": "Didn't receive the item? · {{minutes}} min",
+      "didntHint": "Didn't get the item after starting? You can tell us within 30 minutes.",
+      "didntReceiveLeft": "Didn't receive the item? · {{minutes}} min",
       "notYet": "Not yet",
       "startedBanner": "Rental started at {{time}}. The business has been notified to hand over the item."
     },
@@ -7521,6 +7531,7 @@
     },
     "actions": {
       "bookOffer": "Book offer",
+      "startRental": "Start rental",
       "completePayment": "Complete payment",
       "sendStartPin": "Send start PIN",
       "showStartPin": "Show PIN on screen",

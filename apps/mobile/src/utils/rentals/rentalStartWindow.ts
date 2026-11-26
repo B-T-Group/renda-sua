@@ -62,7 +62,14 @@ export function formatZonedWeekday(iso: string, timeZone: string, language: stri
     timeZone,
     weekday: 'short',
   }).format(new Date(iso));
-  return french ? raw.replace(/\.$/, '').toLowerCase() : raw.replace(/\.$/, '');
+  const clean = raw.replace(/\.$/, '');
+  return french ? `${clean.toLowerCase()}.` : clean;
+}
+
+/** "Thu 26 Nov" / "jeu. 26 nov." — French keeps the abbreviation dots and joins with non-breaking spaces. */
+export function formatZonedWeekdayDay(iso: string, timeZone: string, language: string): string {
+  const text = `${formatZonedWeekday(iso, timeZone, language)} ${formatZonedDay(iso, timeZone, language)}`;
+  return language.toLowerCase().startsWith('fr') ? text.replace(/ /g, '\u00a0') : text;
 }
 
 export function formatZonedTime(iso: string, timeZone: string): string {
@@ -86,8 +93,7 @@ export function pickupClockLabel(
 }
 
 export function formatZonedWhen(iso: string, timeZone: string, language: string): string {
-  const day = `${formatZonedWeekday(iso, timeZone, language)} ${formatZonedDay(iso, timeZone, language)}`;
-  return `${day} · ${formatZonedTime(iso, timeZone)}`;
+  return `${formatZonedWeekdayDay(iso, timeZone, language)} · ${formatZonedTime(iso, timeZone)}`;
 }
 
 function pad(value: number): string {

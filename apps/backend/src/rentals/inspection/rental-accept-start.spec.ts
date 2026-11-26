@@ -626,6 +626,31 @@ describe('accept and start', () => {
     expect(svc.hasuraSystemService.getAccount).toHaveBeenCalledTimes(1);
   });
 
+  it('tells the renter how a paid, not-started booking was paid', async () => {
+    const row = enrolled({
+      status: 'confirmed',
+      payment_status: 'paid',
+      booking_number: 'RB-PAID',
+      client: { id: 'client', user_id: 'client-user' },
+    });
+    svc.hasuraUserService.executeQuery = jest.fn().mockResolvedValue({ rental_bookings_by_pk: row });
+    svc.hasuraUserService.getUser.mockResolvedValue({
+      id: 'client-user',
+      active_persona: 'client',
+      client: { id: 'client' },
+    });
+    const wallet = await svc.getBookingDetailForViewer('b1');
+    expect(wallet.accept_start_preview).toEqual({ payment_rail: 'wallet', amount_due_at_pickup: 0, paid_rail: 'wallet' });
+
+    svc.mobilePaymentsDatabaseService.hasSuccessfulRentalBookingPayment.mockResolvedValue(true);
+    const momo = await svc.getBookingDetailForViewer('b1');
+    expect(momo.accept_start_preview).toEqual({ payment_rail: 'wallet', amount_due_at_pickup: 0, paid_rail: 'mobile_money' });
+
+    svc.mobilePaymentsDatabaseService.hasSuccessfulRentalBookingPayment.mockRejectedValue(new Error('db down'));
+    const unknown = await svc.getBookingDetailForViewer('b1');
+    expect(unknown.accept_start_preview).toEqual({ payment_rail: 'wallet', amount_due_at_pickup: 0, paid_rail: null });
+  });
+
   it('returns 409 when the start race is lost', async () => {
     svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
       if (String(query).includes('rental_accept_pickup_version')) {

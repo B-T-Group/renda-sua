@@ -52,6 +52,7 @@ describe('pickup window on the stored wall-clock date', () => {
     expect(formatZonedTime(START_TO, TORONTO)).toBe('10:00');
     expect(formatZonedTime(START_CM, DOUALA)).toBe('09:00');
     expect(formatZonedWhen(END_TO, TORONTO, 'en')).toBe('Thu 26 Nov · 18:00');
+    expect(formatZonedWhen(END_TO, TORONTO, 'fr')).toBe('jeu.\u00a026\u00a0nov. · 18:00');
   });
 });
 

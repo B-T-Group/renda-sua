@@ -911,18 +911,20 @@ function BookingMoney(props: {
   const { t } = useTranslation();
   const { colors } = useTheme();
   if (props.presentation.mode === 'sentence') return <HeldSentence held={props.held} />;
-  return (
-    <View>
-      <Text style={{ color: colors.text.primary, marginTop: 8, fontWeight: '600' }}>{props.total}</Text>
-      {props.presentation.mode === 'split' ? (
+  if (props.presentation.mode === 'split') {
+    return (
+      <View testID="business-booking-held">
+        <HeldSentence held={props.held} />
         <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
-          {t('rentals.bookingDetail.securityDeposit', 'Security deposit')}
-          {': '}
-          {props.deposit}
+          {t('rentals.start.heldSplit', '{{rental}} rental · {{deposit}} security deposit', {
+            rental: props.total,
+            deposit: props.deposit,
+          })}
         </Text>
-      ) : null}
-    </View>
-  );
+      </View>
+    );
+  }
+  return <Text style={{ color: colors.text.primary, marginTop: 8, fontWeight: '600' }}>{props.total}</Text>;
 }
 
 function HeldSentence({ held }: { held: string }) {
