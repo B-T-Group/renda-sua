@@ -1,5 +1,9 @@
 import {
   bookedRange,
+  dayFieldLabel,
+  parseTimeField,
+  returnDayChoices,
+  timeFieldText,
   bookedUntil,
   canReturnEarly,
   earlyReportPending,
@@ -130,5 +134,29 @@ describe('corrected return time (listing clock)', () => {
     expect(returnAtProblem('2026-11-26T19:00:00.000Z', toronto, torontoNow)).toBe('beforePickup');
     expect(returnAtProblem('2026-11-26T21:00:00.000Z', toronto, torontoNow)).toBe('future');
     expect(returnAtProblem('2026-11-26T20:30:00.000Z', toronto, torontoNow)).toBeNull();
+  });
+});
+
+describe('edit-time fields in the listing format (S2)', () => {
+  it('labels days and times like the listing', () => {
+    expect(dayFieldLabel('2026-11-26', 'en', TORONTO)).toBe('Thu, Nov 26');
+    expect(dayFieldLabel('2026-11-26', 'fr', TORONTO)).toBe(`jeu.${NB}26${NB}nov.`);
+    expect(dayFieldLabel('2026-11-26', 'en', DOUALA)).toBe(`Thu${NB}26${NB}Nov`);
+    expect(timeFieldText('15:40', 'en', TORONTO)).toBe('3:40 PM');
+    expect(timeFieldText('15:40', 'fr', TORONTO)).toBe('15:40');
+  });
+
+  it('parses 12 h and 24 h input', () => {
+    expect(parseTimeField('3:40 PM')).toBe('15:40');
+    expect(parseTimeField('12:05 am')).toBe('00:05');
+    expect(parseTimeField('15h40')).toBe('15:40');
+    expect(parseTimeField('13:00 PM')).toBeNull();
+    expect(parseTimeField('3pm')).toBeNull();
+  });
+
+  it('offers pickup day to today on the listing clock', () => {
+    const started = { ...toronto, actual_start_at: '2026-11-24T19:05:00.000Z' };
+    expect(returnDayChoices(started, torontoNow, TORONTO)).toEqual(['2026-11-26', '2026-11-25', '2026-11-24']);
+    expect(returnDayChoices(toronto, torontoNow, TORONTO)).toEqual(['2026-11-26']);
   });
 });

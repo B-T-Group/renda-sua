@@ -82,7 +82,9 @@ export function RentalStartPanel(props: Props) {
         <Typography variant="caption">{t('rentals.nextStep.label', 'NEXT STEP')}</Typography>
       </Stack>
       <Typography variant="h6" sx={{ mt: 1 }}>{title}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{bodyText(phase, props.role, momo, t)}</Typography>
+      {bodyText(phase, props.role, momo, t) ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{bodyText(phase, props.role, momo, t)}</Typography>
+      ) : null}
       {late ? (
         <Typography variant="body2" sx={{ mt: 0.5 }}>
           {t('rentals.start.lateStill', 'Booked for {{time}} · you can still start until {{until}}', {
@@ -187,7 +189,7 @@ function titleText(
   if (phase === 'started') {
     const at = startedAt ? formatZonedTime(startedAt, zone, language, zone) : time;
     return role === 'business'
-      ? t('rentals.business.startedLine', 'Started at {{time}} · hand over the item', { time: at })
+      ? t('rentals.business.startedLine', 'Rental started at {{time}}', { time: at })
       : t('rentals.start.startedBanner', 'Rental started at {{time}}. The business has been notified to hand over the item.', { time: at });
   }
   if (phase === 'before') return t('rentals.start.pickupOn', 'Pickup on {{when}} · {{time}}', { when, time });
@@ -195,7 +197,9 @@ function titleText(
 }
 
 function bodyText(phase: string, role: string, momo: boolean, t: (key: string, fallback: string) => string): string {
-  if (role === 'business' && phase !== 'started') {
+  // Once started, the business needs no instructions (the renter's "tap Start rental" copy is stale).
+  if (role === 'business' && phase === 'started') return '';
+  if (role === 'business') {
     return t('rentals.business.waitingBody', 'Hand over the item only after you get “Rental started”. No PIN needed.');
   }
   if (phase === 'before') return t('rentals.start.beforeBody', 'You can start the rental on the pickup day, once you are at the business.');

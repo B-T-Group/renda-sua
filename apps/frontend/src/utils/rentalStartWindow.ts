@@ -116,7 +116,20 @@ export function pickupClockLabel(
 }
 
 export function formatZonedWhen(iso: string, timeZone: string, language: string, listingZone?: string | null): string {
-  return `${formatZonedWeekdayDay(iso, timeZone, language)} · ${formatZonedTime(iso, timeZone, language, listingZone)}`;
+  const time = formatZonedTime(iso, timeZone, language, listingZone);
+  // EN on an Americas listing reads US style, like the 12 h time next to it: "Thu, Nov 26 · 6:00 PM".
+  if (listingZone && uses12h(pickerLang(language), listingZone)) return `${usWeekdayDay(iso, timeZone)} · ${time}`;
+  return `${formatZonedWeekdayDay(iso, timeZone, language)} · ${time}`;
+}
+
+const US_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const US_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Thu, Nov 26" in the given zone. */
+function usWeekdayDay(iso: string, timeZone: string): string {
+  const parts = zonedParts(new Date(iso), timeZone);
+  const weekday = new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+  return `${US_WEEKDAYS[weekday]}, ${US_MONTHS[parts.month - 1]} ${parts.day}`;
 }
 
 function pad(value: number): string {

@@ -131,7 +131,7 @@ export function SummaryTable({ lines, testId }: { lines: SummaryLine[]; testId?:
             </Stack>
           ) : (
             <Box sx={{ textAlign: 'right' }}>
-              <Typography variant="body2" fontWeight={700}>
+              <Typography variant="body2" fontWeight={700} color="text.primary">
                 {line.value}
               </Typography>
               {line.sub ? (
@@ -161,6 +161,7 @@ function SheetDialog(props: {
   children: React.ReactNode;
   testId?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <Dialog open={props.open} onClose={props.onClose} fullWidth maxWidth="xs" data-testid={props.testId}>
       <DialogContent sx={{ p: 2.5 }}>
@@ -168,7 +169,7 @@ function SheetDialog(props: {
           <Box sx={{ width: 44, height: 44, borderRadius: '50%', bgcolor: '#EAF1FB', color: BLUE, display: 'grid', placeItems: 'center' }}>
             {props.icon}
           </Box>
-          <IconButton aria-label="close" onClick={props.onClose} size="small" sx={{ bgcolor: '#F1EFEA' }}>
+          <IconButton aria-label={t('common.close', 'Close')} onClick={props.onClose} size="small" sx={{ bgcolor: '#F1EFEA' }}>
             <Close fontSize="small" />
           </IconButton>
         </Stack>

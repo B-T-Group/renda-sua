@@ -1073,7 +1073,7 @@ const RentalBookingDetailPage: React.FC = () => {
                   }
                   pickupAside={pickupClockLabel(booking.actual_start_at, booking.start_at, listingZone, i18n.language)}
                   early={earlyJourney}
-                  accent={theme.palette.success.main}
+                  accent="#0A4FB5"
                 />
               ) : (
               <BookingStatusSteps

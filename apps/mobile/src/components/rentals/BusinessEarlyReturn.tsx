@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Button, Text, TextInput } from 'react-native-paper';
+import { Button, Chip, Text, TextInput } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
+  dayFieldLabel,
   fieldsToInstantIso,
+  parseTimeField,
+  returnDayChoices,
+  timeFieldText,
   freedWindow,
   instantClock,
   listingFields,
@@ -45,7 +49,10 @@ export function BusinessReturnConfirmSheet(props: BusinessReturnConfirmSheetProp
   const defaultIso = reported || new Date(openedAt).toISOString();
   const [editing, setEditing] = useState(Boolean(props.initialEditing));
   const [date, setDate] = useState(listingFields(Date.parse(defaultIso), props.timeZone).date);
-  const [time, setTime] = useState(listingFields(Date.parse(defaultIso), props.timeZone).time);
+  const [timeText, setTimeText] = useState(
+    timeFieldText(listingFields(Date.parse(defaultIso), props.timeZone).time, i18n.language, props.timeZone)
+  );
+  const time = parseTimeField(timeText) ?? '';
 
   useEffect(() => {
     if (!props.open) return;
@@ -54,7 +61,7 @@ export function BusinessReturnConfirmSheet(props: BusinessReturnConfirmSheetProp
     const iso = reported || new Date(at).toISOString();
     const fields = listingFields(Date.parse(iso), props.timeZone);
     setDate(fields.date);
-    setTime(fields.time);
+    setTimeText(timeFieldText(fields.time, i18n.language, props.timeZone));
     setEditing(Boolean(props.initialEditing));
   }, [props.open, props.now, props.timeZone, props.initialEditing, reported]);
 
@@ -117,22 +124,32 @@ export function BusinessReturnConfirmSheet(props: BusinessReturnConfirmSheetProp
       <SummaryTable lines={lines} testID="business-return-confirm-summary" />
       {editing ? (
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }} testID="business-return-time-fields">
-          <TextInput
-            mode="outlined"
-            label={t('rentals.earlyReturn.date', 'Date')}
-            value={date}
-            onChangeText={setDate}
-            placeholder="YYYY-MM-DD"
-            keyboardType="numbers-and-punctuation"
-            style={{ flex: 1 }}
-            disabled={props.busy}
-          />
+          <View style={{ flex: 1, gap: 6 }} testID="business-return-day-choices">
+            <Text style={{ fontSize: 12, color: '#6B7280' }}>{t('rentals.earlyReturn.date', 'Date')}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {returnDayChoices(props.booking, props.now ?? Date.now(), props.timeZone).map((day) => (
+                <Chip
+                  key={day}
+                  compact
+                  selected={day === date}
+                  showSelectedCheck={false}
+                  onPress={() => setDate(day)}
+                  disabled={props.busy}
+                  testID={`business-return-day-${day}`}
+                  style={{ backgroundColor: day === date ? '#EAF1FB' : undefined, borderColor: day === date ? EARLY_BLUE : '#E5E7EB', borderWidth: 1 }}
+                  textStyle={{ color: day === date ? EARLY_BLUE : undefined }}
+                >
+                  {dayFieldLabel(day, lang, props.timeZone)}
+                </Chip>
+              ))}
+            </View>
+          </View>
           <TextInput
             mode="outlined"
             label={t('rentals.earlyReturn.time', 'Time ({{zone}})', { zone: props.zoneLabel })}
-            value={time}
-            onChangeText={setTime}
-            placeholder="HH:mm"
+            value={timeText}
+            onChangeText={setTimeText}
+            placeholder={timeFieldText('15:40', lang, props.timeZone)}
             keyboardType="numbers-and-punctuation"
             style={{ flex: 1 }}
             disabled={props.busy}

@@ -6570,8 +6570,8 @@
       "pickupOn": "Retrait le {{when}} · {{time}}",
       "todayTitle": "Récupérez votre article · {{time}}",
       "beforeBody": "Vous pouvez démarrer la location le jour du retrait, une fois chez le commerce.",
-      "todayBody": "Au commerce, touchez Démarrer la location. On vous remet l’article dès que vous démarrez.",
-      "momoBody": "Au commerce, touchez Démarrer la location. Vous payez à ce moment, et on vous remet l’article une fois le paiement reçu.",
+      "todayBody": "À l’accueil, touchez Démarrer la location. On vous remet l’article dès que vous démarrez.",
+      "momoBody": "À l’accueil, touchez Démarrer la location. Vous payez à ce moment, et on vous remet l’article une fois le paiement reçu.",
       "momoLine": "Mobile Money · {{amount}}",
       "momoWaitingTitle": "Approuvez sur votre téléphone",
       "momoWaitingBody": "Approuvez la demande sur votre téléphone. Cette page se met à jour quand le paiement est accepté.",
@@ -6592,13 +6592,13 @@
       "didntHint": "Vous n’avez pas reçu l’article après le démarrage ? Vous pouvez nous le dire dans les 30 minutes.",
       "didntReceiveLeft": "Pas reçu l’article ? · {{minutes}} min",
       "notYet": "Pas encore",
-      "startedBanner": "Location démarrée à {{time}}. Le commerce a été prévenu pour remettre l’article."
+      "startedBanner": "Location démarrée à {{time}}. L’entreprise a été prévenue pour remettre l’article."
     },
     "business": {
       "waitingTitle": "En attente que {{name}} démarre",
       "waitingTitleElided": "En attente qu’{{name}} démarre",
       "waitingBody": "Remettez l’article seulement après avoir reçu « Location démarrée ». Aucun code PIN n’est nécessaire.",
-      "startedLine": "Démarrée à {{time}} · remettez l’article",
+      "startedLine": "Location démarrée à {{time}}",
       "photosAsked": "{{name}} a demandé de nouvelles photos avant le démarrage.",
       "sendPhotos": "Envoyer les photos mises à jour",
       "pushStartedTitle": "Location démarrée, remettez l'article",

@@ -7561,7 +7561,7 @@
       "waitingTitle": "Waiting for {{name}} to start",
       "waitingTitleElided": "Waiting for {{name}} to start",
       "waitingBody": "Hand over the item only after you get “Rental started”. No PIN needed.",
-      "startedLine": "Started at {{time}} · hand over the item",
+      "startedLine": "Rental started at {{time}}",
       "photosAsked": "{{name}} asked for new photos before starting.",
       "sendPhotos": "Send updated photos",
       "pushStartedTitle": "Rental started, hand over the item",

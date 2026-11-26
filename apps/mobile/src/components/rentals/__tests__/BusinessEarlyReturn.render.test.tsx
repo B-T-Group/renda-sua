@@ -49,7 +49,7 @@ describe('BusinessReturnConfirmSheet', () => {
   it('corrects the time on the listing clock', async () => {
     const onConfirm = jest.fn();
     await renderSheet(onConfirm, { initialEditing: true });
-    await fireEvent.changeText(screen.getByDisplayValue('15:40'), '15:20');
+    await fireEvent.changeText(screen.getByDisplayValue('3:40 PM'), '3:20 PM');
     await fireEvent.press(screen.getByTestId('business-return-confirm'));
     expect(onConfirm).toHaveBeenCalledWith('2026-11-26T20:20:00.000Z');
   });
@@ -57,7 +57,7 @@ describe('BusinessReturnConfirmSheet', () => {
   it('blocks a time before pickup', async () => {
     const onConfirm = jest.fn();
     await renderSheet(onConfirm, { initialEditing: true });
-    await fireEvent.changeText(screen.getByDisplayValue('15:40'), '13:00');
+    await fireEvent.changeText(screen.getByDisplayValue('3:40 PM'), '1:00 PM');
     expect(screen.getByText('The return can’t be before pickup.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('business-return-confirm'));
     expect(onConfirm).not.toHaveBeenCalled();

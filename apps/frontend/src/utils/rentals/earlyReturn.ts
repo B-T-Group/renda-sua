@@ -236,3 +236,46 @@ export function returnAtProblem(iso: string | null, booking: EarlyReturnBooking,
   if (at > nowMs + 60_000) return 'future';
   return null;
 }
+
+const US_WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Listing-format day label for a "YYYY-MM-DD" key: "Thu, Nov 26" (EN Americas), "Thu 26 Nov", "jeu. 26 nov.". */
+export function dayFieldLabel(dateKey: string, language?: string | null, timeZone?: string | null): string {
+  const ms = Date.parse(`${dateKey}T00:00:00Z`);
+  if (!Number.isFinite(ms)) return dateKey;
+  const d = new Date(ms);
+  if (uses12hClock(language, timeZone)) return `${US_WD[d.getUTCDay()]}, ${EN_MON[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  return `${weekday(ms, language)}${NBSP}${d.getUTCDate()}${NBSP}${month(ms, language)}`;
+}
+
+/** Days the return can fall on (pickup day → today, listing clock), newest first, at most `max`. */
+export function returnDayChoices(booking: EarlyReturnBooking, nowMs: number, timeZone?: string | null, max = 7): string[] {
+  const today = Date.parse(`${dayKey(listingNowMs(nowMs, timeZone))}T00:00:00Z`);
+  const started = booking.actual_start_at ? Date.parse(booking.actual_start_at) : Number.NaN;
+  const first = Number.isFinite(started) ? Date.parse(`${dayKey(listingNowMs(started, timeZone))}T00:00:00Z`) : today;
+  const days: string[] = [];
+  for (let day = today; day >= first && days.length < max; day -= DAY_MS) days.push(dayKey(day));
+  return days;
+}
+
+/** "15:40" shown in the listing format: "3:40 PM" (EN Americas) or "15:40". */
+export function timeFieldText(time24: string, language?: string | null, timeZone?: string | null): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(time24);
+  if (!m) return time24;
+  return clockFromWallMs(Date.UTC(2026, 0, 1, Number(m[1]), Number(m[2])), language, timeZone).replace(NBSP, ' ');
+}
+
+/** Parse a typed time ("3:40 PM", "3:40pm", "15:40", "15h40") to "HH:mm"; null when invalid. */
+export function parseTimeField(text: string): string | null {
+  const m = /^\s*(\d{1,2})\s*[:h.]\s*(\d{2})\s*([ap]\.?\s*m\.?)?\s*$/i.exec(text);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const mi = Number(m[2]);
+  const ap = m[3]?.toLowerCase().startsWith('p') ? 'pm' : m[3] ? 'am' : null;
+  if (mi > 59) return null;
+  if (ap) {
+    if (h < 1 || h > 12) return null;
+    h = (h % 12) + (ap === 'pm' ? 12 : 0);
+  } else if (h > 23) return null;
+  return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
+}

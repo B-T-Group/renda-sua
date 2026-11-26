@@ -15,6 +15,7 @@ import {
 } from '../../utils/rentals/rentalStartWindow';
 import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
 import { startMoney, startMoneyLines, type StartMoneyBooking } from '../../utils/rentals/startMoney';
+import { bookedRange } from '../../utils/rentals/earlyReturn';
 import { earlyReturnLine, earlyReturnPreview } from '../../utils/rentals/returnDue';
 import { waitingForRenterTitle } from '../../utils/rentals/frenchElision';
 
@@ -100,6 +101,11 @@ function StartBody(props: Props & { phase: PickupPhase }) {
       <LateLine {...props} />
       <MoneyLine {...props} momo={momo} />
       <Text style={[typography.body2, { color: colors.text.primary }]}>{cardReturnLine(props, t, i18n.language)}</Text>
+      {props.phase === 'started' && props.role === 'client' ? (
+        <Text testID="rental-start-booked" style={[typography.caption, { color: colors.text.secondary, marginTop: -4 }]}>
+          {t('rentals.earlyReturn.booked', 'Booked')} {bookedRange(props.booking, i18n.language, props.timeZone)}
+        </Text>
+      ) : null}
       <StartButton {...props} day={day} momo={momo} />
       <NotCollected {...props} />
       {props.phase === 'started' ? props.actions : null}
@@ -274,7 +280,7 @@ function titleFor(phase: PickupPhase, when: string, time: string, props: Props, 
   if (phase === 'started') {
     const at = props.booking.actual_start_at ? formatZonedTime(props.booking.actual_start_at, props.timeZone, language, props.timeZone) : time;
     return props.role === 'business'
-      ? t('rentals.business.startedLine', 'Started at {{time}} · hand over the item', { time: at })
+      ? t('rentals.business.startedLine', 'Rental started at {{time}}', { time: at })
       : t('rentals.start.startedBanner', 'Rental started at {{time}}. The business has been notified to hand over the item.', { time: at });
   }
   if (phase === 'before') return t('rentals.start.pickupOn', 'Pickup on {{when}} · {{time}}', { when, time });
