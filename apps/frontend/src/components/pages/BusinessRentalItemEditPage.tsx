@@ -35,6 +35,8 @@ import RentalListingModerationStatusChip from '../rentals/RentalListingModeratio
 import { RichTextEditor } from '../common/RichTextEditor';
 import SEOHead from '../seo/SEOHead';
 import { depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
+import { listingReservationFee } from '../../utils/rentals/reservationFee';
 
 function rentalDeleteErrorMessage(error: unknown, fallback: string): string {
   const err = error as { response?: { data?: { message?: string | string[] } } };
@@ -50,6 +52,7 @@ interface ListingFormState {
   offers_daily: boolean;
   offers_hourly: boolean;
   security_deposit_amount: string;
+  reservation_fee_enabled: boolean;
   min_rental_hours: string;
   max_rental_hours: string;
   units_available: string;
@@ -76,6 +79,7 @@ function listingFormsFromDetail(
       offers_hourly: l.offers_hourly !== false,
       security_deposit_amount:
         l.security_deposit_amount != null ? String(l.security_deposit_amount) : '',
+      reservation_fee_enabled: l.reservation_fee_enabled === true,
       min_rental_hours: String(l.min_rental_hours),
       max_rental_hours: l.max_rental_hours != null ? String(l.max_rental_hours) : '',
       units_available: String(l.units_available),
@@ -122,6 +126,7 @@ function buildListingUpdateBody(
     ...parsed,
     offers_daily: f.offers_daily,
     offers_hourly: f.offers_hourly,
+    reservation_fee_enabled: f.reservation_fee_enabled,
     pickup_instructions: f.pickup_instructions.trim(),
     dropoff_instructions: f.dropoff_instructions.trim(),
     is_active: f.is_active,
@@ -165,7 +170,7 @@ function parsePriceFields(f: ListingFormState, currency: string): {
 }
 
 const BusinessRentalItemEditPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -819,6 +824,29 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     </Button>
                   </Box>
                 ))}
+                <FormControlLabel
+                  data-testid={`reservation-fee-${l.id}`}
+                  control={
+                    <Switch
+                      checked={f.reservation_fee_enabled}
+                      onChange={(_, v) => patchListingForm(l.id, { reservation_fee_enabled: v })}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" color="text.primary" fontWeight={600}>{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('business.rentals.reservationFee.help', '{{amount}} when the renter reserves. It counts toward the total.', {
+                          amount: formatConfirmationMoney(
+                            listingReservationFee(item?.currency || lockedCurrency),
+                            item?.currency || lockedCurrency || 'CAD',
+                            i18n.language
+                          ),
+                        })}
+                      </Typography>
+                    </Box>
+                  }
+                />
                 <FormControlLabel
                   control={
                     <Switch

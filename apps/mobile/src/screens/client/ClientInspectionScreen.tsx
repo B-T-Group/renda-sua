@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MobileMoneyConfirmIllustration } from '../../components/illustrations/MobileMoneyConfirmIllustration';
+import { PayWaitingPanel } from '../../components/rentals/inspection/PayWaitingPanel';
+import { payBreakdown } from '../../utils/rentals/payBreakdown';
 import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
 import { DeclineConditionSheet } from '../../components/rentals/DeclinePickupScreens';
@@ -17,6 +18,7 @@ import { useClientInspection } from '../../hooks/useClientInspection';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { getBooking, getPaymentStatus, startRental } from '../../services/rentalsApi';
+import { settlePickupCardPayment, useRentalStripePayment } from '../../hooks/useRentalStripePayment';
 import { BOOKING_CLOCK, formatZonedWhen } from '../../utils/rentals/rentalStartWindow';
 import { bookingReturnDue, earlyReturnPreview, formatReturnClock } from '../../utils/rentals/returnDue';
 import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
@@ -45,6 +47,7 @@ export default function ClientInspectionScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
   const { bookingId, stage } = useRoute<Route>().params;
   const model = useClientInspection(bookingId, stage);
+  const { pay: payWithSheet } = useRentalStripePayment();
   const [panel, setPanel] = useState<'review' | 'correction' | 'dispute'>('review');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
@@ -71,13 +74,17 @@ export default function ClientInspectionScreen() {
   const amountDue = preview?.amount_due_at_pickup ?? 0;
   const shownAmount = amountDue > 0 ? amountDue : Number(model.booking?.total_amount) || 0;
   const amountLabel = formatConfirmationMoney(shownAmount, model.booking?.currency ?? 'XAF', i18n.language);
-  const moneyLines = model.booking
+  const money = model.booking ? startMoney(model.booking) : null;
+  const cardAtPickup = money?.kind === 'card_due';
+  const payAtStep = money?.kind === 'card_due' || money?.kind === 'momo_due' || money?.kind === 'wallet_due';
+  const moneyLines = model.booking && money
     ? startMoneyLines(
-        startMoney(model.booking),
+        money,
         (value) => formatConfirmationMoney(value, model.booking?.currency ?? 'XAF', i18n.language),
         t
       )
     : undefined;
+  const breakdown = model.booking && payAtStep ? payBreakdown(model.booking, i18n.language, t) : null;
   const photoZone = confirmationTimeZone(
     model.booking?.rental_location_listing?.business_location?.address?.country,
     model.booking?.currency
@@ -109,11 +116,15 @@ export default function ClientInspectionScreen() {
         return;
       }
       const pay = await getPaymentStatus(bookingId).catch(() => null);
-      if (pay && !pay.paymentPending && row.status === 'reserved') {
+      if (startRail !== 'card' && pay && !pay.paymentPending && row.status === 'reserved') {
         setMomoPhase('failed');
         return;
       }
       const waited = Date.now() - (waitingSince.current ?? Date.now());
+      if (startRail === 'card' && row.status === 'reserved' && row.payment_status !== 'authorized' && waited >= 90_000) {
+        setMomoPhase('failed');
+        return;
+      }
       if (pay && !pay.paymentPending && row.status === 'confirmed' && !row.actual_start_at && waited >= 60_000) {
         setMomoPhase('stalled');
       }
@@ -140,9 +151,20 @@ export default function ClientInspectionScreen() {
     });
     setStarting(true);
     try {
-      const result = await startRental(bookingId);
+      const result = await startRental(bookingId, cardAtPickup ? { stripe_payment_method: 'payment_sheet' } : undefined);
       setConfirmOpen(false);
       setNotice(null);
+      if (cardAtPickup && result.paymentPending) {
+        // Card pay at pickup: the rental starts when the card authorization webhook lands.
+        setStartRail('card');
+        const outcome = await settlePickupCardPayment(result, payWithSheet);
+        if (outcome === 'cancelled' || outcome === 'failed') {
+          setMomoPhase('failed');
+          return;
+        }
+        setMomoPhase('waiting');
+        return;
+      }
       if (result.paymentPending) {
         setStartRail(result.payment_rail ?? 'mobile_money');
         setMomoPhase('waiting');
@@ -199,37 +221,17 @@ export default function ClientInspectionScreen() {
 
   if (momoPhase) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.pageBackground, padding: spacing.md, gap: spacing.md }]}>
-        {momoPhase === 'waiting' ? <MobileMoneyConfirmIllustration /> : null}
-        <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center' }]}>
-          {momoPhase === 'waiting'
-            ? t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')
-            : momoPhase === 'failed'
-              ? t('orders.momoAwaiting.failedTitle', 'Payment failed')
-              : t('rentalInspection.startDelayedTitle', 'Payment succeeded, but the rental has not started.')}
-        </Text>
-        <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
-          {momoPhase === 'waiting'
-            ? t('orders.momoAwaiting.waitingBody', 'Approve the request on your phone. This page updates when payment succeeds.')
-            : momoPhase === 'failed'
-              ? t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again.')
-              : t('rentalInspection.startDelayedBody', 'You can retry the start, or contact support.')}
-        </Text>
-        {momoPhase === 'failed' ? (
-          <Button mode="contained" buttonColor={colors.primary.main} loading={starting} onPress={() => void confirmStart()}>
-            {t('common.retry', 'Retry')}
-          </Button>
-        ) : null}
-        {momoPhase === 'stalled' ? (
-          <>
-            <Button mode="contained" buttonColor={colors.primary.main} loading={starting} onPress={() => void confirmStart()}>
-              {t('rentalInspection.retryStart', 'Retry start')}
-            </Button>
-            <Button mode="outlined" onPress={() => navigation.navigate('SupportTickets')}>
-              {t('rentalInspection.contactSupport', 'Contact support')}
-            </Button>
-          </>
-        ) : null}
+      <View style={[styles.center, { backgroundColor: colors.pageBackground }]}>
+        <PayWaitingPanel
+          phase={momoPhase}
+          rail={startRail === 'card' ? 'card' : money?.kind === 'wallet_due' ? 'wallet' : 'momo'}
+          breakdown={breakdown}
+          place={model.booking?.rental_location_listing?.business_location?.name ?? ''}
+          timeZone={photoZone}
+          starting={starting}
+          onRetry={() => void confirmStart()}
+          onSupport={() => navigation.navigate('SupportTickets')}
+        />
       </View>
     );
   }
@@ -269,6 +271,8 @@ export default function ClientInspectionScreen() {
           endAt={model.booking?.end_at ?? ''}
           pricingSnapshot={model.booking?.rental_pricing_snapshot}
           startOpensAt={model.booking?.start_opens_at}
+          pay={payAtStep}
+          breakdown={breakdown}
           busy={model.busy}
           starting={starting}
           showDecline={Boolean(flags.rentals_pickup_decline_enabled)}

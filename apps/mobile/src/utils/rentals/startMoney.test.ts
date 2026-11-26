@@ -55,4 +55,27 @@ describe('startMoney', () => {
     expect(startMoneyLines(startMoney({ ...base, accept_start_preview: { paid_rail: 'wallet' } }), (n) => `${n} FCFA`, t).main).toBe('15000 FCFA paid from your wallet');
     expect(startMoneyLines(startMoney(base), (n) => `${n} FCFA`, t)).toEqual({ main: '15000 FCFA paid', sub: null, icon: 'wallet' });
   });
+
+  it('card pay at pickup: nothing held yet, Pay & start charges rental − fee and holds the deposit', () => {
+    const booking = {
+      currency: 'CAD',
+      total_amount: 54,
+      security_deposit_amount: 180,
+      payment_status: 'pending',
+      card_pay_at_pickup: true,
+      reservation_fee_amount: 1,
+      reservation_fee_status: 'paid',
+    };
+    expect(startMoney(booking)).toEqual({ kind: 'card_due', amount: 53, deposit: 180 });
+    expect(
+      startMoney({ ...booking, accept_start_preview: { payment_rail: 'card', amount_due_at_pickup: 53, deposit_hold_amount: 180 } })
+    ).toEqual({ kind: 'card_due', amount: 53, deposit: 180 });
+    expect(startMoney({ ...booking, payment_status: 'authorized', authorized_amount: 228.6 }).kind).toBe('card');
+  });
+
+  it('MoMo pay at pickup: a paid fee lowers the amount due', () => {
+    expect(
+      startMoney({ currency: 'XAF', total_amount: 12000, payment_status: 'pending', reservation_fee_amount: 150, reservation_fee_status: 'paid' })
+    ).toEqual({ kind: 'momo_due', amount: 11850 });
+  });
 });

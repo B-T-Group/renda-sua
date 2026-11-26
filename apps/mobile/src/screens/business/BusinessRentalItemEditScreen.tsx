@@ -33,6 +33,7 @@ import {
 import { RentalWeeklyHoursEditor } from '../../components/business/rentals/RentalWeeklyHoursEditor';
 import { InspectionOptInCard } from '../../components/business/rentals/InspectionOptInCard';
 import { RentalModeSwitches } from '../../components/business/rentals/RentalModeSwitches';
+import { ReservationFeeToggle } from '../../components/business/rentals/ReservationFeeToggle';
 import type { RentalWeeklyAvailabilityRow } from '../../types/rentals';
 import { defaultWeeklyAvailability } from '../../utils/rentals';
 import { depositInputError, depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
@@ -71,6 +72,7 @@ export default function BusinessRentalItemEditScreen() {
         offersDaily: boolean;
         offersHourly: boolean;
         deposit: string;
+        reservationFee: boolean;
         units: string;
         pickup: string;
         dropoff: string;
@@ -105,6 +107,7 @@ export default function BusinessRentalItemEditScreen() {
               l.security_deposit_amount != null
                 ? String(l.security_deposit_amount)
                 : '',
+            reservationFee: l.reservation_fee_enabled === true,
             units: String(l.units_available ?? 1),
             pickup: l.pickup_instructions ?? '',
             dropoff: l.dropoff_instructions ?? '',
@@ -177,6 +180,7 @@ export default function BusinessRentalItemEditScreen() {
           offers_daily: edit.offersDaily,
           offers_hourly: edit.offersHourly,
           ...(depositToSave !== undefined ? { security_deposit_amount: depositToSave } : {}),
+          reservation_fee_enabled: edit.reservationFee,
           units_available: Number.isInteger(units) && units >= 1 ? units : undefined,
           pickup_instructions: edit.pickup.trim() || undefined,
           dropoff_instructions: edit.dropoff.trim() || undefined,
@@ -456,6 +460,17 @@ export default function BusinessRentalItemEditScreen() {
               }
               mode="outlined"
               style={styles.field}
+            />
+            <ReservationFeeToggle
+              listingId={listingId}
+              currency={item.currency}
+              value={edit.reservationFee}
+              onChange={(v) =>
+                setListingEdits((prev) => ({
+                  ...prev,
+                  [listingId]: { ...prev[listingId], reservationFee: v },
+                }))
+              }
             />
             <View style={styles.switchRow}>
               <Text>{t('business.rentals.listingActive', 'Listing active')}</Text>

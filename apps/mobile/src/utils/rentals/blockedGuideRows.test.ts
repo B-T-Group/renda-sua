@@ -51,6 +51,6 @@ describe('blocked guide rows', () => {
 
   it('formats a French listing stamp as 17 nov. · 10:14', () => {
     expect(formatListingStamp('2026-11-17T15:14:00.000Z', 'America/Toronto', 'fr')).toBe('17 nov. · 10:14');
-    expect(formatListingStamp('2026-11-17T15:14:00.000Z', 'America/Toronto', 'en')).toBe('17 Nov · 10:14');
+    expect(formatListingStamp('2026-11-17T15:14:00.000Z', 'America/Toronto', 'en')).toBe('17 Nov · 10:14 AM');
   });
 });
