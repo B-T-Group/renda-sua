@@ -15,6 +15,7 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ReplyIcon from '@mui/icons-material/Reply';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useClientFlags } from '../../hooks/useClientFlags';
@@ -56,6 +57,8 @@ const BusinessRentalsRequestsPage: React.FC = () => {
   const { flags } = useClientFlags();
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
+  const [searchParams] = useSearchParams();
+  const focusRequestId = searchParams.get('request');
   const { respondRequest, fetchBusinessRentalRequests } = useRentalApi();
   const [requests, setRequests] = useState<BusinessRentalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +69,7 @@ const BusinessRentalsRequestsPage: React.FC = () => {
     req: BusinessRentalRequestRow;
     mode: 'available' | 'unavailable';
   } | null>(null);
+  const [unavailableExpanded, setUnavailableExpanded] = useState(false);
 
   const loadRequests = useCallback(async () => {
     const list = await fetchBusinessRentalRequests();
@@ -119,6 +123,20 @@ const BusinessRentalsRequestsPage: React.FC = () => {
     () => sortedRequests.filter((r) => r.status === 'unavailable'),
     [sortedRequests]
   );
+
+
+  useEffect(() => {
+    if (!focusRequestId || loading) return undefined;
+    if (!unavailableRequests.some((row) => row.id === focusRequestId)) return undefined;
+    setUnavailableExpanded(true);
+    const timer = window.setTimeout(() => {
+      document.getElementById(`rental-request-${focusRequestId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [focusRequestId, loading, unavailableRequests]);
 
   if (!businessId) {
     return (
@@ -222,7 +240,8 @@ const BusinessRentalsRequestsPage: React.FC = () => {
         {unavailableRequests.length > 0 &&
         (queueFilter === 'all' || queueFilter === 'respond') ? (
           <Accordion
-            defaultExpanded={false}
+            expanded={unavailableExpanded}
+            onChange={(_event, expanded) => setUnavailableExpanded(expanded)}
             elevation={0}
             sx={{
               mt: 2,
@@ -240,16 +259,17 @@ const BusinessRentalsRequestsPage: React.FC = () => {
             <AccordionDetails>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 {unavailableRequests.map((req) => (
-                  <BusinessRentalRequestCard
-                    key={req.id}
-                    request={req}
-                    onAccept={(selected) =>
-                      setRespondTarget({ req: selected, mode: 'available' })
-                    }
-                    onReject={(selected) =>
-                      setRespondTarget({ req: selected, mode: 'unavailable' })
-                    }
-                  />
+                  <Box key={req.id} id={`rental-request-${req.id}`}>
+                    <BusinessRentalRequestCard
+                      request={req}
+                      onAccept={(selected) =>
+                        setRespondTarget({ req: selected, mode: 'available' })
+                      }
+                      onReject={(selected) =>
+                        setRespondTarget({ req: selected, mode: 'unavailable' })
+                      }
+                    />
+                  </Box>
                 ))}
               </Box>
             </AccordionDetails>

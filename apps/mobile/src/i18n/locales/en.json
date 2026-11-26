@@ -2437,6 +2437,11 @@
         "declinedToast": "Request declined for {{item}}",
         "expiredSla": "Request expired — no response in 24h",
         "expiredStart": "Request expired — no response before the start time",
+        "expiredTitle": "Request expired",
+        "expiredStartReason": "You didn’t reply before the start time. The renter can send a new request.",
+        "expiredSlaReason": "You didn’t reply within 24 hours. The renter can send a new request.",
+        "viewRequest": "View request",
+        "dismissNotice": "Dismiss",
         "pageA11y": "Request {{current}} of {{total}}"
       },
       "activeOrders": {
