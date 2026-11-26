@@ -1,12 +1,12 @@
 import { endOfStartDay } from '../simple-start/simple-start.policy';
 import { wallNow } from '../wall-clock';
 
-/** Samuel, 26 Nov 2026: 10% of the rental, at least 150 FCFA or 2.00, counts toward the total. */
-export const RESERVATION_FEE_RATE = 0.1;
-export const RESERVATION_FEE_MIN_XAF = 150;
-export const RESERVATION_FEE_MIN_OTHER = 2;
-
-const ZERO_DECIMAL = new Set(['XAF', 'XOF']);
+/**
+ * Samuel, 26 Nov 2026 (17:24): a small flat commitment amount, counts toward the total.
+ * Stripe-rail countries: 1.00 in the listing currency. Non-Stripe (Mobile Money): 150 (XAF / XOF).
+ */
+export const RESERVATION_FEE_STRIPE = 1;
+export const RESERVATION_FEE_MOBILE_MONEY = 150;
 
 export type ReservationFeeStatus =
   | 'none'
@@ -19,20 +19,16 @@ export type ReservationFeeStatus =
 
 export type ReservationFeeRail = 'card' | 'wallet' | 'mobile_money';
 
-/** Fee for a rental total. 0 when the listing has no fee or the total is not positive. */
+/** Flat fee, capped at the total. 0 when the listing has no fee or the total is not positive. */
 export function reservationFeeFor(input: {
   enabled: boolean | null | undefined;
   total: number;
-  currency: string | null | undefined;
+  rail: string | null | undefined;
 }): number {
   const total = Number(input.total);
   if (input.enabled !== true || !Number.isFinite(total) || total <= 0) return 0;
-  const currency = String(input.currency ?? '').toUpperCase();
-  const whole = ZERO_DECIMAL.has(currency);
-  const floor = whole ? RESERVATION_FEE_MIN_XAF : RESERVATION_FEE_MIN_OTHER;
-  const raw = total * RESERVATION_FEE_RATE;
-  const rounded = whole ? Math.round(raw) : Math.round(raw * 100) / 100;
-  return Math.min(total, Math.max(floor, rounded));
+  const flat = input.rail === 'stripe' ? RESERVATION_FEE_STRIPE : RESERVATION_FEE_MOBILE_MONEY;
+  return Math.min(total, flat);
 }
 
 /** What is left to pay at pickup. The fee only counts once it was paid. */
