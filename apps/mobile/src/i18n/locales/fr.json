@@ -2726,7 +2726,7 @@
       },
       "reservationFee": {
         "label": "Demander des frais de réservation",
-        "help": "Demander des frais de réservation de {{amount}}. Ils sont déduits du total."
+        "help": "{{amount}} à la réservation, déduits du total."
       }
     },
     "orders": {

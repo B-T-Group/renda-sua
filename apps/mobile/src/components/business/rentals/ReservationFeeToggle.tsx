@@ -15,7 +15,7 @@ export function ReservationFeeToggle({ listingId, currency, value, onChange }: {
       <View style={{ flex: 1, paddingRight: 12 }}>
         <Text>{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Text>
         <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-          {t('business.rentals.reservationFee.help', 'Ask for a {{amount}} reservation fee. It counts toward the total.', { amount })}
+          {t('business.rentals.reservationFee.help', '{{amount}} when the renter reserves. It counts toward the total.', { amount })}
         </Text>
       </View>
       <Switch value={value} onValueChange={onChange} />

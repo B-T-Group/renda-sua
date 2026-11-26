@@ -836,7 +836,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     <Box>
                       <Typography variant="body2" color="text.primary" fontWeight={600}>{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {t('business.rentals.reservationFee.help', 'Ask for a {{amount}} reservation fee. It counts toward the total.', {
+                        {t('business.rentals.reservationFee.help', '{{amount}} when the renter reserves. It counts toward the total.', {
                           amount: formatConfirmationMoney(
                             listingReservationFee(item?.currency || lockedCurrency),
                             item?.currency || lockedCurrency || 'CAD',

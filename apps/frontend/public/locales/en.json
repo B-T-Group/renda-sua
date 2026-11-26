@@ -3742,7 +3742,7 @@
       },
       "reservationFee": {
         "label": "Ask for a reservation fee",
-        "help": "Ask for a {{amount}} reservation fee. It counts toward the total."
+        "help": "{{amount}} when the renter reserves. It counts toward the total."
       }
     },
     "failedDeliveries": {
