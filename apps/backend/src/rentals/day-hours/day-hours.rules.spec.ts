@@ -60,6 +60,33 @@ describe('day-hours picker rules', () => {
       expect(daysInARowViolation([fullDay('2026-11-27')], MON_SAT)).toBeNull();
       expect(daysInARowViolation([fullDay('2026-11-28'), fullDay('2026-11-27')], MON_SAT)).toBeNull();
     });
+
+    it('counts an overnight block as both days and an exclusive midnight end as one day', () => {
+      const overnight: DayHoursWindow = {
+        start: new Date('2026-11-27T22:00:00.000Z'),
+        end: new Date('2026-11-28T02:00:00.000Z'),
+        billing: 'hourly',
+      };
+      expect(daysInARowViolation([overnight, hourly('2026-11-28', 10, 12)], MON_SAT)?.code).toBe(
+        DAY_HOURS_CODES.ONE_BLOCK_PER_DAY
+      );
+      const untilMidnight: DayHoursWindow = {
+        start: new Date('2026-11-27T18:00:00.000Z'),
+        end: new Date('2026-11-28T00:00:00.000Z'),
+        billing: 'hourly',
+      };
+      expect(daysInARowViolation([untilMidnight, hourly('2026-11-28', 10, 12)], MON_SAT)).toBeNull();
+    });
+
+    it('lets a gap through only when that weekday has no bookable hours', () => {
+      const saturdayClosed = MON_SAT.map((row) =>
+        row.weekday === 6 ? { weekday: 6, is_available: true, start_time: null, end_time: null } : row
+      );
+      expect(daysInARowViolation([fullDay('2026-11-27'), fullDay('2026-11-29')], saturdayClosed)).toBeNull();
+      expect(daysInARowViolation([fullDay('2026-11-27'), fullDay('2026-11-29')], MON_SAT)?.code).toBe(
+        DAY_HOURS_CODES.NOT_IN_A_ROW
+      );
+    });
   });
 
   describe('min and max hours per block', () => {
@@ -77,6 +104,19 @@ describe('day-hours picker rules', () => {
       expect(blockHoursViolation([hourly('2026-11-27', 8, 17)], 1, 8)?.code).toBe(
         DAY_HOURS_CODES.BLOCK_ABOVE_MAX
       );
+    });
+
+    it('rounds a partial hour up and ignores a minimum below 1 or a non-finite maximum', () => {
+      const ninety: DayHoursWindow = {
+        start: new Date('2026-11-27T08:00:00.000Z'),
+        end: new Date('2026-11-27T09:30:00.000Z'),
+        billing: 'hourly',
+      };
+      expect(blockHoursViolation([ninety], 2, 2)).toBeNull();
+      expect(blockHoursViolation([ninety], 3, null)?.code).toBe(DAY_HOURS_CODES.BLOCK_BELOW_MIN);
+      expect(blockHoursViolation([hourly('2026-11-27', 8, 10)], 0, Number.NaN)).toBeNull();
+      expect(blockHoursViolation([hourly('2026-11-27', 8, 10)], -4, Number.POSITIVE_INFINITY)).toBeNull();
+      expect(blockHoursViolation([hourly('2026-11-27', 8, 10)], 1, 0)?.code).toBe(DAY_HOURS_CODES.BLOCK_ABOVE_MAX);
     });
   });
 
@@ -105,6 +145,19 @@ describe('day-hours picker rules', () => {
       // 10:20 + 2 h = 12:20, less 10 min grace = 12:10.
       expect(leadTimeViolation([at('12:15')], now, 'Africa/Libreville')).toBeNull();
       expect(leadTimeViolation([at('12:05')], now, 'Africa/Libreville')?.code).toBe(DAY_HOURS_CODES.LEAD_TIME);
+    });
+
+    it('keeps the raw clock when the time zone is not real', () => {
+      expect(wallClockNowMs(now, 'Not/AZone')).toBe(now);
+      expect(leadTimeViolation([hourly('2026-11-25', 11, 13)], now, 'Not/AZone')?.code).toBe(
+        DAY_HOURS_CODES.LEAD_TIME
+      );
+      const at1115: DayHoursWindow = {
+        start: new Date('2026-11-25T11:15:00.000Z'),
+        end: new Date('2026-11-25T13:00:00.000Z'),
+        billing: 'hourly',
+      };
+      expect(leadTimeViolation([at1115], now, 'Not/AZone')).toBeNull();
     });
   });
 
@@ -166,5 +219,12 @@ describe('depositHourRate (one default-deposit rule)', () => {
   it('falls back to the day price when there is no hourly price, and 0 without prices', () => {
     expect(depositHourRate({ hourPrice: 0, dayPrice: 120 })).toBe(10);
     expect(depositHourRate({ hourPrice: 0, dayPrice: 0 })).toBe(0);
+  });
+
+  it('does not turn a negative or missing price into a deposit rate', () => {
+    expect(depositHourRate({ hourPrice: -40, dayPrice: 0 })).toBe(0);
+    expect(depositHourRate({ hourPrice: Number.NaN, dayPrice: 120 })).toBe(10);
+    expect(depositHourRate({ hourPrice: 40, dayPrice: -12, offersHourly: false })).toBe(0);
+    expect(depositHourRate({ hourPrice: -40, dayPrice: 240, offersHourly: true })).toBe(20);
   });
 });
