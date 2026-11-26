@@ -92,6 +92,16 @@ export class CreateBusinessRentalListingDto {
   @Min(0)
   security_deposit_amount?: number;
 
+  @ApiProperty({
+    required: false,
+    default: false,
+    description:
+      'Charge a reservation fee at Reserve (10% of the rental, at least 150 FCFA or 2.00, counts toward the total). Off by default.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  reservation_fee_enabled?: boolean;
+
   @ApiProperty({ required: false, default: 1 })
   @IsOptional()
   @IsInt()

@@ -288,16 +288,33 @@ export class RentalsCronService {
       }
     );
     if (!won) return false;
+    const fee = await this.settleExpiredFee(booking);
     await this.logHistory(
       bookingId,
       'cancelled',
       'reserved',
       null,
       'system',
-      'Reservation expired unpaid after scheduled start'
+      fee === 'forfeit'
+        ? 'Reservation expired unpaid after scheduled start (reservation fee kept by the business)'
+        : 'Reservation expired unpaid after scheduled start'
     );
     await this.notifyReservationExpired(booking);
     return true;
+  }
+
+  /** Unpaid by the end of the start day: the fee is kept, unless a flag was left unresolved. */
+  private async settleExpiredFee(booking: any): Promise<'refund' | 'forfeit' | 'none'> {
+    if (!this.rentalsService?.settleReservationFeeAfterExpiry) return 'none';
+    try {
+      return await this.rentalsService.settleReservationFeeAfterExpiry(booking);
+    } catch (error) {
+      await casUpdateRentalBooking(this.hasuraSystemService, booking.id, ['cancelled'], {
+        status: 'reserved',
+        payment_status: booking.payment_status ?? 'pending',
+      });
+      throw error;
+    }
   }
 
   private async notifyReservationExpired(booking: any): Promise<void> {

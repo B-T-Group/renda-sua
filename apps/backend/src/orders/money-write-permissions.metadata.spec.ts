@@ -119,7 +119,14 @@ describe('user-role write permissions on orders and money tables (#630)', () => 
       item_variants: ['price'],
       business_inventory: ['selling_price', 'unit_cost'],
       business_inventory_variant_price_overrides: ['selling_price'],
-      rental_location_listings: ['base_price_per_day', 'base_price_per_hour', 'security_deposit_amount'],
+      // reservation_fee_enabled: the business turns its own listing's reservation fee on/off.
+      // The amount is computed server-side (10%, floor 150 FCFA / 2.00) and snapshotted on the booking.
+      rental_location_listings: [
+        'base_price_per_day',
+        'base_price_per_hour',
+        'reservation_fee_enabled',
+        'security_deposit_amount',
+      ],
     };
     const covered = new Set([...Object.keys(PINNED), ...Object.keys(NEVER)]);
     const found: string[] = [];
