@@ -97,4 +97,30 @@ describe('day-and-hours submit refused by the server', () => {
     expect(view.getByTestId('day-hours-server-error')).toBeTruthy();
     expect(view.getByText('Ce début est maintenant dans moins de 2\u00A0h. Choisissez une heure plus tard.')).toBeTruthy();
   });
+
+  it('clears the red alert on the first change to the picked days (R4)', async () => {
+    const view = await renderWithProviders(
+      <ThemeProvider>
+        <RentalDayHoursSheet
+          visible
+          presentation="inline"
+          listing={{ weekly: defaultWeeklyAvailability(), booked: [], units: 1, offersDaily: true, offersHourly: true, minHours: 2, maxHours: null, dayRate: 27000, hourRate: 3000 }}
+          currency="XAF"
+          language="en"
+          timeZone="Africa/Libreville"
+          city="Libreville"
+          nowMs={Date.UTC(2026, 10, 25, 9, 20)}
+          initialDays={[{ key: '2026-11-27', mode: 'full', start: 8, end: 20 }]}
+          serverError={LEAD_EN}
+          onClose={() => undefined}
+          onContinue={() => undefined}
+        />
+      </ThemeProvider>
+    );
+    expect(view.getByTestId('day-hours-server-error')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('day-hours-day-2026-11-28'));
+    });
+    expect(view.queryByTestId('day-hours-server-error')).toBeNull();
+  });
 });

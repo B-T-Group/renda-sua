@@ -142,7 +142,10 @@ function parsePriceFields(f: ListingFormState, currency: string): {
 } | null {
   const base = Number(f.base_price_per_hour);
   const day = Number(f.base_price_per_day);
-  const deposit = depositOnSave(currency, f.security_deposit_amount, base);
+  const deposit = depositOnSave(currency, f.security_deposit_amount, base, {
+    daily: day,
+    offersHourly: f.offers_hourly,
+  });
   const minD = Number(f.min_rental_hours);
   const maxRaw = f.max_rental_hours.trim();
   const maxD = maxRaw === '' ? null : Number(maxRaw);
@@ -707,7 +710,10 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     fullWidth
                     helperText={
                       modesOn && !f.offers_hourly
-                        ? t('business.rentals.securityDepositHelperDaily', 'Held on card rentals to cover extra time.')
+                        ? t(
+                            'business.rentals.securityDepositHelperDaily',
+                            'Held on card rentals to cover extra time. Default is two-thirds of the day price.'
+                          )
                         : t(
                             'business.rentals.securityDepositHelper',
                             'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'

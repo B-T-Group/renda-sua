@@ -17,10 +17,13 @@ import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import type { AddBusinessLocationData } from '../../../../hooks/useBusinessLocations';
 import { useBusinessLocations } from '../../../../hooks/useBusinessLocations';
 import { useBusinessInventory } from '../../../../hooks/useBusinessInventory';
+import { useClientFlags } from '../../../../hooks/useClientFlags';
 import { useRentalApi } from '../../../../hooks/useRentalApi';
 import LocationModal from '../../LocationModal';
 import ListingPreviewDialog from '../../ListingPreviewDialog';
 import WeeklyAvailabilityEditor from '../../../rentals/WeeklyAvailabilityEditor';
+import { RentalModeSwitches, type RentalModes } from '../../../rentals/RentalModeSwitches';
+import { createListingPrices } from '../../../../utils/rentals/createListingPrices';
 import {
   createDefaultWeeklyAvailability,
   type WeeklyAvailabilitySlot,
@@ -62,6 +65,9 @@ const FirstRentalItemLocationStep: React.FC<
   const [locationId, setLocationId] = useState('');
   const [pricePerHour, setPricePerHour] = useState('');
   const [pricePerDay, setPricePerDay] = useState('');
+  const { flags } = useClientFlags();
+  const modesOn = flags.rentals_day_hours_picker_enabled === true;
+  const [modes, setModes] = useState<RentalModes>({ offersDaily: true, offersHourly: true });
   const [weeklyAvailability, setWeeklyAvailability] = useState<
     WeeklyAvailabilitySlot[]
   >(() => createDefaultWeeklyAvailability());
@@ -95,7 +101,13 @@ const FirstRentalItemLocationStep: React.FC<
     setModalOpen(false);
   };
 
-  const parsePrices = (): { hourly: number; daily: number } | null => {
+  type ParsedPrices = {
+    hourly: number;
+    daily: number;
+    offers?: { offers_daily?: boolean; offers_hourly?: boolean };
+  };
+
+  const parsePrices = (): ParsedPrices | null => {
     if (!locationId) {
       enqueueSnackbar(
         t(
@@ -106,33 +118,35 @@ const FirstRentalItemLocationStep: React.FC<
       );
       return null;
     }
-    const hourly = Number.parseFloat(pricePerHour.trim());
-    if (Number.isNaN(hourly) || hourly < 0) {
-      enqueueSnackbar(
-        t(
-          'business.onboarding.firstRental.location.invalidHourlyPrice',
-          'Enter a valid hourly price'
-        ),
-        { variant: 'warning' }
-      );
+    const res = createListingPrices({
+      hourlyRaw: pricePerHour,
+      dailyRaw: pricePerDay,
+      modesOn,
+      modes,
+    });
+    if (!res.ok) {
+      const message =
+        res.reason === 'hourly'
+          ? t(
+              'business.onboarding.firstRental.location.invalidHourlyPrice',
+              'Enter a valid hourly price'
+            )
+          : modesOn
+            ? t('business.rentals.rentBy.priceRequired', 'Set a price for each way you rent.')
+            : t(
+                'business.onboarding.firstRental.location.invalidDailyPrice',
+                'Enter a valid daily price or leave it empty'
+              );
+      enqueueSnackbar(message, { variant: 'warning' });
       return null;
     }
-    const dailyRaw = pricePerDay.trim();
-    const daily =
-      dailyRaw === ''
-        ? Number((hourly * 12).toFixed(2))
-        : Number.parseFloat(dailyRaw);
-    if (Number.isNaN(daily) || daily < 0) {
-      enqueueSnackbar(
-        t(
-          'business.onboarding.firstRental.location.invalidDailyPrice',
-          'Enter a valid daily price or leave it empty'
-        ),
-        { variant: 'warning' }
-      );
-      return null;
-    }
-    return { hourly, daily };
+    return {
+      hourly: res.base_price_per_hour,
+      daily: res.base_price_per_day,
+      offers: modesOn
+        ? { offers_daily: res.offers_daily, offers_hourly: res.offers_hourly }
+        : undefined,
+    };
   };
 
   const rememberListingId = (locId: string, listingId: string) => {
@@ -151,8 +165,7 @@ const FirstRentalItemLocationStep: React.FC<
 
   const ensureListingId = async (
     locId: string,
-    hourly: number,
-    daily: number
+    prices: ParsedPrices
   ): Promise<string> => {
     const cached = listingIdsByLocation[locId];
     if (cached) return cached;
@@ -160,8 +173,9 @@ const FirstRentalItemLocationStep: React.FC<
       const res = await createBusinessRentalListing({
         rental_item_id: item.id,
         business_location_id: locId,
-        base_price_per_hour: hourly,
-        base_price_per_day: daily,
+        base_price_per_hour: prices.hourly,
+        base_price_per_day: prices.daily,
+        ...(prices.offers ?? {}),
         units_available: 1,
         weekly_availability: weeklyAvailability,
       });
@@ -182,11 +196,7 @@ const FirstRentalItemLocationStep: React.FC<
     if (!prices) return;
     setSaving(true);
     try {
-      const listingId = await ensureListingId(
-        locationId,
-        prices.hourly,
-        prices.daily
-      );
+      const listingId = await ensureListingId(locationId, prices);
       if (publish) {
         const pub = await publishBusinessRentalListing(listingId);
         if (!pub?.success) {
@@ -274,35 +284,48 @@ const FirstRentalItemLocationStep: React.FC<
           )}
         </Button>
       </Stack>
+      {modesOn ? (
+        <RentalModeSwitches value={modes} onChange={setModes} disabled={busy} />
+      ) : null}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField
-          fullWidth
-          label={t(
-            'business.onboarding.firstRental.location.pricePerHour',
-            'Price per hour'
-          )}
-          type="number"
-          value={pricePerHour}
-          onChange={(e) => setPricePerHour(e.target.value)}
-          disabled={busy}
-          inputProps={{ min: 0, step: '0.01' }}
-        />
-        <TextField
-          fullWidth
-          label={t(
-            'business.onboarding.firstRental.location.pricePerDay',
-            'Price per day'
-          )}
-          type="number"
-          value={pricePerDay}
-          onChange={(e) => setPricePerDay(e.target.value)}
-          disabled={busy}
-          inputProps={{ min: 0, step: '0.01' }}
-          helperText={t(
-            'business.onboarding.firstRental.location.pricePerDayHint',
-            'Leave empty to use 12 × hourly rate'
-          )}
-        />
+        {!modesOn || modes.offersHourly ? (
+          <TextField
+            fullWidth
+            required={modesOn}
+            label={t(
+              'business.onboarding.firstRental.location.pricePerHour',
+              'Price per hour'
+            )}
+            type="number"
+            value={pricePerHour}
+            onChange={(e) => setPricePerHour(e.target.value)}
+            disabled={busy}
+            inputProps={{ min: 0, step: '0.01', 'data-testid': 'first-rental-price-hour' }}
+          />
+        ) : null}
+        {!modesOn || modes.offersDaily ? (
+          <TextField
+            fullWidth
+            required={modesOn}
+            label={t(
+              'business.onboarding.firstRental.location.pricePerDay',
+              'Price per day'
+            )}
+            type="number"
+            value={pricePerDay}
+            onChange={(e) => setPricePerDay(e.target.value)}
+            disabled={busy}
+            inputProps={{ min: 0, step: '0.01', 'data-testid': 'first-rental-price-day' }}
+            helperText={
+              modesOn
+                ? undefined
+                : t(
+                    'business.onboarding.firstRental.location.pricePerDayHint',
+                    'Leave empty to use 12 × hourly rate'
+                  )
+            }
+          />
+        ) : null}
       </Stack>
       <WeeklyAvailabilityEditor
         value={weeklyAvailability}
@@ -356,16 +379,18 @@ const FirstRentalItemLocationStep: React.FC<
           title: item.name,
           imageUrl: imagePreviewUrl,
           priceLine: (() => {
-            const hourly = Number.parseFloat(pricePerHour.trim());
-            if (Number.isNaN(hourly)) return null;
-            const dailyRaw = pricePerDay.trim();
-            const daily =
-              dailyRaw === ''
-                ? Number((hourly * 12).toFixed(2))
-                : Number.parseFloat(dailyRaw);
-            return Number.isNaN(daily)
-              ? `${hourly}/hr`
-              : `${hourly}/hr · ${daily}/day`;
+            const res = createListingPrices({
+              hourlyRaw: pricePerHour,
+              dailyRaw: pricePerDay,
+              modesOn,
+              modes,
+            });
+            if (!res.ok) return null;
+            const parts = [
+              !modesOn || res.offers_hourly ? `${res.base_price_per_hour}/hr` : null,
+              !modesOn || res.offers_daily ? `${res.base_price_per_day}/day` : null,
+            ].filter(Boolean);
+            return parts.join(' · ') || null;
           })(),
           locationLine: list.find((l) => l.id === locationId)?.name
             ? t('business.listingPreview.atLocation', 'At {{name}}', {

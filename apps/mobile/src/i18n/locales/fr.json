@@ -2678,6 +2678,7 @@
           "saveDraft": "Enregistrer comme brouillon",
           "deposit": "Caution (optionnelle)",
           "depositHelp": "Retenue sur les locations par carte pour couvrir les heures supplémentaires. Par défaut : 8× le tarif horaire.",
+          "depositHelpDaily": "Retenue sur les locations par carte pour couvrir le temps supplémentaire. Par défaut : deux tiers du prix par jour.",
           "depositInvalid": "Saisissez une caution valide.",
           "weeklyHours": "Horaires hebdomadaires",
           "weeklyHoursDefaultHint": "Horaires par défaut — les clients peuvent réserver dans ces créneaux. Vous pourrez les personnaliser plus tard dans l’éditeur d’annonce."

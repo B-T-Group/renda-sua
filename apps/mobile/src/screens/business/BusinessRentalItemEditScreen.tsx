@@ -169,7 +169,10 @@ export default function BusinessRentalItemEditScreen() {
       for (const [listingId, edit] of Object.entries(listingEdits)) {
         const hourly = parseFloat(edit.hourly);
         const daily = parseFloat(edit.daily);
-        const depositToSave = depositOnSave(item?.currency, edit.deposit, hourly);
+        const depositToSave = depositOnSave(item?.currency, edit.deposit, hourly, {
+          daily,
+          offersHourly: edit.offersHourly,
+        });
         const units = Math.floor(Number(edit.units));
         await rentalsApi.updateBusinessListing(listingId, {
           base_price_per_hour:
@@ -420,10 +423,15 @@ export default function BusinessRentalItemEditScreen() {
                   variant="bodySmall"
                   style={{ color: colors.text.secondary, marginTop: -6, marginBottom: 10 }}
                 >
-                  {t(
-                    'business.rentals.wizard.location.depositHelp',
-                    'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-                  )}
+                  {modesOn && !edit.offersHourly
+                    ? t(
+                        'business.rentals.wizard.location.depositHelpDaily',
+                        'Held on card rentals to cover extra time. Default is two-thirds of the day price.'
+                      )
+                    : t(
+                        'business.rentals.wizard.location.depositHelp',
+                        'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                      )}
                 </Text>
               </>
             ) : null}

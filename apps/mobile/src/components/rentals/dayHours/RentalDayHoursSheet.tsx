@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } fro
 import { Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Text as PaperText } from 'react-native-paper';
-import { fontFamilyForWeight } from '../../../theme/fonts';
+import { brandFaceStyle } from '../../../theme/fonts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppModal } from '../../common/AppModal';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -78,10 +78,10 @@ export interface RentalDayHoursSheetProps {
 
 type Notes = Record<string, BlockNote | null>;
 
-/** Paper Text with the brand Inter face for its weight, like typography.ts (family + weight). */
+/** Paper Text with the brand Inter face for its weight (R5: no synthetic weight on Android). */
 function Text({ style, ...rest }: ComponentProps<typeof PaperText>) {
   const weight = StyleSheet.flatten(style)?.fontWeight;
-  return <PaperText {...rest} style={[style, { fontFamily: fontFamilyForWeight(weight) }]} />;
+  return <PaperText {...rest} style={[style, brandFaceStyle(weight)]} />;
 }
 
 export function RentalDayHoursSheet(props: RentalDayHoursSheetProps) {
@@ -123,10 +123,16 @@ function SheetBody({
   const [shared, setShared] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState((initialDays?.length ?? 0) < 2);
   const [banner, setBanner] = useState<'notInARow' | 'notInARowRemove' | null>(null);
+  /** The server refusal stays until the renter first changes the picked days (R4). */
+  const [errorCleared, setErrorCleared] = useState(false);
   const [month, setMonth] = useState(() => {
     const anchor = initialDays?.[0]?.key ?? todayKey;
     return { y: Number(anchor.slice(0, 4)), m: Number(anchor.slice(5, 7)) - 1 };
   });
+
+  useEffect(() => {
+    setErrorCleared(false);
+  }, [serverError, visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -163,6 +169,7 @@ function SheetBody({
     }
     if (result.kind === 'unpickable') return;
     setBanner(null);
+    setErrorCleared(true);
     let next = result.days;
     if (sharedOn && result.kind === 'added' && days[0]) {
       next = applySharedChoice(next, days[0]);
@@ -257,7 +264,7 @@ function SheetBody({
         </Pressable>
       </View>
       <PriceChips listing={listing} currency={currency} lang={lang} />
-      {serverError ? (
+      {serverError && !errorCleared ? (
         <View testID="day-hours-server-error" accessibilityRole="alert" style={[styles.serverError, { backgroundColor: '#FDECEC', borderColor: '#F5C2C2' }]}>
           <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.error.main} />
           <Text style={[styles.serverErrorText, { color: colors.error.dark }]}>{serverError}</Text>
@@ -704,9 +711,8 @@ function DayRow({
   return (
     <RowShell testID={prefix} active={open}>
       <View style={styles.rowHead}>
-        <Pressable onPress={isHours ? onExpand : undefined} style={styles.flex}>
+        <Pressable onPress={isHours ? onExpand : undefined} style={styles.rowTitle}>
           <Text style={[styles.rowDay, { color: colors.text.primary }]}>{dayLabel(day.key, lang).replace('\u00A0', ' ')}</Text>
-          {sub ? <Text style={{ color: colors.text.secondary, fontSize: 12 }}>{sub}</Text> : null}
           {!isHours && info.openMin != null && info.closeMin != null && !both ? (
             <Text style={{ color: colors.text.secondary, fontSize: 12, marginTop: 2 }}>
               {minuteLabel(info.openMin, lang, timeZone)} – {minuteLabel(info.closeMin, lang, timeZone)}
@@ -726,6 +732,12 @@ function DayRow({
           <View style={styles.bin} />
         )}
       </View>
+      {sub ? (
+        // Full width under the day and the switch, so "Aujourd’hui · dès 09:00" never squeezes the row at 320 pt (R2).
+        <Text testID={`${prefix}-today`} numberOfLines={1} style={[styles.rowSub, { color: colors.text.secondary }]}>
+          {sub}
+        </Text>
+      ) : null}
       {open ? (
         <HourBar cells={info.cells} start={day.start} end={day.end} selected onHour={onHour} testPrefix={prefix} lang={lang} timeZone={timeZone} />
       ) : null}
@@ -787,7 +799,7 @@ function SharedCard({
   return (
     <RowShell testID="day-hours-shared" active>
       <View style={styles.rowHead}>
-        <View style={styles.flex}>
+        <View style={styles.rowTitle}>
           <Text style={[styles.rowDay, { color: colors.text.primary }]}>{pickerText(lang, 'allDays', { count: days.length })}</Text>
           <Text style={{ color: colors.text.secondary, fontSize: 12 }}>{pickerText(lang, 'oneSetting')}</Text>
         </View>
@@ -839,6 +851,8 @@ function Toggle({ on }: { on: boolean }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
+  /** Day title keeps room for "27 nov."; when the switch doesn't fit beside it (320 pt), the switch wraps under the day. */
+  rowTitle: { flex: 1, minWidth: 76 },
   scrim: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'flex-end' },
   sheet: { maxHeight: '94%', minHeight: '92%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8 },
   handle: { width: 44, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 10 },
@@ -874,6 +888,7 @@ const styles = StyleSheet.create({
   row: { borderWidth: 1.5, borderRadius: 14, padding: 14, gap: 10 },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   rowDay: { fontSize: 16, fontWeight: '800' },
+  rowSub: { fontSize: 12, marginTop: -6 },
   segment: { flexDirection: 'row', borderRadius: 10, padding: 3 },
   segOption: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 8 },
   segActive: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
@@ -885,11 +900,12 @@ const styles = StyleSheet.create({
   barLabel: { fontSize: 11, color: '#64748B', width: 16, textAlign: 'center' },
   hatchClip: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
   hatchLine: { position: 'absolute', top: -10, width: 3, height: 70, backgroundColor: HATCH, transform: [{ rotate: '35deg' }] },
-  rowFoot: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  /** Wraps the price under the time chip when the row is too narrow (320 pt) instead of overflowing. */
+  rowFoot: { flexDirection: 'row', alignItems: 'center', gap: 10, rowGap: 6, flexWrap: 'wrap' },
   timeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   timeChipText: { color: BLUE, fontWeight: '800', fontSize: 15 },
   hours: { fontSize: 15, fontWeight: '600' },
-  price: { fontSize: 15, fontWeight: '800' },
+  price: { fontSize: 15, fontWeight: '800', marginLeft: 'auto' },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   noteText: { fontSize: 13, flex: 1 },
   serverError: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderWidth: 1, borderRadius: 12, padding: 12, marginHorizontal: 20, marginBottom: 8 },

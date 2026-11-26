@@ -258,3 +258,21 @@ export function listingModesViolation(input: {
   }
   return null;
 }
+
+/**
+ * Hour rate behind the default card deposit (8 × this rate), the one rule shared by
+ * server create, web edit and mobile add/edit:
+ * - the hourly price, when the listing rents by the hour and has one;
+ * - otherwise the day price ÷ 12 (day prices were backfilled as 12 × hourly), so a
+ *   day-only listing defaults to two thirds of its day price.
+ */
+export function depositHourRate(input: {
+  hourPrice: number;
+  dayPrice: number;
+  offersHourly?: boolean | null;
+}): number {
+  const hour = Number(input.hourPrice);
+  if (input.offersHourly !== false && hour > 0) return hour;
+  const day = Number(input.dayPrice);
+  return day > 0 ? day / 12 : 0;
+}

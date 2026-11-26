@@ -2749,6 +2749,7 @@
           "saveDraft": "Save as draft",
           "deposit": "Security deposit (optional)",
           "depositHelp": "Held on card rentals to cover extra hours. Default is 8× the hourly rate.",
+          "depositHelpDaily": "Held on card rentals to cover extra time. Default is two-thirds of the day price.",
           "depositInvalid": "Enter a valid security deposit.",
           "weeklyHours": "Weekly hours",
           "weeklyHoursDefaultHint": "Default hours — customers can book in these windows. You can customize later in the listing editor."

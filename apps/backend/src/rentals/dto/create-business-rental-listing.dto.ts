@@ -85,7 +85,7 @@ export class CreateBusinessRentalListingDto {
   @ApiProperty({
     required: false,
     description:
-      'Security deposit authorized/charged on top of the rental total; defaults to 8x base_price_per_hour when omitted',
+      'Security deposit authorized/charged on top of the rental total; defaults to 8x base_price_per_hour when omitted, or 8x (base_price_per_day / 12) when the listing does not rent by the hour',
   })
   @IsOptional()
   @IsNumber()

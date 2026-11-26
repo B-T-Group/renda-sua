@@ -1,4 +1,4 @@
-import { cardHoldLines, depositInputError, depositOnSave, holdPresentation, showsCardDeposit, showsListingDeposit } from './cardDeposit';
+import { cardHoldLines, depositInputError, depositHourRate, depositOnSave, holdPresentation, showsCardDeposit, showsListingDeposit } from './cardDeposit';
 
 describe('card deposit field', () => {
   it('hides a deposit that is the whole card hold', () => {
@@ -39,5 +39,16 @@ describe('card deposit field', () => {
     expect(depositInputError('CAD', '0')).toBe(false);
     expect(depositInputError('XOF', '-5')).toBe(false);
     expect(showsListingDeposit(' xaf ')).toBe(false);
+  });
+
+  it('uses one default-deposit rule with the server: 8 × hourly, or ⅔ of the day price without hourly', () => {
+    expect(depositOnSave('CAD', '', 40, { daily: 300 })).toBe(320);
+    expect(depositOnSave('CAD', '', 40, { daily: 300, offersHourly: true })).toBe(320);
+    expect(depositOnSave('CAD', '', 40, { daily: 300, offersHourly: false })).toBe(200);
+    expect(depositOnSave('CAD', '', 0, { daily: 300 })).toBe(200);
+    expect(depositOnSave('CAD', '', Number.NaN, { daily: 300, offersHourly: false })).toBe(200);
+    expect(depositOnSave('XAF', '', 3000, { daily: 27000, offersHourly: false })).toBeUndefined();
+    expect(depositOnSave('CAD', '75', 40, { daily: 300, offersHourly: false })).toBe(75);
+    expect(depositHourRate(0, {})).toBe(0);
   });
 });
