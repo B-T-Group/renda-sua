@@ -62,4 +62,14 @@ describe('BusinessReturnConfirmSheet', () => {
     await fireEvent.press(screen.getByTestId('business-return-confirm'));
     expect(onConfirm).not.toHaveBeenCalled();
   });
+
+  it('asks for AM or PM when a bare 12-hour time is typed', async () => {
+    const onConfirm = jest.fn();
+    await renderSheet(onConfirm, { initialEditing: true });
+    await fireEvent.changeText(screen.getByDisplayValue('3:40 PM'), '3:20');
+    expect(screen.getByTestId('business-return-time-hint')).toBeTruthy();
+    expect(screen.getByText('Add AM or PM')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('business-return-confirm'));
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });

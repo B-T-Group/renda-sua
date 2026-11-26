@@ -6111,6 +6111,7 @@
   },
   "rentals": {
     "earlyReturn": {
+      "addMeridiem": "Add AM or PM",
       "returnBy": "Return by {{time}}",
       "action": "Return early",
       "sheetTitle": "Return early?",

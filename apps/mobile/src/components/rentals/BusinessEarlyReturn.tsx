@@ -7,6 +7,7 @@ import {
   dayFieldLabel,
   fieldsToInstantIso,
   parseTimeField,
+  timeFieldNeedsMeridiem,
   returnDayChoices,
   timeFieldText,
   freedWindow,
@@ -52,7 +53,8 @@ export function BusinessReturnConfirmSheet(props: BusinessReturnConfirmSheetProp
   const [timeText, setTimeText] = useState(
     timeFieldText(listingFields(Date.parse(defaultIso), props.timeZone).time, i18n.language, props.timeZone)
   );
-  const time = parseTimeField(timeText) ?? '';
+  const needsMeridiem = timeFieldNeedsMeridiem(timeText, i18n.language, props.timeZone);
+  const time = needsMeridiem ? '' : parseTimeField(timeText) ?? '';
 
   useEffect(() => {
     if (!props.open) return;
@@ -155,6 +157,11 @@ export function BusinessReturnConfirmSheet(props: BusinessReturnConfirmSheetProp
             disabled={props.busy}
           />
         </View>
+      ) : null}
+      {editing && needsMeridiem ? (
+        <Text testID="business-return-time-hint" style={{ color: '#B42318', marginTop: 8 }}>
+          {t('rentals.earlyReturn.addMeridiem', 'Add AM or PM')}
+        </Text>
       ) : null}
       {problemText ? <Text style={{ color: '#B42318', marginTop: 8 }}>{problemText}</Text> : null}
       <Button
