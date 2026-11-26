@@ -152,6 +152,12 @@ export interface AcceptAndStartResult {
   amount_due_at_pickup: number;
   bookingId: string;
   start_opens_at?: string;
+  /** Card pay at pickup: the PaymentSheet / Checkout for (rental - fee + deposit). */
+  payment_intent_client_secret?: string;
+  checkout_url?: string;
+  payment_transaction_id?: string;
+  /** Card pay at pickup: the deposit part of the hold. */
+  deposit_hold_amount?: number;
 }
 
 /** Card is already authorized. Wallet covers the contract. Otherwise Mobile Money. */
