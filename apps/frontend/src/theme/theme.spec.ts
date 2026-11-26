@@ -75,8 +75,14 @@ describe('logo brand palette', () => {
     expect(brandTokens.surface.input).toBe('#F4F1EC');
     expect(brandTokens.surface.borderStrong).toBe('#D0C9BE');
     expect(theme.typography.fontFamily).toContain('Inter Variable');
-    expect(String(theme.typography.h1.fontFamily)).toContain('Poppins');
-    expect(String(theme.typography.display.fontFamily)).toContain('Poppins');
+    expect(String(theme.typography.h1.fontFamily)).toContain('Inter Variable');
+    expect(String(theme.typography.h4.fontFamily)).toContain('Inter Variable');
+    expect(String(theme.typography.display.fontFamily)).toContain('Inter Variable');
+    expect(String(theme.typography.h1.fontFamily)).not.toContain('Poppins');
+    expect(
+      (theme.components?.MuiDialogTitle?.styleOverrides?.root as { fontFamily?: string })
+        ?.fontFamily
+    ).toContain('Inter Variable');
   });
 
   it('maps persona chrome to client blue, agent navy and business green', () => {

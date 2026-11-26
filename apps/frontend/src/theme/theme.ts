@@ -5,8 +5,11 @@ import { spacing, borderRadius, shadows, transitions } from './themeUtils';
 const { primary, secondary, cta, success, warning, error, info, surface, text } =
   brandTokens;
 
-const displayFont =
-  '"Poppins", "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+// Page titles (h1–h4, display) and dialog titles use the same Inter stack as
+// body copy, matching mobile headings (brandFaceStyle). Inter Variable is
+// loaded in main.tsx via @fontsource-variable/inter.
+const brandFont =
+  '"Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 const brandShadow = (color: string, opacity: number, blur: number, y: number) =>
   `0 ${y}px ${blur}px ${alpha(color, opacity)}`;
@@ -32,10 +35,9 @@ export const theme = createTheme({
     divider: surface.divider,
   },
   typography: {
-    fontFamily:
-      '"Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    fontFamily: brandFont,
     h1: {
-      fontFamily: displayFont,
+      fontFamily: brandFont,
       fontWeight: 700,
       fontSize: '3rem',
       color: text.primary,
@@ -43,7 +45,7 @@ export const theme = createTheme({
       lineHeight: 1.1,
     },
     h2: {
-      fontFamily: displayFont,
+      fontFamily: brandFont,
       fontWeight: 600,
       fontSize: '2.25rem',
       color: text.primary,
@@ -51,7 +53,7 @@ export const theme = createTheme({
       lineHeight: 1.2,
     },
     h3: {
-      fontFamily: displayFont,
+      fontFamily: brandFont,
       fontWeight: 600,
       fontSize: '1.875rem',
       color: text.primary,
@@ -59,7 +61,7 @@ export const theme = createTheme({
       lineHeight: 1.25,
     },
     h4: {
-      fontFamily: displayFont,
+      fontFamily: brandFont,
       fontWeight: 600,
       fontSize: '1.5rem',
       color: text.primary,
@@ -113,7 +115,7 @@ export const theme = createTheme({
       lineHeight: 1.57,
     },
     display: {
-      fontFamily: displayFont,
+      fontFamily: brandFont,
       fontWeight: 700,
       fontSize: '2rem',
       lineHeight: 1.15,
@@ -440,6 +442,13 @@ export const theme = createTheme({
         paper: {
           borderRadius: 14,
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+        },
+      },
+    },
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: {
+          fontFamily: brandFont,
         },
       },
     },
