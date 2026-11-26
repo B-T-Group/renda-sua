@@ -6384,8 +6384,6 @@
       "minHoursSnapshot": "{{h}} h minimum",
       "depositBarHint": "Caution bloquée sur la carte · Rien n’est débité avant l’acceptation",
       "noChargeUntilAccepted": "Rien n’est débité avant que l’entreprise accepte votre demande",
-      "requestCtaTitle": "Prêt à réserver ?",
-      "requestCtaBody": "Touchez « Demander cette location » ci-dessous pour choisir vos jours et vos heures. Rien n’est débité avant que l’entreprise accepte.",
       "weeklyHours": "Horaires de la semaine",
       "backToRentals": "Retour aux locations",
       "overview": "À propos",

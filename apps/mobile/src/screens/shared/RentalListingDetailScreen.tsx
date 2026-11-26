@@ -575,44 +575,6 @@ export default function RentalListingDetailScreen() {
               t('rentals.detail.noInstructionsYet', 'No instructions provided yet.')}
           </Text>
         </View>
-
-        <View
-          style={[
-            styles.sectionCard,
-            shadows.sm,
-            {
-              borderColor: colors.divider,
-              backgroundColor: colors.surface,
-              borderRadius: borderRadius.md,
-              padding: spacing.md,
-            },
-          ]}
-        >
-          <Text style={[typography.subtitle2, { color: colors.text.primary }]}>
-            {t('rentals.detail.requestCtaTitle', 'Ready to book?')}
-          </Text>
-          <Text style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xxs }]}>
-            {acceptsOrders
-              ? t(
-                  'rentals.detail.requestCtaBody',
-                  'Tap Request this rental below to pick your days and hours. Nothing is charged until the business accepts.'
-                )
-              : t(
-                  'checkout.merchantNotAcceptingOrders',
-                  'This merchant is currently completing account setup and is not yet accepting orders.'
-                )}
-          </Text>
-          <Button
-            mode="contained"
-            style={{ marginTop: spacing.sm }}
-            onPress={openRequestScreen}
-            disabled={!acceptsOrders}
-          >
-            {acceptsOrders
-              ? t('rentals.requestRental', 'Request this rental')
-              : t('business.lifecycle.openingSoonBadge', 'Opening Soon')}
-          </Button>
-        </View>
       </View>
     </ScrollView>
 
