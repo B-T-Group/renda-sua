@@ -16,6 +16,7 @@ import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import type { RenterReturnPhase } from '../../utils/renterReturnPhase';
 import { formatDoualaStamp } from '../../utils/renterReturnPhase';
+import { instantClock } from '../../utils/rentals/earlyReturn';
 
 export function RenterReturnPanel({
   phase,
@@ -26,6 +27,8 @@ export function RenterReturnPanel({
   endAt,
   reportedAt,
   depositLabel,
+  early,
+  timeZone,
   onChanged,
 }: {
   phase: Exclude<RenterReturnPhase, 'hidden'>;
@@ -36,6 +39,9 @@ export function RenterReturnPanel({
   endAt: string;
   reportedAt?: string | null;
   depositLabel: string;
+  /** The renter tapped Return early: early waiting copy on the listing clock. */
+  early?: boolean;
+  timeZone?: string;
   onChanged: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -48,6 +54,9 @@ export function RenterReturnPanel({
   const overdue = phase === 'overdue';
   const due = formatDoualaStamp(endAt, i18n.language);
   const when = formatDoualaStamp(reportedAt || endAt, i18n.language);
+  const body = early && phase === 'waiting'
+    ? earlyWaitingCopy(t, instantClock(reportedAt, i18n.language, timeZone), depositLabel)
+    : copy(phase, t, location, when, depositLabel);
 
   const submit = async () => {
     setBusy(true);
@@ -107,9 +116,9 @@ export function RenterReturnPanel({
       <Typography variant="subtitle1" fontWeight={700} color={overdue ? 'error.main' : 'text.primary'}>
         {heading(phase, t, location, due)}
       </Typography>
-      {copy(phase, t, location, when, depositLabel) ? (
+      {body ? (
         <Typography variant="body2" sx={{ mt: 0.5 }}>
-          {copy(phase, t, location, when, depositLabel)}
+          {body}
         </Typography>
       ) : null}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
@@ -200,6 +209,21 @@ function waitingCopy(
     'rentals.returnReport.waitingBody',
     'You reported the return on {{time}}. The business will check the item. Your {{amount}} deposit is released only after they confirm.',
     { time: when, amount }
+  );
+}
+
+function earlyWaitingCopy(
+  t: (key: string, def: string, opts?: Record<string, string>) => string,
+  time: string,
+  amount: string
+): string {
+  if (!amount) {
+    return t('rentals.earlyReturn.waitingBodyNoDeposit', 'You returned it early at {{time}}. The business will check the item.', { time });
+  }
+  return t(
+    'rentals.earlyReturn.waitingBody',
+    'You returned it early at {{time}}. Your {{amount}} deposit is released once they confirm.',
+    { time, amount }
   );
 }
 

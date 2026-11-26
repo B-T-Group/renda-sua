@@ -12,9 +12,12 @@ export function RentalJourneyList(input: JourneyInput & { accent?: string }) {
       {steps.map((step) => (
         <Stack key={step.key} direction="row" spacing={1} alignItems="center">
           <JourneyIcon state={step.state} accent={input.accent} />
-          <Typography variant="body2" fontWeight={step.state === 'current' ? 700 : 400} color={step.state === 'upcoming' ? 'text.disabled' : 'text.primary'} sx={{ flex: 1 }}>
-            {t(step.labelKey, step.label)}
-          </Typography>
+          <Stack sx={{ flex: 1 }}>
+            <Typography variant="body2" fontWeight={step.state === 'current' ? 700 : 400} color={step.state === 'upcoming' ? 'text.disabled' : 'text.primary'}>
+              {t(step.labelKey, step.label)}
+            </Typography>
+            {step.sub ? <Typography variant="caption" color="text.secondary">{step.sub}</Typography> : null}
+          </Stack>
           {step.aside ? <Typography variant="caption" color="text.secondary">{step.aside}</Typography> : null}
         </Stack>
       ))}

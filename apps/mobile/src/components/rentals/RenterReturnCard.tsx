@@ -8,6 +8,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { reportReturned } from '../../services/rentalsApi';
 import { formatDoualaStamp, type RenterReturnPhase } from '../../utils/rentals/renterReturnPhase';
+import { instantClock } from '../../utils/rentals/earlyReturn';
 
 export interface RenterReturnCardProps {
   phase: Exclude<RenterReturnPhase, 'hidden'>;
@@ -18,6 +19,10 @@ export interface RenterReturnCardProps {
   endAt: string;
   reportedAt?: string | null;
   depositLabel: string;
+  /** The renter tapped Return early (report before the due): early waiting copy (mock 05a). */
+  early?: boolean;
+  /** Listing zone for the early report time. */
+  timeZone?: string;
   onReported: () => void;
   onAlreadyConfirmed: () => void;
   onMessage: () => void;
@@ -33,6 +38,9 @@ export function RenterReturnCard(props: RenterReturnCardProps) {
   const tint = overdue ? colors.error.main : '#0A4FB5';
   const when = formatDoualaStamp(props.reportedAt || props.endAt, i18n.language);
   const due = formatDoualaStamp(props.endAt, i18n.language);
+  const body = props.early && props.phase === 'waiting'
+    ? earlyWaitingBody(t, instantClock(props.reportedAt, i18n.language, props.timeZone), props.depositLabel)
+    : bodyFor(props.phase, t, props.location, when, props.depositLabel);
 
   const submit = async () => {
     setBusy(true);
@@ -91,9 +99,9 @@ export function RenterReturnCard(props: RenterReturnCardProps) {
       <Text style={[typography.subtitle1, { color: overdue ? colors.error.main : colors.text.primary, fontWeight: '700' }]}>
         {titleFor(props.phase, t, props.location, due, when)}
       </Text>
-      {bodyFor(props.phase, t, props.location, when, props.depositLabel) ? (
+      {body ? (
         <Text style={[typography.body2, { color: colors.text.primary, marginTop: spacing.xs }]}>
-          {bodyFor(props.phase, t, props.location, when, props.depositLabel)}
+          {body}
         </Text>
       ) : null}
       <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
@@ -176,6 +184,21 @@ function bodyFor(
     return t('rentals.returnReport.overdueBody', 'Bring the item to {{location}} as soon as you can.', { location });
   }
   return '';
+}
+
+function earlyWaitingBody(
+  t: (key: string, def: string, opts?: Record<string, string>) => string,
+  time: string,
+  amount: string
+): string {
+  if (!amount) {
+    return t('rentals.earlyReturn.waitingBodyNoDeposit', 'You returned it early at {{time}}. The business will check the item.', { time });
+  }
+  return t(
+    'rentals.earlyReturn.waitingBody',
+    'You returned it early at {{time}}. Your {{amount}} deposit is released once they confirm.',
+    { time, amount }
+  );
 }
 
 function sheetCopy(t: (key: string, def: string, opts?: Record<string, string>) => string, amount: string): string {

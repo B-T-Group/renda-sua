@@ -106,6 +106,11 @@ import {
   startOpensAt,
   startWindowState,
 } from './simple-start/simple-start.policy';
+import {
+  defaultReturnAt,
+  isEarlyReturn,
+  settleEarlyAsContract,
+} from './early-return/early-return.policy';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import {
   fetchStripeEnabledCountries,
@@ -4767,7 +4772,7 @@ export class RentalsService {
     if (policy != null) throw inspectionUpdateRequired();
     const previous = booking.status as 'active' | 'awaiting_return';
     const actualEndAt = await this.resolveActualReturnAt(booking, actualEndAtInput);
-    const settlement = this.computeRentalSettlement(booking, actualEndAt);
+    const settlement = this.returnSettlement(booking, actualEndAt);
     return this.finishOpenReturn(booking, settlement, previous, actorId, changedByType, notes);
   }
 
@@ -4835,9 +4840,12 @@ export class RentalsService {
     booking: any,
     actualEndAtInput?: string
   ): string {
-    const end = actualEndAtInput?.trim()
-      ? new Date(actualEndAtInput.trim())
-      : new Date();
+    // No time sent: the renter's report time (early return), else now.
+    const end = defaultReturnAt(
+      actualEndAtInput,
+      booking.renter_reported_returned_at,
+      new Date()
+    );
     if (Number.isNaN(end.getTime())) {
       throw new HttpException('Invalid actualEndAt', HttpStatus.BAD_REQUEST);
     }
@@ -4858,6 +4866,17 @@ export class RentalsService {
       );
     }
     return end.toISOString();
+  }
+
+  /**
+   * Settlement at return. An early return (returned before the due on the
+   * listing clock) pays exactly the full contract and never owes overtime.
+   */
+  private returnSettlement(booking: any, actualEndAtIso: string): RentalReturnSettlement {
+    return settleEarlyAsContract(
+      this.computeRentalSettlement(booking, actualEndAtIso),
+      isEarlyReturn(actualEndAtIso, booking)
+    );
   }
 
   /**
@@ -6421,7 +6440,7 @@ export class RentalsService {
     if (fresh.status !== 'active' && fresh.status !== 'awaiting_return') return;
     const endedAt = (fresh.actual_end_at as string | null) || fields.returnHandedBackAt;
     if (!endedAt) return;
-    const settlement = this.computeRentalSettlement(fresh, endedAt);
+    const settlement = this.returnSettlement(fresh, endedAt);
     const override = fresh.overtime_amount_override;
     if (override != null && override !== '' && Number.isFinite(Number(override))) {
       settlement.overtimeAmount = Math.max(0, Number(override));

@@ -33,6 +33,8 @@ interface Props {
   onConfirm: () => void;
   onNotCollected?: () => void;
   missing?: React.ReactNode;
+  /** Icon actions once started (renter ↶ Return early, business ↶ Item returned). */
+  actions?: React.ReactNode;
 }
 
 export function RentalStartPanel(props: Props) {
@@ -105,6 +107,7 @@ export function RentalStartPanel(props: Props) {
           {t('rentals.business.notCollected', 'Item not collected?')}
         </Button>
       ) : null}
+      {phase === 'started' ? props.actions : null}
       {props.role === 'client' && phase === 'started' ? props.missing : null}
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
         <DialogContent>

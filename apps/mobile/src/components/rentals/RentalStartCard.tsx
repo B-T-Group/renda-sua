@@ -47,6 +47,8 @@ interface Props {
   onNotCollected?: () => void;
   now?: number;
   missing?: React.ReactNode;
+  /** Icon actions once started (renter ↶ Return early, business ↶ Item returned). */
+  actions?: React.ReactNode;
 }
 
 export function RentalStartCard(props: Props) {
@@ -98,6 +100,7 @@ function StartBody(props: Props & { phase: PickupPhase }) {
       </Text>
       <StartButton {...props} day={day} momo={momo} />
       <NotCollected {...props} />
+      {props.phase === 'started' ? props.actions : null}
       {props.phase === 'started' && props.role === 'client' ? props.missing : null}
     </View>
   );

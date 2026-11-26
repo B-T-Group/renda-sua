@@ -28,6 +28,7 @@ interface NotReceivedBooking {
   status: string;
   inspection_policy_version: number | null;
   actual_start_at: string | null;
+  renter_reported_returned_at?: string | null;
   business?: { user_id?: string | null } | null;
   rental_location_listing?: { rental_item?: { name?: string | null } | null } | null;
 }
@@ -41,6 +42,7 @@ const BOOKING = `
       status
       inspection_policy_version
       actual_start_at
+      renter_reported_returned_at
       business { user_id }
       rental_location_listing { rental_item { name } }
     }

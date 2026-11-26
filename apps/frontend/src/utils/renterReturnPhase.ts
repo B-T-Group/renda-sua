@@ -18,7 +18,8 @@ export function renterReturnPhase(input: RenterReturnInput): RenterReturnPhase {
   if (!isOpenReturn(input.status)) return 'hidden';
   const now = input.now ?? new Date();
   const pastDue = returnByPassed(input.endAt, now, input.timeZone);
-  if (input.status === 'active' && !pastDue) return 'hidden';
+  // A renter who tapped Return early waits for the business like any reported return.
+  if (input.status === 'active' && !pastDue && !input.reportedAt) return 'hidden';
   if (!input.reportedAt) return pastDue ? 'overdue' : 'due';
   return escalated(input, now) ? 'escalated' : 'waiting';
 }
