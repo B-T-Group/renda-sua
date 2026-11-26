@@ -471,39 +471,32 @@ export default function RentalListingDetailScreen() {
               'Rentals on Rendasua are coordinated with the business in a few steps:'
             )}
           </Text>
-          {[1, 2, 3, 4].map((n) => {
-            const step4Default =
-              item.operation_mode === 'take_home'
-                ? 'Pick up the item, use it off-site, and return it by the booked end time. Follow pickup and return instructions on this page.'
-                : 'The rental is operated by the business at their location. Follow the pickup and return instructions on this page when you arrive.';
-            const step4Key =
-              item.operation_mode === 'take_home'
-                ? 'rentals.detail.howItWorksStep4TakeHome'
-                : 'rentals.detail.howItWorksStep4';
-            return (
-              <Text
-                key={n}
-                style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}
-              >
-                {`${n}. `}
-                {n === 4
-                  ? t(step4Key, step4Default)
-                  : n === 3 && listing.inspection_policy_version != null
-                    ? t(
-                        'rentals.detail.howItWorksStep3Inspected',
-                        'At pickup, check the item, then tap Start rental. Return by the booked end time.'
-                      )
-                  : t(
-                      `rentals.detail.howItWorksStep${n}`,
-                      n === 1
-                        ? 'Send a request with your preferred start and end date and time.'
-                        : n === 2
-                          ? 'The business checks availability and responds.'
-                          : 'If they confirm availability, you can complete a booking.'
-                    )}
-              </Text>
-            );
-          })}
+          {(item.operation_mode === 'take_home' ? [1, 2, 3] : [1, 2, 3, 4]).map((n) => (
+            <Text
+              key={n}
+              style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}
+            >
+              {`${n}. `}
+              {n === 4
+                ? t(
+                    'rentals.detail.howItWorksStep4',
+                    'The rental is operated by the business at their location. Follow the pickup and return instructions on this page when you arrive.'
+                  )
+                : n === 3 && listing.inspection_policy_version != null
+                  ? t(
+                      'rentals.detail.howItWorksStep3Inspected',
+                      'At pickup, check the item, then tap Start rental. Return by the booked end time.'
+                    )
+                : t(
+                    `rentals.detail.howItWorksStep${n}`,
+                    n === 1
+                      ? 'Send a request with your preferred start and end date and time.'
+                      : n === 2
+                        ? 'The business checks availability and responds.'
+                        : 'If they confirm availability, you can complete a booking.'
+                  )}
+            </Text>
+          ))}
         </View>
 
         {weeklySorted.length > 0 ? (
