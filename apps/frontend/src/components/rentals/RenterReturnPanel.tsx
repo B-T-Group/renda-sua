@@ -107,7 +107,9 @@ export function RenterReturnPanel({
           variant="caption"
           sx={{ px: 1, py: 0.25, borderRadius: 99, border: 1, borderColor: overdue ? 'error.main' : '#0A4FB5', color: overdue ? 'error.main' : '#0A4FB5' }}
         >
-          {t(overdue ? 'rentals.returnReport.overdue' : 'rentals.bookingStatus.awaiting_return', overdue ? 'Overdue' : 'Return due')}
+          {early && phase === 'waiting'
+            ? t('rentals.earlyReturn.returnedEarlyStep', 'Returned early')
+            : t(overdue ? 'rentals.returnReport.overdue' : 'rentals.bookingStatus.awaiting_return', overdue ? 'Overdue' : 'Return due')}
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {t('rentals.returnReport.nextStep', 'Next step')}

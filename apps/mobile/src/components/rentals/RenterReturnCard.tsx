@@ -90,7 +90,9 @@ export function RenterReturnCard(props: RenterReturnCardProps) {
     >
       <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
         <Text style={[styles.pill, { color: tint, borderColor: tint }]}>
-          {t(overdue ? 'rentals.returnReport.overdue' : 'rentals.bookingStatus.awaiting_return', overdue ? 'Overdue' : 'Return due')}
+          {props.early && props.phase === 'waiting'
+            ? t('rentals.earlyReturn.returnedEarlyStep', 'Returned early')
+            : t(overdue ? 'rentals.returnReport.overdue' : 'rentals.bookingStatus.awaiting_return', overdue ? 'Overdue' : 'Return due')}
         </Text>
         <Text style={[typography.caption, { color: colors.text.secondary, alignSelf: 'center' }]}>
           {t('rentals.returnReport.nextStep', 'Next step')}
