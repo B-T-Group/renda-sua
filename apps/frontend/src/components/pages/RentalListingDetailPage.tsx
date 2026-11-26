@@ -37,6 +37,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import type { RentalListingRow } from '../../hooks/useRentalListings';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { showsRentalDetailsDeposit } from '../../utils/rentals/cardDeposit';
+import { formatCatalogMoney } from '../../utils/rentalRequestDisplay';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import LoadingPage from '../common/LoadingPage';
@@ -50,20 +51,12 @@ import { useDeliveryEstimate } from '../../hooks/useDeliveryEstimate';
 import { useMarket } from '../../contexts/MarketContext';
 import { MarketPickerDialog } from '../market/MarketPickerDialog';
 
-function formatMoney(amount: string | number, currency: string): string {
+function formatMoney(amount: string | number, currency: string, locale: string): string {
   const n = typeof amount === 'string' ? parseFloat(amount) : amount;
   if (Number.isNaN(n)) {
     return `${amount} ${currency}`;
   }
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency.length === 3 ? currency : 'XAF',
-      maximumFractionDigits: 0,
-    }).format(n);
-  } catch {
-    return `${n} ${currency}`;
-  }
+  return formatCatalogMoney(n, currency, locale);
 }
 
 function formatAddress(addr: {
@@ -465,7 +458,7 @@ const RentalListingDetailPage: React.FC = () => {
   const { listingId } = useParams<{ listingId: string }>();
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
   const { isAuthenticated } = useSessionAuth();
@@ -579,11 +572,12 @@ const RentalListingDetailPage: React.FC = () => {
   const images = row.rental_item.rental_item_images ?? [];
   const tags = row.rental_item.tags ?? [];
   const addressLine = formatAddress(row.business_location.address ?? {});
-  const priceLabel = formatMoney(row.base_price_per_hour, row.rental_item.currency);
+  const priceLabel = formatMoney(row.base_price_per_hour, row.rental_item.currency, i18n.language);
   const dailyOnly = row.offers_hourly === false && row.offers_daily !== false;
   const dayPriceLabel = formatMoney(
     Number(row.base_price_per_day ?? 0),
-    row.rental_item.currency
+    row.rental_item.currency,
+    i18n.language
   );
 
   return (
@@ -736,7 +730,8 @@ const RentalListingDetailPage: React.FC = () => {
                       <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
                         {formatMoney(
                           Number(row.security_deposit_amount ?? 0),
-                          row.rental_item.currency
+                          row.rental_item.currency,
+                          i18n.language
                         )}{' '}
                         <Typography component="span" variant="body2" color="text.secondary" fontWeight={400}>
                           {t('rentals.detail.securityDeposit', 'Security deposit (card rentals)')}

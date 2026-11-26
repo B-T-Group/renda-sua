@@ -149,11 +149,20 @@ function formatCadAmount(amount: number, locale: string): string {
   }).format(amount);
 }
 
+/**
+ * XAF, XOF, and FCFA use `45 000 FCFA` (non-breaking spaces) in every locale.
+ * Other currencies keep the runtime Intl currency format.
+ */
 export function formatRentalMoney(amount: number, currency: string): string {
+  const code = (currency || 'XAF').toUpperCase();
+  const iso = code.length === 3 ? code : 'XAF';
+  if (iso === 'XAF' || iso === 'XOF' || code === 'FCFA') {
+    return `${groupedDigits(Number.isFinite(amount) ? amount : 0, '\u00A0')}\u00A0FCFA`;
+  }
   try {
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
-      currency: currency.length === 3 ? currency : 'XAF',
+      currency: iso,
       maximumFractionDigits: 0,
     }).format(amount);
   } catch {

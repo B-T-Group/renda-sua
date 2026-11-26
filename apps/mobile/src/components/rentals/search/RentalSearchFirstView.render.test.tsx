@@ -703,6 +703,20 @@ describe('default rental list', () => {
     expect(moneyText(xaf.getByText(/FCFA/))).toBe('45\u00A0000\u00A0FCFA');
   });
 
+  it('formats dated search XAF as amount then FCFA in English', async () => {
+    const view = await renderSearch({
+      mode: 'results',
+      dates: { startDate: '2026-11-12', endDate: '2026-11-15', dayCount: 3 },
+      cards: [canon],
+    });
+    expect(moneyText(view.getByTestId('rental-search-price-canon'))).toBe('25\u00A0000\u00A0FCFA');
+    expect(view.getByTestId('rental-search-total-canon').props.children).toEqual(
+      expect.stringMatching(/75\u00A0000\u00A0FCFA/)
+    );
+    expect(view.queryByText(/FCFA 25/)).toBeNull();
+    expect(view.queryByText(/FCFA 75/)).toBeNull();
+  });
+
   it('formats French CAD with a non-breaking space', async () => {
     await i18n.changeLanguage('fr');
     const cad = await renderSearch({
