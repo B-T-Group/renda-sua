@@ -336,9 +336,10 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
         reservedCancelAfter: null,
       })
     ).toBe(false);
+    // Default zone Africa/Douala (UTC+1): the start day ends at 23:00Z.
     expect(
       reservedBookingExpired({
-        now: new Date('2026-11-09T23:00:00.000Z'),
+        now: new Date('2026-11-09T22:59:59.000Z'),
         startAt,
         policyVersion: null,
         pickupInspectionPending: false,
@@ -347,7 +348,7 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
     ).toBe(false);
     expect(
       reservedBookingExpired({
-        now: new Date('2026-11-10T00:00:00.000Z'),
+        now: new Date('2026-11-09T23:00:00.000Z'),
         startAt,
         policyVersion: null,
         pickupInspectionPending: false,

@@ -1371,7 +1371,10 @@ export const LIST_RECENT_NO_RESPONSE_REQUESTS = `
       responded_at
       rental_selection_windows
       client { user { first_name last_name } }
-      rental_location_listing { rental_item { name } }
+      rental_location_listing {
+        rental_item { name }
+        business_location { address { country } }
+      }
     }
   }
 `;

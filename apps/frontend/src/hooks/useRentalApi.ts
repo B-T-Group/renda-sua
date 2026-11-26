@@ -251,6 +251,8 @@ export interface BusinessRentalRequestRow {
 export interface ClientRentalRequestRow {
   id: string;
   status: string;
+  /** Listing zone; request and booking times are its wall clock stored as UTC components. */
+  listing_timezone?: string | null;
   rental_selection_windows?: RentalSelectionWindow[] | null;
   created_at: string;
   business_response_note?: string | null;

@@ -1,3 +1,4 @@
+import { listingNowMs } from './dayHoursPicker';
 import type { RentalSelectionWindow } from '../../types/rentals';
 import { formatRequestAmount, formatRentalDay } from './rentalRequestFormat';
 
@@ -20,23 +21,24 @@ export function totalOverrideTooHigh(quote: number, value: number, ceiling: numb
   return value > quote * TOTAL_OVERRIDE_RATIO;
 }
 
-export function contractHoursOffer(startIso: string | null, now = new Date()): {
+/** `timeZone` is the listing zone: startIso is its wall clock stored as UTC components. */
+export function contractHoursOffer(startIso: string | null, now = new Date(), timeZone?: string | null): {
   hidden: boolean;
   hours: number;
   maxHours: number;
 } {
-  const remaining = hoursUntil(startIso, now);
+  const remaining = hoursUntil(startIso, now, timeZone);
   if (remaining == null) return { hidden: false, hours: CONTRACT_HOUR_CAP, maxHours: CONTRACT_HOUR_CAP };
   if (remaining < 1) return { hidden: true, hours: Math.max(0, remaining), maxHours: 0 };
   const maxHours = Math.min(CONTRACT_HOUR_CAP, Math.floor(remaining));
   return { hidden: false, hours: maxHours, maxHours };
 }
 
-function hoursUntil(startIso: string | null, now: Date): number | null {
+function hoursUntil(startIso: string | null, now: Date, timeZone?: string | null): number | null {
   if (!startIso) return null;
   const start = Date.parse(startIso);
   if (!Number.isFinite(start)) return null;
-  return (start - now.getTime()) / HOUR_MS;
+  return (start - listingNowMs(now.getTime(), timeZone)) / HOUR_MS;
 }
 
 export function respondWithinHours(respondBy: string, now = Date.now()): number {

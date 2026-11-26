@@ -1097,6 +1097,7 @@ export class RentalsService {
         respond_by: computeRespondBy({
           createdAt: new Date().toISOString(),
           startAt: plan.envelopeStartIso,
+          timeZone: this.listingTimeZone(listing),
         }).respondBy,
       },
     });
@@ -1592,6 +1593,7 @@ export class RentalsService {
       createdAt: req.created_at,
       respondBy: req.respond_by,
       startAt: earliestRequestStartIso(req),
+      timeZone: this.listingTimeZone(req.rental_location_listing ?? {}),
     });
     if (now.getTime() <= Date.parse(decision.respondBy)) return;
     throw new HttpException(
@@ -1993,7 +1995,11 @@ export class RentalsService {
   }
 
   private withRespondBy(rows: any[], flags: DashboardRequestFlagRow[]): any[] {
-    return rows.map((row) => (this.rowDashboardOn(flags, row) ? this.attachRespondBy(row) : row));
+    return rows.map((row) =>
+      this.rowDashboardOn(flags, row)
+        ? this.attachRespondBy(row)
+        : { ...row, listing_timezone: this.listingTimeZone(row.rental_location_listing ?? {}) }
+    );
   }
 
   private attachRespondBy(row: any): any {
@@ -2001,6 +2007,7 @@ export class RentalsService {
       createdAt: row.created_at,
       respondBy: row.respond_by,
       startAt: earliestRequestStartIso(row),
+      timeZone: this.listingTimeZone(row.rental_location_listing ?? {}),
     });
     const country = row.rental_location_listing?.business_location?.address?.country;
     return {
@@ -2041,6 +2048,7 @@ export class RentalsService {
     const decision = computeRespondBy({
       createdAt: row.created_at,
       startAt: earliestRequestStartIso(row),
+      timeZone: this.listingTimeZone(row.rental_location_listing ?? {}),
     });
     const user = row.client?.user;
     const renterName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim();
@@ -2422,9 +2430,9 @@ export class RentalsService {
     if (req.client_id !== clientId) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
   }
 
-  private contractExpiryIso(req: Parameters<typeof earliestRequestStartIso>[0], hours: number, now: Date): string {
+  private contractExpiryIso(req: any, hours: number, now: Date): string {
     const startIso = earliestRequestStartIso(req);
-    const expiry = cappedContractExpiry(startIso, hours, now);
+    const expiry = cappedContractExpiry(startIso, hours, now, this.listingTimeZone(req.rental_location_listing ?? {}));
     if (!expiry) {
       throw new HttpException(
         'contractExpiryHours must be a whole number from 1 up to 48, and not past the rental start',
@@ -7214,6 +7222,7 @@ export class RentalsService {
       actualStartAt: booking.actual_start_at,
       endAt: new Date(booking.end_at),
       now: new Date(),
+      timeZone: listingZoneFor(this.bookingCountry(booking)),
     });
   }
 

@@ -275,7 +275,7 @@ export class PickupPhotoRulesService {
     return {
       enabled: true,
       optIn: true,
-      beforeStart: !!start && isBeforeRentalStart(start, now),
+      beforeStart: !!start && isBeforeRentalStart(start, now, listingTimeZone(booking.country)),
       webUpload: true,
       pickupDay: this.onPickupDay(booking, now),
       timezone: listingTimeZone(booking.country),

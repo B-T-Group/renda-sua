@@ -1,3 +1,5 @@
+import { listingNowMs } from './dayHoursPicker';
+
 export type PickupPhase = 'before' | 'today' | 'late' | 'closed' | 'started';
 
 export interface PickupWindowInput {
@@ -15,9 +17,11 @@ export function pickupPhase(input: PickupWindowInput): PickupPhase {
   const end = Date.parse(input.endAt);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 'before';
   const opens = opensAt(input);
-  if (input.now < opens) return 'before';
-  if (input.now >= end) return 'closed';
-  if (input.now > start) return 'late';
+  // start/end/opens are listing wall clock stored as UTC components; read now on that clock.
+  const now = listingNowMs(input.now, input.timeZone);
+  if (now < opens) return 'before';
+  if (now >= end) return 'closed';
+  if (now > start) return 'late';
   return 'today';
 }
 

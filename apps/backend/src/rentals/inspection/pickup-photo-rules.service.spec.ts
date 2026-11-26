@@ -67,35 +67,31 @@ async function expectStatus(pending: Promise<unknown>, status: number) {
 describe('pickup photo upload gate', () => {
   const gate = { bookingId: '11111111-1111-4111-8111-111111111111', role: 'overview', platform: 'ios', slotKey: 'overview' };
 
-  it('rejects Toronto just before stored midnight and allows the UTC pickup day', async () => {
+  const notPickupDay = { response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }) };
+
+  // Booking start is 17 Nov 15:00 on the listing wall clock (stored as ...T15:00:00Z).
+  it('opens Toronto at Toronto midnight, not 7 PM the evening before', async () => {
     const early = service(true, { PickupRulesBooking: booking('Canada') });
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-16T23:59:59.000Z'))).rejects.toBeInstanceOf(HttpException);
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-16T23:59:59.000Z'))).rejects.toMatchObject({
-      response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
-    });
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T00:00:00.000Z'))).resolves.toBeUndefined();
-    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T04:59:59.000Z'))).resolves.toBeUndefined();
+    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T00:00:00.000Z'))).rejects.toBeInstanceOf(HttpException);
+    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T04:59:59.000Z'))).rejects.toMatchObject(notPickupDay);
+    await expect(early.rules.assertUpload(gate, new Date('2026-11-17T05:00:00.000Z'))).resolves.toBeUndefined();
+    await expect(early.rules.assertUpload(gate, new Date('2026-11-18T04:59:59.000Z'))).resolves.toBeUndefined();
+    await expect(early.rules.assertUpload(gate, new Date('2026-11-18T05:00:00.000Z'))).rejects.toMatchObject(notPickupDay);
   });
 
-  it('rejects Douala just before stored midnight and the UTC day after', async () => {
+  it('opens Douala at Douala midnight and closes at the next one', async () => {
     const rules = service(true, { PickupRulesBooking: booking('Cameroon') }).rules;
-    await expect(rules.assertUpload(gate, new Date('2026-11-16T23:59:59.000Z'))).rejects.toMatchObject({
-      response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
-    });
-    await expect(rules.assertUpload(gate, new Date('2026-11-17T00:00:00.000Z'))).resolves.toBeUndefined();
-    await expect(rules.assertUpload(gate, new Date('2026-11-17T23:00:00.000Z'))).resolves.toBeUndefined();
-    await expect(rules.assertUpload(gate, new Date('2026-11-18T00:00:00.000Z'))).rejects.toMatchObject({
-      response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
-    });
+    await expect(rules.assertUpload(gate, new Date('2026-11-16T22:59:59.000Z'))).rejects.toMatchObject(notPickupDay);
+    await expect(rules.assertUpload(gate, new Date('2026-11-16T23:00:00.000Z'))).resolves.toBeUndefined();
+    await expect(rules.assertUpload(gate, new Date('2026-11-17T22:59:59.000Z'))).resolves.toBeUndefined();
+    await expect(rules.assertUpload(gate, new Date('2026-11-17T23:00:00.000Z'))).rejects.toMatchObject(notPickupDay);
   });
 
   it('allows a Manila afternoon booking on the stored date', async () => {
     const rules = service(true, { PickupRulesBooking: booking('Philippines', '2026-11-26T16:00:00.000Z') }).rules;
+    await expect(rules.assertUpload(gate, new Date('2026-11-25T16:00:00.000Z'))).resolves.toBeUndefined();
     await expect(rules.assertUpload(gate, new Date('2026-11-26T08:00:00.000Z'))).resolves.toBeUndefined();
-    await expect(rules.assertUpload(gate, new Date('2026-11-26T16:00:00.000Z'))).resolves.toBeUndefined();
-    await expect(rules.assertUpload(gate, new Date('2026-11-27T00:00:00.000Z'))).rejects.toMatchObject({
-      response: expect.objectContaining({ code: PICKUP_PHOTO_NOT_PICKUP_DAY }),
-    });
+    await expect(rules.assertUpload(gate, new Date('2026-11-26T16:00:00.000Z'))).rejects.toMatchObject(notPickupDay);
   });
 
   it('rejects a web upload and a missing start only when the flag is on', async () => {

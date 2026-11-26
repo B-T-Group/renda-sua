@@ -297,7 +297,7 @@ export class InspectionOptInService {
 
   private assertBefore(booking: OptBooking, now: Date): void {
     const start = booking.startAt ? new Date(booking.startAt) : null;
-    if (!start || !isBeforeRentalStart(start, now)) {
+    if (!start || !isBeforeRentalStart(start, now, zoneForCountry(booking.country))) {
       throw inspectionRejected(PICKUP_PHOTO_AFTER_START, 'Pickup photos can be added only before the rental starts');
     }
   }

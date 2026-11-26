@@ -1,3 +1,5 @@
+import { listingNowMs } from './rentalDayHoursPicker';
+
 export const RETURN_ESCALATION_MS = 24 * 60 * 60 * 1000;
 
 export type RenterReturnPhase = 'hidden' | 'due' | 'overdue' | 'waiting' | 'escalated';
@@ -8,12 +10,14 @@ export interface RenterReturnInput {
   reportedAt?: string | null;
   escalatedAt?: string | null;
   now?: Date;
+  /** Listing zone. end_at is its wall clock stored as UTC components; unknown uses the device clock. */
+  timeZone?: string | null;
 }
 
 export function renterReturnPhase(input: RenterReturnInput): RenterReturnPhase {
   if (!isOpenReturn(input.status)) return 'hidden';
   const now = input.now ?? new Date();
-  const pastDue = returnByPassed(input.endAt, now);
+  const pastDue = returnByPassed(input.endAt, now, input.timeZone);
   if (input.status === 'active' && !pastDue) return 'hidden';
   if (!input.reportedAt) return pastDue ? 'overdue' : 'due';
   return escalated(input, now) ? 'escalated' : 'waiting';
@@ -22,7 +26,7 @@ export function renterReturnPhase(input: RenterReturnInput): RenterReturnPhase {
 export function listReturnChip(input: RenterReturnInput): 'overdue' | 'waiting' | null {
   if (!isOpenReturn(input.status)) return null;
   if (input.reportedAt) return escalated(input, input.now ?? new Date()) ? null : 'waiting';
-  return returnByPassed(input.endAt, input.now ?? new Date()) ? 'overdue' : null;
+  return returnByPassed(input.endAt, input.now ?? new Date(), input.timeZone) ? 'overdue' : null;
 }
 
 export function formatDoualaStamp(iso: string, language: string): string {
@@ -47,9 +51,9 @@ function isOpenReturn(status: string): boolean {
   return status === 'active' || status === 'awaiting_return';
 }
 
-function returnByPassed(endAt: string | null | undefined, now: Date): boolean {
+function returnByPassed(endAt: string | null | undefined, now: Date, timeZone?: string | null): boolean {
   const end = endAt ? new Date(endAt).getTime() : Number.NaN;
-  return Number.isFinite(end) && end <= now.getTime();
+  return Number.isFinite(end) && end <= listingNowMs(now.getTime(), timeZone);
 }
 
 function escalated(input: RenterReturnInput, now: Date): boolean {
