@@ -1,3 +1,5 @@
+import { BOOKING_CLOCK, formatZonedDay } from '../rentalStartWindow';
+
 const CITY_BY_ZONE: Record<string, string> = {
   'America/Toronto': 'Montréal',
   'America/New_York': 'New York',
@@ -16,6 +18,11 @@ export function slotTileLabel(slotKey: string, language: string): string {
 
 export function listingCity(timeZone: string): string {
   return CITY_BY_ZONE[timeZone] ?? timeZone.split('/').pop()?.replace(/_/g, ' ') ?? timeZone;
+}
+
+/** Booking start_at is listing wall clock saved with a Z suffix. */
+export function formatPickupDay(iso: string, language: string): string {
+  return formatZonedDay(iso, BOOKING_CLOCK, language);
 }
 
 export function photoCaption(origin: string, day: string): string {

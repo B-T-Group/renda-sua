@@ -2,7 +2,7 @@ import { Alert, Box, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { PickupPhotoRules } from '../../utils/rentalInspection';
 import { groupBlockedRows, type BlockedGuideRow } from '../../utils/rentals/blockedGuideRows';
-import { formatListingDay, listingCity } from '../../utils/rentals/pickupPhotoTime';
+import { formatListingDay, formatPickupDay, listingCity } from '../../utils/rentals/pickupPhotoTime';
 
 function CalendarArt() {
   return (
@@ -69,7 +69,7 @@ export function PickupWebNotice({
   const { t, i18n } = useTranslation();
   const guide = rules.guide;
   const date = guide ? formatListingDay(guide.submittedAt, rules.timezone, i18n.language) : '';
-  const day = rules.startAt ? formatListingDay(rules.startAt, rules.timezone, i18n.language) : '';
+  const day = rules.startAt ? formatPickupDay(rules.startAt, i18n.language) : '';
   const city = listingCity(rules.timezone);
   const grouped = groupBlockedRows(rows);
   const note = rules.pickupDay

@@ -1,4 +1,4 @@
-import { listingTimeZone } from '../inspection/pickup-photo-rules';
+import { listingTimeZone } from '../inspection/listing-time-zone';
 
 export const PIN_RETIRED_MESSAGE = 'Update the app to start this rental';
 export const START_WINDOW_CODE = 'RENTAL_START_WINDOW';
