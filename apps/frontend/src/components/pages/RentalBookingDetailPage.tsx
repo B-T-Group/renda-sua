@@ -40,6 +40,8 @@ import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import { BusinessDeclineBanner, DeclineOutcomeCard, declineCardView } from '../rentals/DeclinePickupScreens';
 import { RentalJourneyList } from '../rentals/RentalJourneyList';
 import { RentalStartPanel } from '../rentals/RentalStartPanel';
+import { PayAtPickupPanel } from '../rentals/PayAtPickupPanel';
+import { dueAtPickup, reservationFee, showsPayAtPickupCard } from '../../utils/rentals/reservationFee';
 import { BusinessPhotoRequest } from '../rentals/BusinessPhotoRequest';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
 import { ReportSentConfirmation } from '../rentals/ReportSentConfirmation';
@@ -583,7 +585,7 @@ const RentalBookingDetailPage: React.FC = () => {
           <Typography variant="body2" color="text.secondary" textAlign="center">
             {t('rentals.start.momoWaitingBody', 'Approve the request on your phone. This page updates when the payment goes through.')}
           </Typography>
-          <Typography variant="h6">{formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}</Typography>
+          <Typography variant="h6">{formatConfirmationMoney(Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0, booking.currency, i18n.language)}</Typography>
           <Typography>{booking.rental_location_listing?.rental_item?.name}</Typography>
           <Typography color="text.secondary">{booking.client?.user?.phone_number || ''}</Typography>
           <Button onClick={() => setMomoWaiting(false)}>{t('common.back', 'Back')}</Button>
@@ -883,6 +885,14 @@ const RentalBookingDetailPage: React.FC = () => {
               itemName={booking.rental_location_listing?.rental_item?.name ?? ''}
             />
           ) : null}
+          {isClient && showsPayAtPickupCard(booking) ? (
+            <PayAtPickupPanel
+              booking={booking}
+              format={(value) => formatConfirmationMoney(value, booking.currency, i18n.language)}
+              itemCheck={inspection.enrolled}
+              pickupDay={formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
+            />
+          ) : null}
           {showStartPanel ? (
             <RentalStartPanel
               booking={booking}
@@ -890,7 +900,7 @@ const RentalBookingDetailPage: React.FC = () => {
               role={isBusiness ? 'business' : 'client'}
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ')}
               place={booking.rental_location_listing?.business_location?.name ?? ''}
-              money={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+              money={formatConfirmationMoney(Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0, booking.currency, i18n.language)}
               returnLabel={formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language)}
               starting={sharingPin}
               onNotCollected={isBusiness && status === 'active' && bookingId ? () => {
@@ -914,6 +924,11 @@ const RentalBookingDetailPage: React.FC = () => {
               onConfirm={() => {
                 if (!bookingId) return;
                 void startRental(bookingId).then((res) => {
+                  if (res.checkout_url) {
+                    // Card pay at pickup: Stripe Checkout for (rental − paid fee + deposit).
+                    window.location.href = res.checkout_url;
+                    return;
+                  }
                   if (res.paymentPending) {
                     setMomoWaiting(true);
                     return;
@@ -932,6 +947,8 @@ const RentalBookingDetailPage: React.FC = () => {
               reason={inspection.pickup?.correctionReason}
               timeZone={listingZone}
               askedAt={inspection.pickup?.askedAt || inspection.pickup?.submittedAt}
+              fixBy={`${formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language)}, 23:59`}
+              fee={reservationFee(booking) > 0 ? formatConfirmationMoney(reservationFee(booking), booking.currency, i18n.language) : undefined}
               photos={(inspection.pickup.units[0]?.photos ?? []).map((photo) => ({
                 ...photo,
                 unitId: inspection.pickup?.units[0]?.unitId ?? photo.id,

@@ -2794,6 +2794,11 @@
         "priceNeeded": "Set a price for each way you rent.",
         "hourPrice": "Price per hour",
         "dayPrice": "Price per day"
+      },
+      "reservationFee": {
+        "label": "Ask for a reservation fee",
+        "helpFcfa": "10% of the rental, at least 150 FCFA. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.",
+        "help": "10% of the rental, at least $2.00. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come."
       }
     },
     "orders": {
@@ -6607,7 +6612,10 @@
       "notCollected": "Item not collected?",
       "notCollectedSent": "Support was notified that the item was not collected.",
       "askedAt": "Asked {{when}} ({{zone}} time)",
-      "photosPill": "New photos asked"
+      "photosPill": "New photos asked",
+      "checkFlagged": "Check flagged",
+      "fixByFee": "Fix it by {{time}} so the renter can pay and start. If the check isn’t resolved, the {{fee}} fee goes back to the renter.",
+      "fixBy": "Fix it by {{time}} so the renter can pay and start."
     },
     "journey": {
       "offerReady": "Offer ready",
@@ -6753,6 +6761,44 @@
     },
     "dayHours": {
       "changeDays": "Change days and hours"
+    },
+    "payAtPickup": {
+      "cardDue": "{{amount}} charged to your card at pickup",
+      "cardDepositHold": "+ {{deposit}} deposit hold, released after the return",
+      "payAndStart": "Pay & start · {{amount}}",
+      "cardBody": "At the business, check the item, then tap Pay & start. They hand over the item once the payment goes through.",
+      "stepPay": "Pay & start",
+      "matchesPay": "Matches · go to payment",
+      "payTitle": "Pay and start",
+      "payBody": "Pay now and the business hands you the item. The rental starts when the payment goes through.",
+      "payButton": "Pay {{amount}} · start rental",
+      "cardCancelled": "Payment cancelled. Nothing was charged. You can try again.",
+      "cardFailed": "Card payment didn’t go through. Try again or use another card.",
+      "cardConfirming": "Payment received. Starting your rental…",
+      "cardWaitingTitle": "Confirming your card payment…",
+      "cardWaitingBody": "Stay at the counter. This page updates when the payment goes through, then the business hands you the item.",
+      "pill": "Reserved · pay at pickup",
+      "paymentHeading": "PAYMENT",
+      "rentalTotal": "Rental total",
+      "feePaid": "Paid · reservation fee",
+      "feeWaiting": "Reservation fee · waiting for payment",
+      "dueAfterCheck": "Due at pickup, after the item check",
+      "depositAtPickup": "Deposit hold on your card at pickup",
+      "nothingElse": "Nothing else is charged until you’ve seen the item.",
+      "itemCheck": "Item check required",
+      "feeRefunded": "Fee refunded if you cancel before {{day}}, if the business cancels, or if the item doesn’t match.",
+      "feeKept": "Fee kept if you cancel on the pickup day or don’t come.",
+      "reserveFreeBody": "Nothing to pay today. At pickup, the business shows you the item, you check it, then you pay and take it. Free cancellation before the rental starts.",
+      "reserveFeeBody": "Pay a {{fee}} reservation fee now to hold the item. It counts toward your total. You pay the rest at pickup, after you check the item.",
+      "feeRefundedOffer": "Fee refunded if you cancel before the pickup day, if the business cancels, or if the item doesn’t match.",
+      "reserveFreeButton": "Reserve · pay at pickup",
+      "reserveFeeButton": "Pay {{fee}} & reserve",
+      "feeNowLabel": "Reservation fee today · counts toward your total",
+      "nothingToday": "To pay today",
+      "feePaidSnack": "Fee paid. Reserved · pay the rest at pickup.",
+      "feeMomoSnack": "Approve the reservation fee on your phone. Your reservation is confirmed once it’s paid.",
+      "businessPaid": "Paid at {{time}} · hand over the item",
+      "businessWaitingBody": "The renter checks the item and pays here. Don’t hand over the item until you see “Paid”."
     }
   },
   "admin": {

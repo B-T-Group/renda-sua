@@ -26,6 +26,9 @@ export interface StartCardBooking {
   total_amount: number;
   payment_status?: string | null;
   payment_timing?: string | null;
+  card_pay_at_pickup?: boolean | null;
+  reservation_fee_amount?: number | string | null;
+  reservation_fee_status?: string | null;
   authorized_amount?: number | string | null;
   security_deposit_amount?: number | string | null;
   accept_start_preview?: StartMoneyBooking['accept_start_preview'];
@@ -80,6 +83,7 @@ function StartBody(props: Props & { phase: PickupPhase }) {
   const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
   const pill = pillText(props.phase, day, t);
   const momo = isMomoDue(props.booking);
+  const card = isCardDue(props.booking);
   const tone = props.phase === 'late' ? colors.warning : colors.success;
   return (
     <View style={[styles.card, { backgroundColor: tone.main + '14', borderColor: tone.main + '44', borderRadius: borderRadius.lg, padding: spacing.md, gap: spacing.sm }]}>
@@ -90,13 +94,13 @@ function StartBody(props: Props & { phase: PickupPhase }) {
         <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8 }]}>{t('rentals.nextStep.label', 'NEXT STEP')}</Text>
       </View>
       <Text style={[typography.h6, { color: colors.text.primary }]}>{titleFor(props.phase, when, time, props, t)}</Text>
-      <Text style={[typography.body2, { color: colors.text.secondary }]}>{bodyFor(props, momo, t)}</Text>
+      <Text style={[typography.body2, { color: colors.text.secondary }]}>{bodyFor(props, momo, t, card)}</Text>
       <LateLine {...props} />
       <MoneyLine {...props} momo={momo} />
       <Text style={[typography.body2, { color: colors.text.primary }]}>
         {t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
       </Text>
-      <StartButton {...props} day={day} momo={momo} />
+      <StartButton {...props} day={day} momo={momo} card={card} />
       <NotCollected {...props} />
       {props.phase === 'started' && props.role === 'client' ? props.missing : null}
     </View>
@@ -138,7 +142,7 @@ function SheetMoney({ booking }: { booking: StartCardBooking }) {
   );
 }
 
-function StartButton(props: Props & { phase: PickupPhase; day: string; momo: boolean }) {
+function StartButton(props: Props & { phase: PickupPhase; day: string; momo: boolean; card: boolean }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   if (props.role === 'business' || props.phase === 'started') return null;
@@ -146,11 +150,13 @@ function StartButton(props: Props & { phase: PickupPhase; day: string; momo: boo
   const amount = props.momo ? ` · ${props.money}` : '';
   const label = locked
     ? t('rentals.start.locked', 'Start rental · from {{day}}', { day: props.day })
-    : t('rentals.start.button', 'Start rental{{amount}}', { amount });
+    : props.card
+      ? t('rentals.payAtPickup.payAndStart', 'Pay & start · {{amount}}', { amount: props.money })
+      : t('rentals.start.button', 'Start rental{{amount}}', { amount });
   return (
     <Button
       mode="contained"
-      icon={locked ? 'lock' : 'play'}
+      icon={locked ? 'lock' : props.card ? 'credit-card-outline' : 'play'}
       disabled={locked || props.starting}
       loading={props.starting}
       buttonColor={locked ? colors.text.disabled : colors.primary.main}
@@ -185,6 +191,7 @@ function SheetRow({ icon, label }: { icon: React.ComponentProps<typeof MaterialC
 }
 
 function confirmLabel(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
+  if (isCardDue(props.booking)) return t('rentals.payAtPickup.payAndStart', 'Pay & start · {{amount}}', { amount: props.money });
   if (!isMomoDue(props.booking)) return t('rentals.actions.startRental', 'Start rental');
   return t('rentals.start.button', 'Start rental{{amount}}', { amount: ` · ${props.money}` });
 }
@@ -210,9 +217,11 @@ function ConfirmSheet(props: Props) {
       <Pressable style={styles.backdrop} onPress={props.onClose}>
         <Pressable style={[styles.sheet, { backgroundColor: colors.surface, padding: spacing.lg, borderTopLeftRadius: borderRadius.lg, borderTopRightRadius: borderRadius.lg }]} onPress={() => undefined}>
           <MaterialCommunityIcons name="store" size={28} color={colors.primary.main} style={{ alignSelf: 'center' }} />
-          <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center', marginTop: 8 }]}>{t('rentals.start.confirmTitle', 'Start rental?')}</Text>
+          <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center', marginTop: 8 }]}>{isCardDue(props.booking) ? t('rentals.payAtPickup.payTitle', 'Pay and start') : t('rentals.start.confirmTitle', 'Start rental?')}</Text>
           <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center', marginTop: 8 }]}>
-            {t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
+            {isCardDue(props.booking)
+              ? t('rentals.payAtPickup.payBody', 'Pay now and the business hands you the item. The rental starts when the payment goes through.')
+              : t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
           </Text>
           <SheetRow icon="store" label={props.place} />
           <SheetRow icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
@@ -220,7 +229,7 @@ function ConfirmSheet(props: Props) {
           <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 8 }]}>
             {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30\u00a0minutes.")}
           </Text>
-          <Button mode="contained" icon="play" buttonColor={colors.primary.main} loading={props.starting} onPress={props.onConfirm} style={{ marginTop: 16, minHeight: 48 }}>
+          <Button mode="contained" icon={isCardDue(props.booking) ? 'credit-card-outline' : 'play'} buttonColor={colors.primary.main} loading={props.starting} onPress={props.onConfirm} style={{ marginTop: 16, minHeight: 48 }}>
             {confirmLabel(props, t)}
           </Button>
           <Button onPress={props.onClose}>{t('rentals.start.notYet', 'Not yet')}</Button>
@@ -243,6 +252,9 @@ function titleFor(phase: PickupPhase, when: string, time: string, props: Props, 
   }
   if (phase === 'started') {
     const at = props.booking.actual_start_at ? formatZonedTime(props.booking.actual_start_at, props.timeZone) : time;
+    if (props.role === 'business' && props.booking.payment_timing === 'pay_at_pickup') {
+      return t('rentals.payAtPickup.businessPaid', 'Paid at {{time}} · hand over the item', { time: at });
+    }
     return props.role === 'business'
       ? t('rentals.business.startedLine', 'Started at {{time}} · hand over the item', { time: at })
       : t('rentals.start.startedBanner', 'Rental started at {{time}}. The business has been notified to hand over the item.', { time: at });
@@ -251,18 +263,26 @@ function titleFor(phase: PickupPhase, when: string, time: string, props: Props, 
   return t('rentals.start.todayTitle', 'Pick up your item · {{time}}', { time });
 }
 
-function bodyFor(props: Props & { phase: PickupPhase }, momo: boolean, t: (key: string, fallback: string) => string): string {
+function bodyFor(props: Props & { phase: PickupPhase }, momo: boolean, t: (key: string, fallback: string) => string, card = false): string {
+  if (props.role === 'business' && props.phase !== 'started' && props.booking.payment_timing === 'pay_at_pickup') {
+    return t('rentals.payAtPickup.businessWaitingBody', 'The renter checks the item and pays here. Don’t hand over the item until you see “Paid”.');
+  }
   if (props.role === 'business' && props.phase !== 'started') {
     return t('rentals.business.waitingBody', 'Hand over the item only after you get “Rental started”. No PIN needed.');
   }
   if (props.phase === 'started') return '';
   if (props.phase === 'before') return t('rentals.start.beforeBody', 'You can start the rental on the pickup day, once you are at the business.');
+  if (card) return t('rentals.payAtPickup.cardBody', 'At the business, check the item, then tap Pay & start. They hand over the item once the payment goes through.');
   if (momo) return t('rentals.start.momoBody', 'At the business, tap Start rental. You pay then, and they hand over the item once the payment goes through.');
   return t('rentals.start.todayBody', 'At the business, tap Start rental. They hand over the item once you start.');
 }
 
 function isMomoDue(booking: StartCardBooking): boolean {
   return startMoney(booking).kind === 'momo_due';
+}
+
+function isCardDue(booking: StartCardBooking): boolean {
+  return startMoney(booking).kind === 'card_due';
 }
 
 const styles = StyleSheet.create({

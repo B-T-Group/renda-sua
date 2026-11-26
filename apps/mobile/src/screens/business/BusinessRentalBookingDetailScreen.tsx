@@ -48,6 +48,7 @@ import {
   formatBookedSpan,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
+import { reservationFee } from '../../utils/rentals/reservationFee';
 import { formatStoredPhone } from '../../utils/phoneLoginUsername';
 import { formatDoualaStamp } from '../../utils/rentals/renterReturnPhase';
 import { holdPresentation, type HoldPresentation } from '../../utils/rentals/cardDeposit';
@@ -239,6 +240,8 @@ export default function BusinessRentalBookingDetailScreen() {
     started: booking.status === 'active' || Boolean(booking.actual_start_at),
   });
   const pickupDay = formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language);
+  const feeAmount = reservationFee(booking);
+  const feeLabel = feeAmount > 0 ? formatConfirmationMoney(feeAmount, booking.currency, i18n.language) : undefined;
   const returnWhen = formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language);
   const bookedSpan = formatBookedSpan(
     booking.start_at,
@@ -529,6 +532,8 @@ export default function BusinessRentalBookingDetailScreen() {
           }))}
           timeZone={listingZone}
           askedAt={snapshot.pickup?.askedAt || snapshot.pickup?.submittedAt}
+          fixBy={`${pickupDay}, 23:59`}
+          fee={feeLabel}
           onSent={() => void load({ soft: true })}
         />
       ) : null}

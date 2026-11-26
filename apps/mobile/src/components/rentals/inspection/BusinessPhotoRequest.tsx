@@ -19,6 +19,10 @@ interface Props {
   photos: Array<InspectionPhoto & { unitId: string }>;
   timeZone: string;
   askedAt?: string | null;
+  /** End of the start day (listing time); unresolved flags cancel the booking then. */
+  fixBy?: string;
+  /** Formatted reservation fee, when the booking has one (refunded if the flag isn't fixed). */
+  fee?: string;
   onSent: () => void;
 }
 
@@ -30,7 +34,20 @@ export function BusinessPhotoRequest(props: Props) {
   const parts = splitCorrectionReason(props.reason, reasonLabels(t));
   const asked = props.askedAt ? formatListingStamp(props.askedAt, props.timeZone, i18n.language) : '';
   return (
-    <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+    <View testID="check-flagged" style={{ gap: spacing.sm, marginTop: spacing.md }}>
+      <View style={[styles.title, { gap: spacing.xs }]}>
+        <MaterialCommunityIcons name="flag-outline" size={22} color={colors.warning.dark ?? colors.warning.main} />
+        <Text style={{ color: colors.text.primary, fontWeight: '800', fontSize: 20 }}>
+          {t('rentals.business.checkFlagged', 'Check flagged')}
+        </Text>
+      </View>
+      {props.fixBy ? (
+        <Text style={{ color: colors.text.secondary }}>
+          {props.fee
+            ? t('rentals.business.fixByFee', 'Fix it by {{time}} so the renter can pay and start. If the check isn’t resolved, the {{fee}} fee goes back to the renter.', { time: props.fixBy, fee: props.fee })
+            : t('rentals.business.fixBy', 'Fix it by {{time}} so the renter can pay and start.', { time: props.fixBy })}
+        </Text>
+      ) : null}
       <View style={[styles.banner, { backgroundColor: colors.warning.main + '22', borderRadius: borderRadius.md, padding: spacing.md }]}>
         <Text style={{ color: colors.text.primary }}>
           {t('rentals.business.photosAsked', '{{name}} asked for new photos before starting.', { name: props.renterName })}
@@ -43,7 +60,7 @@ export function BusinessPhotoRequest(props: Props) {
         ))}
       </View>
       {error ? <Text style={{ color: colors.error.main }}>{error}</Text> : null}
-      <Button mode="contained" icon="send" buttonColor={colors.success.main} loading={busy} onPress={() => void send(props, setBusy, setError, t)}>
+      <Button mode="contained" icon="send" buttonColor={colors.primary.main} loading={busy} onPress={() => void send(props, setBusy, setError, t)}>
         {t('rentals.business.sendPhotos', 'Send updated photos')}
       </Button>
     </View>
@@ -166,6 +183,7 @@ async function send(
 
 const styles = StyleSheet.create({
   banner: {},
+  title: { flexDirection: 'row', alignItems: 'center' },
   photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },

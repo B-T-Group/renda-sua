@@ -15,6 +15,10 @@ export interface StartPanelBooking {
   actual_start_at?: string | null;
   currency: string;
   payment_status?: string | null;
+  payment_timing?: string | null;
+  card_pay_at_pickup?: boolean | null;
+  reservation_fee_amount?: number | string | null;
+  reservation_fee_status?: string | null;
   total_amount?: number | string | null;
   security_deposit_amount?: number | string | null;
   authorized_amount?: number | string | null;
@@ -53,6 +57,8 @@ export function RentalStartPanel(props: Props) {
   const locked = phase === 'before' || phase === 'closed';
   const hold = startMoney(props.booking);
   const momo = hold.kind === 'momo_due';
+  const card = hold.kind === 'card_due';
+  const payAtPickup = props.booking.payment_timing === 'pay_at_pickup';
   const lines = startMoneyLines(hold, (value) => formatConfirmationMoney(value, props.booking.currency, i18n.language), t);
   const late = phase === 'late';
   const tone = late ? 'warning.main' : 'success.main';
@@ -63,7 +69,7 @@ export function RentalStartPanel(props: Props) {
       : phase === 'started'
         ? t('rentals.journey.inProgress', 'In progress')
         : t('rentals.start.pickupToday', 'Pickup today');
-  const title = titleText(phase, props.role, props.renterName, when, time, props.booking.actual_start_at, props.timeZone, t);
+  const title = titleText(phase, props.role, props.renterName, when, time, props.booking.actual_start_at, props.timeZone, t, payAtPickup);
   return (
     <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: (theme) => alpha(late ? theme.palette.warning.main : theme.palette.success.main, 0.12), border: 1, borderColor: tone, color: 'text.primary' }}>
       <Stack direction="row" spacing={1} alignItems="center">
@@ -71,7 +77,7 @@ export function RentalStartPanel(props: Props) {
         <Typography variant="caption">{t('rentals.nextStep.label', 'NEXT STEP')}</Typography>
       </Stack>
       <Typography variant="h6" sx={{ mt: 1 }}>{title}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{bodyText(phase, props.role, momo, t)}</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{bodyText(phase, props.role, momo, t, card, payAtPickup)}</Typography>
       {late ? (
         <Typography variant="body2" sx={{ mt: 0.5 }}>
           {t('rentals.start.lateStill', 'Booked for {{time}} · you can still start until {{until}}', {
@@ -91,13 +97,16 @@ export function RentalStartPanel(props: Props) {
         <Button
           variant="contained"
           disabled={locked || props.starting}
-          startIcon={locked ? <Lock /> : <PlayArrow />}
+          startIcon={locked ? <Lock /> : card ? <CreditCard /> : <PlayArrow />}
           onClick={() => setOpen(true)}
           sx={{ mt: 1.5 }}
+          data-testid="rental-start-button"
         >
           {locked
             ? t('rentals.start.locked', 'Start rental · from {{day}}', { day })
-            : t('rentals.start.button', 'Start rental{{amount}}', { amount: momo ? ` · ${props.money}` : '' })}
+            : card
+              ? t('rentals.payAtPickup.payAndStart', 'Pay & start · {{amount}}', { amount: props.money })
+              : t('rentals.start.button', 'Start rental{{amount}}', { amount: momo ? ` · ${props.money}` : '' })}
         </Button>
       ) : null}
       {props.role === 'business' && phase === 'started' && props.onNotCollected ? (
@@ -110,9 +119,11 @@ export function RentalStartPanel(props: Props) {
         <DialogContent>
           <Stack alignItems="center" spacing={1}>
             <Storefront color="primary" />
-            <Typography variant="h6">{t('rentals.start.confirmTitle', 'Start rental?')}</Typography>
+            <Typography variant="h6">{card ? t('rentals.payAtPickup.payTitle', 'Pay and start') : t('rentals.start.confirmTitle', 'Start rental?')}</Typography>
             <Typography variant="body2" color="text.secondary" textAlign="center">
-              {t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
+              {card
+                ? t('rentals.payAtPickup.payBodyWeb', 'Pay now on a secure Stripe page and the business hands you the item. The rental starts when the payment goes through.')
+                : t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
             </Typography>
           </Stack>
           <Stack spacing={1} sx={{ mt: 2 }}>
@@ -131,8 +142,10 @@ export function RentalStartPanel(props: Props) {
           </Typography>
         </DialogContent>
         <DialogActions sx={{ flexDirection: 'column', px: 3, pb: 2 }}>
-          <Button fullWidth variant="contained" startIcon={<PlayArrow />} disabled={props.starting} onClick={() => { setOpen(false); props.onConfirm(); }}>
-            {momo
+          <Button fullWidth variant="contained" startIcon={card ? <CreditCard /> : <PlayArrow />} disabled={props.starting} onClick={() => { setOpen(false); props.onConfirm(); }}>
+            {card
+              ? t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money })
+              : momo
               ? t('rentals.start.button', 'Start rental{{amount}}', { amount: ` · ${props.money}` })
               : t('rentals.actions.startRental', 'Start rental')}
           </Button>
@@ -157,13 +170,17 @@ function titleText(
   time: string,
   startedAt: string | null | undefined,
   zone: string,
-  t: (key: string, fallback: string, vars?: Record<string, string>) => string
+  t: (key: string, fallback: string, vars?: Record<string, string>) => string,
+  payAtPickup = false
 ): string {
   if (role === 'business' && phase !== 'started') {
     return t('rentals.business.waitingTitle', 'Waiting for {{name}} to start', { name: name || 'the renter' });
   }
   if (phase === 'started') {
     const at = startedAt ? formatZonedTime(startedAt, zone) : time;
+    if (role === 'business' && payAtPickup) {
+      return t('rentals.payAtPickup.businessPaid', 'Paid at {{time}} · hand over the item', { time: at });
+    }
     return role === 'business'
       ? t('rentals.business.startedLine', 'Started at {{time}} · hand over the item', { time: at })
       : t('rentals.start.startedBanner', 'Rental started at {{time}}. The business has been notified to hand over the item.', { time: at });
@@ -172,11 +189,15 @@ function titleText(
   return t('rentals.start.todayTitle', 'Pick up your item · {{time}}', { time });
 }
 
-function bodyText(phase: string, role: string, momo: boolean, t: (key: string, fallback: string) => string): string {
+function bodyText(phase: string, role: string, momo: boolean, t: (key: string, fallback: string) => string, card = false, payAtPickup = false): string {
+  if (role === 'business' && phase !== 'started' && payAtPickup) {
+    return t('rentals.payAtPickup.businessWaitingBody', 'The renter checks the item and pays here. Don’t hand over the item until you see “Paid”.');
+  }
   if (role === 'business' && phase !== 'started') {
     return t('rentals.business.waitingBody', 'Hand over the item only after you get “Rental started”. No PIN needed.');
   }
   if (phase === 'before') return t('rentals.start.beforeBody', 'You can start the rental on the pickup day, once you are at the business.');
+  if (card) return t('rentals.payAtPickup.cardBody', 'At the business, check the item, then tap Pay & start. They hand over the item once the payment goes through.');
   if (momo) return t('rentals.start.momoBody', 'At the business, tap Start rental. You pay then, and they hand over the item once the payment goes through.');
   return t('rentals.start.todayBody', 'At the business, tap Start rental. They hand over the item once you start.');
 }

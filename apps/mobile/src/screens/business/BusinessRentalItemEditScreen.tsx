@@ -71,6 +71,7 @@ export default function BusinessRentalItemEditScreen() {
         offersDaily: boolean;
         offersHourly: boolean;
         deposit: string;
+        reservationFee: boolean;
         units: string;
         pickup: string;
         dropoff: string;
@@ -105,6 +106,7 @@ export default function BusinessRentalItemEditScreen() {
               l.security_deposit_amount != null
                 ? String(l.security_deposit_amount)
                 : '',
+            reservationFee: l.reservation_fee_enabled === true,
             units: String(l.units_available ?? 1),
             pickup: l.pickup_instructions ?? '',
             dropoff: l.dropoff_instructions ?? '',
@@ -177,6 +179,7 @@ export default function BusinessRentalItemEditScreen() {
           offers_daily: edit.offersDaily,
           offers_hourly: edit.offersHourly,
           ...(depositToSave !== undefined ? { security_deposit_amount: depositToSave } : {}),
+          reservation_fee_enabled: edit.reservationFee,
           units_available: Number.isInteger(units) && units >= 1 ? units : undefined,
           pickup_instructions: edit.pickup.trim() || undefined,
           dropoff_instructions: edit.dropoff.trim() || undefined,
@@ -457,6 +460,25 @@ export default function BusinessRentalItemEditScreen() {
               mode="outlined"
               style={styles.field}
             />
+            <View testID={`reservation-fee-${listingId}`} style={styles.switchRow}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text>{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Text>
+                <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+                  {item.currency?.toUpperCase() === 'XAF' || item.currency?.toUpperCase() === 'XOF'
+                    ? t('business.rentals.reservationFee.helpFcfa', '10% of the rental, at least 150 FCFA. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.')
+                    : t('business.rentals.reservationFee.help', '10% of the rental, at least $2.00. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.')}
+                </Text>
+              </View>
+              <Switch
+                value={edit.reservationFee}
+                onValueChange={(v) =>
+                  setListingEdits((prev) => ({
+                    ...prev,
+                    [listingId]: { ...prev[listingId], reservationFee: v },
+                  }))
+                }
+              />
+            </View>
             <View style={styles.switchRow}>
               <Text>{t('business.rentals.listingActive', 'Listing active')}</Text>
               <Switch

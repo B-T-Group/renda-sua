@@ -2723,6 +2723,11 @@
         "priceNeeded": "Indiquez un prix pour chaque option activée.",
         "hourPrice": "Prix par heure",
         "dayPrice": "Prix par jour"
+      },
+      "reservationFee": {
+        "label": "Demander des frais de réservation",
+        "helpFcfa": "10 % de la location, au moins 150 FCFA. Ils comptent dans le total. Vous les gardez si le locataire annule le jour du retrait ou ne vient pas.",
+        "help": "10 % de la location, au moins 2,00 $. Ils comptent dans le total. Vous les gardez si le locataire annule le jour du retrait ou ne vient pas."
       }
     },
     "orders": {
@@ -6543,7 +6548,10 @@
       "notCollected": "Article non récupéré ?",
       "notCollectedSent": "Le support a été prévenu que l'article n'a pas été récupéré.",
       "askedAt": "Demandé le {{when}} (heure de {{zone}})",
-      "photosPill": "Nouvelles photos demandées"
+      "photosPill": "Nouvelles photos demandées",
+      "checkFlagged": "Contrôle signalé",
+      "fixByFee": "Corrigez d’ici {{time}} pour que le locataire puisse payer et démarrer. Si le contrôle n’est pas résolu, les frais de {{fee}} sont rendus au locataire.",
+      "fixBy": "Corrigez d’ici {{time}} pour que le locataire puisse payer et démarrer."
     },
     "journey": {
       "offerReady": "Offre prête",
@@ -6689,6 +6697,44 @@
     },
     "dayHours": {
       "changeDays": "Modifier les jours et les heures"
+    },
+    "payAtPickup": {
+      "cardDue": "{{amount}} débités de votre carte au retrait",
+      "cardDepositHold": "+ {{deposit}} de caution bloquée, libérée après le retour",
+      "payAndStart": "Payer et démarrer · {{amount}}",
+      "cardBody": "Au commerce, vérifiez l’article, puis touchez Payer et démarrer. Le commerce vous remet l’article dès que le paiement passe.",
+      "stepPay": "Payer et démarrer",
+      "matchesPay": "Conforme · passer au paiement",
+      "payTitle": "Payer et démarrer",
+      "payBody": "Payez maintenant et le commerce vous remet l’article. La location démarre dès que le paiement passe.",
+      "payButton": "Payer {{amount}} · démarrer la location",
+      "cardCancelled": "Paiement annulé. Rien n’a été débité. Vous pouvez réessayer.",
+      "cardFailed": "Le paiement par carte n’a pas abouti. Réessayez ou utilisez une autre carte.",
+      "cardConfirming": "Paiement reçu. Démarrage de votre location…",
+      "cardWaitingTitle": "Confirmation de votre paiement par carte…",
+      "cardWaitingBody": "Restez au comptoir. Cette page se met à jour dès que le paiement passe, puis le commerce vous remet l’article.",
+      "pill": "Réservé · payer au retrait",
+      "paymentHeading": "PAIEMENT",
+      "rentalTotal": "Total de la location",
+      "feePaid": "Payé · frais de réservation",
+      "feeWaiting": "Frais de réservation · en attente de paiement",
+      "dueAfterCheck": "À payer au retrait, après le contrôle",
+      "depositAtPickup": "Caution bloquée sur votre carte au retrait",
+      "nothingElse": "Rien d’autre n’est débité avant que vous ayez vu l’article.",
+      "itemCheck": "Contrôle de l’article requis",
+      "feeRefunded": "Frais remboursés si vous annulez avant le {{day}}, si le commerce annule ou si l’article ne correspond pas.",
+      "feeKept": "Frais conservés si vous annulez le jour du retrait ou si vous ne venez pas.",
+      "reserveFreeBody": "Rien à payer aujourd’hui. Au retrait, le commerce vous montre l’article, vous le vérifiez, puis vous payez et le prenez. Annulation gratuite avant le début de la location.",
+      "reserveFeeBody": "Payez maintenant {{fee}} de frais de réservation pour bloquer l’article. Ils comptent dans votre total. Vous payez le reste au retrait, après avoir vérifié l’article.",
+      "feeRefundedOffer": "Frais remboursés si vous annulez avant le jour du retrait, si le commerce annule ou si l’article ne correspond pas.",
+      "reserveFreeButton": "Réserver · payer au retrait",
+      "reserveFeeButton": "Payer {{fee}} et réserver",
+      "feeNowLabel": "Frais de réservation aujourd’hui · comptent dans votre total",
+      "nothingToday": "À payer aujourd’hui",
+      "feePaidSnack": "Frais payés. Réservé · payez le reste au retrait.",
+      "feeMomoSnack": "Approuvez les frais de réservation sur votre téléphone. Votre réservation est confirmée dès qu’ils sont payés.",
+      "businessPaid": "Payé à {{time}} · remettez l’article",
+      "businessWaitingBody": "Le locataire vérifie l’article et paie sur place. Ne remettez pas l’article avant de voir « Payé »."
     }
   },
   "admin": {

@@ -34,9 +34,12 @@ import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { cardHoldLines, holdCopyFallback, holdCopyKey, showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import {
+  settlePickupCardPayment,
   settleRentalStripePayment,
   useRentalStripePayment,
 } from '../../hooks/useRentalStripePayment';
+import { PayAtPickupCard } from '../../components/rentals/PayAtPickupCard';
+import { cardDueAtPickup, dueAtPickup, showsPayAtPickupCard } from '../../utils/rentals/reservationFee';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import {
   REPORT_REVIEW_STEP,
@@ -285,7 +288,9 @@ export default function RentalBookingDetailScreen() {
     : undefined;
   const pillLabel = headerOverdue
     ? t('rentals.returnReport.overdue', 'Overdue')
-    : startPhase === 'before'
+    : startPhase === 'before' && showsPayAtPickupCard(booking)
+      ? t('rentals.payAtPickup.pill', 'Reserved · pay at pickup')
+      : startPhase === 'before'
       ? t('rentals.start.pillDay', 'Pickup {{day}}', { day: pickupDay })
       : startPhase === 'today'
         ? t('rentals.start.pickupToday', 'Pickup today')
@@ -322,15 +327,28 @@ export default function RentalBookingDetailScreen() {
     booking?.rental_location_listing?.rental_item?.rental_item_images ?? [];
   const imageUri = bookingImages[0]?.image_url;
 
+  const cardAtPickup = cardDueAtPickup(booking);
   const onStartRental = useCallback(async () => {
     try {
-      const res = await startRental();
+      const res = await startRental(cardAtPickup ? { stripe_payment_method: 'payment_sheet' } : undefined);
       setStartOpen(false);
-      if (res.paymentPending) setMomoWaiting(true);
+      if (!cardAtPickup) {
+        if (res.paymentPending) setMomoWaiting(true);
+        return;
+      }
+      const outcome = await settlePickupCardPayment(res, payWithSheet);
+      if (outcome === 'cancelled') {
+        setSnack(t('rentals.payAtPickup.cardCancelled', 'Payment cancelled. Nothing was charged. You can try again.'));
+      } else if (outcome === 'failed') {
+        setSnack(t('rentals.payAtPickup.cardFailed', 'Card payment didn’t go through. Try again or use another card.'));
+      } else if (outcome !== 'none') {
+        setSnack(t('rentals.payAtPickup.cardConfirming', 'Payment received. Starting your rental…'));
+        void refetch();
+      }
     } catch (e: unknown) {
       setSnack(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
     }
-  }, [startRental, t]);
+  }, [cardAtPickup, payWithSheet, refetch, startRental, t]);
 
   const onRetry = useCallback(async () => {
     try {
@@ -436,7 +454,11 @@ export default function RentalBookingDetailScreen() {
   if (momoWaiting) {
     return (
       <RentalMomoWaiting
-        amount={formatConfirmationMoney(Number(booking?.total_amount) || 0, booking?.currency || 'XAF', i18n.language)}
+        amount={formatConfirmationMoney(
+          Number(booking?.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking?.total_amount) || 0,
+          booking?.currency || 'XAF',
+          i18n.language
+        )}
         item={booking?.rental_location_listing?.rental_item?.name ?? ''}
         phone={maskPhoneE164(booking?.client?.user?.phone_number || '')}
         onBack={() => setMomoWaiting(false)}
@@ -577,6 +599,17 @@ export default function RentalBookingDetailScreen() {
         </View>
         )}
 
+        {showsPayAtPickupCard(booking) && !showReturnReport ? (
+          <View style={{ marginTop: spacing.md }}>
+            <PayAtPickupCard
+              booking={booking}
+              format={formatDetailMoney}
+              itemCheck={snapshot.enrolled}
+              pickupDay={pickupDay}
+            />
+          </View>
+        ) : null}
+
         {(booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active') && !showReturnReport ? (
           <View style={{ marginTop: spacing.md }}>
             <RentalStartCard
@@ -588,7 +621,7 @@ export default function RentalBookingDetailScreen() {
               role="client"
               place={booking.rental_location_listing?.business_location?.name ?? ''}
               money={formatConfirmationMoney(
-                Number(booking.accept_start_preview?.amount_due_at_pickup) || Number(booking.total_amount) || 0,
+                Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0,
                 booking.currency,
                 i18n.language
               )}

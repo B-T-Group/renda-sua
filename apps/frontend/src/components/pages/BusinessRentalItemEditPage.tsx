@@ -50,6 +50,7 @@ interface ListingFormState {
   offers_daily: boolean;
   offers_hourly: boolean;
   security_deposit_amount: string;
+  reservation_fee_enabled: boolean;
   min_rental_hours: string;
   max_rental_hours: string;
   units_available: string;
@@ -76,6 +77,7 @@ function listingFormsFromDetail(
       offers_hourly: l.offers_hourly !== false,
       security_deposit_amount:
         l.security_deposit_amount != null ? String(l.security_deposit_amount) : '',
+      reservation_fee_enabled: l.reservation_fee_enabled === true,
       min_rental_hours: String(l.min_rental_hours),
       max_rental_hours: l.max_rental_hours != null ? String(l.max_rental_hours) : '',
       units_available: String(l.units_available),
@@ -122,6 +124,7 @@ function buildListingUpdateBody(
     ...parsed,
     offers_daily: f.offers_daily,
     offers_hourly: f.offers_hourly,
+    reservation_fee_enabled: f.reservation_fee_enabled,
     pickup_instructions: f.pickup_instructions.trim(),
     dropoff_instructions: f.dropoff_instructions.trim(),
     is_active: f.is_active,
@@ -819,6 +822,25 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     </Button>
                   </Box>
                 ))}
+                <FormControlLabel
+                  data-testid={`reservation-fee-${l.id}`}
+                  control={
+                    <Switch
+                      checked={f.reservation_fee_enabled}
+                      onChange={(_, v) => patchListingForm(l.id, { reservation_fee_enabled: v })}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2">{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {['XAF', 'XOF'].includes((item?.currency || lockedCurrency || '').toUpperCase())
+                          ? t('business.rentals.reservationFee.helpFcfa', '10% of the rental, at least 150\u00a0FCFA. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.')
+                          : t('business.rentals.reservationFee.help', '10% of the rental, at least $2.00. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.')}
+                      </Typography>
+                    </Box>
+                  }
+                />
                 <FormControlLabel
                   control={
                     <Switch

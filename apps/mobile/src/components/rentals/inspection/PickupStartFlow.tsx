@@ -24,6 +24,8 @@ interface Props {
   startAt: string;
   endAt: string;
   startOpensAt?: string | null;
+  /** Reserve now, pay at pickup: the renter still pays at this step (card, MoMo or wallet). */
+  pay?: boolean;
   busy: boolean;
   starting: boolean;
   showDecline: boolean;
@@ -41,7 +43,7 @@ export function PickupStartFlow(props: Props) {
   const checked = props.view.yourDecision === 'accept';
   const step = waiting ? 'wait' : checked ? 'start' : 'check';
   return (
-    <FlowFrame step={step} name={props.itemName} number={props.bookingNumber} business={props.place}>
+    <FlowFrame step={step} pay={props.pay} name={props.itemName} number={props.bookingNumber} business={props.place}>
       {step === 'wait' ? <Waiting {...props} /> : null}
       {step !== 'wait' ? <PhotoRow photos={props.photos} timeZone={props.timeZone} /> : null}
       {step === 'check' ? <CheckActions {...props} /> : null}
@@ -52,7 +54,7 @@ export function PickupStartFlow(props: Props) {
   );
 }
 
-function FlowFrame({ step, name, number, business, children }: { step: string; name?: string; number?: string; business?: string; children: React.ReactNode }) {
+function FlowFrame({ step, pay, name, number, business, children }: { step: string; pay?: boolean; name?: string; number?: string; business?: string; children: React.ReactNode }) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
@@ -60,7 +62,7 @@ function FlowFrame({ step, name, number, business, children }: { step: string; n
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
       <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24, gap: spacing.md }}>
         <ItemHeader name={name} number={number} business={business} />
-        <Stepper step={step} />
+        <Stepper step={step} pay={pay} />
         {step === 'check' ? (
           <Text style={{ color: colors.text.primary, fontWeight: '700', fontSize: 18 }}>
             {t('rentalInspection.matchesQuestion', 'Do the photos match the item in front of you?')}
@@ -84,14 +86,14 @@ function ItemHeader(props: { name?: string; number?: string; business?: string }
   );
 }
 
-function Stepper({ step }: { step: string }) {
+function Stepper({ step, pay }: { step: string; pay?: boolean }) {
   const { t } = useTranslation();
   const current = step === 'start' ? 2 : 1;
   return (
     <View style={styles.stepper}>
       <StepDot n={1} label={t('rentalInspection.stepCheck', 'Check the item')} on={current === 1} done={step === 'start'} />
       <View style={styles.stepLine} />
-      <StepDot n={2} label={t('rentalInspection.stepStart', 'Start rental')} on={current === 2} done={false} />
+      <StepDot n={2} label={pay ? t('rentals.payAtPickup.stepPay', 'Pay & start') : t('rentalInspection.stepStart', 'Start rental')} on={current === 2} done={false} />
     </View>
   );
 }
@@ -144,7 +146,7 @@ function CheckActions(props: Props) {
     <View style={{ gap: 8 }}>
       <ReuseNote photos={props.photos} timeZone={props.timeZone} />
       <Button mode="contained" icon="check" buttonColor={colors.primary.main} loading={props.busy} onPress={props.onMatch}>
-        {t('rentalInspection.matches', 'Matches')}
+        {props.pay ? t('rentals.payAtPickup.matchesPay', 'Matches · go to payment') : t('rentalInspection.matches', 'Matches')}
       </Button>
       <Button mode="outlined" icon="camera" textColor={colors.text.secondary} onPress={() => setOpen(true)}>
         {t('rentalInspection.askPhotos', "Doesn't match · ask for new photos")}
@@ -295,14 +297,20 @@ function StartStep(props: Props) {
       <Text style={{ color: colors.success.dark ?? colors.success.main }}>
         {t('rentalInspection.checkedAt', 'Item checked. The photos are locked as the pickup condition.')}
       </Text>
-      <Text style={{ color: colors.text.primary, fontWeight: '700' }}>{t('rentals.start.confirmTitle', 'Start rental?')}</Text>
+      <Text style={{ color: colors.text.primary, fontWeight: '700' }}>
+        {props.pay ? t('rentals.payAtPickup.payTitle', 'Pay and start') : t('rentals.start.confirmTitle', 'Start rental?')}
+      </Text>
       <Text style={{ color: colors.text.secondary }}>
-        {t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
+        {props.pay
+          ? t('rentals.payAtPickup.payBody', 'Pay now and the business hands you the item. The rental starts when the payment goes through.')
+          : t('rentals.start.confirmBody', 'Only start once you are with the business. The business will hand over the item once you start.')}
       </Text>
       <IconLine icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
       <MoneyLines lines={props.moneyLines ?? { main: t('rentals.start.held', '{{amount}} held on your card', { amount: props.money }), sub: null, icon: 'card' }} />
-      <Button mode="contained" icon={locked ? 'lock' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart}>
-        {t('rentals.actions.startRental', 'Start rental')}
+      <Button testID="pickup-start-button" mode="contained" icon={locked ? 'lock' : props.pay ? 'credit-card-outline' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart}>
+        {props.pay
+          ? t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money })
+          : t('rentals.actions.startRental', 'Start rental')}
       </Button>
       <Button textColor={colors.primary.main} onPress={props.onReport}>
         {t('rentalInspection.reportProblem', 'Report a problem')}

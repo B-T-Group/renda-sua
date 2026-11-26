@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Button, Modal, Portal, Text } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ClientRentalRequestRow } from '../../types/rentals';
 import {
@@ -10,6 +11,8 @@ import {
   parseRentalSelectionWindows,
   proposedContractDeadlineIso,
 } from '../../utils/rentals';
+import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
+import { reservationFee, reserveMode, type ReserveMode } from '../../utils/rentals/reservationFee';
 
 export interface RentalBookConfirmSheetProps {
   visible: boolean;
@@ -30,7 +33,7 @@ export function RentalBookConfirmSheet({
   onDismiss,
   onConfirm,
 }: RentalBookConfirmSheetProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const { width, height } = useWindowDimensions();
 
@@ -46,7 +49,13 @@ export function RentalBookConfirmSheet({
   const envelopePeriod = selectionWindows.length
     ? `${formatRentalRequestLocalDateTime(selectionWindows[0].start_at)} — ${formatRentalRequestLocalDateTime(selectionWindows[selectionWindows.length - 1].end_at)}`
     : '—';
+  const mode = reserveMode(row.rental_booking, isStripeRail);
+  const fee = reservationFee(row.rental_booking);
+  const feeLabel = quote ? formatConfirmationMoney(fee, quote.currency, i18n.language) : String(fee);
   const detailRows = buildSummaryRows({
+    mode,
+    fee,
+    language: i18n.language,
     t,
     itemName,
     locName,
@@ -105,8 +114,19 @@ export function RentalBookConfirmSheet({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={[typography.body2, { color: colors.text.secondary }]}>
-            {isStripeRail
+          <Text testID="book-confirm-message" style={[typography.body2, { color: colors.text.secondary }]}>
+            {mode === 'free'
+              ? t(
+                  'rentals.payAtPickup.reserveFreeBody',
+                  'Nothing to pay today. At pickup, the business shows you the item, you check it, then you pay and take it. Free cancellation before the rental starts.'
+                )
+              : mode === 'fee'
+                ? t(
+                    'rentals.payAtPickup.reserveFeeBody',
+                    'Pay a {{fee}} reservation fee now to hold the item. It counts toward your total. You pay the rest at pickup, after you check the item.',
+                    { fee: feeLabel }
+                  )
+                : isStripeRail
               ? t(
                   'rentals.clientRequests.bookConfirmMessageStripe',
                   'By continuing, the rental total plus the security deposit is held on your card — nothing is charged until the item is returned, and the final charge is at least the rental total. Free cancellation before the rental starts.'
@@ -132,6 +152,18 @@ export function RentalBookConfirmSheet({
               'Reservation summary'
             )}
           </Text>
+          {mode === 'fee' ? (
+            <View testID="book-confirm-fee-rules" style={{ marginTop: spacing.sm, gap: 4 }}>
+              <RuleLine
+                icon="cash-refund"
+                text={t('rentals.payAtPickup.feeRefundedOffer', 'Fee refunded if you cancel before the pickup day, if the business cancels, or if the item doesn’t match.')}
+              />
+              <RuleLine
+                icon="alert-circle-outline"
+                text={t('rentals.payAtPickup.feeKept', 'Fee kept if you cancel on the pickup day or don’t come.')}
+              />
+            </View>
+          ) : null}
           {detailRows.map((rowItem, idx) => (
             <DetailRow
               key={rowItem.key}
@@ -154,8 +186,18 @@ export function RentalBookConfirmSheet({
           <Button onPress={onDismiss} disabled={loading}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button loading={loading} onPress={onConfirm}>
-            {isStripeRail
+          <Button
+            testID="book-confirm-button"
+            mode={mode === 'card_upfront' ? 'text' : 'contained'}
+            buttonColor={mode === 'card_upfront' ? undefined : colors.primary.main}
+            loading={loading}
+            onPress={onConfirm}
+          >
+            {mode === 'free'
+              ? t('rentals.payAtPickup.reserveFreeButton', 'Reserve · pay at pickup')
+              : mode === 'fee'
+                ? t('rentals.payAtPickup.reserveFeeButton', 'Pay {{fee}} & reserve', { fee: feeLabel })
+                : isStripeRail
               ? t(
                   'rentals.clientRequests.bookConfirmButtonStripe',
                   'Continue to payment'
@@ -172,6 +214,9 @@ export function RentalBookConfirmSheet({
 }
 
 function buildSummaryRows(params: {
+  mode: ReserveMode;
+  fee: number;
+  language: string;
   t: (key: string, defaultValue: string, opts?: Record<string, unknown>) => string;
   itemName: string;
   locName?: string | null;
@@ -180,7 +225,7 @@ function buildSummaryRows(params: {
   deadlineIso: string | null;
   isStripeRail?: boolean;
 }): SummaryRow[] {
-  const { t, itemName, locName, envelopePeriod, quote, deadlineIso, isStripeRail } =
+  const { t, itemName, locName, envelopePeriod, quote, deadlineIso, isStripeRail, mode, fee, language } =
     params;
   const rows: SummaryRow[] = [
     {
@@ -199,7 +244,8 @@ function buildSummaryRows(params: {
       value: envelopePeriod,
     },
   ];
-  appendQuoteRows(rows, t, quote, isStripeRail);
+  if (mode === 'card_upfront') appendQuoteRows(rows, t, quote, isStripeRail);
+  else appendPayAtPickupRows(rows, t, quote, mode, fee, language, isStripeRail);
   if (deadlineIso) {
     rows.push({
       key: 'deadline',
@@ -248,6 +294,56 @@ function appendQuoteRows(
     label: t('rentals.clientRequests.bookConfirmLabelHeldOnCard', 'Held on card'),
     value: formatRentalMoney(quote.total + quote.securityDeposit, quote.currency),
   });
+}
+
+/** Reserve now, pay at pickup: the fee (if any) now, the rest at pickup, the card deposit at pickup. */
+function appendPayAtPickupRows(
+  rows: SummaryRow[],
+  t: (key: string, defaultValue: string, opts?: Record<string, unknown>) => string,
+  quote: ReturnType<typeof parseRentalPricingSnapshot>,
+  mode: ReserveMode,
+  fee: number,
+  language: string,
+  isStripeRail?: boolean
+): void {
+  if (!quote) return;
+  const money = (value: number) => formatConfirmationMoney(value, quote.currency, language);
+  rows.push({
+    key: 'total',
+    label: t('rentals.clientRequests.bookConfirmLabelTotal', 'Quoted total'),
+    value: money(quote.total),
+  });
+  const now = mode === 'fee' ? Math.min(fee, quote.total) : 0;
+  rows.push({
+    key: 'now',
+    label:
+      mode === 'fee'
+        ? t('rentals.payAtPickup.feeNowLabel', 'Reservation fee today · counts toward your total')
+        : t('rentals.payAtPickup.nothingToday', 'To pay today'),
+    value: money(now),
+  });
+  const rest = quote.total - now;
+  rows.push({
+    key: 'due',
+    label: t('rentals.payAtPickup.dueAfterCheck', 'Due at pickup, after the item check'),
+    value: money(quote.currency.toUpperCase() === 'XAF' || quote.currency.toUpperCase() === 'XOF' ? Math.round(rest) : Number(rest.toFixed(2))),
+  });
+  if (!isStripeRail || !quote.securityDeposit) return;
+  rows.push({
+    key: 'deposit',
+    label: t('rentals.payAtPickup.depositAtPickup', 'Deposit hold on your card at pickup'),
+    value: money(quote.securityDeposit),
+  });
+}
+
+function RuleLine({ icon, text }: { icon: 'cash-refund' | 'alert-circle-outline'; text: string }) {
+  const { colors, typography } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+      <MaterialCommunityIcons name={icon} size={16} color={colors.text.secondary} style={{ marginTop: 1 }} />
+      <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, flex: 1 }]}>{text}</Text>
+    </View>
+  );
 }
 
 function DetailRow({

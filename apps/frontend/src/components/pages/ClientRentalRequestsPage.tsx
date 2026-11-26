@@ -33,6 +33,9 @@ import {
   type RentalHubGroup,
 } from '../../utils/rentalPhase';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
+import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
+import { reservationFee, reserveMode } from '../../utils/rentals/reservationFee';
+import { parseRentalPricingSnapshot } from '../../utils/rentalRequestDisplay';
 import {
   isPriceChangeUnseenError,
   PRICE_CHANGE_UNSEEN_KEY,
@@ -64,7 +67,7 @@ const hubSegmentSx = {
 } as const;
 
 const ClientRentalRequestsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -140,6 +143,14 @@ const ClientRentalRequestsPage: React.FC = () => {
       setBookConfirmRequestId(null);
       if (res.checkout_url) {
         window.location.href = res.checkout_url;
+        return;
+      }
+      if (res.reservation_fee && res.paymentPending && res.payment_rail === 'mobile_money') {
+        enqueueSnackbar(
+          t('rentals.payAtPickup.feeMomoSnack', 'Approve the reservation fee on your phone. Your reservation is confirmed once it’s paid.'),
+          { variant: 'info' }
+        );
+        navigate(`/rentals/bookings/${res.bookingId}`);
         return;
       }
       enqueueSnackbar(
@@ -223,6 +234,13 @@ const ClientRentalRequestsPage: React.FC = () => {
   const bookConfirmRow = bookConfirmRequestId
     ? rows.find((r) => r.id === bookConfirmRequestId)
     : undefined;
+  const bookMode = reserveMode(bookConfirmRow?.rental_booking, isStripeRail);
+  const bookFeeQuote = parseRentalPricingSnapshot(bookConfirmRow?.rental_pricing_snapshot);
+  const bookFeeLabel = formatConfirmationMoney(
+    reservationFee(bookConfirmRow?.rental_booking),
+    bookFeeQuote?.currency ?? bookConfirmRow?.rental_location_listing?.rental_item?.currency ?? 'XAF',
+    i18n.language
+  );
 
   if (!isAuthenticated) {
     return (
@@ -368,7 +386,18 @@ const ClientRentalRequestsPage: React.FC = () => {
           'Review and confirm your reservation'
         )}
         message={
-          isStripeRail
+          bookMode === 'free'
+            ? t(
+                'rentals.payAtPickup.reserveFreeBody',
+                'Nothing to pay today. At pickup, the business shows you the item, you check it, then you pay and take it. Free cancellation before the rental starts.'
+              )
+            : bookMode === 'fee'
+              ? t(
+                  'rentals.payAtPickup.reserveFeeBodyWeb',
+                  'Pay a {{fee}} reservation fee now to hold the item (card on a secure Stripe page, or Mobile Money). It counts toward your total. You pay the rest at pickup, after you check the item.',
+                  { fee: bookFeeLabel }
+                )
+              : isStripeRail
             ? t(
                 'rentals.clientRequests.bookConfirmMessageStripe',
                 'By continuing, you will be redirected to a secure Stripe Checkout page. The rental total plus the security deposit is held on your card — nothing is charged until the item is returned, and the final charge is at least the rental total. Free cancellation before the rental starts.'
@@ -387,7 +416,11 @@ const ClientRentalRequestsPage: React.FC = () => {
           ) : null
         }
         confirmText={
-          isStripeRail
+          bookMode === 'free'
+            ? t('rentals.payAtPickup.reserveFreeButton', 'Reserve · pay at pickup')
+            : bookMode === 'fee'
+              ? t('rentals.payAtPickup.reserveFeeButton', 'Pay {{fee}} & reserve', { fee: bookFeeLabel })
+              : isStripeRail
             ? t(
                 'rentals.clientRequests.bookConfirmButtonStripe',
                 'Continue to payment'

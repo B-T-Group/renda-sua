@@ -17,6 +17,7 @@ import { useClientInspection } from '../../hooks/useClientInspection';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { getBooking, getPaymentStatus, startRental } from '../../services/rentalsApi';
+import { settlePickupCardPayment, useRentalStripePayment } from '../../hooks/useRentalStripePayment';
 import { BOOKING_CLOCK, formatZonedWhen } from '../../utils/rentals/rentalStartWindow';
 import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
 import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
@@ -44,6 +45,7 @@ export default function ClientInspectionScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
   const { bookingId, stage } = useRoute<Route>().params;
   const model = useClientInspection(bookingId, stage);
+  const { pay: payWithSheet } = useRentalStripePayment();
   const [panel, setPanel] = useState<'review' | 'correction' | 'dispute'>('review');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
@@ -70,9 +72,12 @@ export default function ClientInspectionScreen() {
   const amountDue = preview?.amount_due_at_pickup ?? 0;
   const shownAmount = amountDue > 0 ? amountDue : Number(model.booking?.total_amount) || 0;
   const amountLabel = formatConfirmationMoney(shownAmount, model.booking?.currency ?? 'XAF', i18n.language);
-  const moneyLines = model.booking
+  const money = model.booking ? startMoney(model.booking) : null;
+  const cardAtPickup = money?.kind === 'card_due';
+  const payAtStep = money?.kind === 'card_due' || money?.kind === 'momo_due' || money?.kind === 'wallet_due';
+  const moneyLines = model.booking && money
     ? startMoneyLines(
-        startMoney(model.booking),
+        money,
         (value) => formatConfirmationMoney(value, model.booking?.currency ?? 'XAF', i18n.language),
         t
       )
@@ -104,11 +109,15 @@ export default function ClientInspectionScreen() {
         return;
       }
       const pay = await getPaymentStatus(bookingId).catch(() => null);
-      if (pay && !pay.paymentPending && row.status === 'reserved') {
+      if (startRail !== 'card' && pay && !pay.paymentPending && row.status === 'reserved') {
         setMomoPhase('failed');
         return;
       }
       const waited = Date.now() - (waitingSince.current ?? Date.now());
+      if (startRail === 'card' && row.status === 'reserved' && row.payment_status !== 'authorized' && waited >= 90_000) {
+        setMomoPhase('failed');
+        return;
+      }
       if (pay && !pay.paymentPending && row.status === 'confirmed' && !row.actual_start_at && waited >= 60_000) {
         setMomoPhase('stalled');
       }
@@ -135,9 +144,20 @@ export default function ClientInspectionScreen() {
     });
     setStarting(true);
     try {
-      const result = await startRental(bookingId);
+      const result = await startRental(bookingId, cardAtPickup ? { stripe_payment_method: 'payment_sheet' } : undefined);
       setConfirmOpen(false);
       setNotice(null);
+      if (cardAtPickup && result.paymentPending) {
+        // Card pay at pickup: the rental starts when the card authorization webhook lands.
+        setStartRail('card');
+        const outcome = await settlePickupCardPayment(result, payWithSheet);
+        if (outcome === 'cancelled' || outcome === 'failed') {
+          setMomoPhase('failed');
+          return;
+        }
+        setMomoPhase('waiting');
+        return;
+      }
       if (result.paymentPending) {
         setStartRail(result.payment_rail ?? 'mobile_money');
         setMomoPhase('waiting');
@@ -195,19 +215,26 @@ export default function ClientInspectionScreen() {
   if (momoPhase) {
     return (
       <View style={[styles.center, { backgroundColor: colors.pageBackground, padding: spacing.md, gap: spacing.md }]}>
-        {momoPhase === 'waiting' ? <MobileMoneyConfirmIllustration /> : null}
+        {momoPhase === 'waiting' && startRail !== 'card' ? <MobileMoneyConfirmIllustration /> : null}
+        {momoPhase === 'waiting' && startRail === 'card' ? <ActivityIndicator color={colors.primary.main} /> : null}
         <Text style={[typography.h5, { color: colors.text.primary, textAlign: 'center' }]}>
           {momoPhase === 'waiting'
-            ? t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')
+            ? startRail === 'card'
+              ? t('rentals.payAtPickup.cardWaitingTitle', 'Confirming your card payment…')
+              : t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')
             : momoPhase === 'failed'
               ? t('orders.momoAwaiting.failedTitle', 'Payment failed')
               : t('rentalInspection.startDelayedTitle', 'Payment succeeded, but the rental has not started.')}
         </Text>
         <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center' }]}>
           {momoPhase === 'waiting'
-            ? t('orders.momoAwaiting.waitingBody', 'Approve the request on your phone. This page updates when payment succeeds.')
+            ? startRail === 'card'
+              ? t('rentals.payAtPickup.cardWaitingBody', 'Stay at the counter. This page updates when the payment goes through, then the business hands you the item.')
+              : t('orders.momoAwaiting.waitingBody', 'Approve the request on your phone. This page updates when payment succeeds.')
             : momoPhase === 'failed'
-              ? t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again.')
+              ? startRail === 'card'
+                ? t('rentals.payAtPickup.cardFailed', 'Card payment didn’t go through. Try again or use another card.')
+                : t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again.')
               : t('rentalInspection.startDelayedBody', 'You can retry the start, or contact support.')}
         </Text>
         {momoPhase === 'failed' ? (
@@ -263,6 +290,7 @@ export default function ClientInspectionScreen() {
           startAt={model.booking?.start_at ?? ''}
           endAt={model.booking?.end_at ?? ''}
           startOpensAt={model.booking?.start_opens_at}
+          pay={payAtStep}
           busy={model.busy}
           starting={starting}
           showDecline={Boolean(flags.rentals_pickup_decline_enabled)}

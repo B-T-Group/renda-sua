@@ -100,6 +100,8 @@ export interface RentalListingRow {
   /** Rent by the day. Missing on older API responses = true. */
   offers_daily?: boolean | null;
   security_deposit_amount?: string | number | null;
+  /** Business asks renters for a reservation fee (10%, counts toward the total). */
+  reservation_fee_enabled?: boolean | null;
   min_rental_hours: number;
   max_rental_hours: number | null;
   units_available?: number;
@@ -193,6 +195,13 @@ export interface ClientRentalRequestRow {
     status: RentalBookingStatus | string;
     contract_expires_at?: string | null;
     inspection_policy_version?: number | null;
+    /** Reserve now, pay at pickup: the card is authorized at Pay & start, not at reservation. */
+    card_pay_at_pickup?: boolean | null;
+    /** Optional reservation fee (0 when the listing has it off). Counts toward the total. */
+    reservation_fee_amount?: number | string | null;
+    reservation_fee_status?: ReservationFeeStatus | string | null;
+    reservation_fee_rail?: 'card' | 'wallet' | 'mobile_money' | string | null;
+    reservation_fee_settled_at?: string | null;
   } | null;
 }
 
@@ -242,6 +251,13 @@ export interface RentalBookingDetail {
   reserved_cancel_after?: string | null;
   payment_timing?: RentalPaymentTiming | string | null;
   payment_status?: RentalBookingPaymentState | string | null;
+  /** Reserve now, pay at pickup: the card is authorized at Pay & start, not at reservation. */
+  card_pay_at_pickup?: boolean | null;
+  /** Optional reservation fee (0 when the listing has it off). Counts toward the total. */
+  reservation_fee_amount?: number | string | null;
+  reservation_fee_status?: ReservationFeeStatus | string | null;
+  reservation_fee_rail?: 'card' | 'wallet' | 'mobile_money' | string | null;
+  reservation_fee_settled_at?: string | null;
   actual_start_at?: string | null;
   paid_at?: string | null;
   created_at?: string | null;
@@ -270,6 +286,8 @@ export interface RentalBookingDetail {
   accept_start_preview?: {
     payment_rail: 'card' | 'wallet' | 'mobile_money';
     amount_due_at_pickup: number;
+    /** Card pay at pickup: the deposit part of the Pay & start hold. */
+    deposit_hold_amount?: number | null;
   } | null;
   return_handed_back_at?: string | null;
   return_resolution?: string | null;
@@ -388,6 +406,7 @@ export interface BusinessRentalListingDetail {
   offers_hourly?: boolean | null;
   offers_daily?: boolean | null;
   security_deposit_amount?: number;
+  reservation_fee_enabled?: boolean | null;
   min_rental_hours: number;
   max_rental_hours: number | null;
   units_available: number;
@@ -450,6 +469,7 @@ export interface CreateBusinessRentalListingBody {
   offers_hourly?: boolean | null;
   offers_daily?: boolean | null;
   security_deposit_amount?: number;
+  reservation_fee_enabled?: boolean;
   min_rental_hours?: number;
   max_rental_hours?: number | null;
   units_available: number;
@@ -464,6 +484,7 @@ export interface UpdateBusinessRentalListingBody {
   offers_hourly?: boolean | null;
   offers_daily?: boolean | null;
   security_deposit_amount?: number;
+  reservation_fee_enabled?: boolean;
   min_rental_hours?: number;
   max_rental_hours?: number | null;
   units_available?: number;
@@ -666,9 +687,21 @@ export interface CreateRentalRequestResult {
   inspection_policy_version?: number | null;
 }
 
+/** Same values as order deposits: none → pending → paid → applied | refunded | forfeited. */
+export type ReservationFeeStatus =
+  | 'none'
+  | 'pending'
+  | 'paid'
+  | 'failed'
+  | 'applied'
+  | 'refunded'
+  | 'forfeited';
+
 export interface CreateRentalBookingResult {
   success: boolean;
   bookingId: string;
+  /** Set when the listing asks for a reservation fee; the booking reserves once it is paid. */
+  reservation_fee?: { amount: number; currency: string; status: string } | null;
   paymentPending?: boolean;
   confirmed?: boolean;
   reserved?: boolean;

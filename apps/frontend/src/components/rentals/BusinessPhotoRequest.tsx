@@ -1,4 +1,4 @@
-import { PhotoCamera, Send, Upload } from '@mui/icons-material';
+import { OutlinedFlag, PhotoCamera, Send, Upload } from '@mui/icons-material';
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -17,6 +17,10 @@ interface Props {
   photos: Array<InspectionPhoto & { unitId: string }>;
   timeZone?: string;
   askedAt?: string | null;
+  /** End of the start day (listing time). */
+  fixBy?: string;
+  /** Formatted reservation fee, when the booking has one. */
+  fee?: string;
   onSent: () => void;
 }
 
@@ -30,6 +34,17 @@ export function BusinessPhotoRequest(props: Props) {
   const asked = props.askedAt ? formatListingStamp(props.askedAt, zone, i18n.language) : '';
   return (
     <Box sx={{ p: 2, mb: 2, borderRadius: 2, border: 1, borderColor: 'warning.main', bgcolor: (theme) => alpha(theme.palette.warning.main, 0.16), color: 'text.primary' }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} data-testid="check-flagged">
+        <OutlinedFlag sx={{ color: 'warning.dark' }} />
+        <Typography variant="h6" fontWeight={800}>{t('rentals.business.checkFlagged', 'Check flagged')}</Typography>
+      </Stack>
+      {props.fixBy ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          {props.fee
+            ? t('rentals.business.fixByFee', 'Fix it by {{time}} so the renter can pay and start. If the check isn’t resolved, the {{fee}} fee goes back to the renter.', { time: props.fixBy, fee: props.fee })
+            : t('rentals.business.fixBy', 'Fix it by {{time}} so the renter can pay and start.', { time: props.fixBy })}
+        </Typography>
+      ) : null}
       <Typography>
         {t('rentals.business.photosAsked', '{{name}} asked for new photos before starting.', { name: props.renterName })}
       </Typography>
@@ -52,7 +67,7 @@ export function BusinessPhotoRequest(props: Props) {
       {error ? <Typography color="error">{error}</Typography> : null}
       <Button
         variant="contained"
-        color="success"
+        color="primary"
         startIcon={<Send />}
         disabled={busy}
         sx={{ mt: 2 }}

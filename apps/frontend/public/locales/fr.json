@@ -3433,6 +3433,11 @@
         "dayPrice": "Prix par jour",
         "listingInvalid": "Vérifiez les chiffres de l’annonce, le max ≥ min et un prix pour chaque option activée.",
         "priceRequired": "Indiquez un prix pour chaque option activée."
+      },
+      "reservationFee": {
+        "label": "Demander des frais de réservation",
+        "helpFcfa": "10 % de la location, au moins 150 FCFA. Ils comptent dans le total. Vous les gardez si le locataire annule le jour du retrait ou ne vient pas.",
+        "help": "10 % de la location, au moins 2,00 $. Ils comptent dans le total. Vous les gardez si le locataire annule le jour du retrait ou ne vient pas."
       }
     },
     "failedDeliveries": {
@@ -7226,7 +7231,10 @@
       "notCollected": "Article non récupéré ?",
       "notCollectedSent": "Le support a été prévenu que l'article n'a pas été récupéré.",
       "askedAt": "Demandé le {{when}} (heure de {{zone}})",
-      "photosPill": "Nouvelles photos demandées"
+      "photosPill": "Nouvelles photos demandées",
+      "checkFlagged": "Contrôle signalé",
+      "fixByFee": "Corrigez d’ici {{time}} pour que le locataire puisse payer et démarrer. Si le contrôle n’est pas résolu, les frais de {{fee}} sont rendus au locataire.",
+      "fixBy": "Corrigez d’ici {{time}} pour que le locataire puisse payer et démarrer."
     },
     "journey": {
       "offerReady": "Offre prête",
@@ -7404,6 +7412,36 @@
       "changeDays": "Modifier les jours et les heures",
       "pickDays": "Choisir les jours et les heures",
       "sectionSubtitle": "Choisissez les jours voulus : une journée entière ou quelques heures."
+    },
+    "payAtPickup": {
+      "cardDue": "{{amount}} débités de votre carte au retrait",
+      "cardDepositHold": "+ {{deposit}} de caution bloquée, libérée après le retour",
+      "payAndStart": "Payer et démarrer · {{amount}}",
+      "cardBody": "Au commerce, vérifiez l’article, puis touchez Payer et démarrer. Le commerce vous remet l’article dès que le paiement passe.",
+      "payTitle": "Payer et démarrer",
+      "payButton": "Payer {{amount}} · démarrer la location",
+      "pill": "Réservé · payer au retrait",
+      "paymentHeading": "PAIEMENT",
+      "rentalTotal": "Total de la location",
+      "feePaid": "Payé · frais de réservation",
+      "feeWaiting": "Frais de réservation · en attente de paiement",
+      "dueAfterCheck": "À payer au retrait, après le contrôle",
+      "depositAtPickup": "Caution bloquée sur votre carte au retrait",
+      "nothingElse": "Rien d’autre n’est débité avant que vous ayez vu l’article.",
+      "itemCheck": "Contrôle de l’article requis",
+      "feeRefunded": "Frais remboursés si vous annulez avant le {{day}}, si le commerce annule ou si l’article ne correspond pas.",
+      "feeKept": "Frais conservés si vous annulez le jour du retrait ou si vous ne venez pas.",
+      "reserveFreeBody": "Rien à payer aujourd’hui. Au retrait, le commerce vous montre l’article, vous le vérifiez, puis vous payez et le prenez. Annulation gratuite avant le début de la location.",
+      "feeRefundedOffer": "Frais remboursés si vous annulez avant le jour du retrait, si le commerce annule ou si l’article ne correspond pas.",
+      "reserveFreeButton": "Réserver · payer au retrait",
+      "reserveFeeButton": "Payer {{fee}} et réserver",
+      "feeNowLabel": "Frais de réservation aujourd’hui · comptent dans votre total",
+      "nothingToday": "À payer aujourd’hui",
+      "feeMomoSnack": "Approuvez les frais de réservation sur votre téléphone. Votre réservation est confirmée dès qu’ils sont payés.",
+      "businessPaid": "Payé à {{time}} · remettez l’article",
+      "businessWaitingBody": "Le locataire vérifie l’article et paie sur place. Ne remettez pas l’article avant de voir « Payé ».",
+      "payBodyWeb": "Payez maintenant sur une page Stripe sécurisée et le commerce vous remet l’article. La location démarre dès que le paiement passe.",
+      "reserveFeeBodyWeb": "Payez maintenant {{fee}} de frais de réservation pour bloquer l’article (par carte sur une page Stripe sécurisée, ou par Mobile Money). Ils comptent dans votre total. Vous payez le reste au retrait, après avoir vérifié l’article."
     }
   },
   "profile": {

@@ -11,6 +11,8 @@ import {
   parseRentalPricingSnapshot,
   proposedContractDeadlineIso,
 } from '../../utils/rentalRequestDisplay';
+import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
+import { reservationFee, reserveMode } from '../../utils/rentals/reservationFee';
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -43,6 +45,45 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Reserve now, pay at pickup: the fee (if any) today, the rest at pickup, the card deposit at pickup. */
+function PayAtPickupRows(props: {
+  mode: 'free' | 'fee';
+  fee: number;
+  total: number;
+  deposit: number;
+  format: (value: number) => string;
+}) {
+  const { t } = useTranslation();
+  const now = props.mode === 'fee' ? Math.min(props.fee, props.total) : 0;
+  const rest = Math.round((props.total - now) * 100) / 100;
+  return (
+    <>
+      <DetailRow
+        label={
+          props.mode === 'fee'
+            ? t('rentals.payAtPickup.feeNowLabel', 'Reservation fee today · counts toward your total')
+            : t('rentals.payAtPickup.nothingToday', 'To pay today')
+        }
+        value={props.format(now)}
+      />
+      <DetailRow label={t('rentals.payAtPickup.dueAfterCheck', 'Due at pickup, after the item check')} value={props.format(rest)} />
+      {props.deposit > 0 ? (
+        <DetailRow label={t('rentals.payAtPickup.depositAtPickup', 'Deposit hold on your card at pickup')} value={props.format(props.deposit)} />
+      ) : null}
+      {props.mode === 'fee' ? (
+        <Stack spacing={0.5} sx={{ pt: 1 }} data-testid="book-confirm-fee-rules">
+          <Typography variant="caption" color="text.secondary">
+            {t('rentals.payAtPickup.feeRefundedOffer', 'Fee refunded if you cancel before the pickup day, if the business cancels, or if the item doesn’t match.')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {t('rentals.payAtPickup.feeKept', 'Fee kept if you cancel on the pickup day or don’t come.')}
+          </Typography>
+        </Stack>
+      ) : null}
+    </>
+  );
+}
+
 export interface RentalBookConfirmSummaryProps {
   row: ClientRentalRequestRow;
   /** Card rail shows the deposit/authorization terms; other rails show pay-at-pickup. */
@@ -53,8 +94,10 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
   row,
   isStripeRail,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
+  const mode = reserveMode(row.rental_booking, isStripeRail);
+  const fee = reservationFee(row.rental_booking);
   const listing = row.rental_location_listing;
   const itemName =
     listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental');
@@ -132,7 +175,16 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
             value={formatRentalMoney(quote.total, quote.currency)}
           />
         ) : null}
-        {isStripeRail && quote?.securityDeposit ? (
+        {quote && mode !== 'card_upfront' ? (
+          <PayAtPickupRows
+            mode={mode}
+            fee={fee}
+            total={quote.total}
+            deposit={isStripeRail ? Number(quote.securityDeposit) || 0 : 0}
+            format={(value) => formatConfirmationMoney(value, quote.currency, i18n.language)}
+          />
+        ) : null}
+        {mode === 'card_upfront' && isStripeRail && quote?.securityDeposit ? (
           <DetailRow
             label={t(
               'rentals.clientRequests.bookConfirmLabelDeposit',
