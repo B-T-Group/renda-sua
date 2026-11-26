@@ -29,17 +29,14 @@ function renderRequest(over: Record<string, unknown> = {}) {
     <NavigationContainer>
       <ThemeProvider>
         <RentalSlotPicker
-          layout="screen"
           listingId="listing-1"
           isAuthenticated
           bookedWindows={[]}
           basePricePerDay={380}
           basePricePerHour={40}
           currency="XAF"
-          weeklyAvailability={defaultWeeklyAvailability()}
           initialSelections={selections}
           datesFilled
-          dayHoursPicker
           dateLine="Wed 10 Mar – Thu 11 Mar · 2 days · Full days"
           itemName="Echafaudage roulant 4 m"
           itemMeta="DEV demo · 380 FCFA / day"

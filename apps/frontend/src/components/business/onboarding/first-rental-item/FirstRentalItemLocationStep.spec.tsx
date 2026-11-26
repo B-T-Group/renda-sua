@@ -7,7 +7,6 @@ import en from '../../../../../public/locales/en.json';
 import fr from '../../../../../public/locales/fr.json';
 import FirstRentalItemLocationStep from './FirstRentalItemLocationStep';
 
-const mockFlags = { rentals_day_hours_picker_enabled: true };
 const mockCreate = jest.fn();
 const mockSnack = jest.fn();
 const mockApi = {
@@ -25,7 +24,7 @@ const mockLocs = {
 };
 const mockInv = { businessLocations: [], fetchBusinessLocations: jest.fn(), loading: false };
 
-jest.mock('../../../../hooks/useClientFlags', () => ({ useClientFlags: () => ({ flags: mockFlags }) }));
+jest.mock('../../../../hooks/useClientFlags', () => ({ useClientFlags: () => ({ flags: {} }) }));
 jest.mock('../../../../hooks/useRentalApi', () => ({ useRentalApi: () => mockApi }));
 jest.mock('../../../../hooks/useBusinessLocations', () => ({ useBusinessLocations: () => mockLocs }));
 jest.mock('../../../../hooks/useBusinessInventory', () => ({ useBusinessInventory: () => mockInv }));
@@ -60,7 +59,6 @@ const toggle = (key: 'offersDaily' | 'offersHourly') =>
 
 describe('FirstRentalItemLocationStep: rent switches on web create (#866)', () => {
   beforeEach(async () => {
-    mockFlags.rentals_day_hours_picker_enabled = true;
     mockCreate.mockReset().mockResolvedValue({ success: true, data: { id: 'lst-1' } });
     mockSnack.mockReset();
     await i18n.changeLanguage('en');
@@ -104,19 +102,5 @@ describe('FirstRentalItemLocationStep: rent switches on web create (#866)', () =
       fireEvent.click(screen.getByRole('button', { name: fr.business.onboarding.firstRental.location.publish }));
     });
     expect(mockSnack).toHaveBeenCalledWith('Indiquez un prix pour chaque option activée.', { variant: 'warning' });
-  });
-
-  it('keeps the old step with the flag off: no switches, 12 × hourly, no offers sent', async () => {
-    mockFlags.rentals_day_hours_picker_enabled = false;
-    renderStep();
-    await act(async () => undefined);
-    expect(screen.queryByTestId('rental-mode-offersDaily')).toBeNull();
-    fireEvent.change(screen.getByTestId('first-rental-price-hour'), { target: { value: '3000' } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Publish rental' }));
-    });
-    const body = mockCreate.mock.calls[0][0];
-    expect(body).toEqual(expect.objectContaining({ base_price_per_hour: 3000, base_price_per_day: 36000 }));
-    expect(body).not.toHaveProperty('offers_hourly');
   });
 });

@@ -15,7 +15,6 @@ import { ListingPreviewSheet } from '../ListingPreviewSheet';
 import { RentalWeeklyHoursSummary } from './RentalWeeklyHoursSummary';
 import { depositInputError, showsListingDeposit } from '../../../utils/rentals/cardDeposit';
 import { RentalModeSwitches, type RentalModes } from '../rentals/RentalModeSwitches';
-import { useClientFlags } from '../../../contexts/ClientFlagsContext';
 
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
 
@@ -46,8 +45,6 @@ export function AddRentalLocationStep({
   const [menuOpen, setMenuOpen] = useState(false);
   const [loadingLoc, setLoadingLoc] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const { flags } = useClientFlags();
-  const modesOn = flags.rentals_day_hours_picker_enabled === true;
   const [modes, setModes] = useState<RentalModes>({ offersDaily: true, offersHourly: true });
 
   const loadLocations = useCallback(async () => {
@@ -71,13 +68,12 @@ export function AddRentalLocationStep({
   );
 
   const selected = locations.find((l) => l.id === locationId);
-  const hourlyOff = modesOn && !modes.offersHourly;
-  const dailyOff = modesOn && !modes.offersDaily;
+  const hourlyOff = !modes.offersHourly;
+  const dailyOff = !modes.offersDaily;
   const hourlyNum = hourlyOff ? 0 : parseFloat(hourly);
-  const dailyNum = dailyOff ? 0 : daily.trim() ? parseFloat(daily) : modesOn ? NaN : hourlyNum * 12;
+  const dailyNum = dailyOff ? 0 : daily.trim() ? parseFloat(daily) : NaN;
   const modePricesOk =
-    !modesOn ||
-    ((!modes.offersHourly || hourlyNum > 0) && (!modes.offersDaily || dailyNum > 0));
+    (!modes.offersHourly || hourlyNum > 0) && (!modes.offersDaily || dailyNum > 0);
   const depositInvalid = depositInputError(item.currency, deposit);
   const depositNum = deposit.trim() ? Number(deposit) : undefined;
   const unitsNum = Math.floor(Number(units));
@@ -98,7 +94,8 @@ export function AddRentalLocationStep({
     locationName: selected?.name,
     base_price_per_hour: hourlyNum,
     base_price_per_day: Number.isFinite(dailyNum) ? dailyNum : hourlyNum * 12,
-    ...(modesOn ? { offers_daily: modes.offersDaily, offers_hourly: modes.offersHourly } : {}),
+    offers_daily: modes.offersDaily,
+    offers_hourly: modes.offersHourly,
     security_deposit_amount: depositNum,
     units_available: unitsNum,
     pickup_instructions: pickup,
@@ -223,14 +220,10 @@ export function AddRentalLocationStep({
         </>
       )}
 
-      {modesOn ? <RentalModeSwitches value={modes} onChange={setModes} /> : null}
+      <RentalModeSwitches value={modes} onChange={setModes} />
       {hourlyOff ? null : (
         <TextInput
-          label={
-            modesOn
-              ? t('business.rentals.rentBy.hourPrice', 'Price per hour')
-              : t('business.rentals.wizard.location.hourly', 'Hourly rate')
-          }
+          label={t('business.rentals.rentBy.hourPrice', 'Price per hour')}
           value={hourly}
           onChangeText={setHourly}
           keyboardType="decimal-pad"
@@ -241,11 +234,7 @@ export function AddRentalLocationStep({
       )}
       {dailyOff ? null : (
         <TextInput
-          label={
-            modesOn
-              ? t('business.rentals.rentBy.dayPrice', 'Price per day')
-              : t('business.rentals.wizard.location.daily', 'Daily rate (optional)')
-          }
+          label={t('business.rentals.rentBy.dayPrice', 'Price per day')}
           value={daily}
           onChangeText={setDaily}
           keyboardType="decimal-pad"

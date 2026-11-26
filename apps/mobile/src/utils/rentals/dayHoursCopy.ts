@@ -368,9 +368,8 @@ export function serverRuleCode(error: unknown): string | null {
 
 /**
  * Submit failed: the EN/FR text to show inside the reopened picker when the server refused a
- * day-and-hours rule, or null (picker off, or some other error that stays on the page).
+ * day-and-hours rule, or null (some other error that stays on the page).
  */
-export function submitRuleText(error: unknown, pickerOn: boolean, language?: string | null): string | null {
-  if (!pickerOn) return null;
+export function submitRuleText(error: unknown, language?: string | null): string | null {
   return serverRuleText(serverRuleCode(error), pickerLang(language));
 }

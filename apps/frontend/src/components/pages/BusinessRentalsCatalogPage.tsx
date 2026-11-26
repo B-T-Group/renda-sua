@@ -21,7 +21,6 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
-import { useClientFlags } from '../../hooks/useClientFlags';
 import {
   useRentalApi,
   type BusinessRentalItemRow,
@@ -62,8 +61,6 @@ const BusinessRentalsCatalogPage: React.FC = () => {
   const [price, setPrice] = useState('');
   const [priceDay, setPriceDay] = useState('');
   const [deposit, setDeposit] = useState('');
-  const { flags } = useClientFlags();
-  const modesOn = flags.rentals_day_hours_picker_enabled === true;
   const [modes, setModes] = useState<RentalModes>({ offersDaily: true, offersHourly: true });
   const [minD, setMinD] = useState('1');
   const [maxD, setMaxD] = useState('');
@@ -101,11 +98,9 @@ const BusinessRentalsCatalogPage: React.FC = () => {
     );
   }, [items, moderationFilter]);
 
-  // Flag off keeps the old dialog behaviour: an empty hourly price is sent as 0.
   const prices = createListingPrices({
-    hourlyRaw: !modesOn && price.trim() === '' ? '0' : price,
+    hourlyRaw: price,
     dailyRaw: priceDay,
-    modesOn,
     modes,
   });
 
@@ -130,7 +125,8 @@ const BusinessRentalsCatalogPage: React.FC = () => {
           dropoff_instructions: dropoff,
           base_price_per_hour: prices.base_price_per_hour,
           base_price_per_day: prices.base_price_per_day,
-          ...(modesOn ? { offers_daily: prices.offers_daily, offers_hourly: prices.offers_hourly } : {}),
+          offers_daily: prices.offers_daily,
+          offers_hourly: prices.offers_hourly,
           ...(showsListingDeposit(listingCurrency) && deposit.trim() !== ''
             ? { security_deposit_amount: Number(deposit) }
             : {}),
@@ -406,34 +402,27 @@ const BusinessRentalsCatalogPage: React.FC = () => {
               ))}
             </Select>
           </FormControl>
-          {modesOn ? <RentalModeSwitches value={modes} onChange={setModes} disabled={savingListing} /> : null}
-          {!modesOn || modes.offersHourly ? (
+          <RentalModeSwitches value={modes} onChange={setModes} disabled={savingListing} />
+          {modes.offersHourly ? (
             <TextField
               label={t('business.rentals.pricePerHour', 'Price per hour')}
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               type="number"
-              required={modesOn}
+              required
               inputProps={{ 'data-testid': 'add-listing-price-hour' }}
             />
           ) : null}
-          {!modesOn || modes.offersDaily ? (
+          {modes.offersDaily ? (
             <TextField
               label={
-                modesOn
-                  ? t('business.rentals.rentBy.dayPrice', 'Price per day')
-                  : t('business.rentals.pricePerDay', 'Full day price (daily rate)')
+                t('business.rentals.rentBy.dayPrice', 'Price per day')
               }
               value={priceDay}
               onChange={(e) => setPriceDay(e.target.value)}
               type="number"
-              required={modesOn}
+              required
               inputProps={{ 'data-testid': 'add-listing-price-day' }}
-              helperText={
-                modesOn
-                  ? undefined
-                  : t('business.rentals.pricePerDayHint', 'Leave empty to use 12 × hourly rate')
-              }
             />
           ) : null}
           {showsListingDeposit(items.find((it) => it.id === selItem)?.currency) ? (
@@ -446,7 +435,7 @@ const BusinessRentalsCatalogPage: React.FC = () => {
               helperText={
                 depositInputError(items.find((it) => it.id === selItem)?.currency, deposit)
                   ? t('business.rentals.depositInvalid', 'Enter a valid security deposit.')
-                  : modesOn && !modes.offersHourly
+                  : !modes.offersHourly
                     ? t(
                         'business.rentals.securityDepositCreateHintDaily',
                         'Leave empty to use two-thirds of the day price. Held on card rentals to cover extra time.'
@@ -542,7 +531,7 @@ const BusinessRentalsCatalogPage: React.FC = () => {
           </Button>
           <Button
             variant="contained"
-            disabled={savingListing || !selItem || !selLoc || (modesOn && !prices.ok)}
+            disabled={savingListing || !selItem || !selLoc || !prices.ok}
             data-testid="add-listing-publish"
             onClick={() => void saveListing()}
           >

@@ -1,5 +1,5 @@
 /**
- * Day-and-hours picker model (rentals_day_hours_picker_enabled).
+ * Day-and-hours picker model (the only rental date picker).
  *
  * Everything is listing wall-clock time: a day is a `YYYY-MM-DD` key and an hour is
  * 0..24 on that day. Booked windows from the API are floating wall-clock times

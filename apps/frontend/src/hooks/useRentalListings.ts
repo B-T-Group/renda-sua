@@ -17,7 +17,7 @@ export interface RentalListingRow {
   min_rental_hours: number;
   max_rental_hours: number | null;
   units_available?: number;
-  /** Listing switches (rentals_day_hours_picker_enabled). Missing means both on. */
+  /** Listing switches. Missing means both on. */
   offers_daily?: boolean;
   offers_hourly?: boolean;
   pickup_instructions: string;

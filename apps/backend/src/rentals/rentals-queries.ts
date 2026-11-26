@@ -1248,17 +1248,6 @@ export const GET_RENTAL_LISTING_MODES = `
   }
 `;
 
-export const GET_DAY_HOURS_PICKER_FLAG = `
-  query GetDayHoursPickerFlag {
-    application_configurations(
-      where: { config_key: { _eq: "rentals_day_hours_picker_enabled" }, status: { _eq: "active" } }
-    ) {
-      boolean_value
-      country_code
-    }
-  }
-`;
-
 export const GET_RENTAL_LISTING_MIN_MAX = `
   query GetRentalListingMinMax($id: uuid!) {
     rental_location_listings_by_pk(id: $id) {

@@ -36,7 +36,6 @@ function renderModify(onModifySave: jest.Mock) {
     <NavigationContainer>
       <ThemeProvider>
         <RentalSlotPicker
-          layout="screen"
           submitMode="modify"
           listingId="listing-1"
           isAuthenticated

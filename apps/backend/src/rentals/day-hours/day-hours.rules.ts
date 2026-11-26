@@ -1,12 +1,10 @@
 /**
- * Server rules for the rental day-and-hours picker (rentals_day_hours_picker_enabled).
+ * Server rules for rental requests (the day-and-hours picker; always on since the flag was retired).
  *
  * Times are floating listing wall-clock encoded as `YYYY-MM-DDTHH:mm:00Z`, so every
  * date and hour here is read with UTC getters (the same convention as the rest of
  * the rentals service).
  */
-
-export const DAY_HOURS_FLAG_KEY = 'rentals_day_hours_picker_enabled';
 
 /** Renters must start at least 2 hours from now, in the listing's local time. */
 export const RENTAL_LEAD_TIME_MS = 2 * 60 * 60 * 1000;
