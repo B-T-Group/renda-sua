@@ -247,7 +247,8 @@ export class RentalsCronService {
   /**
    * Release reserved (pay-at-pickup) bookings that were never paid within the
    * grace window after their scheduled start, so the capacity frees up.
-   * An open pickup inspection pauses that clock until the client accepts.
+   * An open pickup inspection pauses that clock until the client accepts, except a
+   * flagged check (correction requested) left unfixed: cancelled and refunded at 23:59.
    */
   async expireReservedRentalBookings(): Promise<number> {
     // start_at is listing wall clock: widen, then unpaidReservationDue rechecks per listing.
@@ -280,7 +281,10 @@ export class RentalsCronService {
   private async expireOneReservedBooking(bookingId: string): Promise<boolean> {
     const booking = await this.fetchBooking(bookingId);
     if (!booking || booking.status !== 'reserved' || booking.actual_start_at) return false;
-    if (!this.rentalsService || !this.rentalsService.unpaidReservationDue(booking)) return false;
+    if (!this.rentalsService) return false;
+    // A flagged check left unfixed at 23:59 on the start day cancels and refunds (mockup 07).
+    const flagged = booking.pickup_inspection_pending ? await this.rentalsService.pickupCheckFlagged(bookingId) : false;
+    if (!this.rentalsService.unpaidReservationDue(booking, new Date(), flagged)) return false;
     const won = await casUpdateRentalBooking(
       this.hasuraSystemService,
       bookingId,
@@ -301,7 +305,9 @@ export class RentalsCronService {
       'system',
       fee === 'forfeit'
         ? 'Reservation expired unpaid after scheduled start (reservation fee kept by the business)'
-        : 'Reservation expired unpaid after scheduled start'
+        : flagged
+          ? 'Reservation cancelled: pickup check flag not fixed by the end of the start day (reservation fee refunded)'
+          : 'Reservation expired unpaid after scheduled start'
     );
     await this.notifyReservationExpired(booking);
     return true;
