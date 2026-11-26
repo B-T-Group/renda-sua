@@ -72,7 +72,7 @@ import {
   formatConfirmationDue,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
-import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 import {
   isPriceChangeUnseenError,
@@ -502,7 +502,7 @@ const RentalBookingDetailPage: React.FC = () => {
   const windowLabel = windowStatusLabel({
     phase: windowPhase,
     photosAsked: photosRequested,
-    day: formatZonedDay(booking.start_at, listingZone, i18n.language),
+    day: formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language),
     t,
   });
 
@@ -886,7 +886,7 @@ const RentalBookingDetailPage: React.FC = () => {
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ')}
               place={booking.rental_location_listing?.business_location?.name ?? ''}
               money={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
-              returnLabel={formatZonedWhen(booking.end_at, confirmationTimeZone(booking.rental_location_listing?.business_location?.address?.country, booking.currency), i18n.language)}
+              returnLabel={formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language)}
               starting={sharingPin}
               onNotCollected={isBusiness && status === 'active' && bookingId ? () => {
                 void reportItemNotCollected(bookingId).then(() => {
@@ -950,7 +950,7 @@ const RentalBookingDetailPage: React.FC = () => {
                       ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
                       : undefined
                   }
-                  pickupAside={`${formatZonedDay(booking.actual_start_at || booking.start_at, listingZone, i18n.language)} ${formatZonedTime(booking.actual_start_at || booking.start_at, listingZone)}`}
+                  pickupAside={pickupClockLabel(booking.actual_start_at, booking.start_at, listingZone, i18n.language)}
                   accent={theme.palette.success.main}
                 />
               ) : (
@@ -1346,7 +1346,7 @@ function BookingConfirmation({
   const theme = useTheme();
   const country = booking.rental_location_listing?.business_location?.address?.country;
   const zoneId = confirmationTimeZone(country, booking.currency);
-  const due = formatConfirmationDue(booking.end_at, zoneId, language);
+  const due = formatConfirmationDue(booking.end_at, 'UTC', language);
   const zone = t(
     confirmationZoneKey(country, booking.currency),
     confirmationZoneDefault(country, booking.currency, language)

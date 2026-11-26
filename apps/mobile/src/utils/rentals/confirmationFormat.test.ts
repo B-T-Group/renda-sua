@@ -43,7 +43,7 @@ describe('confirmation timezone', () => {
         'fr',
         'heure de Montréal'
       )
-    ).toBe('17 nov. 15:00 → 18 nov. 20:00 (heure de Montréal)');
+    ).toBe('17 nov. 20:00 → 19 nov. 01:00 (heure de Montréal)');
     expect(formatConfirmationMoney(65, 'CAD', 'en')).toBe('$65.00');
     expect(formatConfirmationMoney(65, 'CAD', 'fr')).toBe('65,00\u00a0$');
     expect(formatConfirmationMoney(45000, 'XAF', 'fr')).toBe('45\u00a0000\u00a0FCFA');

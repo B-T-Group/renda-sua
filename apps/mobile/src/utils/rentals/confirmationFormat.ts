@@ -66,13 +66,13 @@ function shortMonth(parts: Intl.DateTimeFormatPart[], fr: boolean): string {
   return fr ? `${raw.toLowerCase()}.` : raw;
 }
 
-function spanPoint(iso: string | null | undefined, timeZone: string, language?: string | null) {
+function spanPoint(iso: string | null | undefined, _timeZone: string, language?: string | null) {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
   const fr = french(language);
   const parts = new Intl.DateTimeFormat(fr ? 'fr-CA' : 'en-CA', {
-    timeZone: timeZone || 'UTC',
+    timeZone: 'UTC',
     year: 'numeric',
     day: 'numeric',
     month: 'short',
@@ -85,7 +85,7 @@ function spanPoint(iso: string | null | undefined, timeZone: string, language?: 
   return { key, text };
 }
 
-/** Cross-day stay in the listing zone. Same-day windows keep the shorter period line. */
+/** Cross-day stay using the stored wall-clock components. Same-day windows keep the shorter period line. */
 export function formatBookedSpan(
   start: string | null | undefined,
   end: string | null | undefined,

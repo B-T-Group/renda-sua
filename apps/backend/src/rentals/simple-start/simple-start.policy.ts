@@ -1,21 +1,23 @@
-import { DateTime } from 'luxon';
-import { calendarDay, listingTimeZone } from '../inspection/pickup-photo-rules';
+import { listingTimeZone } from '../inspection/pickup-photo-rules';
 
 export const PIN_RETIRED_MESSAGE = 'Update the app to start this rental';
 export const START_WINDOW_CODE = 'RENTAL_START_WINDOW';
 
-/** 00:00 on the start calendar day in the listing time zone. */
-export function startOpensAt(startAt: Date, timeZone: string): Date {
-  const local = DateTime.fromJSDate(startAt, { zone: 'utc' }).setZone(timeZone);
-  if (!local.isValid) return new Date(NaN);
-  return local.startOf('day').toUTC().toJSDate();
+/**
+ * 00:00 on the stored start date. `start_at` is listing wall clock written as UTC
+ * components (`08:00` in Douala is `...T08:00:00Z`), so a listing-zone conversion
+ * shifts the pickup day by the UTC offset.
+ */
+export function startOpensAt(startAt: Date, _timeZone?: string): Date {
+  if (Number.isNaN(startAt.getTime())) return new Date(NaN);
+  return new Date(Date.UTC(startAt.getUTCFullYear(), startAt.getUTCMonth(), startAt.getUTCDate()));
 }
 
-/** Exclusive end of the start calendar day in the listing time zone. */
-export function endOfStartDay(startAt: Date, timeZone: string): Date {
-  const local = DateTime.fromJSDate(startAt, { zone: 'utc' }).setZone(timeZone);
-  if (!local.isValid) return new Date(NaN);
-  return local.plus({ days: 1 }).startOf('day').toUTC().toJSDate();
+/** Exclusive end of that stored start date. */
+export function endOfStartDay(startAt: Date, timeZone?: string): Date {
+  const opens = startOpensAt(startAt, timeZone);
+  if (Number.isNaN(opens.getTime())) return new Date(NaN);
+  return new Date(opens.getTime() + 86_400_000);
 }
 
 export type StartWindowState = 'before' | 'open' | 'after' | 'unknown';
@@ -66,7 +68,7 @@ export function isNoShow(input: {
   return input.now.getTime() >= input.endAt.getTime();
 }
 
-export function isStartDay(startAt: Date, now: Date, timeZone: string): boolean {
+export function isStartDay(startAt: Date, now: Date, _timeZone?: string): boolean {
   if (Number.isNaN(startAt.getTime()) || Number.isNaN(now.getTime())) return false;
-  return calendarDay(startAt, timeZone) === calendarDay(now, timeZone);
+  return startAt.toISOString().slice(0, 10) === now.toISOString().slice(0, 10);
 }

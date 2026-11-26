@@ -21,10 +21,19 @@ export function pickupPhase(input: PickupWindowInput): PickupPhase {
   return 'today';
 }
 
+/** Booking start/end store listing wall clock in the UTC fields. */
+export const BOOKING_CLOCK = 'UTC';
+
 export function opensAt(input: PickupWindowInput): number {
   const given = input.startOpensAt ? Date.parse(input.startOpensAt) : NaN;
   if (Number.isFinite(given)) return given;
-  return zonedStartOfDay(input.startAt, input.timeZone);
+  return utcMidnight(input.startAt);
+}
+
+export function utcMidnight(iso: string): number {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return NaN;
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
 export function zonedStartOfDay(iso: string, timeZone: string): number {
@@ -59,6 +68,17 @@ export function formatZonedTime(iso: string, timeZone: string): string {
 
 export function formatPhotoStamp(iso: string, timeZone: string, language: string): string {
   return `${formatZonedDay(iso, timeZone, language)} ${formatZonedTime(iso, timeZone)}`;
+}
+
+export function pickupClockLabel(
+  actualStartAt: string | null | undefined,
+  startAt: string,
+  timeZone: string,
+  language: string
+): string {
+  const clock = actualStartAt ? timeZone : BOOKING_CLOCK;
+  const iso = actualStartAt || startAt;
+  return `${formatZonedDay(iso, clock, language)} ${formatZonedTime(iso, clock)}`;
 }
 
 export function formatZonedWhen(iso: string, timeZone: string, language: string): string {

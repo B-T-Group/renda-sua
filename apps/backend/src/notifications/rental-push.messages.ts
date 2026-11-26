@@ -27,10 +27,10 @@ const NOTICE_ZONE: Record<string, { en: string; fr: string }> = {
   'Asia/Manila': { en: 'Manila time', fr: 'heure de Manille' },
 };
 
-function noticeClock(iso: string, timeZone: string | null | undefined, language?: string | null): string {
+function noticeClock(iso: string, language?: string | null): string {
   const fr = normalizeLocale(language) === 'fr';
   const parts = new Intl.DateTimeFormat(fr ? 'fr-CA' : 'en-CA', {
-    timeZone: timeZone || 'UTC',
+    timeZone: 'UTC',
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -48,14 +48,14 @@ function noticeZonePhrase(timeZone: string | null | undefined, language?: string
   return normalizeLocale(language) === 'fr' ? row.fr : row.en;
 }
 
-/** Compact due clock in the listing time zone, with the city when we know it. */
+/** Stored rental clock (UTC components) plus the listing city, when we know it. */
 export function formatRentalNoticeDue(
   iso: string | null | undefined,
   timeZone: string | null | undefined,
   language?: string | null
 ): string {
   if (!iso || Number.isNaN(new Date(iso).getTime())) return '';
-  const clock = noticeClock(iso, timeZone, language);
+  const clock = noticeClock(iso, language);
   const zone = noticeZonePhrase(timeZone, language);
   return zone ? `${clock} (${zone})` : clock;
 }
