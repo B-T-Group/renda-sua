@@ -56,6 +56,7 @@ import { cappedContractExpiry, computeRespondBy, earliestRequestStartIso, effect
 import { listingDashboardFlag, type DashboardRequestFlagRow } from './rental-dashboard-flag';
 import {
   dayHoursPickerViolation,
+  depositHourRate,
   listingModesViolation,
   modeViolation,
   type DayHoursViolation,
@@ -158,7 +159,7 @@ const RENTAL_DISTANCE_CACHE_TTL = 7776000;
 export const RENTAL_OVERWRITE_BUSINESS_FORBIDDEN =
   "A rental can only be started with the client's PIN. Contact support if the client cannot share it.";
 
-/** Default security deposit = 8x the listing hourly rate (business can overwrite). */
+/** Default security deposit = 8x the listing hourly rate, or 8x (day price / 12) without one (depositHourRate). */
 const RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER = 8;
 
 function cardDepositCurrency(currency: string | null | undefined): boolean {
@@ -2480,7 +2481,7 @@ export class RentalsService {
     const modes = this.createListingModes(dto, price, dayPrice);
     const securityDeposit = this.resolveListingSecurityDeposit(
       dto.security_deposit_amount,
-      price > 0 ? price : dayPrice / 12,
+      depositHourRate({ hourPrice: price, dayPrice, offersHourly: dto.offers_hourly }),
       currency
     );
     const availability = this.normalizeWeeklyAvailability(dto.weekly_availability);
@@ -2783,7 +2784,7 @@ export class RentalsService {
     return out;
   }
 
-  /** Explicit deposit when provided. Card listings default to 8x hourly. XAF and XOF stay 0. */
+  /** Explicit deposit when provided. Card listings default to 8x depositHourRate. XAF and XOF stay 0. */
   private resolveListingSecurityDeposit(
     raw: number | undefined,
     hourlyRate: number,

@@ -19,6 +19,7 @@ import {
   dayLabel,
   footerDetail,
   fromHourlyPrice,
+  noOrphan,
   pickerText,
   submitRuleText,
   lockReason,
@@ -191,14 +192,37 @@ describe('day-hours picker model', () => {
   it('gives a reason for every Full day lock and only lets the ends be removed', () => {
     const l = listing();
     const today = dayInfo('2026-11-25', l, NOW);
-    expect(lockReason(today, 'en')).toBe('Full day isn’t possible today: it has already started.');
+    expect(lockReason(today, 'en')).toBe('Full day isn’t possible today: it has already\u00A0started.');
     const early = dayInfo('2026-11-25', l, Date.UTC(2026, 10, 25, 7, 0));
     expect(early.fullDayLock).toBe('today');
-    expect(lockReason(early, 'fr')).toBe('Journée impossible aujourd’hui\u00A0: elle commence dans moins de 2\u00A0h.');
+    expect(lockReason(early, 'fr')).toBe('Journée impossible aujourd’hui\u00A0: elle commence dans moins de\u00A02\u00A0h.');
     const sat = dayInfo('2026-11-28', l, NOW);
-    expect(sharedLockReason([dayInfo('2026-11-27', l, NOW), sat], 'en')).toBe('Full day isn’t possible: Sat\u00A028\u00A0Nov is partly booked.');
+    expect(sharedLockReason([dayInfo('2026-11-27', l, NOW), sat], 'en')).toBe('Full day isn’t possible: Sat\u00A028\u00A0Nov is partly\u00A0booked.');
     const days = ['2026-11-27', '2026-11-28', '2026-11-30', '2026-12-01'].map((key) => ({ key, mode: 'full' as const, start: 8, end: 18 }));
     expect(days.map((d) => canRemoveDay(days, d.key))).toEqual([true, false, false, true]);
     expect(canRemoveDay(days.slice(0, 2), '2026-11-28')).toBe(true);
+  });
+});
+
+describe('orphan words in picker hints (R3)', () => {
+  it('keeps the last two words of a hint together, EN and FR', () => {
+    expect(pickerText('en', 'subtitle', { city: 'Libreville' })).toBe('Tap the days you need. Times are Libreville\u00A0time.');
+    expect(pickerText('en', 'oneSetting')).toBe('One setting for every\u00A0day');
+    expect(pickerText('fr', 'subtitle', { city: 'Libreville' })).toBe('Touchez les jours voulus. Heures de\u00A0Libreville.');
+    expect(pickerText('fr', 'chooseHint')).toBe('Choisissez l’heure de début, puis l’heure de\u00A0fin.');
+  });
+
+  it('leaves short labels and amounts alone', () => {
+    expect(pickerText('en', 'fullDay')).toBe('Full day');
+    expect(pickerText('en', 'sameForAll')).toBe('Same for all days');
+    expect(noOrphan('Pick days')).toBe('Pick days');
+    expect(noOrphan('Rents by the day only')).toBe('Rents by the day\u00A0only');
+  });
+
+  it('keeps the footer time range on one line', () => {
+    const l = { weekly: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, is_available: true, start_time: '08:00:00', end_time: '18:00:00' })), booked: [], units: 1, offersDaily: true, offersHourly: true, minHours: 2, maxHours: null, dayRate: 27000, hourRate: 3000 };
+    const day = { key: '2026-11-27', mode: 'hours' as const, start: 9, end: 11 };
+    const infos = { [day.key]: dayInfo(day.key, l, Date.UTC(2026, 10, 25, 9, 20)) };
+    expect(footerDetail([day], infos, 'fr', 'Africa/Libreville')).toMatch(/09:00\u00A0–\u2060\u00A011:00$/);
   });
 });

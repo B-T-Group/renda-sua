@@ -3397,8 +3397,9 @@
       "securityDeposit": "Caution",
       "depositInvalid": "Saisissez une caution valide.",
       "securityDepositHelper": "Retenue sur les locations par carte pour couvrir les heures supplémentaires. Par défaut : 8× le tarif horaire.",
-      "securityDepositHelperDaily": "Retenue sur les locations par carte pour couvrir le temps supplémentaire.",
+      "securityDepositHelperDaily": "Retenue sur les locations par carte pour couvrir le temps supplémentaire. Par défaut : deux tiers du prix par jour.",
       "securityDepositCreateHint": "Laissez vide pour utiliser 8 × le tarif horaire. Retenue sur les locations par carte pour couvrir les heures supplémentaires.",
+      "securityDepositCreateHintDaily": "Laissez vide pour utiliser deux tiers du prix par jour. Retenue sur les locations par carte pour couvrir le temps supplémentaire.",
       "activity": {
         "title": "Activité de location",
         "seeRentals": "Voir les locations",
@@ -3425,7 +3426,8 @@
         "byHourHint": "Les clients peuvent réserver quelques heures.",
         "atLeastOne": "Gardez au moins une option activée.",
         "dayPrice": "Prix par jour",
-        "listingInvalid": "Vérifiez les chiffres de l’annonce, le max ≥ min et un prix pour chaque option activée."
+        "listingInvalid": "Vérifiez les chiffres de l’annonce, le max ≥ min et un prix pour chaque option activée.",
+        "priceRequired": "Indiquez un prix pour chaque option activée."
       }
     },
     "failedDeliveries": {

@@ -61,7 +61,7 @@ export class UpdateBusinessRentalListingDto {
   @ApiProperty({
     required: false,
     description:
-      'Security deposit authorized/charged on top of the rental total (defaults to 8x hourly rate)',
+      'Security deposit authorized/charged on top of the rental total (clients default an empty field to 8x the hourly rate, or 8x the day price / 12 without hourly)',
   })
   @IsOptional()
   @IsNumber()

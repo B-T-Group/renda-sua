@@ -116,9 +116,44 @@ const FR: Record<keyof typeof EN, string> = {
 
 export type PickerCopyKey = keyof typeof EN;
 
+/** Hint, note and summary lines that wrap inside the sheet/dialog. */
+const PROSE_KEYS: ReadonlySet<PickerCopyKey> = new Set<PickerCopyKey>([
+  'subtitle',
+  'empty',
+  'oneSetting',
+  'tapHint',
+  'chooseHint',
+  'tapEnd',
+  'sharedHint',
+  'lockBooked',
+  'lockToday',
+  'lockTodaySoon',
+  'sharedLockBooked',
+  'stretched',
+  'capped',
+  'tooShort',
+  'notInARow',
+  'notInARowRemove',
+  'noDaysSub',
+  'dailyOnly',
+  'hourlyOnly',
+  'eachDay',
+]);
+
+/**
+ * Keeps the last two words of a line together (NBSP), so a wrapped hint never leaves one
+ * word alone on its last line ("Times are Libreville / time."). Lines under 4 words are left as is.
+ */
+export function noOrphan(text: string): string {
+  const i = text.lastIndexOf(' ');
+  if (i <= 0 || text.trim().split(/[ \u00A0]+/).length < 4) return text;
+  return `${text.slice(0, i)}\u00A0${text.slice(i + 1)}`;
+}
+
 export function pickerText(lang: PickerLang, key: PickerCopyKey, vars: Record<string, string | number> = {}): string {
   const raw = (lang === 'fr' ? FR : EN)[key];
-  return raw.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(vars[name] ?? ''));
+  const text = raw.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(vars[name] ?? ''));
+  return PROSE_KEYS.has(key) ? noOrphan(text) : text;
 }
 
 function groupedDigits(amount: number, sep: string): string {
@@ -214,6 +249,14 @@ export function summaryLine(days: PickedDay[], lang: PickerLang): string {
   return [head, parts.join(', ')].filter(Boolean).join(' · ');
 }
 
+/**
+ * "09:00 – 11:00" stays on one line in the footer (no "09:00 –" / "11:00" wrap).
+ * A line may break after a dash even before a no-break space, so a word joiner follows it.
+ */
+function unbrokenRange(range: string): string {
+  return range.replace(/ – /g, '\u00A0–\u2060\u00A0');
+}
+
 /** Footer line 2: the single day's times, or the pickup moment. */
 export function footerDetail(
   days: PickedDay[],
@@ -227,14 +270,14 @@ export function footerDetail(
   const info = infos[first.key];
   const dayText = opts.todayKey === first.key ? (lang === 'fr' ? 'Aujourd’hui' : 'Today') : dayLabel(first.key, lang);
   if (opts.shared && days.length > 1 && first.mode === 'hours') {
-    return pickerText(lang, 'eachDay', { range: rangeLabel(first.start, first.end, lang, timeZone) });
+    return pickerText(lang, 'eachDay', { range: unbrokenRange(rangeLabel(first.start, first.end, lang, timeZone)) });
   }
   if (days.length === 1) {
     const range =
       first.mode === 'full' && info?.openMin != null && info.closeMin != null
         ? `${minuteLabel(info.openMin, lang, timeZone)} – ${minuteLabel(info.closeMin, lang, timeZone)}`
         : rangeLabel(first.start, first.end, lang, timeZone);
-    return `${dayText} · ${range}`;
+    return `${dayText} · ${unbrokenRange(range)}`;
   }
   const startMin = first.mode === 'full' ? info?.openMin ?? first.start * 60 : first.start * 60;
   const sep = lang === 'fr' ? ', ' : ', ';

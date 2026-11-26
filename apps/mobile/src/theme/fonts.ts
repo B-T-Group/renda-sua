@@ -27,3 +27,16 @@ export function fontFamilyForWeight(weight?: string | number | null): string {
   if (w >= 500) return fontFamily.medium;
   return fontFamily.regular;
 }
+
+/**
+ * Text style for a weight: the Inter face that carries it. On Android the weight is reset to
+ * normal, because a bold weight on a face registered only as normal makes Android look up a
+ * "bold" variant that does not exist and fall back to the system font (Roboto).
+ */
+export function brandFaceStyle(
+  weight?: string | number | null,
+  os: string = Platform.OS
+): { fontFamily: string; fontWeight?: 'normal' } {
+  const family = fontFamilyForWeight(weight);
+  return os === 'android' ? { fontFamily: family, fontWeight: 'normal' } : { fontFamily: family };
+}

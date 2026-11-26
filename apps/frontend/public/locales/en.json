@@ -3703,8 +3703,9 @@
       "securityDeposit": "Security deposit",
       "depositInvalid": "Enter a valid security deposit.",
       "securityDepositHelper": "Held on card rentals to cover extra hours. Default is 8× the hourly rate.",
-      "securityDepositHelperDaily": "Held on card rentals to cover extra time.",
+      "securityDepositHelperDaily": "Held on card rentals to cover extra time. Default is two-thirds of the day price.",
       "securityDepositCreateHint": "Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours.",
+      "securityDepositCreateHintDaily": "Leave empty to use two-thirds of the day price. Held on card rentals to cover extra time.",
       "activity": {
         "title": "Rental activity",
         "seeRentals": "See rentals",
@@ -3731,7 +3732,8 @@
         "byHourHint": "Renters can book a few hours.",
         "atLeastOne": "Keep at least one on.",
         "dayPrice": "Price per day",
-        "listingInvalid": "Check listing numbers, max ≥ min, and a price for each way you rent."
+        "listingInvalid": "Check listing numbers, max ≥ min, and a price for each way you rent.",
+        "priceRequired": "Set a price for each way you rent."
       }
     },
     "failedDeliveries": {

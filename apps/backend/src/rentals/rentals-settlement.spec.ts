@@ -134,3 +134,39 @@ describe('assertStripeRentalEndWithinAuthWindow', () => {
     );
   });
 });
+
+describe('createBusinessRentalListing default deposit (same rule as web edit and mobile)', () => {
+  async function createdDeposit(dto: Record<string, unknown>, currency = 'CAD'): Promise<unknown> {
+    const s: any = Object.create(RentalsService.prototype);
+    s.requireBusinessId = jest.fn().mockResolvedValue('biz-1');
+    s.assertRentalItemForBusiness = jest.fn().mockResolvedValue(currency);
+    s.assertLocationForBusiness = jest.fn().mockResolvedValue(undefined);
+    s.normalizeWeeklyAvailability = jest.fn().mockReturnValue([]);
+    s.upsertWeeklyAvailability = jest.fn().mockResolvedValue(undefined);
+    s.hasuraUserService = {
+      executeMutation: jest.fn().mockResolvedValue({ insert_rental_location_listings_one: { id: 'L1' } }),
+    };
+    await s.createBusinessRentalListing({
+      rental_item_id: 'item-1',
+      business_location_id: 'loc-1',
+      units_available: 1,
+      ...dto,
+    });
+    return s.hasuraUserService.executeMutation.mock.calls[0][1].object.security_deposit_amount;
+  }
+
+  it('is 8x the hourly price when hourly is on', async () => {
+    expect(await createdDeposit({ base_price_per_hour: 40, base_price_per_day: 300 })).toBe(320);
+  });
+
+  it('is 8x (day price / 12) when hourly is off, ignoring a stale hourly price', async () => {
+    expect(
+      await createdDeposit({ base_price_per_hour: 40, base_price_per_day: 300, offers_hourly: false, offers_daily: true })
+    ).toBe(200);
+  });
+
+  it('stays 0 for XAF and keeps a typed deposit', async () => {
+    expect(await createdDeposit({ base_price_per_hour: 3000, base_price_per_day: 27000 }, 'XAF')).toBe(0);
+    expect(await createdDeposit({ base_price_per_hour: 40, base_price_per_day: 300, security_deposit_amount: 55 })).toBe(55);
+  });
+});

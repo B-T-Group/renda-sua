@@ -275,10 +275,15 @@ export function AddRentalLocationStep({
           >
             {depositInvalid
               ? t('business.rentals.wizard.location.depositInvalid', 'Enter a valid security deposit.')
-              : t(
-                  'business.rentals.wizard.location.depositHelp',
-                  'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-                )}
+              : hourlyOff
+                ? t(
+                    'business.rentals.wizard.location.depositHelpDaily',
+                    'Held on card rentals to cover extra time. Default is two-thirds of the day price.'
+                  )
+                : t(
+                    'business.rentals.wizard.location.depositHelp',
+                    'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                  )}
           </Text>
         </>
       ) : null}

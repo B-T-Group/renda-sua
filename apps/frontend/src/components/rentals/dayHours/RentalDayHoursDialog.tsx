@@ -135,6 +135,8 @@ function DialogBody({
   const [notes, setNotes] = useState<Notes>({});
   const [shared, setShared] = useState(false);
   const [banner, setBanner] = useState<'notInARow' | 'notInARowRemove' | null>(null);
+  /** The server refusal stays until the renter first changes the picked days (R4). The body remounts on open. */
+  const [errorCleared, setErrorCleared] = useState(false);
   const [month, setMonth] = useState(() => {
     const anchor = initialDays?.[0]?.key ?? todayKey;
     return { y: Number(anchor.slice(0, 4)), m: Number(anchor.slice(5, 7)) - 1 };
@@ -178,6 +180,7 @@ function DialogBody({
     }
     if (result.kind === 'unpickable') return;
     setBanner(null);
+    setErrorCleared(true);
     let next = result.days;
     if (sharedOn && result.kind === 'added' && days[0]) next = applySharedChoice(next, days[0]);
     setDays(next);
@@ -250,7 +253,7 @@ function DialogBody({
           <CloseIcon />
         </IconButton>
       </Box>
-      {serverError ? (
+      {serverError && !errorCleared ? (
         <Box data-testid="day-hours-server-error" role="alert" sx={{ mx: 3, mb: 1.5, p: 1.5, display: 'flex', alignItems: 'flex-start', gap: 1, borderRadius: '12px', border: '1px solid #F5C2C2', bgcolor: '#FDECEC', color: 'error.dark' }}>
           <ErrorOutlineIcon sx={{ fontSize: 20, color: 'error.main' }} />
           <Typography sx={{ fontSize: 14, fontWeight: 600, color: 'inherit' }}>{serverError}</Typography>

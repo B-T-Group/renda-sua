@@ -67,7 +67,7 @@ describe('RentalDayHoursDialog', () => {
     fireEvent.click(screen.getByTestId('day-hours-day-2026-11-28'));
     fireEvent.click(screen.getByTestId('day-hours-day-2026-11-27'));
     fireEvent.click(screen.getByTestId('day-hours-day-2026-11-30'));
-    expect(screen.getByTestId('day-hours-banner').textContent).toContain('Pick days in a row');
+    expect(screen.getByTestId('day-hours-banner').textContent).toContain('Pick days in a\u00A0row');
   });
 
   it('shows a server refusal inside the dialog', () => {

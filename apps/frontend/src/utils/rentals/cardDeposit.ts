@@ -74,22 +74,41 @@ export function depositInputError(currency: string | null | undefined, raw: stri
   return !Number.isFinite(value) || value < 0;
 }
 
-/** Empty XAF/XOF stays unset. Card listings still fall back to 8× hourly. */
+/** Rates behind the default deposit. Missing `offersHourly` means the listing rents by the hour. */
+export interface DepositRates {
+  daily?: number;
+  offersHourly?: boolean;
+}
+
+/**
+ * Hour rate behind the default card deposit (8 × this rate). Same rule as the server
+ * (`depositHourRate`): the hourly price when the listing rents by the hour and has one,
+ * otherwise the day price ÷ 12, so a day-only listing defaults to ⅔ of its day price.
+ */
+export function depositHourRate(hourly: number, rates: DepositRates = {}): number {
+  if (rates.offersHourly !== false && Number.isFinite(hourly) && hourly > 0) return hourly;
+  const daily = Number(rates.daily);
+  if (Number.isFinite(daily) && daily > 0) return daily / 12;
+  return hourly;
+}
+
+/** Empty XAF/XOF stays unset. Empty card deposits use 8 × depositHourRate. */
 export function depositOnSave(
   currency: string | null | undefined,
   raw: string,
-  hourly: number
+  hourly: number,
+  rates: DepositRates = {}
 ): number | undefined {
   const trimmed = raw.trim();
   if (!showsCardDeposit(currency)) return storedDeposit(trimmed);
-  if (!trimmed) return hourlyDeposit(hourly);
+  if (!trimmed) return defaultDeposit(depositHourRate(hourly, rates));
   const value = Number(trimmed);
   return Number.isFinite(value) ? value : undefined;
 }
 
-function hourlyDeposit(hourly: number): number | undefined {
-  if (!Number.isFinite(hourly)) return undefined;
-  return Number((hourly * 8).toFixed(2));
+function defaultDeposit(rate: number): number | undefined {
+  if (!Number.isFinite(rate)) return undefined;
+  return Number((rate * 8).toFixed(2));
 }
 
 function storedDeposit(raw: string): number | undefined {

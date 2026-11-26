@@ -2,6 +2,7 @@ import {
   DAY_HOURS_CODES,
   blockHoursViolation,
   dayHoursPickerViolation,
+  depositHourRate,
   daysInARowViolation,
   leadTimeViolation,
   listingModesViolation,
@@ -148,5 +149,22 @@ describe('day-hours picker rules', () => {
     expect(run([hourly('2026-11-25', 11, 13)])).toBe(DAY_HOURS_CODES.LEAD_TIME);
     expect(run([fullDay('2026-11-27'), fullDay('2026-11-30')])).toBe(DAY_HOURS_CODES.NOT_IN_A_ROW);
     expect(run([hourly('2026-11-27', 8, 9)])).toBe(DAY_HOURS_CODES.BLOCK_BELOW_MIN);
+  });
+});
+
+describe('depositHourRate (one default-deposit rule)', () => {
+  it('uses the hourly price when the listing rents by the hour', () => {
+    expect(depositHourRate({ hourPrice: 40, dayPrice: 300 })).toBe(40);
+    expect(depositHourRate({ hourPrice: 40, dayPrice: 300, offersHourly: true })).toBe(40);
+  });
+
+  it('uses the day price / 12 when hourly is off, even if a stale hourly price is sent', () => {
+    expect(depositHourRate({ hourPrice: 40, dayPrice: 300, offersHourly: false })).toBe(25);
+    expect(depositHourRate({ hourPrice: 0, dayPrice: 300, offersHourly: false }) * 8).toBe(200);
+  });
+
+  it('falls back to the day price when there is no hourly price, and 0 without prices', () => {
+    expect(depositHourRate({ hourPrice: 0, dayPrice: 120 })).toBe(10);
+    expect(depositHourRate({ hourPrice: 0, dayPrice: 0 })).toBe(0);
   });
 });
