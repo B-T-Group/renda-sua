@@ -242,6 +242,8 @@ export interface BusinessRentalRequestRow {
     end_at?: string | null;
     booking_number?: string | null;
     actual_start_at?: string | null;
+    /** Return due set at start (hourly early start); listing wall clock like end_at. */
+    return_due_at?: string | null;
     inspection_policy_version?: number | null;
     renter_reported_returned_at?: string | null;
     renter_return_escalated_at?: string | null;
@@ -275,6 +277,7 @@ export interface ClientRentalRequestRow {
     id: string;
     status: string;
     end_at?: string | null;
+    return_due_at?: string | null;
     contract_expires_at?: string | null;
     inspection_policy_version?: number | null;
     renter_reported_returned_at?: string | null;
@@ -324,6 +327,8 @@ export interface BusinessRentalItemActivityStats {
 
 export interface BusinessRentalItemActivityBooking extends BusinessRentalScheduleRow {
   actual_start_at?: string | null;
+  /** Return due set at start (hourly early start); listing wall clock like end_at. */
+  return_due_at?: string | null;
   actual_end_at?: string | null;
   overtime_amount?: number | null;
   settlement_completed_at?: string | null;
@@ -380,6 +385,8 @@ export interface RentalBookingDetail {
   payment_timing?: 'pay_now' | 'pay_at_pickup' | null;
   payment_status?: 'pending' | 'authorized' | 'paid' | 'cancelled' | null;
   actual_start_at?: string | null;
+  /** Return due set at start (hourly early start); listing wall clock like end_at. */
+  return_due_at?: string | null;
   paid_at?: string | null;
   created_at?: string | null;
   actual_end_at?: string | null;

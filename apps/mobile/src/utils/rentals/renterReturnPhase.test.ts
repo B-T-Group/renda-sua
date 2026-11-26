@@ -1,4 +1,4 @@
-import { formatDoualaStamp, listReturnChip, renterReturnPhase } from './renterReturnPhase';
+import { formatReturnStamp, listReturnChip, renterReturnPhase } from './renterReturnPhase';
 
 const end = '2026-11-12T19:00:00.000Z';
 const before = new Date('2026-11-12T18:00:00.000Z');
@@ -31,10 +31,19 @@ describe('renterReturnPhase', () => {
     expect(listReturnChip({ status: 'completed', endAt: end, now: after })).toBeNull();
   });
 
+  it('formats the report time on the listing clock', () => {
+    // 20:40Z is 15:40 in Toronto (EST) and 21:40 in Douala.
+    expect(formatReturnStamp('2026-11-26T20:40:00.000Z', 'en', 'America/Toronto')).toBe('26 Nov · 15:40');
+    expect(formatReturnStamp('2026-11-26T20:40:00.000Z', 'en', 'Africa/Douala')).toBe('26 Nov · 21:40');
+    expect(formatReturnStamp('2026-11-26T20:40:00.000Z', 'en', null)).toBe('26 Nov · 21:40');
+    // A stored wall clock reads as typed with 'UTC'.
+    expect(formatReturnStamp('2026-11-26T18:00:00.000Z', 'en', 'UTC')).toBe('26 Nov · 18:00');
+  });
+
   it('formats Douala time', () => {
-    expect(formatDoualaStamp('2026-11-12T19:00:00.000Z', 'en')).toContain('20:00');
-    expect(formatDoualaStamp('2026-11-12T19:00:00.000Z', 'fr')).toContain('20:00');
-    expect(formatDoualaStamp('not-a-date', 'en')).toBe('');
+    expect(formatReturnStamp('2026-11-12T19:00:00.000Z', 'en')).toContain('20:00');
+    expect(formatReturnStamp('2026-11-12T19:00:00.000Z', 'fr')).toContain('20:00');
+    expect(formatReturnStamp('not-a-date', 'en')).toBe('');
   });
 
   it('opens at the end instant and escalates at 24 hours', () => {

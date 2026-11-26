@@ -49,7 +49,13 @@ import {
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
 import { formatStoredPhone } from '../../utils/phoneLoginUsername';
-import { formatDoualaStamp } from '../../utils/rentals/renterReturnPhase';
+import { formatReturnStamp } from '../../utils/rentals/renterReturnPhase';
+import {
+  clockInputAfterWall,
+  clockInputToInstantIso,
+  listingClockInput,
+  wallIsoInput,
+} from '../../utils/rentals/returnClock';
 import { holdPresentation, type HoldPresentation } from '../../utils/rentals/cardDeposit';
 import {
   businessCanReplaceReport,
@@ -61,6 +67,8 @@ import {
 } from '../../utils/rentals/rentalInspection';
 import { RentalHandoverNotice } from '../../components/rentals/RentalHandoverNotice';
 import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { bookingReturnDue } from '../../utils/rentals/returnDue';
+import { ReturnDialogTitle, ReturnTimeOptions } from '../../components/rentals/ReturnTimeOptions';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalBookingDetail'>;
 
@@ -133,11 +141,15 @@ export default function BusinessRentalBookingDetailScreen() {
     }
   }, []);
 
+  // The return fields are typed on the listing clock, like end_at; the device zone is ignored.
+  const returnZone = booking
+    ? confirmationTimeZone(booking.rental_location_listing?.business_location?.address?.country, booking.currency)
+    : null;
+
   const returnIsOvertime = (() => {
-    if (!booking?.end_at || !returnDate || !returnTime) return false;
-    const iso = combineLocalDateTime(returnDate, returnTime);
-    if (!iso) return false;
-    return new Date(iso).getTime() > new Date(booking.end_at).getTime();
+    const dueAt = bookingReturnDue(booking);
+    if (!dueAt || !returnDate || !returnTime) return false;
+    return clockInputAfterWall(returnDate, returnTime, dueAt);
   })();
 
   const reportNotCollected = useCallback(async () => {
@@ -153,14 +165,14 @@ export default function BusinessRentalBookingDetailScreen() {
   }, [bookingId, t]);
 
   const openReturnDialog = useCallback(() => {
-    const parts = localDateTimeParts(new Date());
+    const parts = listingClockInput(Date.now(), returnZone);
     setReturnDate(parts.date);
     setReturnTime(parts.time);
     setReturnDialog(true);
-  }, []);
+  }, [returnZone]);
 
   const submitReturn = useCallback(async () => {
-    const actualEndAt = combineLocalDateTime(returnDate, returnTime);
+    const actualEndAt = clockInputToInstantIso(returnDate, returnTime, returnZone);
     if (!actualEndAt) {
       setSnack(
         t('rentals.returnAtInvalid', 'Enter a valid return date and time')
@@ -189,7 +201,7 @@ export default function BusinessRentalBookingDetailScreen() {
     } finally {
       setBusy(false);
     }
-  }, [bookingId, load, returnDate, returnTime, t]);
+  }, [bookingId, load, returnDate, returnTime, returnZone, t]);
 
   const cancelBooking = useCallback(async () => {
     setBusy(true);
@@ -239,7 +251,7 @@ export default function BusinessRentalBookingDetailScreen() {
     started: booking.status === 'active' || Boolean(booking.actual_start_at),
   });
   const pickupDay = formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language);
-  const returnWhen = formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language);
+  const returnWhen = formatZonedWhen(bookingReturnDue(booking) ?? booking.end_at, BOOKING_CLOCK, i18n.language, listingZone);
   const bookedSpan = formatBookedSpan(
     booking.start_at,
     booking.end_at,
@@ -461,7 +473,7 @@ export default function BusinessRentalBookingDetailScreen() {
       {showRenterReport && booking.renter_reported_returned_at ? (
         <BusinessReturnedBanner
           title={t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
-            time: formatDoualaStamp(booking.renter_reported_returned_at, i18n.language),
+            time: formatReturnStamp(booking.renter_reported_returned_at, i18n.language, listingZone),
           })}
           body={t(
             'rentals.returnReport.businessBody',
@@ -659,40 +671,24 @@ export default function BusinessRentalBookingDetailScreen() {
           visible={returnDialog}
           onDismiss={() => !busy && setReturnDialog(false)}
         >
-          <Dialog.Title>{t('rentals.confirmReturn', 'Confirm return')}</Dialog.Title>
+          <ReturnDialogTitle />
           <Dialog.Content>
-            <Text style={{ marginBottom: 12, color: colors.text.secondary }}>
-              {t(
-                'rentals.returnAtHint',
-                'Select when the item was returned. Early returns still pay the full rental total; time after the booked end is billed as overtime.'
-              )}
-            </Text>
-            <Button
-              mode="outlined"
-              style={{ marginBottom: 10 }}
-              disabled={busy}
-              onPress={() => {
-                const parts = localDateTimeParts(new Date());
+            <ReturnTimeOptions
+              dueAt={booking.end_at ? bookingReturnDue(booking) ?? booking.end_at : null}
+              timeZone={listingZone}
+              busy={busy}
+              onUseNow={() => {
+                const parts = listingClockInput(Date.now(), returnZone);
                 setReturnDate(parts.date);
                 setReturnTime(parts.time);
               }}
-            >
-              {t('rentals.returnUseNow', 'Use current time')}
-            </Button>
-            {booking.end_at ? (
-              <Button
-                mode="outlined"
-                style={{ marginBottom: 10 }}
-                disabled={busy}
-                onPress={() => {
-                  const parts = localDateTimeParts(new Date(booking.end_at));
-                  setReturnDate(parts.date);
-                  setReturnTime(parts.time);
-                }}
-              >
-                {t('rentals.returnUseBookedEnd', 'Use booked end time')}
-              </Button>
-            ) : null}
+              onUseDue={(dueAt) => {
+                const parts = wallIsoInput(dueAt);
+                if (!parts) return;
+                setReturnDate(parts.date);
+                setReturnTime(parts.time);
+              }}
+            />
             <Text style={{ marginBottom: 6, color: colors.text.secondary, fontSize: 12 }}>
               {t(
                 'rentals.returnSelectedAt',
@@ -746,14 +742,6 @@ export default function BusinessRentalBookingDetailScreen() {
   );
 }
 
-function localDateTimeParts(d: Date): { date: string; time: string } {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return {
-    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-  };
-}
-
 function BusinessAcceptStartHero({
   booking,
   submittedUnits,
@@ -775,7 +763,11 @@ function BusinessAcceptStartHero({
     (booking.status === 'reserved' || booking.status === 'confirmed');
   if (!started && !waiting) return null;
   const name = booking.client?.user?.first_name || t('rentalInspection.renterFallback', 'The renter');
-  const due = formatListingDue(booking.end_at, i18n.language);
+  const due = formatListingDue(
+    bookingReturnDue(booking) ?? booking.end_at,
+    i18n.language,
+    confirmationTimeZone(booking.rental_location_listing?.business_location?.address?.country, booking.currency)
+  );
   const paid =
     (booking.currency || '').toUpperCase() === 'CAD'
       ? formatConfirmationMoney(Number(booking.total_amount) || 0, 'CAD', i18n.language)
@@ -843,32 +835,6 @@ function WaitingStep({ step, idx, current }: { step: string; idx: number; curren
   );
 }
 
-/** Combine local YYYY-MM-DD + HH:mm into an ISO timestamp, or null if invalid. */
-function combineLocalDateTime(date: string, time: string): string | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
-  const tm = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
-  if (!m || !tm) return null;
-  const y = Number(m[1]);
-  const mo = Number(m[2]) - 1;
-  const day = Number(m[3]);
-  const h = Number(tm[1]);
-  const mi = Number(tm[2]);
-  if (
-    mo < 0 ||
-    mo > 11 ||
-    day < 1 ||
-    day > 31 ||
-    h < 0 ||
-    h > 23 ||
-    mi < 0 ||
-    mi > 59
-  ) {
-    return null;
-  }
-  const d = new Date(y, mo, day, h, mi, 0, 0);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
 
 function phaseTone(
   phase: PickupPhase,

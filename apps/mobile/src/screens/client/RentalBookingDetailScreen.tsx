@@ -67,6 +67,7 @@ import {
   PRICE_CHANGE_UNSEEN_TEXT,
 } from '../../utils/rentals/priceChangeUnseen';
 import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { bookingReturnDue } from '../../utils/rentals/returnDue';
 import { RentalMomoWaiting } from '../../components/rentals/RentalMomoWaiting';
 import { BookingQuickActions } from '../../components/rentals/BookingQuickActions';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
@@ -193,8 +194,10 @@ export default function RentalBookingDetailScreen() {
     dayCountLabel,
     bookedSpan
   );
-  const returnByLabel = booking?.end_at
-    ? formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language)
+  // Return due: return_due_at after an hourly early start, else the booked end.
+  const returnDueAt = bookingReturnDue(booking);
+  const returnByLabel = returnDueAt
+    ? formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language, confirmationTimeZone(listingCountry, booking?.currency))
     : '—';
   const timelineStepsBase = bookingDetailTimeline(booking?.status ?? '');
   const currentIdxBase = bookingDetailTimelineIndex(timelineStepsBase, booking?.status ?? '');
@@ -256,7 +259,7 @@ export default function RentalBookingDetailScreen() {
   const overtimeAmount = toAmount(booking?.overtime_amount);
   const returnPhase = renterReturnPhase({
     status: booking?.status ?? '',
-    endAt: booking?.end_at,
+    endAt: returnDueAt,
     reportedAt: booking?.renter_reported_returned_at,
     escalatedAt: booking?.renter_return_escalated_at,
     timeZone: booking ? confirmationTimeZone(listingCountry, booking.currency) : null,
@@ -644,8 +647,9 @@ export default function RentalBookingDetailScreen() {
             location={returnLocation}
             address={booking.return_place?.address ?? returnLocation}
             phone={booking.return_place?.phone ?? null}
-            endAt={booking.end_at}
+            endAt={returnDueAt ?? booking.end_at}
             reportedAt={booking.renter_reported_returned_at}
+            timeZone={startZone}
             depositLabel={hold.showDeposit ? formatDetailMoney(depositAmount) : ''}
             onReported={() => void refetch()}
             onAlreadyConfirmed={() => void refetch()}

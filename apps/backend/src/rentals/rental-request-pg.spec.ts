@@ -2,6 +2,8 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Client } from 'pg';
 import { parse as parsePgConnection } from 'pg-connection-string';
+import { listingTimeZone } from './inspection/listing-time-zone';
+import { earlyStartReturnDue } from './return-due';
 
 const url = process.env.RENTAL_QA_DATABASE_URL || 'postgres://rental_qa:rental_qa@127.0.0.1:5432/rental_qa';
 const root = join(__dirname, '../../../hasura/migrations/Rendasua');
@@ -363,3 +365,78 @@ async function respondBy(client: Client, id: string): Promise<string> {
   const saved = await client.query('SELECT respond_by FROM public.rental_requests WHERE id = $1', [id]);
   return saved.rows[0].respond_by.toISOString();
 }
+
+/** Slices one function definition out of a migration file. */
+function migrationFunction(file: string, name: string): string {
+  const sql = readFileSync(join(root, file, 'up.sql'), 'utf8');
+  const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+  const end = sql.indexOf('$$;', sql.indexOf('AS $$', start)) + 3;
+  if (start < 0 || end < 3) throw new Error(`${name} not found in ${file}`);
+  return sql.slice(start, end);
+}
+
+describe('hourly early start return due on Postgres', () => {
+  const client = new Client({ connectionString: url });
+  const hourly = JSON.stringify({ lines: [{ kind: 'hourly' }] });
+
+  beforeAll(async () => {
+    assertDisposableQaDatabase(url);
+    await client.connect();
+    await client.query(migrationFunction('20261123120000_rental_simple_start', 'rental_listing_time_zone'));
+    await client.query(migrationFunction('20261126190000_rental_wall_clock_deadlines', 'rental_wall_now'));
+    await client.query(
+      migrationFunction('20261126213000_rental_early_start_return_due', 'rental_early_start_return_due')
+    );
+  });
+
+  afterAll(async () => {
+    await client.end();
+  });
+
+  async function sqlDue(start: string, end: string, snapshot: string, at: string, country: string) {
+    const result = await client.query(
+      'SELECT public.rental_early_start_return_due($1::timestamptz, $2::timestamptz, $3::jsonb, $4::timestamptz, $5) AS due',
+      [start, end, snapshot, at, country]
+    );
+    const due = result.rows[0].due as Date | null;
+    return due ? due.toISOString() : null;
+  }
+
+  it('matches the Nest rule in Toronto, Douala, Manila and across DST', async () => {
+    const cases: Array<[string, string, string, string, string, string | null]> = [
+      ['2026-11-26T14:00:00Z', '2026-11-26T16:00:00Z', hourly, '2026-11-26T16:00:00Z', 'CA', '2026-11-26T13:00:00.000Z'],
+      ['2026-11-26T14:00:00Z', '2026-11-26T16:00:00Z', hourly, '2026-11-26T10:00:00Z', 'CM', '2026-11-26T13:00:00.000Z'],
+      ['2026-11-26T14:00:00Z', '2026-11-26T16:00:00Z', hourly, '2026-11-26T03:00:00Z', 'PH', '2026-11-26T13:00:00.000Z'],
+      ['2026-11-26T14:00:00Z', '2026-11-26T16:00:00Z', hourly, '2026-11-26T19:00:00Z', 'CA', null],
+      ['2026-11-26T14:00:00Z', '2026-11-26T16:00:00Z', hourly, '2026-11-26T19:30:00Z', 'CA', null],
+      ['2026-11-26T00:00:00Z', '2026-11-27T00:00:00Z', JSON.stringify({ lines: [{ kind: 'all_day' }] }), '2026-11-25T23:30:00Z', 'CM', null],
+      ['2026-11-26T14:00:00Z', '2026-11-27T16:00:00Z', JSON.stringify({ lines: [{ kind: 'hourly' }, { kind: 'hourly' }] }), '2026-11-26T10:00:00Z', 'CM', null],
+      ['2026-11-26T14:00:00Z', '2026-11-26T16:00:00Z', JSON.stringify({ version: 2 }), '2026-11-26T10:00:00Z', 'CM', null],
+      ['2026-11-01T03:00:00Z', '2026-11-01T05:00:00Z', hourly, '2026-11-01T04:30:00Z', 'CA', '2026-11-01T01:30:00.000Z'],
+      ['2026-03-08T03:00:00Z', '2026-03-08T05:00:00Z', hourly, '2026-03-08T06:30:00Z', 'CA', '2026-03-08T04:30:00.000Z'],
+    ];
+    for (const [start, end, snapshot, at, country, expected] of cases) {
+      const fromSql = await sqlDue(start, end, snapshot, at, country);
+      expect({ start, at, country, due: fromSql }).toEqual({ start, at, country, due: expected });
+      const fromNest = earlyStartReturnDue({
+        startAt: start,
+        endAt: end,
+        snapshot: JSON.parse(snapshot),
+        actualStartAt: new Date(at),
+        timeZone: listingTimeZone(country),
+      });
+      expect(fromNest).toBe(expected);
+    }
+  });
+
+  it('does not depend on the session time zone', async () => {
+    await client.query("SET TIME ZONE 'America/Toronto'");
+    try {
+      await expect(
+        sqlDue('2026-11-01T03:00:00Z', '2026-11-01T05:00:00Z', hourly, '2026-11-01T04:30:00Z', 'CA')
+      ).resolves.toBe('2026-11-01T01:30:00.000Z');
+    } finally {
+      await client.query("SET TIME ZONE 'UTC'");
+    }
+  });
+});

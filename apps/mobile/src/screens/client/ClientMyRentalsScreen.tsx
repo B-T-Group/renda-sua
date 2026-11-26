@@ -430,7 +430,7 @@ export default function ClientMyRentalsScreen({
                 ? (() => {
                     const chip = listReturnChip({
                       status: item.status,
-                      endAt: item.end_at,
+                      endAt: item.return_due_at || item.end_at,
                       reportedAt: item.renter_reported_returned_at,
                       escalatedAt: item.renter_return_escalated_at,
                     });
