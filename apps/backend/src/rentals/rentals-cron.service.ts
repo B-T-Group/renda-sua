@@ -247,7 +247,8 @@ export class RentalsCronService {
   /**
    * Release reserved (pay-at-pickup) bookings that were never paid within the
    * grace window after their scheduled start, so the capacity frees up.
-   * An open pickup inspection pauses that clock until the client accepts.
+   * An open pickup inspection pauses that clock until the client accepts, except a
+   * flagged check (correction requested) left unfixed: cancelled and refunded at 23:59.
    */
   async expireReservedRentalBookings(): Promise<number> {
     // start_at is listing wall clock: widen, then unpaidReservationDue rechecks per listing.
@@ -280,7 +281,10 @@ export class RentalsCronService {
   private async expireOneReservedBooking(bookingId: string): Promise<boolean> {
     const booking = await this.fetchBooking(bookingId);
     if (!booking || booking.status !== 'reserved' || booking.actual_start_at) return false;
-    if (!this.rentalsService || !this.rentalsService.unpaidReservationDue(booking)) return false;
+    if (!this.rentalsService) return false;
+    // A flagged check left unfixed at 23:59 on the start day cancels and refunds (mockup 07).
+    const flagged = booking.pickup_inspection_pending ? await this.rentalsService.pickupCheckFlagged(bookingId) : false;
+    if (!this.rentalsService.unpaidReservationDue(booking, new Date(), flagged)) return false;
     const won = await casUpdateRentalBooking(
       this.hasuraSystemService,
       bookingId,
@@ -292,16 +296,35 @@ export class RentalsCronService {
       }
     );
     if (!won) return false;
+    const fee = await this.settleExpiredFee(booking);
     await this.logHistory(
       bookingId,
       'cancelled',
       'reserved',
       null,
       'system',
-      'Reservation expired unpaid after scheduled start'
+      fee === 'forfeit'
+        ? 'Reservation expired unpaid after scheduled start (reservation fee kept by the business)'
+        : flagged
+          ? 'Reservation cancelled: pickup check flag not fixed by the end of the start day (reservation fee refunded)'
+          : 'Reservation expired unpaid after scheduled start'
     );
     await this.notifyReservationExpired(booking);
     return true;
+  }
+
+  /** Unpaid by the end of the start day: the fee is kept, unless a flag was left unresolved. */
+  private async settleExpiredFee(booking: any): Promise<'refund' | 'forfeit' | 'none'> {
+    if (!this.rentalsService?.settleReservationFeeAfterExpiry) return 'none';
+    try {
+      return await this.rentalsService.settleReservationFeeAfterExpiry(booking);
+    } catch (error) {
+      await casUpdateRentalBooking(this.hasuraSystemService, booking.id, ['cancelled'], {
+        status: 'reserved',
+        payment_status: booking.payment_status ?? 'pending',
+      });
+      throw error;
+    }
   }
 
   private async notifyReservationExpired(booking: any): Promise<void> {

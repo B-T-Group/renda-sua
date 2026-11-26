@@ -40,6 +40,9 @@ import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import { BusinessDeclineBanner, DeclineOutcomeCard, declineCardView } from '../rentals/DeclinePickupScreens';
 import { RentalJourneyList } from '../rentals/RentalJourneyList';
 import { RentalStartPanel } from '../rentals/RentalStartPanel';
+import { PayAtPickupPanel } from '../rentals/PayAtPickupPanel';
+import { CancelBookingDialog } from '../rentals/CancelBookingDialog';
+import { cancelFeeResult, dueAtPickup, reservationFee, showsPayAtPickupCard } from '../../utils/rentals/reservationFee';
 import { BusinessPhotoRequest } from '../rentals/BusinessPhotoRequest';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
 import { ReportSentConfirmation } from '../rentals/ReportSentConfirmation';
@@ -88,7 +91,7 @@ import {
   formatConfirmationDue,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
-import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedWeekdayDay, formatZonedWhen, pickupClockLabel, pickupPhase, windowStatusLabel } from '../../utils/rentalStartWindow';
 import { bookingReturnDue } from '../../utils/rentals/returnDue';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 import {
@@ -647,7 +650,7 @@ const RentalBookingDetailPage: React.FC = () => {
           <Typography variant="body2" color="text.secondary" textAlign="center">
             {t('rentals.start.momoWaitingBody', 'Approve the request on your phone. This page updates when the payment goes through.')}
           </Typography>
-          <Typography variant="h6">{formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}</Typography>
+          <Typography variant="h6">{formatConfirmationMoney(Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0, booking.currency, i18n.language)}</Typography>
           <Typography>{booking.rental_location_listing?.rental_item?.name}</Typography>
           <Typography color="text.secondary">{booking.client?.user?.phone_number || ''}</Typography>
           <Button onClick={() => setMomoWaiting(false)}>{t('common.back', 'Back')}</Button>
@@ -991,6 +994,15 @@ const RentalBookingDetailPage: React.FC = () => {
               itemName={booking.rental_location_listing?.rental_item?.name ?? ''}
             />
           ) : null}
+          {isClient && showsPayAtPickupCard(booking) ? (
+            <PayAtPickupPanel
+              booking={booking}
+              format={(value) => formatConfirmationMoney(value, booking.currency, i18n.language)}
+              itemCheck={inspection.enrolled}
+              pickupDay={formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
+              timeZone={listingZone}
+            />
+          ) : null}
           {showStartPanel ? (
             <RentalStartPanel
               booking={booking}
@@ -998,7 +1010,7 @@ const RentalBookingDetailPage: React.FC = () => {
               role={isBusiness ? 'business' : 'client'}
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ')}
               place={booking.rental_location_listing?.business_location?.name ?? ''}
-              money={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+              money={formatConfirmationMoney(Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0, booking.currency, i18n.language)}
               returnLabel={formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language, listingZone)}
               starting={sharingPin}
               actions={
@@ -1030,6 +1042,11 @@ const RentalBookingDetailPage: React.FC = () => {
               onConfirm={() => {
                 if (!bookingId) return;
                 void startRental(bookingId).then((res) => {
+                  if (res.checkout_url) {
+                    // Card pay at pickup: Stripe Checkout for (rental − paid fee + deposit).
+                    window.location.href = res.checkout_url;
+                    return;
+                  }
                   if (res.paymentPending) {
                     setMomoWaiting(true);
                     return;
@@ -1044,10 +1061,12 @@ const RentalBookingDetailPage: React.FC = () => {
           {photosRequested && bookingId ? (
             <BusinessPhotoRequest
               bookingId={bookingId}
-              renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ') || t('rentals.renter', 'The renter')}
+              renterName={booking.client?.user?.first_name || t('rentals.renter', 'The renter')}
               reason={inspection.pickup?.correctionReason}
               timeZone={listingZone}
               askedAt={inspection.pickup?.askedAt || inspection.pickup?.submittedAt}
+              fixDay={formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
+              fee={reservationFee(booking) > 0 ? formatConfirmationMoney(reservationFee(booking), booking.currency, i18n.language) : undefined}
               photos={(inspection.pickup.units[0]?.photos ?? []).map((photo) => ({
                 ...photo,
                 unitId: inspection.pickup?.units[0]?.unitId ?? photo.id,
@@ -1281,23 +1300,14 @@ const RentalBookingDetailPage: React.FC = () => {
               </Paper>
             ) : null}
 
-            <Dialog open={cancelConfirm} onClose={() => setCancelConfirm(false)}>
-              <DialogTitle>{t('rentals.cancelBooking', 'Cancel booking')}</DialogTitle>
-              <DialogContent>
-                <Typography>
-                  {t(
-                    'rentals.bookingDetail.cancelBeforeStartMessage',
-                    'This booking has not started, so cancellation is free. Any card hold or wallet hold is released.'
-                  )}
-                </Typography>
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={() => setCancelConfirm(false)}>{t('common.cancel', 'Cancel')}</Button>
-                <Button color="error" onClick={() => { setCancelConfirm(false); void handleCancelBooking(); }}>
-                  {t('rentals.cancelBooking', 'Cancel booking')}
-                </Button>
-              </DialogActions>
-            </Dialog>
+            <CancelBookingDialog
+              open={cancelConfirm}
+              fee={cancelFeeResult(booking, Date.now(), listingZone, inspection.pickup?.status === 'correction_requested')}
+              feeLabel={formatConfirmationMoney(reservationFee(booking), booking.currency, i18n.language)}
+              flagged={inspection.pickup?.status === 'correction_requested'}
+              onClose={() => setCancelConfirm(false)}
+              onConfirm={() => { setCancelConfirm(false); void handleCancelBooking(); }}
+            />
 
             {bookingId && booking.status !== 'cancelled' ? (
               <Box id="rental-messages">

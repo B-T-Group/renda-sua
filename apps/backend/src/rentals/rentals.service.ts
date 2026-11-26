@@ -127,6 +127,17 @@ import { StripeService } from '../stripe-payments/stripe.service';
 import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment.dto';
 import { isActivePersona } from '../users/persona.util';
 import { casUpdateRentalBooking } from './rental-booking-cas';
+import { ReservationFeeLedger } from './reservation-fee/reservation-fee.ledger';
+import {
+  bookingNumberFromFeeEntity,
+  dueAtPickup,
+  feeOutcome,
+  feePaidAmount,
+  pickupAuthFits,
+  reservationFeeEntityId,
+  reservationFeeFor,
+  type FeeCancelReason,
+} from './reservation-fee/reservation-fee.policy';
 import {
   assertLedgerResult,
   rentalLedgerKey,
@@ -191,6 +202,8 @@ export interface RentalBookingActionResult {
   paymentPending?: boolean;
   /** Booking is capacity-held without payment; contract is collected at pickup. */
   reserved?: boolean;
+  /** Reserve with a reservation fee: what is being paid now. */
+  reservation_fee?: { amount: number; currency: string; status: string };
 }
 
 export interface RentalReturnSettlement {
@@ -2520,6 +2533,7 @@ export class RentalsService {
         base_price_per_day: dayPrice,
         ...modes,
         security_deposit_amount: securityDeposit,
+        reservation_fee_enabled: dto.reservation_fee_enabled === true,
         min_rental_hours: minHours,
         max_rental_hours: maxHours,
         units_available: dto.units_available,
@@ -2785,6 +2799,9 @@ export class RentalsService {
         dto.security_deposit_amount,
         0
       );
+    }
+    if (dto.reservation_fee_enabled !== undefined) {
+      out.reservation_fee_enabled = dto.reservation_fee_enabled === true;
     }
     if (dto.min_rental_hours !== undefined) {
       out.min_rental_hours = dto.min_rental_hours;
@@ -3214,12 +3231,13 @@ export class RentalsService {
     const rail = listingCountry
       ? await this.paymentRoutingService.resolveRailForCountry(listingCountry)
       : await this.paymentRoutingService.resolveRailForUser(params.userId);
+    const booking = await this.fetchBooking(params.bookingId);
     if (rail !== 'stripe') {
-      return this.reserveRentalBookingForPickup(
-        params.bookingId,
-        params.requestId,
-        params.userId
-      );
+      return this.reserveWithFee({ ...params, booking, rail: 'mobile_money' });
+    }
+    if (booking?.card_pay_at_pickup === true) {
+      await this.assertPickupAuthFits(params.req, listingCountry, booking);
+      return this.reserveWithFee({ ...params, booking, rail: 'stripe' });
     }
     const enrolledEnd = this.requestWindowEnvelope(params.req).endAt;
     const fields = await this.stripeWindowFields(listingCountry, await this.knownInspected(listingCountry, params.req));
@@ -3243,11 +3261,281 @@ export class RentalsService {
     });
   }
 
-  /** Wallet / mobile money: hold capacity without payment; pay at pickup. */
+  /**
+   * Reserve now, pay at pickup. No fee: reserve straight away. With a fee: pay the
+   * fee first (card PaymentIntent, wallet, or a Mobile Money push); the booking
+   * stays `proposed` until the fee lands, then reserves (onReservationFeePaid).
+   */
+  private async reserveWithFee(params: {
+    bookingId: string;
+    bookingNumber: string;
+    requestId: string;
+    userId: string;
+    email?: string | null;
+    stripePaymentMethod?: 'payment_sheet';
+    booking: any;
+    rail: 'stripe' | 'mobile_money';
+    req: any;
+  }): Promise<RentalBookingActionResult> {
+    const booking = params.booking;
+    const fee = this.feeLedger.amount(booking ?? { id: params.bookingId, currency: '' });
+    const railName = params.rail === 'stripe' ? 'stripe' : 'mobile_money';
+    if (fee <= 0 || booking?.reservation_fee_status === 'paid') {
+      return this.reserveRentalBookingForPickup(params.bookingId, params.requestId, params.userId, railName);
+    }
+    const account = await this.hasuraSystemService.getAccount(params.userId, booking.currency);
+    if (!account?.id) throw new HttpException('Client account missing', HttpStatus.BAD_REQUEST);
+    if (params.rail === 'stripe') return this.startCardFee(params, booking, account.id, fee);
+    if (Number(account.available_balance ?? 0) >= fee) {
+      return this.payFeeFromWallet(params, booking);
+    }
+    return this.startMomoFee(params, booking, account.id, fee);
+  }
+
+  private feeBody(
+    bookingId: string,
+    rail: RentalPaymentRail,
+    booking: any,
+    status: string
+  ): RentalBookingActionResult {
+    return {
+      success: true,
+      bookingId,
+      payment_rail: rail,
+      paymentPending: true,
+      reservation_fee: {
+        amount: Number(booking.reservation_fee_amount) || 0,
+        currency: booking.currency,
+        status,
+      },
+    };
+  }
+
+  private async startCardFee(
+    params: { bookingId: string; bookingNumber: string; email?: string | null; stripePaymentMethod?: 'payment_sheet' },
+    booking: any,
+    accountId: string,
+    fee: number
+  ): Promise<RentalBookingActionResult> {
+    await this.feeLedger.cas(params.bookingId, ['none', 'pending', 'failed'], {
+      reservation_fee_status: 'pending',
+      reservation_fee_rail: 'card',
+    });
+    const entityId = reservationFeeEntityId(params.bookingNumber);
+    const pending = await this.stripePaymentsDatabaseService.getTransactionByEntityId(entityId);
+    const base = this.feeBody(params.bookingId, 'stripe', booking, 'pending');
+    if (pending?.status === 'pending' && pending.stripe_payment_intent_id && params.stripePaymentMethod === 'payment_sheet') {
+      const reused = await this.reusePendingRentalPaymentIntent(params.bookingId, pending);
+      if (reused) return { ...reused, reservation_fee: base.reservation_fee };
+    }
+    if (pending?.status === 'pending' && pending.payment_url && params.stripePaymentMethod !== 'payment_sheet') {
+      return { ...base, checkout_url: pending.payment_url, payment_transaction_id: pending.id };
+    }
+    const common = {
+      amount: fee,
+      currency: booking.currency,
+      description: `Rental reservation fee ${params.bookingNumber}`,
+      accountId,
+      paymentEntity: 'rental_booking' as const,
+      entityId,
+      bookingId: params.bookingId,
+      customerEmail: params.email ?? undefined,
+      captureMethod: 'automatic' as const,
+    };
+    if (params.stripePaymentMethod === 'payment_sheet') {
+      const intent = await this.stripeCheckoutService.createPaymentIntent(common);
+      if (!intent.clientSecret) {
+        throw new HttpException('Failed to create Stripe PaymentIntent', HttpStatus.BAD_GATEWAY);
+      }
+      return {
+        ...base,
+        payment_intent_client_secret: intent.clientSecret,
+        payment_transaction_id: intent.transactionId,
+      };
+    }
+    const checkout = await this.stripeCheckoutService.createCheckout(common);
+    if (!checkout.paymentUrl) {
+      throw new HttpException('Failed to create Stripe checkout session', HttpStatus.BAD_GATEWAY);
+    }
+    return { ...base, checkout_url: checkout.paymentUrl, payment_transaction_id: checkout.transactionId };
+  }
+
+  private async payFeeFromWallet(
+    params: { bookingId: string; requestId: string; userId: string },
+    booking: any
+  ): Promise<RentalBookingActionResult> {
+    const claimed = await this.feeLedger.cas(params.bookingId, ['none', 'pending', 'failed'], {
+      reservation_fee_status: 'pending',
+      reservation_fee_rail: 'wallet',
+    });
+    if (!claimed) return this.reserveReplayResult(params.bookingId);
+    const fresh = { ...booking, reservation_fee_rail: 'wallet' };
+    await this.feeLedger.hold(fresh);
+    await this.feeLedger.cas(params.bookingId, ['pending'], { reservation_fee_status: 'paid' });
+    return this.reserveAfterFee({ ...fresh, reservation_fee_status: 'paid' }, params.userId);
+  }
+
+  private async startMomoFee(
+    params: { bookingId: string; bookingNumber: string; userId: string; email?: string | null; req: any },
+    booking: any,
+    accountId: string,
+    fee: number
+  ): Promise<RentalBookingActionResult> {
+    await this.feeLedger.cas(params.bookingId, ['none', 'pending', 'failed'], {
+      reservation_fee_status: 'pending',
+      reservation_fee_rail: 'mobile_money',
+    });
+    const user = await this.hasuraUserService.getUser();
+    await this.initiateRentalBookingPayment({
+      bookingNumber: params.bookingNumber,
+      amount: fee,
+      currency: booking.currency,
+      clientAccountId: accountId,
+      userId: params.userId,
+      phoneNumber: user?.phone_number || '',
+      email: params.email,
+      purpose: 'reservation_fee',
+      paymentEntity: 'rental_booking',
+      itemCountry: resolveItemCountry(this.bookingCountry(booking)),
+      entityId: reservationFeeEntityId(params.bookingNumber),
+    });
+    return this.feeBody(params.bookingId, 'mobile_money', booking, 'pending');
+  }
+
+  /**
+   * Fee payment landed (card webhook or Mobile Money callback; the wallet was
+   * already credited). Hold it, mark paid, then reserve. A booking that is no
+   * longer proposed or reserved (offer expired, cancelled) gets the fee back.
+   */
+  private async onReservationFeePaid(bookingNumber: string): Promise<void> {
+    const booking = await this.fetchBookingByBookingNumber(bookingNumber);
+    if (!booking) {
+      this.logger.warn(`reservation fee: booking not found (${bookingNumber})`);
+      return;
+    }
+    if (booking.reservation_fee_status === 'paid' || booking.reservation_fee_status === 'applied') return;
+    await this.feeLedger.hold(booking);
+    const won = await this.feeLedger.cas(booking.id, ['none', 'pending', 'failed'], { reservation_fee_status: 'paid' });
+    if (!won) return;
+    const paid = { ...booking, reservation_fee_status: 'paid' };
+    if (booking.status === 'proposed') {
+      const result = await this.reserveAfterFee(paid, booking.client?.user_id ?? null);
+      if (result.reserved) return;
+    }
+    const fresh = await this.fetchBooking(booking.id);
+    if (fresh?.status === 'reserved' || fresh?.status === 'confirmed' || fresh?.status === 'active') return;
+    await this.feeLedger.refund({ ...paid, ...(fresh ?? {}), reservation_fee_status: 'paid' });
+    await this.logHistory(booking.id, fresh?.status ?? booking.status, booking.status, null, 'system',
+      'Reservation fee refunded: the offer was no longer open');
+  }
+
+  private async reserveAfterFee(booking: any, userId: string | null): Promise<RentalBookingActionResult> {
+    const exp = booking.contract_expires_at as string | null | undefined;
+    if (exp && new Date(exp) <= new Date()) {
+      return { success: true, bookingId: booking.id, payment_rail: 'mobile_money', reserved: false };
+    }
+    const rail = booking.card_pay_at_pickup ? 'stripe' : 'mobile_money';
+    return this.reserveRentalBookingForPickup(booking.id, booking.rental_request_id, userId, rail);
+  }
+
+  /** Card pay at pickup keeps the ~6-day card limit, now counted from pickup. */
+  private async assertPickupAuthFits(req: any, country: string | null, booking: any): Promise<void> {
+    const envelope = this.requestWindowEnvelope(req);
+    const inspected = booking?.inspection_policy_version != null;
+    const reviewHours = inspected ? await this.stripeReviewHours(country) : 0;
+    const fits = pickupAuthFits({
+      startAt: new Date(envelope.startAt),
+      endAt: new Date(envelope.endAt),
+      authWindowDays: STRIPE_AUTH_WINDOW_DAYS,
+      reviewHours,
+    });
+    if (fits) return;
+    throw cardWindowRejected(
+      'RENTAL_STRIPE_BOOKING_WINDOW_EXCEEDED',
+      `Card payments support rentals up to ${STRIPE_AUTH_WINDOW_DAYS} days`,
+      await this.stripeWindowFields(country, inspected)
+    );
+  }
+
+  /** Card pay-at-pickup and the reservation fee are decided once, when the booking is created. */
+  private async stampReservePath(bookingId: string, req: any, total: number): Promise<void> {
+    try {
+      const listing = req.rental_location_listing ?? {};
+      const country = resolveItemCountry(listing.business_location?.address?.country);
+      const rail = country ? await this.paymentRoutingService.resolveRailForCountry(country) : 'mobile_money';
+      const cardPath = rail === 'stripe' && (await this.inspectionFlags.cardChargeAtPickupEnabled(country));
+      const feeApplies = rail !== 'stripe' || cardPath;
+      const fee = feeApplies
+        ? reservationFeeFor({ enabled: listing.reservation_fee_enabled, total, rail })
+        : 0;
+      if (!cardPath && fee <= 0) return;
+      await this.patchBooking(bookingId, {
+        card_pay_at_pickup: cardPath,
+        reservation_fee_amount: fee,
+        ...(fee > 0 ? { reservation_fee_ref: crypto.randomUUID() } : {}),
+      });
+    } catch (error: any) {
+      this.logger?.warn(`stampReservePath ${bookingId}: ${error?.message ?? error}`);
+    }
+  }
+
+  private get feeLedger(): ReservationFeeLedger {
+    return new ReservationFeeLedger(this.accountsService, this.hasuraSystemService, this.stripeCaptureService);
+  }
+
+  /** Settle a paid fee for a booking cancelled elsewhere (pickup decline). */
+  async refundReservationFeeFor(bookingId: string, reason: FeeCancelReason): Promise<'refund' | 'forfeit' | 'none'> {
+    const booking = await this.fetchBooking(bookingId);
+    return this.settleReservationFeeOnCancel(booking, reason);
+  }
+
+  /** Reserved expiry (cron): a flagged, unresolved pickup check refunds; plain unpaid keeps the fee. */
+  async settleReservationFeeAfterExpiry(booking: any): Promise<'refund' | 'forfeit' | 'none'> {
+    if (!booking || booking.reservation_fee_status !== 'paid') return 'none';
+    const flagged = await this.pickupCheckFlagged(booking.id);
+    return this.settleReservationFeeOnCancel(booking, flagged ? 'unresolved_flag' : 'unpaid_expired');
+  }
+
+  /** The renter asked for new photos (correction_requested) and the business hasn't resent them. */
+  async pickupCheckFlagged(bookingId: string): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      rental_inspections: Array<{ status: string }>;
+    }>(
+      `query PickupCheckFlagged($id: uuid!) {
+        rental_inspections(where: { rental_booking_id: { _eq: $id }, stage: { _eq: "pickup" } }, limit: 1) { status }
+      }`,
+      { id: bookingId }
+    );
+    return result.rental_inspections?.[0]?.status === 'correction_requested';
+  }
+
+  /** A renter cancelling while their flag is still open gets the fee back, like an unresolved flag at 23:59. */
+  private async cancelFeeReason(booking: any, isClient: boolean): Promise<FeeCancelReason> {
+    if (!isClient) return 'business_cancel';
+    if (booking?.reservation_fee_status !== 'paid') return 'renter_cancel';
+    return (await this.pickupCheckFlagged(booking.id)) ? 'unresolved_flag' : 'renter_cancel';
+  }
+
+  /** Refund or keep a paid fee when a booking is cancelled (README §4 table). */
+  async settleReservationFeeOnCancel(booking: any, reason: FeeCancelReason): Promise<'refund' | 'forfeit' | 'none'> {
+    if (!booking || booking.reservation_fee_status !== 'paid' || this.feeLedger.amount(booking) <= 0) return 'none';
+    const outcome = feeOutcome({
+      reason,
+      now: new Date(),
+      startAt: new Date(booking.start_at),
+      timeZone: listingZoneFor(this.bookingCountry(booking)),
+    });
+    if (outcome === 'refund') await this.feeLedger.refund(booking);
+    else await this.feeLedger.forfeit(booking);
+    return outcome;
+  }
+
+  /** Wallet / mobile money (and card pay at pickup): hold capacity without payment; pay at pickup. */
   private async reserveRentalBookingForPickup(
     bookingId: string,
     requestId: string,
-    userId: string
+    userId: string | null,
+    rail: 'stripe' | 'mobile_money' = 'mobile_money'
   ): Promise<RentalBookingActionResult> {
     const won = await this.casBooking(bookingId, ['proposed'], {
       status: 'reserved',
@@ -3272,7 +3560,7 @@ export class RentalsService {
     return {
       success: true,
       bookingId,
-      payment_rail: 'mobile_money',
+      payment_rail: rail,
       reserved: true,
     };
   }
@@ -3580,9 +3868,11 @@ export class RentalsService {
     userId: string;
     phoneNumber: string;
     email?: string | null;
-    purpose: 'contract' | 'overtime';
+    purpose: 'contract' | 'overtime' | 'reservation_fee';
     paymentEntity: 'rental_booking';
     itemCountry?: string | null;
+    /** Defaults to the booking number. The reservation fee uses `fee:<booking number>`. */
+    entityId?: string;
   }): Promise<void> {
     if (!params.phoneNumber.trim()) {
       throw new HttpException(
@@ -3616,7 +3906,7 @@ export class RentalsService {
       account_id: params.clientAccountId,
       transaction_type: 'PAYMENT',
       payment_entity: params.paymentEntity,
-      entity_id: params.bookingNumber,
+      entity_id: params.entityId ?? params.bookingNumber,
       idempotency_key: rentalMomoIdempotencyKey(
         params.bookingNumber,
         params.purpose
@@ -3691,6 +3981,11 @@ export class RentalsService {
    * pending overtime on `awaiting_return` bookings.
    */
   async processRentalBookingPayment(transaction: any): Promise<void> {
+    const feeFor = bookingNumberFromFeeEntity(transaction?.entity_id);
+    if (feeFor) {
+      await this.onReservationFeePaid(feeFor);
+      return;
+    }
     const bookingNumber = transaction?.entity_id || transaction?.reference;
     if (!bookingNumber) {
       this.logger.warn('processRentalBookingPayment: missing bookingNumber');
@@ -3879,7 +4174,7 @@ export class RentalsService {
     const placed = await this.placeHoldForBooking(
       booking.id,
       booking.client_id,
-      Number(booking.total_amount),
+      this.amountDueAtPickup(booking),
       booking.currency
     );
     owned.value = placed === 'own';
@@ -3934,14 +4229,19 @@ export class RentalsService {
       await this.voidCardAuthIfCancelled(booking);
       return;
     }
+    const atPickup = booking.status === 'reserved';
     const confirmed = await this.finalizeRentalBookingConfirmation(
       booking.id,
       booking.rental_request_id,
       booking.client.user_id as string,
-      'proposed',
-      'Card authorized (contract + deposit)'
+      atPickup ? 'reserved' : 'proposed',
+      atPickup ? 'Card authorized at pickup (rental - fee + deposit)' : 'Card authorized (contract + deposit)'
     );
-    if (!confirmed) await this.voidCardAuthIfCancelled(booking);
+    if (!confirmed) {
+      await this.voidCardAuthIfCancelled(booking);
+      return;
+    }
+    if (atPickup) await this.startEnrolledAfterPickupPayment(booking, 'Started after card payment');
   }
 
   private async bookingAwaitingCardAuth(transaction: any): Promise<any | null> {
@@ -3951,7 +4251,9 @@ export class RentalsService {
       return null;
     }
     const booking = await this.fetchBookingByBookingNumber(bookingNumber);
-    if (!booking || booking.status !== 'proposed') return null;
+    if (!booking) return null;
+    const pickupCard = booking.status === 'reserved' && booking.card_pay_at_pickup === true;
+    if (booking.status !== 'proposed' && !pickupCard) return null;
     if (!booking.client?.user_id) {
       this.logger.warn(
         `processRentalBookingAuthorization: missing client user_id for ${bookingNumber}`
@@ -3962,6 +4264,12 @@ export class RentalsService {
   }
 
   private async stampCardAuthorized(booking: any, amount: number): Promise<boolean> {
+    if (booking.status === 'reserved') {
+      return this.casBooking(booking.id, ['reserved'], {
+        payment_status: 'authorized',
+        authorized_amount: amount,
+      });
+    }
     return this.casBooking(booking.id, ['proposed'], {
       payment_status: 'authorized',
       authorized_amount: amount,
@@ -4010,10 +4318,12 @@ export class RentalsService {
       contract_expires_at: null,
     });
     if (!won) return this.alreadyCancelledOrConflict(bookingId);
+    let fee: 'refund' | 'forfeit' | 'none' = 'none';
     try {
       // A hold placed after this read is released by the paid-stamp compare-and-set.
       await this.releaseHoldIfNeeded(bookingId, booking);
       await this.cancelStripeAuthorizationIfAny(booking);
+      fee = await this.settleReservationFeeOnCancel(booking, await this.cancelFeeReason(booking, isClient));
     } catch (error) {
       await this.casBooking(bookingId, ['cancelled'], {
         status: from,
@@ -4029,7 +4339,9 @@ export class RentalsService {
       booking.status,
       user.id,
       cancelledBy,
-      'Cancelled before start (no charge)'
+      fee === 'forfeit'
+        ? 'Cancelled on the start day (reservation fee kept by the business)'
+        : 'Cancelled before start (no charge)'
     );
     await this.deliveryPinService.clearPinForOrder(bookingId);
     await this.notifyRentalBookingCancelled(booking, cancelledBy);
@@ -4242,13 +4554,13 @@ export class RentalsService {
   }
 
   /** Renter start for every booking. Pays Mobile Money first, then marks started. */
-  async startRental(bookingId: string): Promise<AcceptAndStartResult> {
+  async startRental(bookingId: string, stripePaymentMethod?: 'payment_sheet'): Promise<AcceptAndStartResult> {
     const actor = await this.requireStartClient(bookingId);
     this.assertBookingStartWindow(actor.booking);
     if (this.rentalAlreadyRunning(actor.booking)) return this.replayAcceptStart(actor.booking);
     const gate = await this.readInspectionStart(bookingId);
     this.assertPickupReady(gate);
-    const result = await this.payAndStartAccepted(actor.booking);
+    const result = await this.payAndStartAccepted(actor.booking, stripePaymentMethod);
     return this.withStartOpens(actor.booking, result);
   }
 
@@ -4333,7 +4645,8 @@ export class RentalsService {
 
   async acceptAndStartRental(
     bookingId: string,
-    versionId: string
+    versionId: string,
+    stripePaymentMethod?: 'payment_sheet'
   ): Promise<AcceptAndStartResult> {
     const actor = await this.requireAcceptStartClient(bookingId);
     this.assertBookingStartWindow(actor.booking);
@@ -4343,7 +4656,7 @@ export class RentalsService {
       return this.replayAcceptStart(actor.booking);
     }
     await this.acceptPickupVersion(actor.booking, gate, versionId, actor.userId);
-    return this.startThenNotify(actor.booking);
+    return this.startThenNotify(actor.booking, stripePaymentMethod);
   }
 
   private async requireAcceptStartClient(bookingId: string) {
@@ -4383,9 +4696,9 @@ export class RentalsService {
   }
 
   /** Write the accept first. The notice follows the start result, not a balance guess. */
-  private async startThenNotify(booking: any): Promise<AcceptAndStartResult> {
+  private async startThenNotify(booking: any, stripePaymentMethod?: 'payment_sheet'): Promise<AcceptAndStartResult> {
     try {
-      const result = await this.payAndStartAccepted(booking);
+      const result = await this.payAndStartAccepted(booking, stripePaymentMethod);
       await this.notifyAcceptOutcome(booking, result.started, result.paymentPending);
       return result;
     } catch (error: any) {
@@ -4458,7 +4771,7 @@ export class RentalsService {
     return text.includes('rental_inspection_ack_conflict') || text.includes('Uniqueness violation');
   }
 
-  private async payAndStartAccepted(booking: any): Promise<AcceptAndStartResult> {
+  private async payAndStartAccepted(booking: any, stripePaymentMethod?: 'payment_sheet'): Promise<AcceptAndStartResult> {
     const fresh = await this.fetchBooking(booking.id);
     if (!fresh) throw acceptStartConflict('Booking status changed');
     const ready = acceptStartPaymentRail({
@@ -4470,11 +4783,53 @@ export class RentalsService {
       return this.finishAcceptStart(fresh, ready, 0);
     }
     if (fresh.status !== 'reserved') throw acceptStartConflict('Booking status changed');
-    return this.payReservedAcceptStart(fresh);
+    return this.payReservedAcceptStart(fresh, stripePaymentMethod);
   }
 
-  private async payReservedAcceptStart(booking: any): Promise<AcceptAndStartResult> {
-    const total = Number(booking.total_amount);
+  /** Rental total minus a paid reservation fee. */
+  private amountDueAtPickup(booking: any): number {
+    return dueAtPickup({
+      total: Number(booking?.total_amount),
+      feeAmount: booking?.reservation_fee_amount,
+      feeStatus: booking?.reservation_fee_status,
+    });
+  }
+
+  /**
+   * Card pay at pickup: authorize (rental - fee + deposit) now, manual capture.
+   * The booking stays `reserved` until the authorization webhook confirms and starts it.
+   * A decline leaves it `reserved` and retryable with another card.
+   */
+  private async cardPickupAuthorize(booking: any, stripePaymentMethod?: 'payment_sheet'): Promise<AcceptAndStartResult> {
+    const due = this.amountDueAtPickup(booking);
+    const deposit = Math.max(0, Number(booking.security_deposit_amount) || 0);
+    const amount = Number((due + deposit).toFixed(2));
+    const userId = booking.client.user_id as string;
+    const account = await this.hasuraSystemService.getAccount(userId, booking.currency);
+    if (!account?.id) throw new HttpException('Client account missing', HttpStatus.BAD_REQUEST);
+    const contact = await this.fetchUserContact(userId);
+    const sheet = await this.initiateStripeRentalPayment({
+      bookingId: booking.id,
+      bookingNumber: booking.booking_number,
+      amount,
+      currency: booking.currency,
+      clientAccountId: account.id,
+      userId,
+      email: contact?.email,
+      stripePaymentMethod,
+    });
+    return {
+      ...this.acceptStartBody(booking, 'card', due, false, true),
+      deposit_hold_amount: deposit,
+      ...(sheet.payment_intent_client_secret ? { payment_intent_client_secret: sheet.payment_intent_client_secret } : {}),
+      ...(sheet.checkout_url ? { checkout_url: sheet.checkout_url } : {}),
+      ...(sheet.payment_transaction_id ? { payment_transaction_id: sheet.payment_transaction_id } : {}),
+    };
+  }
+
+  private async payReservedAcceptStart(booking: any, stripePaymentMethod?: 'payment_sheet'): Promise<AcceptAndStartResult> {
+    if (booking.card_pay_at_pickup === true) return this.cardPickupAuthorize(booking, stripePaymentMethod);
+    const total = this.amountDueAtPickup(booking);
     const userId = booking.client.user_id as string;
     const account = await this.hasuraSystemService.getAccount(userId, booking.currency);
     if (!account?.id) throw new HttpException('Client account missing', HttpStatus.BAD_REQUEST);
@@ -4484,7 +4839,7 @@ export class RentalsService {
   }
 
   private async walletAcceptStart(booking: any, userId: string): Promise<AcceptAndStartResult> {
-    const total = Number(booking.total_amount);
+    const total = this.amountDueAtPickup(booking);
     const confirmed = await this.confirmWalletContract({
       booking,
       previousStatus: 'reserved',
@@ -4524,7 +4879,7 @@ export class RentalsService {
 
   private async replayAcceptStart(booking: any): Promise<AcceptAndStartResult> {
     const paid = booking.payment_status === 'authorized' || booking.payment_status === 'paid';
-    const due = paid ? 0 : Number(booking.total_amount) || 0;
+    const due = paid ? 0 : this.amountDueAtPickup(booking);
     return this.acceptStartBody(booking, await this.replayPaymentRail(booking), due, true, false, true);
   }
 
@@ -4638,6 +4993,13 @@ export class RentalsService {
       return { payment_rail: 'wallet' as const, amount_due_at_pickup: 0, paid_rail: await this.paidRail(booking) };
     }
     if (booking.status !== 'reserved') return null;
+    if (booking.card_pay_at_pickup === true) {
+      return {
+        payment_rail: 'card' as const,
+        amount_due_at_pickup: this.amountDueAtPickup(booking),
+        deposit_hold_amount: Math.max(0, Number(booking.security_deposit_amount) || 0),
+      };
+    }
     return this.previewReservedRail(booking);
   }
 
@@ -4653,7 +5015,7 @@ export class RentalsService {
   }
 
     private async previewReservedRail(booking: any) {
-    const total = Number(booking.total_amount) || 0;
+    const total = this.amountDueAtPickup(booking);
     const userId = booking.client?.user?.id ?? booking.client?.user_id;
     if (!userId) return { payment_rail: 'mobile_money' as const, amount_due_at_pickup: total };
     try {
@@ -4666,34 +5028,34 @@ export class RentalsService {
     }
   }
 
-  private async startEnrolledAfterPickupPayment(booking: any): Promise<void> {
+  private async startEnrolledAfterPickupPayment(booking: any, note = 'Started after Mobile Money'): Promise<void> {
     if (booking.status !== 'reserved' && booking.payment_timing !== 'pay_at_pickup') return;
     const gate = await this.readInspectionStart(booking.id);
     if (gate.inspectionPolicyVersion != null && !pickupStartAllowed(gate)) return;
     const fresh = await this.fetchBooking(booking.id);
     if (fresh?.status !== 'confirmed') return;
-    await this.finishPaymentStart(fresh);
+    await this.finishPaymentStart(fresh, note);
   }
 
-  private async finishPaymentStart(fresh: any): Promise<void> {
+  private async finishPaymentStart(fresh: any, note = 'Started after Mobile Money'): Promise<void> {
     try {
       const won = await this.markInspectionOrLegacyStart(fresh.id);
       if (!won) return;
-      await this.notePaymentStart(fresh);
+      await this.notePaymentStart(fresh, note);
     } catch (error: any) {
       if (!this.isStartWindowError(error)) throw error;
       this.logger?.warn(`start window closed after payment ${fresh.id}`);
     }
   }
 
-  private async notePaymentStart(fresh: any): Promise<void> {
+  private async notePaymentStart(fresh: any, note = 'Started after Mobile Money'): Promise<void> {
     await this.logHistory(
       fresh.id,
       'active',
       'confirmed',
       fresh.client?.user_id ?? null,
       'system',
-      'Started after Mobile Money'
+      note
     );
     await this.notifyRentalActivated(fresh);
   }
@@ -4897,7 +5259,11 @@ export class RentalsService {
     booking: any,
     actualEndAtIso: string
   ): RentalReturnSettlement {
-    const contract = Number(booking.total_amount);
+    // Card: a paid reservation fee was taken at Reserve, so the capture covers the rest.
+    const cardFee = booking.payment_status === 'authorized'
+      ? feePaidAmount(booking.reservation_fee_amount, booking.reservation_fee_status)
+      : 0;
+    const contract = Number((Number(booking.total_amount) - cardFee).toFixed(2));
     const deposit = Math.max(0, Number(booking.security_deposit_amount) || 0);
     const units = Math.max(1, Number(booking.units_booked) || 1);
     const hourly = this.resolveBookingHourlyRate(booking);
@@ -4956,6 +5322,7 @@ export class RentalsService {
     }
     await this.creditClientWalletForStripeCapture(booking, charge);
     await this.registerRentalProceedsLedger(booking, charge, 'Stripe capture');
+    await this.feeLedger.apply(booking, true);
     await this.patchBooking(booking.id, {
       captured_amount: charge,
       overtime_amount: Number(
@@ -5265,9 +5632,16 @@ export class RentalsService {
       return this.legacyStartIfUnenrolled(policy, bookingId, at);
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
+      if (this.unpaidStart(error)) throw acceptStartConflict('Pay before starting this rental.');
       if (!this.missingInspectionFunction(error)) throw error;
       return this.legacyStartIfUnenrolled(policy, bookingId, at);
     }
+  }
+
+  /** The rental_bookings_require_paid_start trigger refused confirmed -> active. */
+  private unpaidStart(error: any): boolean {
+    const text = JSON.stringify(error?.response ?? error?.message ?? error);
+    return text.includes('rental_start_unpaid');
   }
 
   private legacyStartIfUnenrolled(
@@ -5295,7 +5669,7 @@ export class RentalsService {
       return {
         success: true,
         bookingId,
-        payment_rail: 'mobile_money',
+        payment_rail: fresh.card_pay_at_pickup === true ? 'stripe' : 'mobile_money',
         reserved: fresh.status === 'reserved',
       };
     }
@@ -5334,7 +5708,7 @@ export class RentalsService {
       const clientUser = await this.fetchUserContact(clientUserId);
       await this.initiateRentalBookingPayment({
         bookingNumber,
-        amount: Number(booking.total_amount),
+        amount: this.amountDueAtPickup(booking),
         currency: booking.currency,
         clientAccountId,
         userId: clientUserId,
@@ -6042,7 +6416,9 @@ export class RentalsService {
     const policyVersion = await this.inspectionPolicyForInsert(req);
     const object = this.proposedBookingInsert(req, clientId, snap, total, contractExpiresAt, envelope, unitsBooked);
     if (policyVersion != null) object.inspection_policy_version = policyVersion;
-    return this.reserveProposedBooking(object);
+    const row = await this.reserveProposedBooking(object);
+    await this.stampReservePath(row.insert_rental_bookings_one.id, req, total);
+    return row;
   }
 
   private async reserveProposedBooking(object: Record<string, unknown>) {
@@ -6752,6 +7128,8 @@ export class RentalsService {
       accounts.clientAccountId,
       this.holdAttemptId(h, booking.id)
     );
+    // A paid reservation fee is released first so the contract payment covers the full total.
+    await this.feeLedger.apply(booking, false);
     await this.postContractSettlement(booking, accounts, Number(booking.total_amount));
     if (h.status !== 'active') return;
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
@@ -7247,13 +7625,14 @@ export class RentalsService {
     return this.finishNoShow(booking);
   }
 
-  unpaidReservationDue(booking: any, now = new Date()): boolean {
+  unpaidReservationDue(booking: any, now = new Date(), pickupCheckFlagged = false): boolean {
     return reservedUnpaidDue({
       now,
       startAt: new Date(booking?.start_at),
       timeZone: listingZoneFor(this.bookingCountry(booking)),
       policyVersion: booking?.inspection_policy_version ?? null,
       pickupInspectionPending: !!booking?.pickup_inspection_pending,
+      pickupCheckFlagged,
     });
   }
 
@@ -7296,6 +7675,7 @@ export class RentalsService {
 
   private async releaseNoShowFunds(booking: any): Promise<void> {
     await this.releaseFreeCancelFunds(booking);
+    await this.settleReservationFeeOnCancel(booking, 'no_show');
     if (!(await this.momoWasCollected(booking))) return;
     this.logger?.log(`no-show ${booking.id}: Mobile Money returned to the renter wallet`);
   }

@@ -9,7 +9,7 @@ const CITY_BY_ZONE: Record<string, string> = {
 
 export function slotTileLabel(slotKey: string, language: string): string {
   const french = language.startsWith('fr');
-  if (slotKey === 'overview') return french ? "Vue d'ensemble" : 'Overview';
+  if (slotKey === 'overview') return french ? 'Vue d’ensemble' : 'Overview';
   if (slotKey === 'other_side') return french ? 'Autre côté' : 'Other side';
   if (slotKey === 'accessories') return french ? 'Accessoires' : 'Accessories';
   if (slotKey.startsWith('extra:')) return french ? `Supp. ${slotKey.slice(6)}` : `Extra ${slotKey.slice(6)}`;
@@ -34,12 +34,11 @@ export function formatListingDay(iso: string, timeZone: string, language: string
 export function formatListingStamp(iso: string, timeZone: string, language: string): string {
   const date = new Date(iso);
   const day = formatListingDay(iso, timeZone, language);
-  const time = new Intl.DateTimeFormat('en-GB', {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(date);
+  // English in the Americas reads a 12-hour clock ("9:18 AM"); everywhere else 24-hour.
+  const twelve = !language.startsWith('fr') && timeZone.startsWith('America/');
+  const time = twelve
+    ? new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit', hour12: true }).format(date).replace(/\u202f/g, ' ')
+    : new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
   return `${day} · ${time}`;
 }
 

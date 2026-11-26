@@ -5,12 +5,13 @@ import { useTranslation } from 'react-i18next';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import type { RentalPricingSnapshotLine } from '../../hooks/useRentalApi';
 import {
-  formatRentalMoney,
-  formatRentalRequestLocalDateTime,
   parseRentalSelectionWindows,
   parseRentalPricingSnapshot,
   proposedContractDeadlineIso,
 } from '../../utils/rentalRequestDisplay';
+import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
+import { reservationFee, reserveMode } from '../../utils/rentals/reservationFee';
+import { clockTime, reserveZone, weekdayDay, windowLabel } from '../../utils/rentals/reserveSummary';
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -28,7 +29,8 @@ function DetailRow({ label, value }: { label: string; value: string }) {
         variant="caption"
         color="text.secondary"
         sx={{
-          minWidth: { sm: 152 },
+          width: { sm: 200 },
+          flexShrink: 0,
           fontWeight: 700,
           letterSpacing: 0.04,
           textTransform: 'uppercase',
@@ -43,6 +45,45 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Reserve now, pay at pickup: the fee (if any) today, the rest at pickup, the card deposit at pickup. */
+function PayAtPickupRows(props: {
+  mode: 'free' | 'fee';
+  fee: number;
+  total: number;
+  deposit: number;
+  format: (value: number) => string;
+}) {
+  const { t } = useTranslation();
+  const now = props.mode === 'fee' ? Math.min(props.fee, props.total) : 0;
+  const rest = Math.round((props.total - now) * 100) / 100;
+  return (
+    <>
+      <DetailRow
+        label={
+          props.mode === 'fee'
+            ? t('rentals.payAtPickup.feeNowLabel', 'Reservation fee today · counts toward your total')
+            : t('rentals.payAtPickup.nothingToday', 'To pay today')
+        }
+        value={props.format(now)}
+      />
+      <DetailRow label={t('rentals.payAtPickup.dueAfterCheck', 'Due at pickup, after the item check')} value={props.format(rest)} />
+      {props.deposit > 0 ? (
+        <DetailRow label={t('rentals.payAtPickup.depositAtPickup', 'Deposit hold on your card at pickup')} value={props.format(props.deposit)} />
+      ) : null}
+      {props.mode === 'fee' ? (
+        <Stack spacing={0.5} sx={{ pt: 1 }} data-testid="book-confirm-fee-rules">
+          <Typography variant="caption" color="text.secondary">
+            {t('rentals.payAtPickup.feeRefundedOffer', 'Fee refunded if you cancel before the pickup day, if the business cancels, or if the item doesn’t match.')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {t('rentals.payAtPickup.feeKept', 'Fee kept if you cancel on the pickup day or don’t come.')}
+          </Typography>
+        </Stack>
+      ) : null}
+    </>
+  );
+}
+
 export interface RentalBookConfirmSummaryProps {
   row: ClientRentalRequestRow;
   /** Card rail shows the deposit/authorization terms; other rails show pay-at-pickup. */
@@ -53,8 +94,10 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
   row,
   isStripeRail,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
+  const mode = reserveMode(row.rental_booking, isStripeRail);
+  const fee = reservationFee(row.rental_booking);
   const listing = row.rental_location_listing;
   const itemName =
     listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental');
@@ -62,8 +105,14 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
   const deadlineIso = proposedContractDeadlineIso(row);
   const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
+  // Listing clock with weekdays (B3); CAD keeps cents (S8b).
+  const zone = reserveZone({ listingZone: row.listing_timezone, quote });
+  const money = (value: number, currency: string) => formatConfirmationMoney(value, currency, i18n.language);
+  const formatRentalMoney = money;
   const envelopePeriod = selectionWindows.length
-    ? `${formatRentalRequestLocalDateTime(selectionWindows[0].start_at)} — ${formatRentalRequestLocalDateTime(selectionWindows[selectionWindows.length - 1].end_at)}`
+    ? selectionWindows.length === 1
+      ? windowLabel(selectionWindows[0], i18n.language, zone)
+      : `${windowLabel(selectionWindows[0], i18n.language, zone)} – ${windowLabel(selectionWindows[selectionWindows.length - 1], i18n.language, zone)}`
     : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable');
 
   return (
@@ -94,13 +143,13 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
           label={t('rentals.clientRequests.bookConfirmLabelPeriod', 'Rental period')}
           value={envelopePeriod}
         />
-        {selectionWindows.map((window, idx) => (
+        {selectionWindows.length > 1 && selectionWindows.map((window, idx) => (
           <DetailRow
             key={`${window.start_at}-${window.end_at}-${idx}`}
             label={t('rentals.clientRequests.bookConfirmLabelWindow', 'Window {{index}}', {
               index: idx + 1,
             })}
-            value={`${formatRentalRequestLocalDateTime(window.start_at)} — ${formatRentalRequestLocalDateTime(window.end_at)}`}
+            value={windowLabel(window, i18n.language, zone)}
           />
         ))}
         {quote?.lines?.length ? (
@@ -132,7 +181,16 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
             value={formatRentalMoney(quote.total, quote.currency)}
           />
         ) : null}
-        {isStripeRail && quote?.securityDeposit ? (
+        {quote && mode !== 'card_upfront' ? (
+          <PayAtPickupRows
+            mode={mode}
+            fee={fee}
+            total={quote.total}
+            deposit={isStripeRail ? Number(quote.securityDeposit) || 0 : 0}
+            format={(value) => formatConfirmationMoney(value, quote.currency, i18n.language)}
+          />
+        ) : null}
+        {mode === 'card_upfront' && isStripeRail && quote?.securityDeposit ? (
           <DetailRow
             label={t(
               'rentals.clientRequests.bookConfirmLabelDeposit',
@@ -144,7 +202,7 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
         {deadlineIso ? (
           <DetailRow
             label={t('rentals.clientRequests.bookConfirmLabelAcceptBy', 'Offer valid until')}
-            value={formatRentalRequestLocalDateTime(deadlineIso)}
+            value={`${weekdayDay(deadlineIso, i18n.language, zone)} · ${clockTime(deadlineIso, i18n.language, zone, zone)}`}
           />
         ) : null}
       </Stack>

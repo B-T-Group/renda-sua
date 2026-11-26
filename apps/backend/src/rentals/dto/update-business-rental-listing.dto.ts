@@ -68,6 +68,16 @@ export class UpdateBusinessRentalListingDto {
   @Min(0)
   security_deposit_amount?: number;
 
+  @ApiProperty({
+    required: false,
+    default: false,
+    description:
+      'Charge a reservation fee at Reserve (flat 1.00 on the Stripe rail or 150 FCFA on Mobile Money, capped at the rental, counts toward the total). Off by default.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  reservation_fee_enabled?: boolean;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsInt()

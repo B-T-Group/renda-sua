@@ -80,6 +80,11 @@ select_permissions:
         - refund_amount
         - refund_currency
         - refunded_at
+        - card_pay_at_pickup
+        - reservation_fee_amount
+        - reservation_fee_status
+        - reservation_fee_rail
+        - reservation_fee_settled_at
         - created_at
         - updated_at
       filter:
@@ -127,6 +132,11 @@ select_permissions:
         - refund_amount
         - refund_currency
         - refunded_at
+        - card_pay_at_pickup
+        - reservation_fee_amount
+        - reservation_fee_status
+        - reservation_fee_rail
+        - reservation_fee_settled_at
         - created_at
         - updated_at
       filter:

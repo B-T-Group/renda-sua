@@ -56,6 +56,7 @@ import {
   formatBookedSpan,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
+import { reservationFee } from '../../utils/rentals/reservationFee';
 import { formatStoredPhone } from '../../utils/phoneLoginUsername';
 import { formatReturnStamp } from '../../utils/rentals/renterReturnPhase';
 import {
@@ -74,7 +75,7 @@ import {
   showLegacyReturnPicker,
 } from '../../utils/rentals/rentalInspection';
 import { RentalHandoverNotice } from '../../components/rentals/RentalHandoverNotice';
-import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedWeekdayDay, formatZonedWhen, pickupClockLabel, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
 import { bookingReturnDue } from '../../utils/rentals/returnDue';
 import { ReturnDialogTitle, ReturnTimeOptions } from '../../components/rentals/ReturnTimeOptions';
 
@@ -281,6 +282,8 @@ export default function BusinessRentalBookingDetailScreen() {
     started: booking.status === 'active' || Boolean(booking.actual_start_at),
   });
   const pickupDay = formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language);
+  const feeAmount = reservationFee(booking);
+  const feeLabel = feeAmount > 0 ? formatConfirmationMoney(feeAmount, booking.currency, i18n.language) : undefined;
   const returnWhen = formatZonedWhen(bookingReturnDue(booking) ?? booking.end_at, BOOKING_CLOCK, i18n.language, listingZone);
   const bookedSpan = formatBookedSpan(
     booking.start_at,
@@ -661,6 +664,8 @@ export default function BusinessRentalBookingDetailScreen() {
           }))}
           timeZone={listingZone}
           askedAt={snapshot.pickup?.askedAt || snapshot.pickup?.submittedAt}
+          fixDay={formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
+          fee={feeLabel}
           onSent={() => void load({ soft: true })}
         />
       ) : null}

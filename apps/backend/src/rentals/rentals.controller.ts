@@ -38,7 +38,7 @@ import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment
 import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
 import { UpdateRentalRequestDto } from './dto/update-rental-request.dto';
 import { RespondRentalRequestDto } from './dto/respond-rental-request.dto';
-import { AcceptAndStartRentalDto } from './dto/accept-and-start-rental.dto';
+import { AcceptAndStartRentalDto, StartRentalDto } from './dto/accept-and-start-rental.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
@@ -726,8 +726,8 @@ export class RentalsController {
   @ApiResponse({ status: 403, description: 'Only the renter' })
   @ApiResponse({ status: 404, description: 'Not the renter of this booking' })
   @ApiResponse({ status: 409, description: 'RENTAL_START_WINDOW or pickup not accepted' })
-  async startRental(@Param('id') bookingId: string) {
-    return this.rentalsService.startRental(bookingId);
+  async startRental(@Param('id') bookingId: string, @Body() body?: StartRentalDto) {
+    return this.rentalsService.startRental(bookingId, body?.stripe_payment_method);
   }
 
   @Post('bookings/:id/accept-and-start')
@@ -748,7 +748,7 @@ export class RentalsController {
     @Param('id') bookingId: string,
     @Body() body: AcceptAndStartRentalDto
   ) {
-    return this.rentalsService.acceptAndStartRental(bookingId, body.versionId);
+    return this.rentalsService.acceptAndStartRental(bookingId, body.versionId, body.stripe_payment_method);
   }
 
   @Post('bookings/:id/item-not-collected')

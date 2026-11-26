@@ -351,16 +351,33 @@ export async function retryPayment(
   );
 }
 
-export async function startRental(bookingId: string): Promise<{
+export interface StartRentalResult {
   started: boolean;
   paymentPending: boolean;
   payment_rail?: string;
   start_opens_at?: string;
   message?: string;
-}> {
+  amount_due_at_pickup?: number;
+  /** Card pay at pickup: PaymentSheet for (rental − paid fee + deposit). */
+  payment_intent_client_secret?: string;
+  checkout_url?: string;
+  payment_transaction_id?: string;
+  deposit_hold_amount?: number;
+}
+
+/**
+ * Start (or Pay & start). Card pay-at-pickup bookings send `payment_sheet` so the server
+ * returns a PaymentSheet secret; older servers ignore the body.
+ */
+export async function startRental(
+  bookingId: string,
+  options?: { stripe_payment_method?: 'payment_sheet' }
+): Promise<StartRentalResult> {
   return apiRequest(
     `/rentals/bookings/${encodeURIComponent(bookingId)}/start`,
-    { method: 'POST' }
+    options?.stripe_payment_method
+      ? { method: 'POST', body: JSON.stringify({ stripe_payment_method: options.stripe_payment_method }) }
+      : { method: 'POST' }
   );
 }
 
@@ -387,6 +404,10 @@ export interface AcceptAndStartResult {
   payment_rail: 'card' | 'wallet' | 'mobile_money';
   amount_due_at_pickup: number;
   bookingId: string;
+  payment_intent_client_secret?: string;
+  checkout_url?: string;
+  payment_transaction_id?: string;
+  deposit_hold_amount?: number;
 }
 
 export async function reportReturned(bookingId: string): Promise<{
@@ -414,11 +435,12 @@ export async function reportNotReceived(bookingId: string): Promise<{
 
 export async function acceptAndStart(
   bookingId: string,
-  versionId: string
+  versionId: string,
+  options?: { stripe_payment_method?: 'payment_sheet' }
 ): Promise<AcceptAndStartResult> {
   return apiRequest<AcceptAndStartResult>(
     `/rentals/bookings/${encodeURIComponent(bookingId)}/accept-and-start`,
-    { method: 'POST', body: JSON.stringify({ versionId }) }
+    { method: 'POST', body: JSON.stringify({ versionId, ...(options?.stripe_payment_method ? { stripe_payment_method: options.stripe_payment_method } : {}) }) }
   );
 }
 

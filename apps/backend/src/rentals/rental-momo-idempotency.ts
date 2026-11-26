@@ -1,7 +1,9 @@
 /** One in-flight mobile-money attempt per booking and purpose. */
+export type RentalMomoPurpose = 'contract' | 'overtime' | 'reservation_fee';
+
 export function rentalMomoIdempotencyKey(
   bookingNumber: string,
-  purpose: 'contract' | 'overtime'
+  purpose: RentalMomoPurpose
 ): string {
   return `rental-momo:${bookingNumber}:${purpose}`;
 }
@@ -11,10 +13,10 @@ export const RENTAL_MOMO_PENDING_MAX_AGE_MS = 5 * 60 * 1000;
 
 /** Unique alphanumeric provider reference. `reference` is unique and callbacks look it up. */
 export function newRentalMomoReference(
-  purpose: 'contract' | 'overtime',
+  purpose: RentalMomoPurpose,
   now = Date.now()
 ): string {
-  const tag = purpose === 'overtime' ? 'o' : 'c';
+  const tag = purpose === 'overtime' ? 'o' : purpose === 'reservation_fee' ? 'f' : 'c';
   const stamp = now.toString().slice(-8);
   const random = Math.random().toString(36).slice(2, 6);
   return `${tag}${stamp}${random}`.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15);

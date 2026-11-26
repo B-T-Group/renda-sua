@@ -7,9 +7,11 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { submitInspection, uploadInspectionPhoto } from '../../../services/rentalInspectionApi';
 import type { InspectionPhoto } from '../../../utils/rentals/rentalInspection';
-import { formatListingStamp, listingCity, slotTileLabel } from '../../../utils/rentals/pickupPhotoTime';
+import { listingCity, slotTileLabel } from '../../../utils/rentals/pickupPhotoTime';
 import { splitCorrectionReason } from '../../../utils/rentals/rentalInspection';
-import { formatPhotoStamp } from '../../../utils/rentals/rentalStartWindow';
+import { formatPhotoStamp, photosTakenStamp } from '../../../utils/rentals/rentalStartWindow';
+import { dayEndDeadline } from '../../../utils/rentals/reserveSummary';
+import { elidesBefore } from '../../../utils/rentals/frenchElision';
 import { filterSupportedImageAssets, IMAGE_LIBRARY_PICKER_OPTIONS } from '../../../utils/supportedImageFormats';
 
 interface Props {
@@ -19,6 +21,10 @@ interface Props {
   photos: Array<InspectionPhoto & { unitId: string }>;
   timeZone: string;
   askedAt?: string | null;
+  /** Start day with weekday (listing clock), e.g. "Sat 28 Nov": an unresolved flag cancels the booking at 23:59. */
+  fixDay?: string;
+  /** Formatted reservation fee, when the booking has one (refunded if the flag isn't fixed). */
+  fee?: string;
   onSent: () => void;
 }
 
@@ -28,22 +34,36 @@ export function BusinessPhotoRequest(props: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const parts = splitCorrectionReason(props.reason, reasonLabels(t));
-  const asked = props.askedAt ? formatListingStamp(props.askedAt, props.timeZone, i18n.language) : '';
+  const asked = props.askedAt ? photosTakenStamp([props.askedAt], props.timeZone, i18n.language) : '';
   return (
-    <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+    <View testID="check-flagged" style={{ gap: spacing.sm, marginTop: spacing.md }}>
+      <View style={[styles.title, { gap: spacing.xs }]}>
+        <MaterialCommunityIcons name="flag-outline" size={22} color={colors.warning.dark ?? colors.warning.main} />
+        <Text style={{ color: colors.text.primary, fontWeight: '800', fontSize: 20 }}>
+          {t('rentals.business.checkFlagged', 'Check flagged')}
+        </Text>
+      </View>
+      {props.fixDay ? (
+        <Text testID="check-flagged-deadline" style={{ color: colors.text.secondary }}>
+          {props.fee
+            ? t('rentals.business.fixByFee', 'Fix it by {{deadline}} today ({{day}}), or the booking is cancelled and {{name}} gets the {{fee}} fee back. Nothing can be paid or handed over until {{name}} accepts.', { deadline: dayEndDeadline(i18n.language, props.timeZone), day: props.fixDay, name: props.renterName, fee: props.fee, que: elidesBefore(props.renterName) ? 'qu’' : 'que ' })
+            : t('rentals.business.fixBy', 'Fix it by {{deadline}} today ({{day}}), or the booking is cancelled. Nothing can be paid or handed over until {{name}} accepts.', { deadline: dayEndDeadline(i18n.language, props.timeZone), day: props.fixDay, name: props.renterName, que: elidesBefore(props.renterName) ? 'qu’' : 'que ' })}
+        </Text>
+      ) : null}
       <View style={[styles.banner, { backgroundColor: colors.warning.main + '22', borderRadius: borderRadius.md, padding: spacing.md }]}>
         <Text style={{ color: colors.text.primary }}>
           {t('rentals.business.photosAsked', '{{name}} asked for new photos before starting.', { name: props.renterName })}
         </Text>
         <ReasonLine chips={parts.chips} note={parts.note} asked={asked} zone={listingCity(props.timeZone)} />
       </View>
+      <PhotosTaken photos={props.photos} timeZone={props.timeZone} />
       <View style={styles.photos}>
         {props.photos.map((photo) => (
           <RetakeTile key={photo.id} photo={photo} bookingId={props.bookingId} timeZone={props.timeZone} onError={setError} />
         ))}
       </View>
       {error ? <Text style={{ color: colors.error.main }}>{error}</Text> : null}
-      <Button mode="contained" icon="send" buttonColor={colors.success.main} loading={busy} onPress={() => void send(props, setBusy, setError, t)}>
+      <Button mode="contained" icon="send" buttonColor={colors.primary.main} loading={busy} onPress={() => void send(props, setBusy, setError, t)}>
         {t('rentals.business.sendPhotos', 'Send updated photos')}
       </Button>
     </View>
@@ -71,7 +91,7 @@ function RetakeTile({
         {photo.url ? <Image source={{ uri: photo.url }} style={styles.image} /> : null}
       </View>
       <Text style={{ textAlign: 'center', color: colors.text.primary, fontSize: 12 }}>{slotTileLabel(photo.role, i18n.language)}</Text>
-      <Text style={{ textAlign: 'center', color: colors.text.secondary, fontSize: 11 }}>{`${badge}${when ? ` · ${when}` : ''}`}</Text>
+      <Text numberOfLines={1} style={{ textAlign: 'center', color: colors.text.secondary, fontSize: 11 }}>{`${badge}${when ? ` · ${when}` : ''}`}</Text>
       <View style={styles.tools}>
         <Pressable accessibilityRole="button" onPress={() => void pick(photo, bookingId, 'camera', onError)}>
           <MaterialCommunityIcons name="camera" size={22} color={colors.primary.main} />
@@ -81,6 +101,18 @@ function RetakeTile({
         </Pressable>
       </View>
     </View>
+  );
+}
+
+function PhotosTaken({ photos, timeZone }: { photos: InspectionPhoto[]; timeZone: string }) {
+  const { t, i18n } = useTranslation();
+  const { colors } = useTheme();
+  const when = photosTakenStamp(photos.map((p) => p.capturedAt), timeZone, i18n.language);
+  if (!when) return null;
+  return (
+    <Text testID="photos-taken" numberOfLines={1} style={{ color: colors.text.secondary, fontSize: 13 }}>
+      {t('rentalInspection.photosTaken', 'Photos taken {{when}}', { when })}
+    </Text>
   );
 }
 
@@ -166,6 +198,7 @@ async function send(
 
 const styles = StyleSheet.create({
   banner: {},
+  title: { flexDirection: 'row', alignItems: 'center' },
   photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
