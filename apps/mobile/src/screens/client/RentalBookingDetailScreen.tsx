@@ -66,7 +66,7 @@ import {
   PRICE_CHANGE_UNSEEN_KEY,
   PRICE_CHANGE_UNSEEN_TEXT,
 } from '../../utils/rentals/priceChangeUnseen';
-import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase } from '../../utils/rentals/rentalStartWindow';
 import { RentalMomoWaiting } from '../../components/rentals/RentalMomoWaiting';
 import { BookingQuickActions } from '../../components/rentals/BookingQuickActions';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
@@ -190,11 +190,7 @@ export default function RentalBookingDetailScreen() {
     ? [bookedSpan]
     : bookingRequestedPeriodLines(windows, booking, i18n.language, dayCountLabel);
   const returnByLabel = booking?.end_at
-    ? formatZonedWhen(
-        booking.end_at,
-        confirmationTimeZone(listingCountry, booking.currency),
-        i18n.language
-      )
+    ? formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language)
     : '—';
   const timelineStepsBase = bookingDetailTimeline(booking?.status ?? '');
   const currentIdxBase = bookingDetailTimelineIndex(timelineStepsBase, booking?.status ?? '');
@@ -274,14 +270,13 @@ export default function RentalBookingDetailScreen() {
         timeZone: startZone,
       })
     : null;
-  const pickupDay = booking ? formatZonedDay(booking.start_at, startZone, i18n.language) : '';
+  const pickupDay = booking ? formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language) : '';
   const paidSource = booking?.paid_at || booking?.created_at;
   const paidAside = paidSource && (booking?.payment_status === 'paid' || booking?.payment_status === 'authorized')
     ? formatZonedDay(paidSource, startZone, i18n.language)
     : undefined;
-  const pickupSource = booking?.actual_start_at || booking?.start_at;
-  const pickupAside = pickupSource
-    ? `${formatZonedDay(pickupSource, startZone, i18n.language)} ${formatZonedTime(pickupSource, startZone)}`
+  const pickupAside = booking
+    ? pickupClockLabel(booking.actual_start_at, booking.start_at, startZone, i18n.language)
     : undefined;
   const pillLabel = headerOverdue
     ? t('rentals.returnReport.overdue', 'Overdue')

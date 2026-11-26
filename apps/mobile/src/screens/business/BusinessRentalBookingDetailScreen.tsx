@@ -60,7 +60,7 @@ import {
   showLegacyReturnPicker,
 } from '../../utils/rentals/rentalInspection';
 import { RentalHandoverNotice } from '../../components/rentals/RentalHandoverNotice';
-import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedWhen, pickupClockLabel, pickupPhase, type PickupPhase } from '../../utils/rentals/rentalStartWindow';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalBookingDetail'>;
 
@@ -238,8 +238,8 @@ export default function BusinessRentalBookingDetailScreen() {
     timeZone: listingZone,
     started: booking.status === 'active' || Boolean(booking.actual_start_at),
   });
-  const pickupDay = formatZonedDay(booking.start_at, listingZone, i18n.language);
-  const returnWhen = formatZonedWhen(booking.end_at, listingZone, i18n.language);
+  const pickupDay = formatZonedDay(booking.start_at, BOOKING_CLOCK, i18n.language);
+  const returnWhen = formatZonedWhen(booking.end_at, BOOKING_CLOCK, i18n.language);
   const bookedSpan = formatBookedSpan(
     booking.start_at,
     booking.end_at,
@@ -576,7 +576,7 @@ export default function BusinessRentalBookingDetailScreen() {
                   ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
                   : undefined
               }
-              pickupAside={`${formatZonedDay(booking.actual_start_at || booking.start_at, listingZone, i18n.language)} ${formatZonedTime(booking.actual_start_at || booking.start_at, listingZone)}`}
+              pickupAside={pickupClockLabel(booking.actual_start_at, booking.start_at, listingZone, i18n.language)}
               paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
               accent={colors.success.main}
             />

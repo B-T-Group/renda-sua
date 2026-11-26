@@ -83,7 +83,7 @@ function bookingFor(current: Scene) {
       status: 'confirmed',
       start_at: momo ? '2026-11-24T08:00:00.000Z' : '2026-11-24T15:00:00.000Z',
       end_at: momo ? '2026-11-29T17:00:00.000Z' : '2026-11-26T23:00:00.000Z',
-      start_opens_at: momo ? '2026-11-23T23:00:00.000Z' : '2026-11-24T05:00:00.000Z',
+      start_opens_at: '2026-11-24T00:00:00.000Z',
       total_amount: momo ? 45000 : 180,
       currency: momo ? 'XAF' : 'CAD',
       payment_status: momo ? 'pending' : 'authorized',

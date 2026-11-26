@@ -17,7 +17,7 @@ import { useClientInspection } from '../../hooks/useClientInspection';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { getBooking, getPaymentStatus, startRental } from '../../services/rentalsApi';
-import { formatZonedWhen } from '../../utils/rentals/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedWhen } from '../../utils/rentals/rentalStartWindow';
 import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
 import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import {
@@ -73,7 +73,7 @@ export default function ClientInspectionScreen() {
     model.booking?.rental_location_listing?.business_location?.address?.country,
     model.booking?.currency
   );
-  const dueLabel = model.booking?.end_at ? formatZonedWhen(model.booking.end_at, photoZone, i18n.language) : '';
+  const dueLabel = model.booking?.end_at ? formatZonedWhen(model.booking.end_at, BOOKING_CLOCK, i18n.language) : '';
   const pickupStart = stage === 'pickup' && !damaged;
 
   useEffect(() => {
@@ -161,7 +161,7 @@ export default function ClientInspectionScreen() {
 
   if (started && model.booking) {
     const country = model.booking.rental_location_listing?.business_location?.address?.country;
-    const due = formatConfirmationDue(model.booking.end_at, confirmationTimeZone(country, model.booking.currency), i18n.language);
+    const due = formatConfirmationDue(model.booking.end_at, BOOKING_CLOCK, i18n.language);
     const paid = formatConfirmationMoney(Number(model.booking.total_amount) || 0, model.booking.currency, i18n.language);
     const depositAmount = Number(model.booking.security_deposit_amount) || 0;
     const deposit = depositAmount > 0 && showsCardDeposit(model.booking.currency)

@@ -156,12 +156,12 @@ describe('rental push copy', () => {
     expect(sent.body).toBe('Votre remboursement de 45\u00a0000\u00a0FCFA a été envoyé sur votre numéro Mobile Money.');
   });
 
-  it('formats the due clock in the listing time zone', () => {
+  it('formats the stored due clock and keeps the listing city', () => {
     const iso = '2026-11-18T20:00:00.000Z';
-    expect(formatRentalNoticeDue(iso, 'America/Toronto', 'en')).toBe('18 Nov · 15:00 (Montréal time)');
-    expect(formatRentalNoticeDue('2026-11-19T01:00:00.000Z', 'America/Toronto', 'en')).toBe('18 Nov · 20:00 (Montréal time)');
+    expect(formatRentalNoticeDue(iso, 'America/Toronto', 'en')).toBe('18 Nov · 20:00 (Montréal time)');
+    expect(formatRentalNoticeDue('2026-11-19T01:00:00.000Z', 'America/Toronto', 'en')).toBe('19 Nov · 01:00 (Montréal time)');
     const fr = formatRentalNoticeDue('2026-11-19T01:00:00.000Z', 'America/Toronto', 'fr');
-    expect(fr).toBe('18 nov. · 20:00 (heure de Montréal)');
+    expect(fr).toBe('19 nov. · 01:00 (heure de Montréal)');
     expect(fr).not.toMatch(/\d+h/);
   });
 });

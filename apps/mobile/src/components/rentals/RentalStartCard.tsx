@@ -6,6 +6,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   formatZonedDay,
+  BOOKING_CLOCK,
   formatZonedTime,
   formatZonedWeekday,
   formatZonedWhen,
@@ -71,9 +72,9 @@ function cardPhase(props: Props): PickupPhase {
 function StartBody(props: Props & { phase: PickupPhase }) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
-  const day = formatZonedDay(props.booking.start_at, props.timeZone, i18n.language);
-  const when = `${formatZonedWeekday(props.booking.start_at, props.timeZone, i18n.language)} ${day}`;
-  const time = formatZonedTime(props.booking.start_at, props.timeZone);
+  const day = formatZonedDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
+  const when = `${formatZonedWeekday(props.booking.start_at, BOOKING_CLOCK, i18n.language)} ${day}`;
+  const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
   const pill = pillText(props.phase, day, t);
   const momo = isMomoDue(props.booking);
   const tone = props.phase === 'late' ? colors.warning : colors.success;
@@ -169,8 +170,8 @@ function LateLine(props: Props & { phase: PickupPhase }) {
   const { t, i18n } = useTranslation();
   const { colors, typography } = useTheme();
   if (props.phase !== 'late') return null;
-  const booked = formatZonedTime(props.booking.start_at, props.timeZone);
-  const until = formatZonedWhen(props.booking.end_at, props.timeZone, i18n.language);
+  const booked = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
+  const until = formatZonedWhen(props.booking.end_at, BOOKING_CLOCK, i18n.language);
   return (
     <Text style={[typography.body2, { color: colors.text.primary }]}>
       {t('rentals.start.lateStill', 'Booked for {{time}} · you can still start until {{until}}', { time: booked, until })}

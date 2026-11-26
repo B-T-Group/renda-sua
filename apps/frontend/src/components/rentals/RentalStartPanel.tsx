@@ -3,7 +3,7 @@ import { Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } 
 import { alpha } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatZonedDay, formatZonedTime, formatZonedWeekday, formatZonedWhen, pickupPhase } from '../../utils/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedTime, formatZonedWeekday, formatZonedWhen, pickupPhase } from '../../utils/rentalStartWindow';
 
 export interface StartPanelBooking {
   status: string;
@@ -41,9 +41,9 @@ export function RentalStartPanel(props: Props) {
     timeZone: props.timeZone,
     started,
   });
-  const day = formatZonedDay(props.booking.start_at, props.timeZone, i18n.language);
-  const when = `${formatZonedWeekday(props.booking.start_at, props.timeZone, i18n.language)} ${day}`;
-  const time = formatZonedTime(props.booking.start_at, props.timeZone);
+  const day = formatZonedDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
+  const when = `${formatZonedWeekday(props.booking.start_at, BOOKING_CLOCK, i18n.language)} ${day}`;
+  const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
   const locked = phase === 'before' || phase === 'closed';
   const momo = (props.booking.currency === 'XAF' || props.booking.currency === 'XOF') && props.booking.payment_status !== 'paid';
   const late = phase === 'late';
@@ -68,7 +68,7 @@ export function RentalStartPanel(props: Props) {
         <Typography variant="body2" sx={{ mt: 0.5 }}>
           {t('rentals.start.lateStill', 'Booked for {{time}} · you can still start until {{until}}', {
             time,
-            until: formatZonedWhen(props.booking.end_at, props.timeZone, i18n.language),
+            until: formatZonedWhen(props.booking.end_at, BOOKING_CLOCK, i18n.language),
           })}
         </Typography>
       ) : null}

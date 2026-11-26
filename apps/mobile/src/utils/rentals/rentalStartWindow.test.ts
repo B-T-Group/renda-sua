@@ -1,4 +1,4 @@
-import { formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase, zonedStartOfDay } from './rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedTime, formatZonedWhen, pickupPhase, utcMidnight, zonedStartOfDay } from './rentalStartWindow';
 
 const TORONTO = 'America/Toronto';
 const DOUALA = 'Africa/Douala';
@@ -7,21 +7,24 @@ const END_TO = '2026-11-26T23:00:00.000Z';
 const START_CM = '2026-11-24T08:00:00.000Z';
 const END_CM = '2026-11-29T17:00:00.000Z';
 
-describe('pickup window in the listing time zone', () => {
-  it('locks until midnight on the Toronto start day', () => {
-    expect(zonedStartOfDay(START_TO, TORONTO)).toBe(Date.parse('2026-11-24T05:00:00.000Z'));
-    expect(phase(TORONTO, START_TO, END_TO, '2026-11-24T04:59:00.000Z')).toBe('before');
-    expect(phase(TORONTO, START_TO, END_TO, '2026-11-24T05:00:00.000Z')).toBe('today');
+describe('pickup window on the stored wall-clock date', () => {
+  it('locks until 00:00 UTC on the stored start date', () => {
+    expect(utcMidnight(START_TO)).toBe(Date.parse('2026-11-24T00:00:00.000Z'));
+    expect(phase(TORONTO, START_TO, END_TO, '2026-11-23T23:59:00.000Z')).toBe('before');
+    expect(phase(TORONTO, START_TO, END_TO, '2026-11-24T00:00:00.000Z')).toBe('today');
     expect(phase(TORONTO, START_TO, END_TO, '2026-11-24T15:00:00.000Z')).toBe('today');
     expect(phase(TORONTO, START_TO, END_TO, '2026-11-24T15:01:00.000Z')).toBe('late');
     expect(phase(TORONTO, START_TO, END_TO, END_TO)).toBe('closed');
   });
 
-  it('opens at Douala midnight, which is the previous UTC evening', () => {
+  it('keeps an 08:00 Douala booking on that clock, not 09:00', () => {
     expect(zonedStartOfDay(START_CM, DOUALA)).toBe(Date.parse('2026-11-23T23:00:00.000Z'));
-    expect(phase(DOUALA, START_CM, END_CM, '2026-11-23T22:59:00.000Z')).toBe('before');
-    expect(phase(DOUALA, START_CM, END_CM, '2026-11-23T23:00:00.000Z')).toBe('today');
+    expect(utcMidnight(START_CM)).toBe(Date.parse('2026-11-24T00:00:00.000Z'));
+    expect(phase(DOUALA, START_CM, END_CM, '2026-11-23T23:00:00.000Z')).toBe('before');
+    expect(phase(DOUALA, START_CM, END_CM, '2026-11-24T00:00:00.000Z')).toBe('today');
     expect(phase(DOUALA, START_CM, END_CM, '2026-11-24T08:01:00.000Z')).toBe('late');
+    expect(formatZonedTime(START_CM, BOOKING_CLOCK)).toBe('08:00');
+    expect(formatZonedTime(START_CM, DOUALA)).toBe('09:00');
   });
 
   it('formats the pickup day in the listing zone, not the device zone', () => {

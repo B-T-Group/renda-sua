@@ -13,21 +13,28 @@ const TORONTO = 'America/Toronto';
 const DOUALA = 'Africa/Douala';
 
 describe('rental start window', () => {
-  it('opens at local midnight and closes at end_at for Toronto and Douala', () => {
+  it('opens at 00:00 UTC on the stored date for Toronto and Douala', () => {
     const torontoStart = new Date('2026-11-24T15:00:00.000Z');
-    expect(startOpensAt(torontoStart, TORONTO).toISOString()).toBe('2026-11-24T05:00:00.000Z');
-    expect(endOfStartDay(torontoStart, TORONTO).toISOString()).toBe('2026-11-25T05:00:00.000Z');
+    expect(startOpensAt(torontoStart, TORONTO).toISOString()).toBe('2026-11-24T00:00:00.000Z');
+    expect(endOfStartDay(torontoStart, TORONTO).toISOString()).toBe('2026-11-25T00:00:00.000Z');
 
     const doualaStart = new Date('2026-11-24T08:00:00.000Z');
-    expect(startOpensAt(doualaStart, DOUALA).toISOString()).toBe('2026-11-23T23:00:00.000Z');
-    expect(endOfStartDay(doualaStart, DOUALA).toISOString()).toBe('2026-11-24T23:00:00.000Z');
+    expect(startOpensAt(doualaStart, DOUALA).toISOString()).toBe('2026-11-24T00:00:00.000Z');
+    expect(endOfStartDay(doualaStart, DOUALA).toISOString()).toBe('2026-11-25T00:00:00.000Z');
   });
 
-  it('treats the instant before local midnight as not yet the pickup day', () => {
+  it('keeps a 16:00 Manila booking startable at the stored hour', () => {
+    const start = new Date('2026-11-26T16:00:00.000Z');
+    const end = new Date('2026-11-26T18:00:00.000Z');
+    const atPickup = new Date('2026-11-26T16:00:00.000Z');
+    expect(startWindowState({ now: atPickup, startAt: start, endAt: end, timeZone: 'Asia/Manila' })).toBe('open');
+  });
+
+  it('treats the instant before stored midnight as not yet the pickup day', () => {
     const start = new Date('2026-11-24T15:00:00.000Z');
-    const justBefore = new Date('2026-11-24T04:59:59.999Z');
+    const justBefore = new Date('2026-11-23T23:59:59.999Z');
     expect(startWindowState({ now: justBefore, startAt: start, endAt: new Date('2026-11-26T15:00:00.000Z'), timeZone: TORONTO })).toBe('before');
-    expect(startWindowState({ now: new Date('2026-11-24T05:00:00.000Z'), startAt: start, endAt: new Date('2026-11-26T15:00:00.000Z'), timeZone: TORONTO })).toBe('open');
+    expect(startWindowState({ now: new Date('2026-11-24T00:00:00.000Z'), startAt: start, endAt: new Date('2026-11-26T15:00:00.000Z'), timeZone: TORONTO })).toBe('open');
   });
 
   it('allows the opening instant and refuses the end instant', () => {
@@ -66,6 +73,13 @@ describe('unpaid Mobile Money cutoff and no-show', () => {
       timeZone: DOUALA,
       policyVersion: null,
       pickupInspectionPending: false,
+    })).toBe(false);
+    expect(reservedUnpaidDue({
+      now: new Date('2026-11-25T00:00:00.000Z'),
+      startAt: start,
+      timeZone: DOUALA,
+      policyVersion: null,
+      pickupInspectionPending: false,
     })).toBe(true);
   });
 
@@ -96,10 +110,11 @@ describe('unpaid Mobile Money cutoff and no-show', () => {
     })).toBe(false);
   });
 
-  it('matches the pickup calendar day in the listing zone', () => {
+  it('matches the stored UTC date, not the listing-zone date', () => {
     const now = new Date('2026-11-24T04:30:00.000Z');
-    expect(isStartDay(start, now, TORONTO)).toBe(false);
+    expect(isStartDay(start, now, TORONTO)).toBe(true);
     expect(isStartDay(start, now, DOUALA)).toBe(true);
+    expect(isStartDay(start, new Date('2026-11-23T23:30:00.000Z'), DOUALA)).toBe(false);
   });
 });
 
@@ -112,6 +127,12 @@ describe('rental_mark_started window', () => {
     expect(sql).toContain("RAISE EXCEPTION 'rental_start_window'");
     expect(sql).toContain('p_at < v_opens OR p_at >= v_booking.end_at');
     expect(sql).toContain('public.rental_end_of_start_day(start_at, v_country)');
+    const wall = readFileSync(
+      join(__dirname, '../../../../hasura/migrations/Rendasua/20261126120000_rental_start_wall_clock/up.sql'),
+      'utf8'
+    );
+    expect(wall).toContain("date_trunc('day', p_start AT TIME ZONE 'UTC')");
+    expect(wall).not.toContain('rental_listing_time_zone');
     expect(sql).not.toContain('rentals_simple_start_enabled');
     expect(sql).not.toContain('application_configurations');
   });
