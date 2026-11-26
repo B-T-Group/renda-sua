@@ -6677,7 +6677,7 @@
       "wouldHaveReceived": "Vous auriez reçu {{amount}}",
       "expired": "Expirée",
       "deposit": "Caution {{amount}}",
-      "sent": "Envoyée {{time}}",
+      "sent": "Envoyée à {{time}}",
       "quoteUnavailable": "Devis indisponible",
       "openRequest": "Ouvrir la demande",
       "acceptUnavailable": "Accepter indisponible — dates prises",

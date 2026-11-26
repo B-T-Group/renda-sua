@@ -257,7 +257,9 @@ describe('renter and sent time', () => {
     expect(renterInitials('MM', 'Test')).toBe('MM');
     expect(renterInitials('Samuel', 'Oru')).toBe('SO');
     expect(sentClock('2026-11-11T18:19:00.000Z', 'en')).toMatch(/7:19\s?PM/);
-    expect(sentClock('2026-11-11T18:19:00.000Z', 'fr')).toMatch(/19:19/);
+    expect(sentClock('2026-11-11T18:19:00.000Z', 'fr')).toBe('19:19');
+    expect(sentClock('2026-11-26T12:00:00.000Z', 'fr', 'America/Toronto')).toBe('07:00');
+    expect(sentClock('2026-11-26T12:00:00.000Z', 'en', 'America/Toronto')).toMatch(/7:00\s?AM/);
     const model = buildRequestCardModel(request(), 'en', now, copy);
     expect(model.initials).toBe('MM');
     expect(model.place).toBe("Stripe Rail · L'Assomption");

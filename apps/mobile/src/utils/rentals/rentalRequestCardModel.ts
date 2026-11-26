@@ -127,8 +127,9 @@ export function sentClock(iso: string, locale: string, zone: string = DOUALA): s
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   const french = locale.toLowerCase().startsWith('fr');
-  return new Intl.DateTimeFormat(french ? 'fr-FR' : 'en-US', {
-    hour: 'numeric',
+  // FR is zero-padded 24h (`07:00`); EN stays `7:00 AM`.
+  return new Intl.DateTimeFormat(french ? 'en-GB' : 'en-US', {
+    hour: french ? '2-digit' : 'numeric',
     minute: '2-digit',
     hour12: !french,
     timeZone: zone,

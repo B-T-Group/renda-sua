@@ -95,6 +95,9 @@ describe('business rental request card — expired', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('JBL PartyBox 310')).toBeInTheDocument();
     expect(screen.getByText(/Would have received/)).toBeInTheDocument();
+    expect(screen.getByText(/Would have received \$90\.00/)).toBeInTheDocument();
+    expect(screen.getByText('26 Nov · All day')).toBeInTheDocument();
+    expect(screen.queryByText(/^\$45$/)).not.toBeInTheDocument();
     expect(screen.queryByTestId('rental-request-accept')).not.toBeInTheDocument();
     expect(screen.queryByTestId('rental-request-decline')).not.toBeInTheDocument();
     expect(screen.queryByText(/Nothing was charged/i)).not.toBeInTheDocument();
@@ -107,6 +110,10 @@ describe('business rental request card — expired', () => {
     expect(screen.getByText('Expirée')).toBeInTheDocument();
     expect(screen.queryByText('Terminé')).not.toBeInTheDocument();
     expect(screen.getByText(/Vous auriez reçu/)).toBeInTheDocument();
+    expect(screen.getByText(/Vous auriez reçu/).textContent?.replace(/[\s\u00a0\u202f]/g, ' ')).toBe(
+      'Vous auriez reçu 90,00 $'
+    );
+    expect(screen.getByText(/26\s*nov\.\s*·\s*Toute la journée/)).toBeInTheDocument();
     expect(screen.getByText(/Vous n’avez pas répondu sous 24/)).toBeInTheDocument();
     expect(i18n.t('business.dashboard.rentalRequests.expiredSlaReason')).toContain('24\u00a0h');
     expect(screen.queryByTestId('rental-request-accept')).not.toBeInTheDocument();
@@ -124,7 +131,7 @@ describe('business rental request card — expired', () => {
       })
     );
     expect(screen.getByText(/Would have received/)).toBeInTheDocument();
-    expect(screen.getByText(/90/)).toBeInTheDocument();
+    expect(screen.getByText(/Would have received \$90\.00/)).toBeInTheDocument();
     expect(screen.queryByText(/^\$45$/)).not.toBeInTheDocument();
   });
 });

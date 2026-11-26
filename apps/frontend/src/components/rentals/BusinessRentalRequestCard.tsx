@@ -1,6 +1,9 @@
+import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import HandymanOutlinedIcon from '@mui/icons-material/HandymanOutlined';
+import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Chip,
@@ -8,22 +11,22 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { BusinessRentalRequestRow } from '../../hooks/useRentalApi';
 import {
-  formatRentalMoney,
+  formatRequestAmount,
   parseRentalPricingSnapshot,
-  parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
 import {
   computeRentalPricingLines,
   parseRentalSelectionWindowsFromJson,
 } from '../../utils/rentalPricingLines';
 import { resolveRentalPhase } from '../../utils/rentalPhase';
-import { expiredRequestWindow, isExpiredRentalRequest } from '../../utils/dashboardRentalRequests';
+import { expiredRequestWindow, isExpiredRentalRequest, requestPhotoUrl } from '../../utils/dashboardRentalRequests';
+import { buildRequestCardModel } from '../../utils/rentalRequestCardModel';
 import { RentalRequestExpiredBanner } from '../business/RentalRequestExpiredBanner';
 
 function changeDetail(summary: BusinessRentalRequestRow['change_summary']): string {
@@ -72,21 +75,6 @@ function formatDateTimeWithoutTimezone(value?: string | null): string {
   });
 }
 
-function formatDateOnly(value?: string | null): string {
-  if (!value) {
-    return '-';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-  });
-}
-
 export interface BusinessRentalRequestCardProps {
   request: BusinessRentalRequestRow;
   onAccept: (request: BusinessRentalRequestRow) => void;
@@ -98,7 +86,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   onAccept,
   onReject,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
   const firstName = request.client?.user?.first_name?.trim() || '';
@@ -110,17 +98,10 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   const bookingIsActive = booking?.status === 'active';
   const actualStartAt = booking?.actual_start_at ?? null;
   const itemName = request.rental_location_listing?.rental_item?.name ?? '—';
-  const img = request.rental_location_listing?.rental_item?.rental_item_images?.[0];
-  const imgUrl =
-    (img?.image_url?.trim() ||
-      (img as { imageUrl?: string | null } | undefined)?.imageUrl?.trim() ||
-      '') as string;
-  const imgAlt = img?.alt_text?.trim() || itemName;
+  const imgUrl = requestPhotoUrl(request);
+  const imgAlt = itemName;
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
-  const selectionWindows = useMemo(
-    () => parseRentalSelectionWindows(request.rental_selection_windows),
-    [request.rental_selection_windows]
-  );
+  const model = buildRequestCardModel(request, i18n.language, new Date(), t);
   const currency = request.rental_location_listing?.rental_item?.currency ?? 'XAF';
   const pricingPreview = useMemo(() => {
     const quoted = parseRentalPricingSnapshot(request.rental_pricing_snapshot);
@@ -191,6 +172,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   return (
     <Paper
       elevation={0}
+      data-testid="rental-request-row"
       role={cardOpensBooking ? 'button' : undefined}
       tabIndex={cardOpensBooking ? 0 : undefined}
       aria-label={
@@ -254,23 +236,23 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
             }}
           />
         ) : (
-          <Avatar
-            variant="rounded"
+          <Box
+            aria-hidden
             sx={{
               width: 104,
               height: 104,
               borderRadius: 2,
-              fontWeight: 900,
-              bgcolor: alpha(theme.palette.primary.main, 0.12),
-              color: 'primary.main',
               border: 1,
               borderColor: 'divider',
               flexShrink: 0,
-              fontSize: '1.1rem',
+              bgcolor: 'action.hover',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            {itemName?.trim()?.[0]?.toUpperCase() ?? 'R'}
-          </Avatar>
+            <ItemCategoryIcon request={request} />
+          </Box>
         )}
 
         <Stack spacing={1.25} sx={{ flex: 1, minWidth: 0 }}>
@@ -338,15 +320,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
           ) : null}
 
           <Typography variant="body2" color="text.secondary">
-            {selectionWindows.length
-              ? selectionWindows
-                  .map((w) =>
-                    w.billing === 'all_day'
-                      ? formatDateOnly(w.start_at)
-                      : `${formatDateTimeWithoutTimezone(w.start_at)} → ${formatDateTimeWithoutTimezone(w.end_at)}`
-                  )
-                  .join(' · ')
-              : '—'}
+            {model.schedule.summary || '—'}
           </Typography>
 
           <Typography
@@ -356,9 +330,13 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
           >
             {isExpiredRentalRequest(request)
               ? t('rentals.requestCard.wouldHaveReceived', 'Would have received {{amount}}', {
-                  amount: formatRentalMoney(pricingPreview.total, pricingPreview.currency),
+                  amount: formatRequestAmount(
+                    pricingPreview.total,
+                    pricingPreview.currency,
+                    i18n.language
+                  ),
                 })
-              : formatRentalMoney(pricingPreview.total, pricingPreview.currency)}
+              : formatRequestAmount(pricingPreview.total, pricingPreview.currency, i18n.language)}
           </Typography>
 
           <Stack
@@ -405,3 +383,19 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
     </Paper>
   );
 };
+
+function ItemCategoryIcon({ request }: { request: BusinessRentalRequestRow }) {
+  const name =
+    request.rental_location_listing.rental_item.rental_category?.name ||
+    request.rental_location_listing.rental_item.name;
+  const Icon = categoryIcon(name);
+  return <Icon color="action" sx={{ fontSize: 40 }} />;
+}
+
+function categoryIcon(name: string) {
+  if (/camera|photo|caméra|appareil/i.test(name)) return PhotoCameraOutlinedIcon;
+  if (/equipment|équipement|equipement|tool|outil|light/i.test(name)) return HandymanOutlinedIcon;
+  if (/power|électr|electr|éclair/i.test(name)) return BoltOutlinedIcon;
+  return CategoryOutlinedIcon;
+}
+
