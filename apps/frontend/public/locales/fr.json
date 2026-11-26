@@ -7183,6 +7183,7 @@
     },
     "start": {
       "pillDay": "Retrait {{day}}",
+      "walletDue": "{{amount}} seront payés depuis votre portefeuille",
       "pickupToday": "Retrait aujourd'hui",
       "latePickup": "Retrait en retard",
       "pickupOn": "Retrait le {{when}} · {{time}}",

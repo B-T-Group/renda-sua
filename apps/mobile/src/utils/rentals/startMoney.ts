@@ -20,12 +20,14 @@ export interface StartMoneyBooking {
  *   security deposit in one manual-capture hold. The split subline shows only when the hold
  *   equals rental + deposit, so the parts always add up to the held amount.
  * - momo_due: nothing paid yet; the amount is charged by Mobile Money when the renter starts.
- * - paid: already paid (XAF/XOF have no deposit), or covered by the wallet per the server's
- *   start preview (`payment_rail: 'wallet'`); `via` says how when the server knows.
+ * - wallet_due: not paid yet, but the server's start preview (`payment_rail: 'wallet'`) says the
+ *   wallet covers it, so Start takes it from the wallet.
+ * - paid: already paid (XAF/XOF have no deposit); `via` says how when the server knows.
  */
 export type StartMoney =
   | { kind: 'card'; held: number; rental: number; deposit: number; split: boolean }
   | { kind: 'momo_due'; amount: number }
+  | { kind: 'wallet_due'; amount: number }
   | { kind: 'paid'; amount: number; via: 'mobile_money' | 'wallet' | null };
 
 export function startMoney(booking: StartMoneyBooking): StartMoney {
@@ -39,7 +41,7 @@ export function startMoney(booking: StartMoneyBooking): StartMoney {
   const due = amount(booking.accept_start_preview?.amount_due_at_pickup);
   const value = due > 0 ? due : rental;
   // Server preview: the renter's wallet covers the total, so Start takes it from the wallet, not Mobile Money.
-  if (booking.accept_start_preview?.payment_rail === 'wallet') return { kind: 'paid', amount: value, via: 'wallet' };
+  if (booking.accept_start_preview?.payment_rail === 'wallet') return { kind: 'wallet_due', amount: value };
   return { kind: 'momo_due', amount: value };
 }
 
@@ -90,6 +92,13 @@ export function startMoneyLines(
   }
   if (money.kind === 'momo_due') {
     return { main: t('rentals.start.momoLine', 'Mobile Money · {{amount}}', { amount: format(money.amount) }), sub: null, icon: 'momo' };
+  }
+  if (money.kind === 'wallet_due') {
+    return {
+      main: t('rentals.start.walletDue', '{{amount}} will be paid from your wallet', { amount: format(money.amount) }),
+      sub: null,
+      icon: 'wallet',
+    };
   }
   const value = format(money.amount);
   if (money.via === 'mobile_money') {

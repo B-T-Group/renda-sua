@@ -71,7 +71,7 @@ describe('RentalStartCard held amount', () => {
     expect(screen.getAllByText(/paid with Mobile Money/).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('says paid from your wallet when the wallet covers an FCFA booking', async () => {
+  it('says will be paid from your wallet before Start when the wallet covers an FCFA booking', async () => {
     await renderCard({
       ...base,
       status: 'reserved',
@@ -83,7 +83,7 @@ describe('RentalStartCard held amount', () => {
       accept_start_preview: { payment_rail: 'wallet', amount_due_at_pickup: 15000 },
     });
     expect(screen.queryByText(/Mobile Money/)).toBeNull();
-    expect(screen.getAllByText(/paid from your wallet/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/will be paid from your wallet/).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText('Start rental').length).toBeGreaterThanOrEqual(1);
   });
 

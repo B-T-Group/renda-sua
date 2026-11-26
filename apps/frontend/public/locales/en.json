@@ -7463,6 +7463,7 @@
     },
     "start": {
       "pillDay": "Pickup {{day}}",
+      "walletDue": "{{amount}} will be paid from your wallet",
       "pickupToday": "Pickup today",
       "latePickup": "Late pickup",
       "pickupOn": "Pickup on {{when}} · {{time}}",
