@@ -24,7 +24,7 @@ describe('reserve summary (01a/01b)', () => {
       mode: 'fee',
       windows: [W],
       quote: { currency: 'XAF', total: 12000, lines: [] },
-      booking: { reservation_fee_amount: 1200, inspection_policy_version: 1 },
+      booking: { reservation_fee_amount: 150, inspection_policy_version: 1 },
       listingZone: 'Africa/Douala',
       placeName: 'Sono Akwa',
       language: 'en',
@@ -36,7 +36,7 @@ describe('reserve summary (01a/01b)', () => {
     expect(s.box.kind).toBe('fee');
     expect(s.box.lines.map((l) => l.text).join(' | ')).toMatch(/Refunded if you cancel before Sat 28 Nov/);
     expect(s.cancelLine).toBe('Free cancellation until Fri 27 Nov · 23:59');
-    expect(s.button).toMatch(/^Pay 1.200.FCFA & reserve$/);
+    expect(s.button).toMatch(/^Pay 150.FCFA & reserve$/);
   });
 
   it('card pay at pickup: deposit row and nothing held today', () => {
@@ -67,18 +67,18 @@ describe('Pay & start breakdown (05a/05b)', () => {
     reservation_fee_status: 'paid',
   };
   it('card: rental, fee paid, charged now, deposit hold and the footer', () => {
-    const b = payBreakdown({ ...base, currency: 'CAD', total_amount: 60, card_pay_at_pickup: true, reservation_fee_amount: 6, security_deposit_amount: 180 } as never, 'en', t);
+    const b = payBreakdown({ ...base, currency: 'CAD', total_amount: 60, card_pay_at_pickup: true, reservation_fee_amount: 1, security_deposit_amount: 180 } as never, 'en', t);
     expect(b?.rail).toBe('card');
     expect(b?.rows.map((r) => [r.label, r.value])).toEqual([
       ['Rental · 4 h', '$60.00'],
-      ['Reservation fee paid', '\u2212$6.00'],
-      ['Charged now', '$54.00'],
+      ['Reservation fee paid', '\u2212$1.00'],
+      ['Charged now', '$59.00'],
       ['Deposit hold', '$180.00'],
     ]);
-    expect(b?.footer).toBe('$234.00 on your card today · $180.00 of it is a hold');
+    expect(b?.footer).toBe('$239.00 on your card today · $180.00 of it is a hold');
   });
   it('MoMo: to pay now, no deposit row, no footer', () => {
-    const b = payBreakdown({ ...base, currency: 'XAF', total_amount: 12000, reservation_fee_amount: 1200 } as never, 'en', t);
+    const b = payBreakdown({ ...base, currency: 'XAF', total_amount: 12000, reservation_fee_amount: 150 } as never, 'en', t);
     expect(b?.rows.map((r) => r.key)).toEqual(['rental', 'fee', 'now']);
     expect(b?.rows[2].label).toBe('To pay now');
     expect(b?.footer).toBeNull();
@@ -86,7 +86,7 @@ describe('Pay & start breakdown (05a/05b)', () => {
 });
 
 describe('cancel fee result', () => {
-  const b = { status: 'reserved', currency: 'XAF', total_amount: 12000, reservation_fee_amount: 1200, reservation_fee_status: 'paid', start_at: W.start_at } as never;
+  const b = { status: 'reserved', currency: 'XAF', total_amount: 12000, reservation_fee_amount: 150, reservation_fee_status: 'paid', start_at: W.start_at } as never;
   it('refunds before the start day and keeps it on the start day (listing clock)', () => {
     expect(cancelFeeResult(b, Date.parse('2026-11-27T22:30:00Z'), 'Africa/Douala')).toBe('refund');
     expect(cancelFeeResult(b, Date.parse('2026-11-27T23:30:00Z'), 'Africa/Douala')).toBe('keep');

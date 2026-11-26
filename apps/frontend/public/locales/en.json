@@ -3742,8 +3742,7 @@
       },
       "reservationFee": {
         "label": "Ask for a reservation fee",
-        "helpFcfa": "10% of the rental, at least 150 FCFA. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.",
-        "help": "10% of the rental, at least $2.00. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come."
+        "help": "Ask for a {{amount}} reservation fee. It counts toward the total."
       }
     },
     "failedDeliveries": {

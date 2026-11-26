@@ -78,19 +78,19 @@ describe('Start rental dialog copy (web locales)', () => {
       security_deposit_amount: 180,
       payment_status: 'pending',
       card_pay_at_pickup: true,
-      reservation_fee_amount: 5.4,
+      reservation_fee_amount: 1,
       reservation_fee_status: 'paid',
     };
-    expect(startMoney(booking)).toEqual({ kind: 'card_due', amount: 48.6, deposit: 180 });
+    expect(startMoney(booking)).toEqual({ kind: 'card_due', amount: 53, deposit: 180 });
     expect(
-      startMoney({ ...booking, accept_start_preview: { payment_rail: 'card', amount_due_at_pickup: 48.6, deposit_hold_amount: 180 } })
-    ).toEqual({ kind: 'card_due', amount: 48.6, deposit: 180 });
+      startMoney({ ...booking, accept_start_preview: { payment_rail: 'card', amount_due_at_pickup: 53, deposit_hold_amount: 180 } })
+    ).toEqual({ kind: 'card_due', amount: 53, deposit: 180 });
     expect(startMoney({ ...booking, payment_status: 'authorized', authorized_amount: 228.6 }).kind).toBe('card');
   });
 
   it('MoMo pay at pickup: a paid fee lowers the amount due', () => {
     expect(
-      startMoney({ currency: 'XAF', total_amount: 12000, payment_status: 'pending', reservation_fee_amount: 1200, reservation_fee_status: 'paid' })
-    ).toEqual({ kind: 'momo_due', amount: 10800 });
+      startMoney({ currency: 'XAF', total_amount: 12000, payment_status: 'pending', reservation_fee_amount: 150, reservation_fee_status: 'paid' })
+    ).toEqual({ kind: 'momo_due', amount: 11850 });
   });
 });

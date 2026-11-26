@@ -47,7 +47,7 @@ export interface ReserveRow {
 
 export interface ReserveSummary {
   rows: ReserveRow[];
-  /** "Reservation fee · 1 200 FCFA" box (fee mode) or "Nothing to pay today" box. */
+  /** "Reservation fee · 150 FCFA" box (fee mode) or "Nothing to pay today" box. */
   box: { kind: 'fee' | 'free'; title: string; lines: Array<{ icon: 'check' | 'refund' | 'warn' | 'card'; text: string; warn?: boolean }> };
   cancelLine: string;
   footer: { title: string; sub: string; amount: string };

@@ -35,6 +35,8 @@ import RentalListingModerationStatusChip from '../rentals/RentalListingModeratio
 import { RichTextEditor } from '../common/RichTextEditor';
 import SEOHead from '../seo/SEOHead';
 import { depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
+import { listingReservationFee } from '../../utils/rentals/reservationFee';
 
 function rentalDeleteErrorMessage(error: unknown, fallback: string): string {
   const err = error as { response?: { data?: { message?: string | string[] } } };
@@ -168,7 +170,7 @@ function parsePriceFields(f: ListingFormState, currency: string): {
 }
 
 const BusinessRentalItemEditPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -834,9 +836,13 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     <Box>
                       <Typography variant="body2" color="text.primary" fontWeight={600}>{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {['XAF', 'XOF'].includes((item?.currency || lockedCurrency || '').toUpperCase())
-                          ? t('business.rentals.reservationFee.helpFcfa', '10% of the rental, at least 150\u00a0FCFA. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.')
-                          : t('business.rentals.reservationFee.help', '10% of the rental, at least $2.00. It counts toward the total. You keep it if the renter cancels on the pickup day or doesn’t come.')}
+                        {t('business.rentals.reservationFee.help', 'Ask for a {{amount}} reservation fee. It counts toward the total.', {
+                          amount: formatConfirmationMoney(
+                            listingReservationFee(item?.currency || lockedCurrency),
+                            item?.currency || lockedCurrency || 'CAD',
+                            i18n.language
+                          ),
+                        })}
                       </Typography>
                     </Box>
                   }

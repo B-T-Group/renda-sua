@@ -60,19 +60,19 @@ describe('Reserve now, pay at pickup', () => {
     expect(screen.queryByTestId('book-confirm-fee-rules')).toBeNull();
   });
 
-  it('MoMo with a fee: Pay 1 200 FCFA & reserve and the refund rules', async () => {
-    await renderSheet(offer('XAF', 12000, { id: 'b1', status: 'proposed', reservation_fee_amount: 1200 }), false);
-    expect(screen.getByText('Pay 1\u00a0200\u00a0FCFA & reserve')).toBeTruthy();
+  it('MoMo with a fee: Pay 150 FCFA & reserve and the refund rules', async () => {
+    await renderSheet(offer('XAF', 12000, { id: 'b1', status: 'proposed', reservation_fee_amount: 150 }), false);
+    expect(screen.getByText('Pay 150\u00a0FCFA & reserve')).toBeTruthy();
     expect(screen.getByTestId('book-confirm-fee-rules')).toBeTruthy();
-    expect(screen.getByText(/Pay at pickup 10.800.FCFA, after you check the item/)).toBeTruthy();
+    expect(screen.getByText(/Pay at pickup 11.850.FCFA, after you check the item/)).toBeTruthy();
     expect(screen.getByText(/Refunded if you cancel before Sat 28 Nov/)).toBeTruthy();
     expect(screen.getByText('Free cancellation until Fri 27 Nov · 23:59')).toBeTruthy();
     expect(screen.queryByText(/Window 1/i)).toBeNull();
   });
 
   it('card market on the new path: no up-front hold, deposit at pickup', async () => {
-    await renderSheet(offer('CAD', 60, { id: 'b1', status: 'proposed', card_pay_at_pickup: true, reservation_fee_amount: 6 }), true);
-    expect(screen.getByText('Pay $6.00 & reserve')).toBeTruthy();
+    await renderSheet(offer('CAD', 60, { id: 'b1', status: 'proposed', card_pay_at_pickup: true, reservation_fee_amount: 1 }), true);
+    expect(screen.getByText('Pay $1.00 & reserve')).toBeTruthy();
     expect(screen.getByText('Held on your card at pickup')).toBeTruthy();
     expect(screen.getByText(/2:00–6:00 PM/)).toBeTruthy();
     expect(screen.queryByText('Held on card')).toBeNull();
@@ -87,7 +87,7 @@ describe('Reserve now, pay at pickup', () => {
     await renderWithProviders(
       <ThemeProvider>
         <PayAtPickupCard
-          booking={{ status: 'reserved', currency: 'XAF', total_amount: 12000, payment_timing: 'pay_at_pickup', payment_status: 'pending', reservation_fee_amount: 1200, reservation_fee_status: 'paid' }}
+          booking={{ status: 'reserved', currency: 'XAF', total_amount: 12000, payment_timing: 'pay_at_pickup', payment_status: 'pending', reservation_fee_amount: 150, reservation_fee_status: 'paid' }}
           format={(v) => `${v} FCFA`}
           itemCheck
           pickupDay="Sat 28 Nov"
@@ -95,7 +95,7 @@ describe('Reserve now, pay at pickup', () => {
       </ThemeProvider>
     );
     expect(screen.getByText('Paid · reservation fee')).toBeTruthy();
-    expect(screen.getByText('10800 FCFA')).toBeTruthy();
+    expect(screen.getByText('11850 FCFA')).toBeTruthy();
     expect(screen.getByText('Item check required')).toBeTruthy();
   });
 
@@ -110,7 +110,7 @@ describe('Reserve now, pay at pickup', () => {
       payment_status: 'pending',
       payment_timing: 'pay_at_pickup',
       card_pay_at_pickup: true,
-      reservation_fee_amount: 6,
+      reservation_fee_amount: 1,
       reservation_fee_status: 'paid',
       security_deposit_amount: 180,
     };
@@ -121,7 +121,7 @@ describe('Reserve now, pay at pickup', () => {
           timeZone="America/Toronto"
           role="client"
           place="Sono"
-          money="$54.00"
+          money="$59.00"
           returnLabel="Sat 28 Nov · 6:00 PM"
           open
           onOpen={() => undefined}
@@ -131,13 +131,13 @@ describe('Reserve now, pay at pickup', () => {
         />
       </ThemeProvider>
     );
-    expect(screen.getAllByText('Pay & start · $54.00').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Pay & start · $59.00').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Reservation fee paid')).toBeTruthy();
-    expect(screen.getByText('−$6.00')).toBeTruthy();
+    expect(screen.getByText('−$1.00')).toBeTruthy();
     expect(screen.getByText('Charged now')).toBeTruthy();
-    expect(screen.getAllByText('$54.00').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Pay $54.00 · start rental')).toBeTruthy();
-    expect(screen.getByText('$234.00 on your card today · $180.00 of it is a hold')).toBeTruthy();
+    expect(screen.getAllByText('$59.00').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Pay $59.00 · start rental')).toBeTruthy();
+    expect(screen.getByText('$239.00 on your card today · $180.00 of it is a hold')).toBeTruthy();
     expect(screen.getByText('Pick up your item · 2:00 PM')).toBeTruthy();
     expect(screen.queryByText(/held on your card/)).toBeNull();
   });

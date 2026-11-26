@@ -2726,8 +2726,7 @@
       },
       "reservationFee": {
         "label": "Demander des frais de réservation",
-        "helpFcfa": "10 % de la location, au moins 150 FCFA. Ils comptent dans le total. Vous les gardez si le locataire annule le jour du retrait ou ne vient pas.",
-        "help": "10 % de la location, au moins 2,00 $. Ils comptent dans le total. Vous les gardez si le locataire annule le jour du retrait ou ne vient pas."
+        "help": "Demander des frais de réservation de {{amount}}. Ils sont déduits du total."
       }
     },
     "orders": {

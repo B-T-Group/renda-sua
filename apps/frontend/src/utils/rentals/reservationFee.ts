@@ -43,6 +43,15 @@ export function isFcfa(currency: string | null | undefined): boolean {
   return code === 'XAF' || code === 'XOF';
 }
 
+/**
+ * The flat fee a listing asks for when the business turns it on (Samuel, 26 Nov 17:24).
+ * Mirrors the server: 1.00 on the Stripe rail, 150 FCFA on Mobile Money, capped at the
+ * rental total there. The booking's stamped reservation_fee_amount stays the source of truth.
+ */
+export function listingReservationFee(currency: string | null | undefined): number {
+  return isFcfa(currency) ? 150 : 1;
+}
+
 export function reservationFee(b: PayAtPickupFields | null | undefined): number {
   return amount(b?.reservation_fee_amount);
 }
