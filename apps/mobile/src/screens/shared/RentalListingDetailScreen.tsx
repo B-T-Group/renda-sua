@@ -27,7 +27,7 @@ import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
 import { formatRentalMoney } from '../../utils/rentals';
-import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { showsRentalDetailsDeposit } from '../../utils/rentals/cardDeposit';
 import { confirmationTimeZone } from '../../utils/rentals/confirmationFormat';
 import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
 import { listingRentModes } from '../../utils/rentals/listingRentModes';
@@ -197,7 +197,7 @@ export default function RentalListingDetailScreen() {
   const hourlyPrice = toNumber(listing.base_price_per_hour);
   const dailyPrice = toNumber(listing.base_price_per_day);
   const modes = listingRentModes(listing);
-  const depositAmount = showsCardDeposit(currency)
+  const depositAmount = showsRentalDetailsDeposit(currency, listing.security_deposit_amount)
     ? toNumber(listing.security_deposit_amount ?? 0)
     : 0;
   const closeToday = todayCloseLabel(weeklySorted);
@@ -419,13 +419,13 @@ export default function RentalListingDetailScreen() {
               </Text>
             </Text>
           ) : null}
-          {toNumber(listing.security_deposit_amount ?? 0) > 0 ? (
+          {depositAmount > 0 ? (
             <>
               <Text style={[typography.body2, { color: colors.text.primary, marginTop: 4 }]}>
                 {t('rentals.detail.securityDeposit', 'Security deposit (card rentals)')}:{' '}
                 <Text style={{ fontWeight: '700' }}>
                   {formatRentalMoney(
-                    toNumber(listing.security_deposit_amount ?? 0),
+                    depositAmount,
                     currency
                   )}
                 </Text>

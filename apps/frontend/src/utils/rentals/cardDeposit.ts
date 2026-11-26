@@ -59,6 +59,17 @@ export function showsCardDeposit(currency: string | null | undefined): boolean {
   return code !== 'XAF' && code !== 'XOF';
 }
 
+/** Listing details: only show a deposit when this currency actually collects one on a card hold. XAF/XOF never do, including for diaspora card payers. */
+export function showsRentalDetailsDeposit(
+  currency: string | null | undefined,
+  amount: unknown
+): boolean {
+  if (!showsCardDeposit(currency)) return false;
+  const value = Number(amount);
+  return Number.isFinite(value) && value > 0;
+}
+
+
 /** Add-listing hides the field until the item currency has loaded. */
 export function showsListingDeposit(currency: string | null | undefined): boolean {
   if (!(currency ?? '').trim()) return false;

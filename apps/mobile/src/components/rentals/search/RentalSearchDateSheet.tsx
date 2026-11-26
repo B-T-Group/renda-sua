@@ -8,7 +8,8 @@ import {
   calendarDateInTimeZone,
   describeRentalDateRange,
   formatIsoDate,
-  formatRangeDates,
+  formatSearchStayRange,
+  formatSheetDateLine,
   MAX_RENTAL_SEARCH_DAYS,
   parseIsoLocal,
   todayRange,
@@ -102,11 +103,12 @@ export function RentalSearchDateSheet({
     onChange(described.status === 'ok' ? described.range : null);
   }
 
+  const dayLabel = (count: number) => t('rentals.searchFirst.dayCount', '{{count}} days', { count });
   const summary =
     tooLong != null && start && end
-      ? formatRangeDates({ startDate: start, endDate: end, dayCount: tooLong }, i18n.language)
+      ? formatSearchStayRange({ startDate: start, endDate: end, dayCount: tooLong }, i18n.language)
       : value
-        ? `${formatRangeDates(value, i18n.language)} · ${value.dayCount}`
+        ? formatSheetDateLine(value, i18n.language, dayLabel(value.dayCount))
         : null;
 
   return (

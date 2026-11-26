@@ -6242,7 +6242,7 @@
       "nextRental": "Next rental",
       "dismissNext": "Dismiss",
       "perDay": "/ day",
-      "freeFor": "Free {{range}}",
+      "freeFor": "Available {{range}}",
       "availableFrom": "Available from {{date}}",
       "unavailableForDates": "Not available for these dates",
       "totalFor": "Total · {{amount}} for {{count}} days",

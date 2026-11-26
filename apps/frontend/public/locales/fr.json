@@ -7106,7 +7106,7 @@
       "countOnly": "{{count}} locations · ajoutez des dates pour trier par disponibilité",
       "matches": "{{count}} résultats · les dates libres d'abord",
       "inspection": "Inspection",
-      "freeRange": "Libre {{range}}",
+      "freeRange": "Disponible {{range}}",
       "availableFrom": "Disponible à partir du {{date}}",
       "totalFor": "Total · {{amount}} pour {{count}} jours",
       "perDayShort": "/ jour",

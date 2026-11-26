@@ -7387,7 +7387,7 @@
       "countOnly": "{{count}} rentals · add dates to sort by availability",
       "matches": "{{count}} matches · available for your dates first",
       "inspection": "Inspection",
-      "freeRange": "Free {{range}}",
+      "freeRange": "Available {{range}}",
       "availableFrom": "Available from {{date}}",
       "totalFor": "Total · {{amount}} for {{count}} days",
       "perDayShort": "/ day",

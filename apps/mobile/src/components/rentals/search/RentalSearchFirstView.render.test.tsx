@@ -22,7 +22,7 @@ const canon: RentalSearchCardModel = {
   totalIsEstimate: false,
   dayCount: 3,
   nextAvailableDate: null,
-  rangeLabel: '12–15 Nov',
+  rangeLabel: '12–14 Nov',
 };
 
 const nikon: RentalSearchCardModel = {
@@ -173,7 +173,7 @@ describe('search-first rentals', () => {
     });
     expect(view.getByText('2 matches · available for your dates first')).toBeTruthy();
     expect(view.getByText('Canon EOS R50 kit')).toBeTruthy();
-    expect(view.getByText('Free 12–15 Nov')).toBeTruthy();
+    expect(view.getByText('Available 12–14 Nov')).toBeTruthy();
     expect(view.getByText(/Total ·/)).toBeTruthy();
     expect(view.getByText(/75/)).toBeTruthy();
     expect(view.queryByText(/Est\./)).toBeNull();
@@ -227,7 +227,7 @@ describe('search-first rentals', () => {
     });
     expect(view.getByText('Nothing free for those dates')).toBeTruthy();
     await act(async () => {
-      fireEvent.press(view.getByText(/16–19/));
+      fireEvent.press(view.getByText(/16–18/));
     });
     expect(onNearby).toHaveBeenCalledWith(nearby[0]);
     await act(async () => {
@@ -402,7 +402,7 @@ describe('search-first rentals', () => {
       mode: 'results',
       query: 'scaffold',
       dates: { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 },
-      cards: [{ ...canon, totalForDates: 760, dayCount: 2, totalIsEstimate: true, rangeLabel: '14–16 Nov' }],
+      cards: [{ ...canon, totalForDates: 760, dayCount: 2, totalIsEstimate: true, rangeLabel: '14–15 Nov' }],
     });
     expect(view.getByText(/Est\./)).toBeTruthy();
   });

@@ -84,7 +84,7 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
         availability={availability}
         perDay={t('rentals.catalog.perDayShort', '/ day')}
         inspectionLabel={t('rentals.catalog.inspection', 'Inspection')}
-        freeLabel={(range) => t('rentals.catalog.freeRange', 'Free {{range}}', { range })}
+        freeLabel={(range) => t('rentals.catalog.freeRange', 'Available {{range}}', { range })}
         waitLabel={(date) => t('rentals.catalog.availableFrom', 'Available from {{date}}', { date })}
         totalLabel={(amount, count) =>
           t('rentals.catalog.totalFor', 'Total · {{amount}} for {{count}} days', { amount, count })

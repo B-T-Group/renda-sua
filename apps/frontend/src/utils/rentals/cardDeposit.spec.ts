@@ -1,4 +1,4 @@
-import { cardHoldLines, depositInputError, depositHourRate, depositOnSave, holdPresentation, showsCardDeposit, showsListingDeposit } from './cardDeposit';
+import { cardHoldLines, depositInputError, depositHourRate, depositOnSave, holdPresentation, showsCardDeposit, showsListingDeposit, showsRentalDetailsDeposit } from './cardDeposit';
 
 describe('card deposit field', () => {
   it('hides a deposit that is the whole card hold', () => {
@@ -21,6 +21,15 @@ describe('card deposit field', () => {
     expect(showsCardDeposit('CAD')).toBe(true);
     expect(showsCardDeposit('')).toBe(true);
   });
+
+  it('shows the listing-details deposit line only for card currencies with a positive amount', () => {
+    expect(showsRentalDetailsDeposit('XAF', 20000)).toBe(false);
+    expect(showsRentalDetailsDeposit('xof', 20000)).toBe(false);
+    expect(showsRentalDetailsDeposit('CAD', 80)).toBe(true);
+    expect(showsRentalDetailsDeposit('CAD', 0)).toBe(false);
+    expect(showsRentalDetailsDeposit('CAD', null)).toBe(false);
+  });
+
 
   it('does not invent 8x hourly when an XAF or XOF deposit is empty', () => {
     expect(depositOnSave('XAF', '', 40)).toBeUndefined();

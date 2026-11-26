@@ -51,6 +51,9 @@ describe('formatRentalPeriod', () => {
     expect(formatExclusiveStay('2026-11-22', '2026-11-25', 'en', days)).toBe('22\u201324 Nov · 3 days');
     expect(formatExclusiveStay('2026-11-22', '2026-11-25', 'fr', jours)).toBe('22\u201324 nov. · 3 jours');
     expect(formatExclusiveStayRange('2026-11-22', '2026-11-25', 'en')).toBe('22\u201324 Nov');
+    expect(formatExclusiveStayRange('2026-11-27', '2026-11-29', 'en')).toBe('27\u201328 Nov');
+    expect(formatExclusiveStay('2026-11-27', '2026-11-29', 'en', days)).toBe('27\u201328 Nov · 2 days');
+    expect(formatExclusiveStay('2026-11-27', '2026-11-29', 'fr', jours)).toBe('27\u201328 nov. · 2 jours');
     expect(formatRentalDay('2026-11-28', 'en')).toBe('28 Nov');
     expect(formatRentalDay('2026-11-28', 'fr')).toBe('28 nov.');
   });

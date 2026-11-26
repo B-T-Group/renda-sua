@@ -4,7 +4,7 @@ import { useRentalCatalogGeoParams } from './useRentalCatalogGeoParams';
 import type { RentalListingRow } from '../types/rentals';
 import { allDaySelectionsForRange } from '../utils/rentals/rentalSearchPreset';
 import {
-  formatRangeDates,
+  formatSearchStayRange,
   marketTimeZone,
   rangeFromSearchParams,
   type RentalDateRange,
@@ -51,7 +51,7 @@ function dateLineFor(
   if (!stay) return undefined;
   const days = t('rentals.requestForm.dayCount', '{{count}} days', { count: stay.dayCount });
   return t('rentals.searchFirst.sheetDateLine', '{{range}} · {{days}}', {
-    range: formatRangeDates(stay, language),
+    range: formatSearchStayRange(stay, language),
     days,
   });
 }

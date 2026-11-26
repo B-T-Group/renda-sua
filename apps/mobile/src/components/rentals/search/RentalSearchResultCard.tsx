@@ -83,7 +83,7 @@ export function RentalSearchResultCard({
         {place ? <Text style={{ color: colors.text.secondary }}>{place}</Text> : null}
         {showAvailability && card.available ? (
           <Text style={[styles.badge, { backgroundColor: colors.cta.soft, color: colors.cta.dark }]}>
-            {t('rentals.searchFirst.freeFor', 'Free {{range}}', { range: card.rangeLabel })}
+            {t('rentals.searchFirst.freeFor', 'Available {{range}}', { range: card.rangeLabel })}
           </Text>
         ) : null}
         {showAvailability && card.available === false ? (

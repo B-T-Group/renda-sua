@@ -40,6 +40,16 @@ describe('rental search dates', () => {
     expect(formatSearchStayRange(range, 'en')).toBe('22\u201324 Nov');
   });
 
+  it('labels a 27–29 exclusive stay as the two booked days, matching the priced count', () => {
+    const range = { startDate: '2026-11-27', endDate: '2026-11-29', dayCount: 2 };
+    const days = (count: number) => (count === 1 ? '1 day' : `${count} days`);
+    expect(range.dayCount).toBe(2);
+    expect(formatSearchStayRange(range, 'en')).toBe('27\u201328 Nov');
+    expect(formatSearchStayRange(range, 'fr')).toBe('27\u201328 nov.');
+    expect(formatSearchStay(range, 'en', days)).toBe('27\u201328 Nov · 2 days');
+    expect(formatSheetDateLine(range, 'en', '2 days')).toBe('27\u201328 Nov · 2 days');
+  });
+
   it('labels 12–15 Nov as three days and suggests later windows', () => {
     const range = { startDate: '2026-11-12', endDate: '2026-11-15', dayCount: 3 };
     expect(formatRangeDates(range, 'en')).toContain('12–15');
@@ -55,8 +65,8 @@ describe('rental search dates', () => {
 
   it('writes the request-sheet date line in English and French', () => {
     const range = { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 };
-    expect(formatSheetDateLine(range, 'en', '2 days')).toBe('14–16 Nov · 2 days');
-    expect(formatSheetDateLine(range, 'fr', '2 jours')).toBe('14–16 nov. · 2 jours');
+    expect(formatSheetDateLine(range, 'en', '2 days')).toBe('14\u201315 Nov · 2 days');
+    expect(formatSheetDateLine(range, 'fr', '2 jours')).toBe('14\u201315 nov. · 2 jours');
   });
 
   it('tells the results list when the request sheet changes dates', () => {
