@@ -28,6 +28,7 @@ import {
   formatConfirmationDue,
   formatConfirmationMoney,
 } from '../../utils/rentals/confirmationFormat';
+import { startMoney, startMoneyLines } from '../../utils/rentals/startMoney';
 import { CORRECTION_REASON_CODES, allUnitsReviewed, classifyInspectionError, damageRail, returnHasDamage } from '../../utils/rentals/rentalInspection';
 
 type Route = RouteProp<ClientRootStackParamList, 'ClientInspection'>;
@@ -69,6 +70,13 @@ export default function ClientInspectionScreen() {
   const amountDue = preview?.amount_due_at_pickup ?? 0;
   const shownAmount = amountDue > 0 ? amountDue : Number(model.booking?.total_amount) || 0;
   const amountLabel = formatConfirmationMoney(shownAmount, model.booking?.currency ?? 'XAF', i18n.language);
+  const moneyLines = model.booking
+    ? startMoneyLines(
+        startMoney(model.booking),
+        (value) => formatConfirmationMoney(value, model.booking?.currency ?? 'XAF', i18n.language),
+        t
+      )
+    : undefined;
   const photoZone = confirmationTimeZone(
     model.booking?.rental_location_listing?.business_location?.address?.country,
     model.booking?.currency
@@ -251,6 +259,7 @@ export default function ClientInspectionScreen() {
           place={model.booking?.rental_location_listing?.business_location?.name ?? ''}
           returnLabel={dueLabel}
           money={amountLabel}
+          moneyLines={moneyLines}
           startAt={model.booking?.start_at ?? ''}
           endAt={model.booking?.end_at ?? ''}
           startOpensAt={model.booking?.start_opens_at}
