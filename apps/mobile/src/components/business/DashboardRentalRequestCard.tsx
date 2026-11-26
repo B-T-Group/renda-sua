@@ -215,8 +215,9 @@ export function CardActions({
     ? t('rentals.requestCard.acceptUnavailable', 'Accept unavailable — dates are taken')
     : t('business.dashboard.rentalRequests.accept', 'Accept');
   return (
-    <View style={styles.actions}>
+    <View testID="rental-request-actions" style={styles.actions}>
       <Pressable
+        testID="rental-request-decline"
         accessibilityLabel={t('business.dashboard.rentalRequests.decline', 'Decline')}
         onPress={() => onDecline(request)}
         style={[styles.iconBtn, styles.decline, { borderColor: colors.divider }]}
@@ -224,6 +225,7 @@ export function CardActions({
         <MaterialCommunityIcons name="close" color={colors.error.main} size={22} />
       </Pressable>
       <Pressable
+        testID="rental-request-accept"
         accessibilityLabel={acceptLabel}
         accessibilityState={{ disabled }}
         disabled={disabled}

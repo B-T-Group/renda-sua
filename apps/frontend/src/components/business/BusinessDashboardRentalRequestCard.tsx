@@ -176,12 +176,12 @@ function DecisionButtons({
     ? t('rentals.requestCard.acceptUnavailable', 'Accept unavailable — dates are taken')
     : t('business.dashboard.rentalRequests.accept', 'Accept');
   return (
-    <Stack direction="row" spacing={1}>
-      <IconButton aria-label={acceptLabel} disabled={disabled} color="success" onClick={() => onAccept(request)} sx={{ bgcolor: 'success.main', color: 'common.white', '&:hover': { bgcolor: 'success.dark' } }}>
-        <CheckIcon />
-      </IconButton>
-      <IconButton aria-label={t('business.dashboard.rentalRequests.decline', 'Decline')} color="error" onClick={() => onDecline(request)} sx={{ border: 1, borderColor: 'divider' }}>
+    <Stack direction="row" spacing={1} data-testid="rental-request-actions">
+      <IconButton data-testid="rental-request-decline" aria-label={t('business.dashboard.rentalRequests.decline', 'Decline')} color="error" onClick={() => onDecline(request)} sx={{ border: 1, borderColor: 'divider' }}>
         <CloseIcon />
+      </IconButton>
+      <IconButton data-testid="rental-request-accept" aria-label={acceptLabel} disabled={disabled} color="success" onClick={() => onAccept(request)} sx={{ bgcolor: 'success.main', color: 'common.white', '&:hover': { bgcolor: 'success.dark' } }}>
+        <CheckIcon />
       </IconButton>
     </Stack>
   );

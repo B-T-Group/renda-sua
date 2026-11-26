@@ -23,6 +23,8 @@ import {
   parseRentalSelectionWindowsFromJson,
 } from '../../utils/rentalPricingLines';
 import { resolveRentalPhase } from '../../utils/rentalPhase';
+import { expiredRequestWindow, isExpiredRentalRequest } from '../../utils/dashboardRentalRequests';
+import { RentalRequestExpiredBanner } from '../business/RentalRequestExpiredBanner';
 
 function changeDetail(summary: BusinessRentalRequestRow['change_summary']): string {
   if (!summary?.fields?.length) return '';
@@ -288,6 +290,10 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
               ) : null}
             </Stack>
           </Stack>
+          {isExpiredRentalRequest(request) ? (
+            <RentalRequestExpiredBanner window={expiredRequestWindow(request)} />
+          ) : null}
+
           {(request.change_summary?.fields?.length ?? 0) > 0 ? (
             <Typography variant="body2" color="primary.main">
               {t('rentals.modify.changed', 'Changed: {{detail}}', {
@@ -334,18 +340,20 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
               <>
                 <Button
                   size="small"
-                  variant="contained"
-                  onClick={stopAnd(() => onAccept(request))}
-                >
-                  {t('rentals.actions.accept', 'Accept')}
-                </Button>
-                <Button
-                  size="small"
                   variant="outlined"
                   color="warning"
+                  data-testid="rental-request-decline"
                   onClick={stopAnd(() => onReject(request))}
                 >
                   {t('rentals.actions.decline', 'Decline')}
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  data-testid="rental-request-accept"
+                  onClick={stopAnd(() => onAccept(request))}
+                >
+                  {t('rentals.actions.accept', 'Accept')}
                 </Button>
               </>
             ) : null}

@@ -54,6 +54,24 @@ export function respondWindow(createdAt: string, startAt: string | null): 'sla' 
   return Number.isFinite(start) && start < sla ? 'start' : 'sla';
 }
 
+/** Auto-declined after the business missed the respond-by window. */
+export function isExpiredRentalRequest(row: {
+  status?: string | null;
+  unavailable_reason_code?: string | null;
+}): boolean {
+  return row.status === 'unavailable' && row.unavailable_reason_code === 'no_response';
+}
+
+export function expiredRequestWindow(row: {
+  created_at: string;
+  requested_start_at?: string | null;
+  rental_selection_windows?: Array<{ start_at?: string | null }> | null;
+  respond_window?: 'sla' | 'start' | null;
+}): 'sla' | 'start' {
+  if (row.respond_window === 'sla' || row.respond_window === 'start') return row.respond_window;
+  return respondWindow(row.created_at, requestStartIso(row));
+}
+
 export function requestStartIso(row: {
   rental_selection_windows?: RentalSelectionWindow[] | null;
   requested_start_at?: string | null;

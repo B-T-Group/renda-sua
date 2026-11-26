@@ -5,12 +5,14 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { CardActions, DashboardRentalRequestCard } from '../../components/business/DashboardRentalRequestCard';
+import { RentalRequestExpiredBanner } from '../../components/business/RentalRequestExpiredBanner';
 import { BusinessRentalRespondDialog } from '../../components/business/rentals/BusinessRentalRespondDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRentalRequestRow } from '../../types/rentals';
 import { buildRequestCardModel } from '../../utils/rentals/rentalRequestCardModel';
+import { expiredRequestWindow, isExpiredRentalRequest } from '../../utils/rentals/dashboardRentalRequests';
 
 type DetailRoute = RouteProp<BusinessRootStackParamList, 'BusinessRentalRequestDetail'>;
 
@@ -38,22 +40,29 @@ export default function BusinessRentalRequestDetailScreen() {
   if (!request) {
     return <Text style={{ margin: spacing.md }}>{t('rentals.requestCard.notFound', 'This request is no longer here.')}</Text>;
   }
+  const expired = isExpiredRentalRequest(request);
+  const canRespond = request.status === 'pending';
   const disabled = buildRequestCardModel(request, i18n.language, new Date(), t).acceptDisabled;
   return (
     <View style={[styles.screen, { backgroundColor: colors.background.default }]}>
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 140 }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: canRespond ? 140 : spacing.md }}>
         {stale ? <Text style={{ color: colors.warning.dark, marginBottom: spacing.sm }}>{t('rentals.modify.staleBanner', 'This request was updated. Review the latest version.')}</Text> : null}
+        {expired ? (
+          <RentalRequestExpiredBanner window={expiredRequestWindow(request)} style={{ marginBottom: spacing.md }} />
+        ) : null}
         <DashboardRentalRequestCard request={request} showActions={false} onAccept={() => undefined} onDecline={() => undefined} />
       </ScrollView>
-      <View style={[styles.footer, { borderColor: colors.divider, backgroundColor: colors.surface, padding: spacing.md }]}>
-        <Text variant="bodySmall">{t('rentals.requestCard.chargedAfterAccept', 'The renter is charged after you accept')}</Text>
-        <CardActions
-          request={request}
-          disabled={disabled}
-          onAccept={() => setMode('available')}
-          onDecline={() => setMode('unavailable')}
-        />
-      </View>
+      {canRespond ? (
+        <View style={[styles.footer, { borderColor: colors.divider, backgroundColor: colors.surface, padding: spacing.md }]}>
+          <Text variant="bodySmall">{t('rentals.requestCard.chargedAfterAccept', 'The renter is charged after you accept')}</Text>
+          <CardActions
+            request={request}
+            disabled={disabled}
+            onAccept={() => setMode('available')}
+            onDecline={() => setMode('unavailable')}
+          />
+        </View>
+      ) : null}
       <BusinessRentalRespondDialog
         visible={mode != null}
         mode={mode}

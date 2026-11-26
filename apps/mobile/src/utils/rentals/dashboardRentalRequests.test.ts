@@ -2,6 +2,8 @@ import {
   compareSoonestRequestStart,
   contractHoursOffer,
   dashboardPeriodLabel,
+  expiredRequestWindow,
+  isExpiredRentalRequest,
   respondWithinAmber,
   respondWithinHours,
   totalOverrideTooHigh,
@@ -62,5 +64,30 @@ describe('contractHoursOffer on the listing clock', () => {
   it('hides the hours picker in the last hour before a Douala start', () => {
     const offer = contractHoursOffer('2026-11-26T14:00:00.000Z', new Date('2026-11-26T12:30:00.000Z'), 'Africa/Douala');
     expect(offer.hidden).toBe(true);
+  });
+});
+
+describe('expired rental request', () => {
+  it('is only the auto-declined no_response row', () => {
+    expect(isExpiredRentalRequest({ status: 'unavailable', unavailable_reason_code: 'no_response' })).toBe(true);
+    expect(isExpiredRentalRequest({ status: 'unavailable', unavailable_reason_code: 'item_unavailable' })).toBe(false);
+    expect(isExpiredRentalRequest({ status: 'pending', unavailable_reason_code: 'no_response' })).toBe(false);
+    expect(isExpiredRentalRequest({ status: 'pending' })).toBe(false);
+  });
+
+  it('prefers the stored window and otherwise compares start to the 24h SLA', () => {
+    expect(expiredRequestWindow({ created_at: '2026-11-26T12:00:00.000Z', respond_window: 'start' })).toBe('start');
+    expect(
+      expiredRequestWindow({
+        created_at: '2026-11-26T12:00:00.000Z',
+        requested_start_at: '2026-11-26T20:00:00.000Z',
+      })
+    ).toBe('start');
+    expect(
+      expiredRequestWindow({
+        created_at: '2026-11-26T12:00:00.000Z',
+        requested_start_at: '2026-11-29T12:00:00.000Z',
+      })
+    ).toBe('sla');
   });
 });
