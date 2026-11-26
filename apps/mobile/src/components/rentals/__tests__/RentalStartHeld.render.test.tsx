@@ -1,6 +1,8 @@
 /** "Start rental?" sheet and start card: held amount includes the security deposit. */
 import React from 'react';
-import { screen } from '@testing-library/react-native';
+import { getDefaultNormalizer, screen } from '@testing-library/react-native';
+
+const raw = { normalizer: getDefaultNormalizer({ collapseWhitespace: false, trim: false }) };
 import { renderWithProviders } from '../../../__tests__/test-utils';
 import { ThemeProvider } from '../../../contexts/ThemeContext';
 import i18n from '../../../i18n';
@@ -69,10 +71,29 @@ describe('RentalStartCard held amount', () => {
     expect(screen.getAllByText(/paid with Mobile Money/).length).toBeGreaterThanOrEqual(1);
   });
 
+  it('says paid from your wallet when the wallet covers an FCFA booking', async () => {
+    await renderCard({
+      ...base,
+      status: 'reserved',
+      currency: 'XAF',
+      total_amount: 15000,
+      authorized_amount: null,
+      security_deposit_amount: null,
+      payment_status: 'pending',
+      accept_start_preview: { payment_rail: 'wallet', amount_due_at_pickup: 15000 },
+    });
+    expect(screen.queryByText(/Mobile Money/)).toBeNull();
+    expect(screen.getAllByText(/paid from your wallet/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Start rental').length).toBeGreaterThanOrEqual(1);
+  });
+
   it('uses the French copy', async () => {
     await i18n.changeLanguage('fr');
     await renderCard(base);
     expect(screen.getAllByText(/retenus sur votre carte/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/location · .*caution/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Démarrer la location\u00a0?', raw)).toBeTruthy();
+    expect(screen.getByText(/démarrage\u00a0\? .*dans les 30\u00a0minutes\.$/, raw)).toBeTruthy();
+    expect(screen.getByText(/^Démarrez seulement lorsque vous êtes avec le commerce\. On vous remet/)).toBeTruthy();
   });
 });

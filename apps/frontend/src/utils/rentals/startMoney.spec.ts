@@ -37,10 +37,38 @@ describe('startMoney', () => {
     expect(startMoneyLines(money, (n) => `${n} FCFA`, t)).toEqual({ main: 'Mobile Money · 15000 FCFA', sub: null, icon: 'momo' });
   });
 
+  it('says paid from your wallet when the server preview shows the wallet covers an FCFA booking', () => {
+    const money = startMoney({ currency: 'XAF', payment_status: 'pending', total_amount: 15000, accept_start_preview: { payment_rail: 'wallet', amount_due_at_pickup: 15000 } });
+    expect(money).toEqual({ kind: 'paid', amount: 15000, via: 'wallet' });
+    expect(startMoneyLines(money, (n) => `${n} FCFA`, t)).toEqual({ main: '15000 FCFA paid from your wallet', sub: null, icon: 'wallet' });
+  });
+
+  it('keeps Mobile Money when the wallet does not cover it or the preview is missing', () => {
+    expect(startMoney({ currency: 'XAF', payment_status: 'pending', total_amount: 15000, accept_start_preview: { payment_rail: 'mobile_money', amount_due_at_pickup: 15000 } }).kind).toBe('momo_due');
+    expect(startMoney({ currency: 'XAF', payment_status: 'pending', total_amount: 15000, accept_start_preview: null })).toEqual({ kind: 'momo_due', amount: 15000 });
+  });
+
   it('never says card for a paid FCFA booking', () => {
     const base = { currency: 'XAF', payment_status: 'paid', total_amount: 15000 };
     expect(startMoneyLines(startMoney({ ...base, accept_start_preview: { paid_rail: 'mobile_money' } }), (n) => `${n} FCFA`, t).main).toBe('15000 FCFA paid with Mobile Money');
     expect(startMoneyLines(startMoney({ ...base, accept_start_preview: { paid_rail: 'wallet' } }), (n) => `${n} FCFA`, t).main).toBe('15000 FCFA paid from your wallet');
     expect(startMoneyLines(startMoney(base), (n) => `${n} FCFA`, t)).toEqual({ main: '15000 FCFA paid', sub: null, icon: 'wallet' });
+  });
+});
+
+describe('Start rental dialog copy (web locales)', () => {
+  const fr = require('../../../public/locales/fr.json');
+  const en = require('../../../public/locales/en.json');
+
+  it('has the primary button in both languages', () => {
+    expect(fr.rentals.actions.startRental).toBe('Démarrer la location');
+    expect(en.rentals.actions.startRental).toBe('Start rental');
+  });
+
+  it('keeps 30 minutes together and a non-breaking space before French question marks', () => {
+    expect(en.rentals.start.didntHint).toContain('30\u00a0minutes');
+    expect(fr.rentals.start.didntHint).toContain('démarrage\u00a0?');
+    expect(fr.rentals.start.didntHint).toContain('30\u00a0minutes');
+    expect(fr.rentals.start.confirmTitle).toBe('Démarrer la location\u00a0?');
   });
 });

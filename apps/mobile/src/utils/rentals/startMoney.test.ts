@@ -38,6 +38,17 @@ describe('startMoney', () => {
     expect(startMoneyLines(money, (n) => `${n} FCFA`, t)).toEqual({ main: 'Mobile Money · 15000 FCFA', sub: null, icon: 'momo' });
   });
 
+  it('says paid from your wallet when the server preview shows the wallet covers an FCFA booking', () => {
+    const money = startMoney({ currency: 'XAF', payment_status: 'pending', total_amount: 15000, accept_start_preview: { payment_rail: 'wallet', amount_due_at_pickup: 15000 } });
+    expect(money).toEqual({ kind: 'paid', amount: 15000, via: 'wallet' });
+    expect(startMoneyLines(money, (n) => `${n} FCFA`, t)).toEqual({ main: '15000 FCFA paid from your wallet', sub: null, icon: 'wallet' });
+  });
+
+  it('keeps Mobile Money when the wallet does not cover it or the preview is missing', () => {
+    expect(startMoney({ currency: 'XAF', payment_status: 'pending', total_amount: 15000, accept_start_preview: { payment_rail: 'mobile_money', amount_due_at_pickup: 15000 } }).kind).toBe('momo_due');
+    expect(startMoney({ currency: 'XAF', payment_status: 'pending', total_amount: 15000, accept_start_preview: null })).toEqual({ kind: 'momo_due', amount: 15000 });
+  });
+
   it('never says card for a paid FCFA booking', () => {
     const base = { currency: 'XAF', payment_status: 'paid', total_amount: 15000 };
     expect(startMoneyLines(startMoney({ ...base, accept_start_preview: { paid_rail: 'mobile_money' } }), (n) => `${n} FCFA`, t).main).toBe('15000 FCFA paid with Mobile Money');

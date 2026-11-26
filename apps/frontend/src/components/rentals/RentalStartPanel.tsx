@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
 import { startMoney, startMoneyLines, type StartMoneyBooking } from '../../utils/rentals/startMoney';
-import { BOOKING_CLOCK, formatZonedDay, formatZonedTime, formatZonedWeekday, formatZonedWhen, pickupPhase } from '../../utils/rentalStartWindow';
+import { BOOKING_CLOCK, formatZonedDay, formatZonedTime, formatZonedWeekdayDay, formatZonedWhen, pickupPhase } from '../../utils/rentalStartWindow';
 
 export interface StartPanelBooking {
   status: string;
@@ -48,7 +48,7 @@ export function RentalStartPanel(props: Props) {
     started,
   });
   const day = formatZonedDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
-  const when = `${formatZonedWeekday(props.booking.start_at, BOOKING_CLOCK, i18n.language)} ${day}`;
+  const when = formatZonedWeekdayDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
   const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
   const locked = phase === 'before' || phase === 'closed';
   const hold = startMoney(props.booking);
@@ -127,7 +127,7 @@ export function RentalStartPanel(props: Props) {
             </Stack>
           </Stack>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-            {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30 minutes.")}
+            {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30\u00a0minutes.")}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ flexDirection: 'column', px: 3, pb: 2 }}>

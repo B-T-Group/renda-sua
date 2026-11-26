@@ -20,7 +20,8 @@ export interface StartMoneyBooking {
  *   security deposit in one manual-capture hold. The split subline shows only when the hold
  *   equals rental + deposit, so the parts always add up to the held amount.
  * - momo_due: nothing paid yet; the amount is charged by Mobile Money when the renter starts.
- * - paid: already paid (XAF/XOF have no deposit); `via` says how when the server knows.
+ * - paid: already paid (XAF/XOF have no deposit), or covered by the wallet per the server's
+ *   start preview (`payment_rail: 'wallet'`); `via` says how when the server knows.
  */
 export type StartMoney =
   | { kind: 'card'; held: number; rental: number; deposit: number; split: boolean }
@@ -36,7 +37,10 @@ export function startMoney(booking: StartMoneyBooking): StartMoney {
     return { kind: 'paid', amount: rental, via: paidVia(booking.accept_start_preview?.paid_rail) };
   }
   const due = amount(booking.accept_start_preview?.amount_due_at_pickup);
-  return { kind: 'momo_due', amount: due > 0 ? due : rental };
+  const value = due > 0 ? due : rental;
+  // Server preview: the renter's wallet covers the total, so Start takes it from the wallet, not Mobile Money.
+  if (booking.accept_start_preview?.payment_rail === 'wallet') return { kind: 'paid', amount: value, via: 'wallet' };
+  return { kind: 'momo_due', amount: value };
 }
 
 function cardHold(booking: StartMoneyBooking, rental: number): StartMoney {

@@ -7484,8 +7484,8 @@
       "button": "Start rental{{amount}}",
       "confirmTitle": "Start rental?",
       "confirmBody": "Only start once you are with the business. The business will hand over the item once you start.",
-      "didntHint": "Didn't get the item after starting? You can tell us within 30 minutes.",
-      "didntReceiveLeft": "Didn't receive the item? · {{minutes}} min",
+      "didntHint": "Didn't get the item after starting? You can tell us within 30 minutes.",
+      "didntReceiveLeft": "Didn't receive the item? · {{minutes}} min",
       "notYet": "Not yet",
       "startedBanner": "Rental started at {{time}}. The business has been notified to hand over the item."
     },
@@ -7524,6 +7524,7 @@
     },
     "actions": {
       "bookOffer": "Book offer",
+      "startRental": "Start rental",
       "completePayment": "Complete payment",
       "sendStartPin": "Send start PIN",
       "showStartPin": "Show PIN on screen",

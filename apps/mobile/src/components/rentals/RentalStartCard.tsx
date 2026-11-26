@@ -8,7 +8,7 @@ import {
   formatZonedDay,
   BOOKING_CLOCK,
   formatZonedTime,
-  formatZonedWeekday,
+  formatZonedWeekdayDay,
   formatZonedWhen,
   pickupPhase,
   type PickupPhase,
@@ -76,7 +76,7 @@ function StartBody(props: Props & { phase: PickupPhase }) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const day = formatZonedDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
-  const when = `${formatZonedWeekday(props.booking.start_at, BOOKING_CLOCK, i18n.language)} ${day}`;
+  const when = formatZonedWeekdayDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
   const time = formatZonedTime(props.booking.start_at, BOOKING_CLOCK);
   const pill = pillText(props.phase, day, t);
   const momo = isMomoDue(props.booking);
@@ -218,7 +218,7 @@ function ConfirmSheet(props: Props) {
           <SheetRow icon="calendar-clock" label={t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })} />
           <SheetMoney booking={props.booking} />
           <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 8 }]}>
-            {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30 minutes.")}
+            {t('rentals.start.didntHint', "Didn't get the item after starting? You can tell us within 30\u00a0minutes.")}
           </Text>
           <Button mode="contained" icon="play" buttonColor={colors.primary.main} loading={props.starting} onPress={props.onConfirm} style={{ marginTop: 16, minHeight: 48 }}>
             {confirmLabel(props, t)}
