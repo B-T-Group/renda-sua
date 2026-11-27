@@ -65,6 +65,27 @@ export function buildStoresCacheKey(input: {
   ].join(':');
 }
 
+/** Exports seller directory (GET /stores?export_only=true); separate prefix so store keys never collide. */
+export function buildExportStoresCacheKey(input: {
+  generation: number;
+  limit: number;
+  offset: number;
+  search?: string;
+  countryCode?: string;
+  originCountry?: string;
+  businessLocationId?: string;
+}): string {
+  return [
+    'export-stores',
+    `g${input.generation}`,
+    input.originCountry ? `from_${input.originCountry}` : `into_${input.countryCode || 'none'}`,
+    input.search?.toLowerCase() || 'all',
+    input.businessLocationId || 'any',
+    input.limit,
+    input.offset,
+  ].join(':');
+}
+
 export function buildEssentialsCacheKey(
   countryCode?: string,
   state?: string,

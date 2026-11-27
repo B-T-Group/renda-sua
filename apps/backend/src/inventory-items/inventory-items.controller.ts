@@ -24,6 +24,7 @@ import {
   buildInventoryItemsCacheKey,
   EXPORT_ORIGINS_TTL_SECONDS,
   buildStoresCacheKey,
+  buildExportStoresCacheKey,
   inventoryItemsCacheTtlSeconds,
   isCatalogUserAuthenticated,
   isInventoryItemsCacheable,
@@ -41,6 +42,10 @@ import type {
 } from './inventory-items.service';
 import { InventoryItemsService } from './inventory-items.service';
 import type { ExportOriginSummary } from './export-origins.util';
+import {
+  clampExportStoresWindow,
+  type ExportStoresPage,
+} from './export-stores.util';
 import { DiscoveryRecoveryService } from './discovery/discovery-recovery.service';
 import { resolveDiscoverySort } from './discovery/discovery-sort.util';
 import {
@@ -293,6 +298,34 @@ export class InventoryItemsController {
     description:
       'When true, only locations that sell cooked food (restaurant directory)',
   })
+  @ApiQuery({
+    name: 'export_only',
+    required: false,
+    type: Boolean,
+    description:
+      'Exports seller directory. When true, only locations with live export items in context; item_count counts export items only; adds `total` and `country` to data and `country` / `latest_export_at` to rows. Into: pass country_code (viewer market). From: pass origin_country. Order: export item count, newest export listing, name (never distance). Absent: response unchanged.',
+  })
+  @ApiQuery({
+    name: 'origin_country',
+    required: false,
+    type: String,
+    example: 'CA',
+    description:
+      'With export_only=true: sellers whose location is in this ISO-2 country (From view, /exports/{cc}). Ignored without export_only.',
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    type: Number,
+    description: 'With export_only=true: skip this many sellers (pagination with total).',
+  })
+  @ApiQuery({
+    name: 'business_location_id',
+    required: false,
+    type: String,
+    description:
+      'With export_only=true: only this location (export seller page header). Ignored without export_only.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Stores with item counts and optional distance',
@@ -308,12 +341,28 @@ export class InventoryItemsController {
     @Query('origin_lng') origin_lng?: string,
     @Query('partners_only') partners_only?: string,
     @Query('business_id') business_id?: string,
-    @Query('food_only') food_only?: string
+    @Query('food_only') food_only?: string,
+    @Query('export_only') export_only?: string,
+    @Query('origin_country') origin_country?: string,
+    @Query('offset') offset?: string,
+    @Query('business_location_id') business_location_id?: string
   ): Promise<{
     success: boolean;
-    data: { stores: TopInventoryStoreRow[] };
+    data:
+      | { stores: TopInventoryStoreRow[] }
+      | ExportStoresPage;
     message: string;
   }> {
+    if (export_only === 'true') {
+      return this.getExportStores({
+        limit,
+        offset,
+        search,
+        country_code,
+        origin_country,
+        business_location_id,
+      });
+    }
     const n = limit ? Math.min(parseInt(limit, 10) || 20, 50) : 20;
     const lat =
       origin_lat !== undefined ? Number.parseFloat(origin_lat) : undefined;
@@ -382,6 +431,45 @@ export class InventoryItemsController {
       data: { stores },
       message: 'Stores retrieved successfully',
     };
+  }
+
+  /** Exports seller directory branch of GET /stores (export_only=true). */
+  private async getExportStores(params: {
+    limit?: string;
+    offset?: string;
+    search?: string;
+    country_code?: string;
+    origin_country?: string;
+    business_location_id?: string;
+  }): Promise<{ success: boolean; data: ExportStoresPage; message: string }> {
+    const window = clampExportStoresWindow(params.limit, params.offset);
+    const query = {
+      ...window,
+      search: params.search?.trim() || undefined,
+      country_code: params.country_code?.trim().toUpperCase() || undefined,
+      origin_country: params.origin_country?.trim().toUpperCase() || undefined,
+      business_location_id: params.business_location_id?.trim() || undefined,
+    };
+    const compute = async () => ({
+      success: true,
+      data: await this.inventoryItemsService.getExportStores(query),
+      message: 'Stores retrieved successfully',
+    });
+    if (!query.country_code && !query.origin_country) return compute();
+    const generation = await this.catalogCacheService.getGeneration('global');
+    return this.catalogCacheService.getOrCompute(
+      buildExportStoresCacheKey({
+        generation,
+        limit: query.limit,
+        offset: query.offset,
+        search: query.search,
+        countryCode: query.country_code,
+        originCountry: query.origin_country,
+        businessLocationId: query.business_location_id,
+      }),
+      compute,
+      { ttlSeconds: STORES_TTL_SECONDS }
+    );
   }
 
   @Public()

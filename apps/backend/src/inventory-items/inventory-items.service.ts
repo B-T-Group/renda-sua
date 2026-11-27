@@ -56,6 +56,12 @@ import {
   normalizeExportOriginCountry,
   summarizeExportOrigins,
 } from './export-origins.util';
+import {
+  aggregateExportStoreRows,
+  compareExportStores,
+  type ExportStoreRow,
+  type ExportStoresPage,
+} from './export-stores.util';
 import { listingRankSignals } from '../catalog-experience/catalog-listing-rank';
 import { scoreCatalogCandidate } from '../catalog-experience/catalog-ranking.weights';
 
@@ -584,6 +590,16 @@ const EXPORT_ORIGIN_ROWS_GQL = `
           country_code
         }
       }
+    }
+  }
+`;
+
+const EXPORT_STORE_ROWS_GQL = `
+  query ExportStoreRows($where: business_inventory_bool_exp!, $lim: Int!, $off: Int!) {
+    business_inventory(where: $where, limit: $lim, offset: $off, order_by: { id: asc }) {
+      item_id
+      business_location_id
+      created_at
     }
   }
 `;
@@ -1481,6 +1497,7 @@ export class InventoryItemsService {
         is_active: boolean;
         is_storefront_visible: boolean;
         logo_url: string | null;
+        reliability_tier?: string;
         latitude?: number | null;
         longitude?: number | null;
         country?: string | null;
@@ -1706,6 +1723,108 @@ export class InventoryItemsService {
       ...row,
       is_partner: partnerIds.has(row.business_id),
     }));
+  }
+
+  /**
+   * Exports seller directory (GET /inventory-items/stores?export_only=true).
+   * Business locations with at least one live export item in the Into / From context,
+   * counting export items only. Separate from the generic directory so that path is unchanged.
+   */
+  async getExportStores(query: {
+    limit: number;
+    offset?: number;
+    search?: string;
+    /** Into: viewer market (required when origin_country is absent). */
+    country_code?: string;
+    /** From: home-location country of the seller (ISO-2). */
+    origin_country?: string;
+    /** Restrict to one location (seller page header). */
+    business_location_id?: string;
+  }): Promise<ExportStoresPage> {
+    const origin = normalizeExportOriginCountry(query.origin_country);
+    const market = normalizeExportOriginCountry(query.country_code);
+    const country = origin ?? market ?? null;
+    const empty: ExportStoresPage = { stores: [], total: 0, country };
+    const locationId = query.business_location_id?.trim();
+    if (locationId && !isUuid(locationId)) return empty;
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: true,
+      include_unavailable: false,
+      export_only: true,
+      ...(origin ? { origin_country: origin } : { country_code: market }),
+      ...(locationId && { business_location_id: locationId }),
+    });
+    if ('unsupported' in built) return empty;
+    const aggregates = aggregateExportStoreRows(
+      await this.scanExportStoreRows(built.where)
+    );
+    if (aggregates.size === 0) return empty;
+    const byId = await this.fetchStoreLocationDetailsByIds([...aggregates.keys()]);
+    const counts = new Map<string, number>();
+    const demoted = new Set(['demote', 'restrict', 'suspend']);
+    for (const [id, agg] of aggregates) {
+      const loc = byId.get(id);
+      if (!loc || demoted.has(loc.reliability_tier || 'ok')) {
+        byId.delete(id);
+        continue;
+      }
+      counts.set(id, agg.item_count);
+    }
+    await this.applyStoreDirectoryFilters(counts, byId, { search: query.search });
+    const ranked: ExportStoreRow[] = [...counts.keys()]
+      .map((id) => {
+        const loc = byId.get(id);
+        const agg = aggregates.get(id);
+        return {
+          business_location_id: id,
+          business_id: loc?.business_id ?? '',
+          name: loc?.name ?? '',
+          city: loc?.city ?? null,
+          country: normalizeExportOriginCountry(loc?.country) ?? null,
+          logo_url: loc?.logo_url ?? null,
+          item_count: agg?.item_count ?? 0,
+          latest_export_at: agg?.latest_export_at ?? null,
+          is_verified: loc?.is_verified === true,
+          can_accept_orders: loc?.can_accept_orders === true,
+          is_storefront_visible: loc?.is_storefront_visible === true,
+          distance_meters: null,
+        };
+      })
+      .sort(compareExportStores);
+    const offset = Math.max(query.offset ?? 0, 0);
+    const page = ranked.slice(offset, offset + query.limit);
+    if (page.length === 0) return { stores: [], total: ranked.length, country };
+    const partnerIds = await this.activePartnerBusinessIds();
+    return {
+      stores: page.map((row) => ({
+        ...row,
+        is_partner: partnerIds.has(row.business_id),
+      })),
+      total: ranked.length,
+      country,
+    };
+  }
+
+  /** Pages export inventory rows (item, location, listing date) for the seller directory. */
+  private async scanExportStoreRows(where: Record<string, unknown>): Promise<
+    Array<{ item_id?: string; business_location_id?: string; created_at?: string }>
+  > {
+    const out: Array<{
+      item_id?: string;
+      business_location_id?: string;
+      created_at?: string;
+    }> = [];
+    const chunk = 1000;
+    for (let offset = 0; offset < INVENTORY_CATALOG_FETCH_MAX; offset += chunk) {
+      const res = await this.hasuraSystemService.executeQuery(
+        EXPORT_STORE_ROWS_GQL,
+        { where, lim: chunk, off: offset }
+      );
+      const rows = res?.business_inventory ?? [];
+      out.push(...rows);
+      if (rows.length < chunk) break;
+    }
+    return out;
   }
 
   private async applyStoreDirectoryFilters(
