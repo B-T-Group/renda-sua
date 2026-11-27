@@ -6854,6 +6854,7 @@
       "payButton": "Pay {{amount}} · start rental",
       "cardCancelled": "Payment cancelled. Nothing was charged. You can try again.",
       "cardFailed": "Card payment didn’t go through. Try again or use another card.",
+      "cardUnavailable": "We couldn’t open the card payment. Nothing was charged. Try again.",
       "cardConfirming": "Payment received. Starting your rental…",
       "cardWaitingTitle": "Confirming your card payment…",
       "cardWaitingBody": "Stay at the counter. This page updates when the payment goes through, then the business hands you the item.",

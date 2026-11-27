@@ -57,6 +57,8 @@ export interface RentalStartCardProps {
   onOpen: () => void;
   onClose: () => void;
   onConfirm: () => void;
+  /** Fires once the confirm Modal has finished closing (iOS); present native sheets after it. */
+  onDismissed?: () => void;
   onNotCollected?: () => void;
   now?: number;
   missing?: React.ReactNode;
@@ -268,7 +270,7 @@ function ConfirmSheet(props: RentalStartCardProps) {
   const breakdown = pays ? payBreakdown(props.booking, i18n.language, t) : null;
   const hero = card ? 'credit-card-outline' : pays ? 'cellphone' : 'store';
   return (
-    <Modal visible={props.open} transparent animationType="slide" onRequestClose={props.onClose}>
+    <Modal visible={props.open} transparent animationType="slide" onRequestClose={props.onClose} onDismiss={props.onDismissed}>
       <Pressable style={styles.backdrop} onPress={props.onClose}>
         <Pressable style={[styles.sheet, { backgroundColor: colors.surface, padding: spacing.lg, borderTopLeftRadius: borderRadius.lg, borderTopRightRadius: borderRadius.lg }]} onPress={() => undefined}>
           <View testID="rental-start-sheet-hero" style={[styles.hero, { backgroundColor: colors.primaryTint }]}>

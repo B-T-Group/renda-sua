@@ -6790,6 +6790,7 @@
       "payButton": "Payer {{amount}} · démarrer la location",
       "cardCancelled": "Paiement annulé. Rien n’a été débité. Vous pouvez réessayer.",
       "cardFailed": "Le paiement par carte n’a pas abouti. Réessayez ou utilisez une autre carte.",
+      "cardUnavailable": "Impossible d’ouvrir le paiement par carte. Rien n’a été débité. Réessayez.",
       "cardConfirming": "Paiement reçu. Démarrage de votre location…",
       "cardWaitingTitle": "Confirmation de votre paiement par carte…",
       "cardWaitingBody": "Restez au comptoir. Cette page se met à jour dès que le paiement passe, puis le commerce vous remet l’article.",

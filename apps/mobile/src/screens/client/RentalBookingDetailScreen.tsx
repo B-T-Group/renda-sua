@@ -87,6 +87,8 @@ import { bookingReturnDue } from '../../utils/rentals/returnDue';
 import { RentalMomoWaiting } from '../../components/rentals/RentalMomoWaiting';
 import { BookingQuickActions } from '../../components/rentals/BookingQuickActions';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
+import { createModalDismissWaiter } from '../../utils/modalDismissWaiter';
+import { pickupCardOutcomeMessage } from '../../utils/rentals/pickupCardOutcome';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
@@ -369,27 +371,25 @@ export default function RentalBookingDetailScreen() {
   const imageUri = bookingImages[0]?.image_url;
 
   const cardAtPickup = cardDueAtPickup(booking);
+  const startSheetDismiss = useMemo(() => createModalDismissWaiter(), []);
   const onStartRental = useCallback(async () => {
     try {
       const res = await startRental(cardAtPickup ? { stripe_payment_method: 'payment_sheet' } : undefined);
+      const sheetGone = startSheetDismiss.wait();
       setStartOpen(false);
       if (!cardAtPickup) {
         if (res.paymentPending) setMomoWaiting(true);
         return;
       }
+      await sheetGone;
       const outcome = await settlePickupCardPayment(res, payWithSheet);
-      if (outcome === 'cancelled') {
-        setSnack(t('rentals.payAtPickup.cardCancelled', 'Payment cancelled. Nothing was charged. You can try again.'));
-      } else if (outcome === 'failed') {
-        setSnack(t('rentals.payAtPickup.cardFailed', 'Card payment didn’t go through. Try again or use another card.'));
-      } else if (outcome !== 'none') {
-        setSnack(t('rentals.payAtPickup.cardConfirming', 'Payment received. Starting your rental…'));
-        void refetch();
-      }
+      setSnack(pickupCardOutcomeMessage(outcome, res.started, t));
+      if (outcome !== 'cancelled' && outcome !== 'failed') void refetch();
     } catch (e: unknown) {
+      setStartOpen(false);
       setSnack(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
     }
-  }, [cardAtPickup, payWithSheet, refetch, startRental, t]);
+  }, [cardAtPickup, payWithSheet, refetch, startRental, startSheetDismiss, t]);
 
   const onRetry = useCallback(async () => {
     try {
@@ -547,6 +547,7 @@ export default function RentalBookingDetailScreen() {
     onOpen: () => setStartOpen(true),
     onClose: () => setStartOpen(false),
     onConfirm: () => void onStartRental(),
+    onDismissed: startSheetDismiss.onDismiss,
   };
   const reviewLabel =
     reviewStage === 'return'
