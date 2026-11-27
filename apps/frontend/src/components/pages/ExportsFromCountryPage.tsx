@@ -191,9 +191,15 @@ const ExportsFromCountryPage: React.FC = () => {
           {code && !isEmpty ? (
             <Box sx={{ display: 'flex', gap: 4, mt: 1.5 }} data-testid="exports-origin-stats">
               {[
-                [summary?.item_count ?? items.length, t('exportsOrigin.statProducts', 'products')],
-                [businessCount, t('exportsOrigin.statBusinesses', 'businesses')],
-                [destinations.length, t('exportsOrigin.statDestinations', 'destination markets')],
+                [
+                  summary?.item_count ?? items.length,
+                  t('exportsOrigin.statProducts', 'products', { count: summary?.item_count ?? items.length }),
+                ],
+                [businessCount, t('exportsOrigin.statBusinesses', 'businesses', { count: businessCount })],
+                [
+                  destinations.length,
+                  t('exportsOrigin.statDestinations', 'destination markets', { count: destinations.length }),
+                ],
               ].map(([value, label]) => (
                 <Box key={String(label)}>
                   <Typography variant="h6" fontWeight={800} lineHeight={1.1}>

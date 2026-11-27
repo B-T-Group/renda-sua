@@ -603,8 +603,9 @@ function InventoryItemDetailScreen() {
   const acceptsOrders = merchantCanAcceptOrders(loc.business);
   const openingSoon = isOpeningSoonMerchant(loc.business);
   const paymentsEnabled = item.payments_enabled !== false;
+  // Export-only items never show Buy / Add to cart, in any market (origin included).
   const canPurchase =
-    !orderBlocked && paymentsEnabled && acceptsOrders && variantSelectionReady;
+    !exportAvailable && !orderBlocked && paymentsEnabled && acceptsOrders && variantSelectionReady;
   const showRestockBar = restockSoldOut && outOfStock && !isExportInterestOnly;
   const showStickyBar = isExportInterestOnly || !orderBlocked || showRestockBar;
   const showLowStock = !isFood && qty > 0 && qty <= LOW_STOCK_THRESHOLD;
@@ -905,7 +906,7 @@ function InventoryItemDetailScreen() {
             style={{ marginTop: spacing.sm }}
           />
 
-          {!orderBlocked ? (
+          {!orderBlocked && !exportAvailable ? (
             <Text
               style={[
                 typography.body2,
@@ -918,6 +919,8 @@ function InventoryItemDetailScreen() {
             </Text>
           ) : null}
 
+          {!exportAvailable ? (
+          <>
           <Text
             style={[
               typography.overline,
@@ -964,6 +967,8 @@ function InventoryItemDetailScreen() {
               />
             </View>
           </ScrollView>
+          </>
+          ) : null}
 
           <View
             style={[

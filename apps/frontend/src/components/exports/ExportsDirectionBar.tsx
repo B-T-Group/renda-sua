@@ -105,7 +105,7 @@ export const ExportsDirectionBar: React.FC<ExportsDirectionBarProps> = ({
         <ToggleButton
           value="into"
           data-testid="exports-into"
-          sx={{ border: 0, borderRadius: '20px !important', px: 2, textTransform: 'none', fontWeight: 600, gap: 0.75, flex: 1, ...selectedSx }}
+          sx={{ border: 0, borderRadius: '20px !important', px: 2, textTransform: 'none', fontWeight: 600, gap: 0.75, flex: 1, whiteSpace: 'nowrap', ...selectedSx }}
         >
           <FlightLand fontSize="small" />
           {market
@@ -115,7 +115,7 @@ export const ExportsDirectionBar: React.FC<ExportsDirectionBarProps> = ({
         <ToggleButton
           value="from"
           data-testid="exports-from"
-          sx={{ border: 0, borderRadius: '20px !important', px: 2, textTransform: 'none', fontWeight: 600, gap: 0.75, flex: 1, ...selectedSx }}
+          sx={{ border: 0, borderRadius: '20px !important', px: 2, textTransform: 'none', fontWeight: 600, gap: 0.75, flex: 1, whiteSpace: 'nowrap', ...selectedSx }}
         >
           <FlightTakeoff fontSize="small" />
           {origin

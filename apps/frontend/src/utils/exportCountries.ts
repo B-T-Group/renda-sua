@@ -45,6 +45,8 @@ function intlRegionName(code: string, language: string): string | null {
       DisplayNames?: new (l: string[], o: { type: 'region' }) => { of(c: string): string | undefined };
     }).DisplayNames;
     if (!Ctor) return null;
+    // ZZ is the CLDR "Unknown Region"; show the raw code instead of a fake name.
+    if (code.toUpperCase() === 'ZZ') return null;
     const name = new Ctor([language], { type: 'region' }).of(code);
     return name && name !== code ? name : null;
   } catch {

@@ -540,7 +540,8 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
                 </Typography>
               </Box>
             )}
-            {/* Price badge overlay */}
+            {/* Price badge overlay (export items show the Export only badge here; price sits in the body) */}
+            {!exportAvailable ? (
             <Box
               sx={{
                 position: 'absolute',
@@ -558,11 +559,7 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
                 pointerEvents: 'none',
               }}
             >
-              {exportAvailable ? (
-                <Typography variant="body2" color="primary" fontWeight="bold">
-                  {t('productInterest.priceNotApplicable', 'Price on request')}
-                </Typography>
-              ) : hasDealPrices ? (
+              {hasDealPrices ? (
                 <>
                   <Box>
                     <Typography
@@ -594,6 +591,7 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
                 </Typography>
               )}
             </Box>
+            ) : null}
           </Box>
         </Tooltip>
         {hasMultipleImages && (
@@ -663,6 +661,14 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
           />
           {exportAvailable ? (
             <Box sx={{ mb: 0.75 }}>
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                color="text.primary"
+                data-testid="export-price-on-request"
+              >
+                {t('productInterest.priceNotApplicable', 'Price on request')}
+              </Typography>
               <ExportViewerNote
                 variant="card"
                 role={exportViewer.role}

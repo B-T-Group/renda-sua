@@ -1405,6 +1405,15 @@ export default function ItemDetailPage() {
                   />
                 ) : null}
               </Paper>
+            ) : exportAvailable ? (
+              <Typography
+                variant="h5"
+                color="primary.main"
+                fontWeight={700}
+                data-testid="export-price-on-request"
+              >
+                {t('productInterest.priceNotApplicable', 'Price on request')}
+              </Typography>
             ) : (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 {hasDeal && (
@@ -1453,7 +1462,7 @@ export default function ItemDetailPage() {
               formatCurrency={formatCurrency}
             />
 
-            {!foodAvailability ? (
+            {!foodAvailability && !exportAvailable ? (
               <ItemDetailAvailabilityCheck
                 inventoryId={inventoryItem.id}
                 itemName={item.name}
@@ -1461,10 +1470,13 @@ export default function ItemDetailPage() {
               />
             ) : null}
 
-            <ItemDetailTrustStrip
-              isVerifiedSeller={Boolean(business?.is_verified)}
-              isStripeRail={isStripeRail}
-            />
+            {/* Checkout trust copy (MoMo, buyer help) does not apply to export-only items. */}
+            {!exportAvailable ? (
+              <ItemDetailTrustStrip
+                isVerifiedSeller={Boolean(business?.is_verified)}
+                isStripeRail={isStripeRail}
+              />
+            ) : null}
 
             {location && business && (
               <Box>
@@ -1521,9 +1533,10 @@ export default function ItemDetailPage() {
               statsLoading={orderStatsLoading}
             />
 
-            <ItemDetailHowItWorks />
+            {!exportAvailable ? <ItemDetailHowItWorks /> : null}
 
             {/* Delivery Expectations Card (pre-checkout) */}
+            {!exportAvailable ? (
             <DeliveryExpectationsCard
               estimate={deliveryEstimate}
               loading={deliveryEstimateLoading}
@@ -1533,6 +1546,7 @@ export default function ItemDetailPage() {
               areaId={selectedMarket?.stateCode || undefined}
               onAreaChange={() => setMarketPickerOpen(true)}
             />
+            ) : null}
 
             {showMobileStickyOrderBar ? (
               <Typography

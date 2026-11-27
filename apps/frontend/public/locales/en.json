@@ -10399,9 +10399,6 @@
     "shareMessage": "Exports from {{place}} on Rendasua: {{url}}",
     "pageTitle": "Exports from {{place}}",
     "pageSubtitle": "Products exported from {{place}} on Rendasua, and where each one ships. Open to anyone, no account needed.",
-    "statProducts": "products",
-    "statBusinesses": "businesses",
-    "statDestinations": "destination markets",
     "shipsTo": "Ships to",
     "all": "All",
     "seeAll": "See all {{count}} ›",
@@ -10418,7 +10415,13 @@
     "seoDescription": "{{count}} products exported from {{place}} by {{businesses}} businesses to {{destinations}} markets. Browse and send interest, no account needed.",
     "loading": "Loading exports…",
     "loadError": "We couldn’t load these exports. Try again in a moment.",
-    "pickCountry": "Choose a country"
+    "pickCountry": "Choose a country",
+    "statProducts_one": "product",
+    "statProducts_other": "products",
+    "statBusinesses_one": "business",
+    "statBusinesses_other": "businesses",
+    "statDestinations_one": "destination market",
+    "statDestinations_other": "destination markets"
   },
   "exportItem": {
     "badge": "Export only",

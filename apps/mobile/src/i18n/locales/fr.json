@@ -9362,9 +9362,6 @@
     "shareMessage": "Exports {{ofPlace}} sur Rendasua : {{url}}",
     "pageTitle": "Exports {{ofPlace}}",
     "pageSubtitle": "Produits exportés depuis {{place}} sur Rendasua, et leurs destinations. Ouvert à tous, sans compte.",
-    "statProducts": "produits",
-    "statBusinesses": "entreprises",
-    "statDestinations": "marchés de destination",
     "shipsTo": "Expédié vers",
     "all": "Tous",
     "seeAll": "Tout voir ({{count}}) ›",
@@ -9381,7 +9378,13 @@
     "seoDescription": "{{count}} produits exportés depuis {{place}} par {{businesses}} entreprises vers {{destinations}} marchés. Parcourez et manifestez votre intérêt, sans compte.",
     "loading": "Chargement des exports…",
     "loadError": "Nous n’avons pas pu charger ces exports. Réessayez dans un instant.",
-    "pickCountry": "Choisissez un pays"
+    "pickCountry": "Choisissez un pays",
+    "statProducts_one": "produit",
+    "statProducts_other": "produits",
+    "statBusinesses_one": "entreprise",
+    "statBusinesses_other": "entreprises",
+    "statDestinations_one": "marché de destination",
+    "statDestinations_other": "marchés de destination"
   },
   "exportItem": {
     "badge": "Export uniquement",
