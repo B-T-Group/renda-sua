@@ -12,7 +12,7 @@ import { payBreakdown } from '../../utils/rentals/payBreakdown';
 import { PayBreakdownBox, PayFooter } from './PayBreakdownBox';
 import { clockRange } from '../../utils/rentals/reserveSummary';
 import { StickyActionCard } from '../common/StickyActionCard';
-import { pickupAddressLink } from '../../utils/pickupAddressLink';
+import { pickupPlaceLink } from '../../utils/pickupPlaceLink';
 
 export interface StartPanelBooking {
   status: string;
@@ -129,7 +129,7 @@ export function RentalStartPanel(props: Props) {
           summaryLabel={t('rentals.start.stickyPickupAt', 'Pickup at')}
           summaryValue={props.place}
           summaryVariant="place"
-          {...pickupAddressLink(props.address, t)}
+          {...pickupPlaceLink(props.place, props.address, t)}
           actionIcon={locked ? <Lock /> : card ? <CreditCard /> : momo ? <PhoneIphone /> : <PlayArrow />}
           disabled={locked || props.starting}
           loading={props.starting}

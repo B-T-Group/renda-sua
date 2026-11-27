@@ -19,9 +19,9 @@ export interface StickyActionCardProps {
   /** `place` shows the label and value at one size with `summaryDetail` (an address) underneath. */
   summaryVariant?: 'amount' | 'place';
   summaryDetail?: string | null;
-  /** Makes `summaryDetail` a link (for example to directions). */
-  summaryDetailHref?: string;
-  summaryDetailLinkLabel?: string;
+  /** Makes `summaryValue` (the place name) a link, for example to directions. */
+  summaryValueHref?: string;
+  summaryValueLinkLabel?: string;
   /** One line of context under the summary. */
   note?: string;
   maxWidth?: 'sm' | 'md' | 'lg';
@@ -76,29 +76,32 @@ export function StickyActionCard(props: StickyActionCardProps) {
   );
 }
 
+function PlaceName(props: StickyActionCardProps) {
+  if (!props.summaryValueHref) return <Box component="span" fontWeight={700}>{props.summaryValue}</Box>;
+  return (
+    <Link
+      href={props.summaryValueHref}
+      target="_blank"
+      rel="noopener noreferrer"
+      fontWeight={700}
+      underline="always"
+      aria-label={props.summaryValueLinkLabel}
+      data-testid="sticky-summary-name-link"
+    >
+      {props.summaryValue}
+    </Link>
+  );
+}
+
 function PlaceSummary(props: StickyActionCardProps) {
-  const address = props.summaryDetail;
   return (
     <Box>
       <Typography variant="body2" component="div">
         <Box component="span" color="text.secondary">{props.summaryLabel} </Box>
-        <Box component="span" fontWeight={700}>{props.summaryValue}</Box>
+        <PlaceName {...props} />
       </Typography>
-      {address && props.summaryDetailHref ? (
-        <Link
-          href={props.summaryDetailHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          variant="body2"
-          fontWeight={600}
-          underline="always"
-          aria-label={props.summaryDetailLinkLabel}
-          data-testid="sticky-summary-address"
-        >
-          {address}
-        </Link>
-      ) : address ? (
-        <Typography variant="body2" fontWeight={600} data-testid="sticky-summary-address">{address}</Typography>
+      {props.summaryDetail ? (
+        <Typography variant="body2" fontWeight={600} data-testid="sticky-summary-address">{props.summaryDetail}</Typography>
       ) : null}
     </Box>
   );

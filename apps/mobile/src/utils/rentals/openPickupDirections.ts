@@ -12,13 +12,13 @@ export async function openPickupDirections(address: string): Promise<void> {
 
 type Translate = (key: string, fallback: string, vars?: Record<string, string>) => string;
 
-/** Sticky-card props that turn the pickup address line into a directions link. */
-export function pickupAddressLink(address: string | null | undefined, t: Translate) {
+/** Sticky-card props: the address stays plain text and the place name opens directions to it. */
+export function pickupPlaceLink(place: string, address: string | null | undefined, t: Translate) {
   const text = address?.trim();
   if (!text) return {};
   return {
     summaryDetail: text,
-    onSummaryDetailPress: () => void openPickupDirections(text),
-    summaryDetailAccessibilityLabel: t('rentals.start.directionsTo', 'Get directions to {{address}}', { address: text }),
+    onSummaryValuePress: () => void openPickupDirections(text),
+    summaryValueAccessibilityLabel: t('rentals.start.directionsTo', 'Get directions to {{name}}', { name: place }),
   };
 }

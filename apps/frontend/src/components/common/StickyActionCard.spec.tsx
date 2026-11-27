@@ -21,24 +21,25 @@ describe('StickyActionCard', () => {
     expect(onAction).not.toHaveBeenCalled();
   });
 
-  it('shows the place name with its address as an external link', () => {
+  it('links the place name to directions and keeps the address as plain text', () => {
     render(
       <StickyActionCard
         summaryVariant="place"
         summaryLabel="Pickup at"
         summaryValue="Stripe Rail"
         summaryDetail="12 Rue Principale"
-        summaryDetailHref="https://www.google.com/maps/dir/?api=1&destination=12"
-        summaryDetailLinkLabel="Get directions to 12 Rue Principale"
+        summaryValueHref="https://www.google.com/maps/dir/?api=1&destination=12"
+        summaryValueLinkLabel="Get directions to Stripe Rail"
         actionLabel="Go"
         onAction={() => undefined}
       />
     );
-    const link = screen.getByRole('link', { name: 'Get directions to 12 Rue Principale' });
+    const link = screen.getByRole('link', { name: 'Get directions to Stripe Rail' });
     expect(link.getAttribute('href')).toContain('google.com/maps/dir');
     expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.textContent).toBe('12 Rue Principale');
-    expect(screen.getByText('Stripe Rail')).toBeTruthy();
+    expect(link.textContent).toBe('Stripe Rail');
+    expect(screen.getByTestId('sticky-summary-address').textContent).toBe('12 Rue Principale');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
   });
 
   it('pins itself to the viewport bottom', () => {
