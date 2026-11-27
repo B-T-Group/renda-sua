@@ -21,6 +21,12 @@ import {
 } from './export-orders.queries';
 import type { ExportOrderRow } from './export-orders.types';
 
+export const DEFAULT_EXPORT_COUNTRY = 'CM';
+
+export function resolveExportCountry(countryCode?: string | null): string {
+  return (countryCode || DEFAULT_EXPORT_COUNTRY).toUpperCase();
+}
+
 export type ExportOrderViewerRole = 'client' | 'agent' | 'business';
 
 type ExportOrderViewer = {
@@ -91,7 +97,7 @@ export class ExportOrdersService {
     }
     const inventory = await this.fetchInventory(dto.businessInventoryId);
     this.assertEligible(inventory);
-    const country = (dto.countryCode || 'CM').toUpperCase();
+    const country = resolveExportCountry(dto.countryCode);
     if (!(await this.isExportOrdersEnabled(country))) {
       throw new HttpException(
         {

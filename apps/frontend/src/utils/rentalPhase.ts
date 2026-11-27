@@ -13,7 +13,7 @@ export type RentalPhase =
 
 export type RentalPhaseRole = 'client' | 'business';
 
-export type RentalHubGroup = 'action_needed' | 'upcoming' | 'past';
+export type RentalHubGroup = 'action_needed' | 'upcoming' | 'active' | 'past';
 
 export type BusinessActionQueue =
   | 'respond'
@@ -96,19 +96,26 @@ function nextStepKeyFor(
   return null;
 }
 
+/** Client My rentals: To do is only an offer to book. Reserved and pickup sit in Upcoming. */
+export function clientHubGroup(phase: RentalPhase): RentalHubGroup {
+  if (phase === 'done') return 'past';
+  if (phase === 'offer_ready') return 'action_needed';
+  if (phase === 'in_progress') return 'active';
+  return 'upcoming';
+}
+
+/** Opens the first filter that has a rental, most urgent first. */
+export function preferredClientHub(groups: RentalHubGroup[]): RentalHubGroup {
+  if (groups.includes('action_needed')) return 'action_needed';
+  if (groups.includes('active')) return 'active';
+  if (groups.includes('upcoming')) return 'upcoming';
+  if (groups.includes('past')) return 'past';
+  return 'upcoming';
+}
+
 function hubGroupFor(phase: RentalPhase, role: RentalPhaseRole): RentalHubGroup {
   if (phase === 'done') return 'past';
-  if (role === 'client') {
-    if (
-      phase === 'offer_ready' ||
-      phase === 'reserved' ||
-      phase === 'ready_for_pickup' ||
-      phase === 'in_progress'
-    ) {
-      return 'action_needed';
-    }
-    return 'upcoming';
-  }
+  if (role === 'client') return clientHubGroup(phase);
   if (
     phase === 'requested' ||
     phase === 'reserved' ||

@@ -30,14 +30,12 @@ import { resolveProductCardHint } from '../../utils/resolveProductCardHint';
 import { formatDistanceKm } from '../../utils/formatDistanceKm';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useSnackbar } from 'notistack';
 import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useAuthGate } from '../../contexts/AuthGateContext';
 import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { catalogStorePath, isFoodCatalogItem } from '../../constants/food';
-import { useProductInterest } from '../../hooks/useProductInterest';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
 import {
   SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
@@ -127,14 +125,11 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
   const navigate = useNavigate();
   const [anonBuyNowOpen, setAnonBuyNowOpen] = useState(false);
   const [interestOpen, setInterestOpen] = useState(false);
-  const [interestSubmitting, setInterestSubmitting] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { t } = useTranslation();
   const { flagOn, requireAuth } = useAuthGate();
   const { loginWithRedirectTracked } = useAuthFunnelTracking('dashboard_item');
   const { isAuthenticated } = useSessionAuth();
-  const { enqueueSnackbar } = useSnackbar();
-  const { submitInterest } = useProductInterest();
   const { trackSiteEvent } = useTrackSiteEvent();
   const { getListingQuantityInCart } = useCart();
   const exportAvailable = inventory.item?.export_available === true;
@@ -1434,31 +1429,9 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
 
       <ProductInterestDialog
         open={interestOpen}
+        businessInventoryId={inventory.id}
         itemName={inventory.item.name}
-        submitting={interestSubmitting}
         onClose={() => setInterestOpen(false)}
-        onSubmit={async (note) => {
-          setInterestSubmitting(true);
-          try {
-            await submitInterest(inventory.id, note);
-            setInterestOpen(false);
-            enqueueSnackbar(
-              t(
-                'productInterest.success',
-                'Interest sent. The seller will contact you.'
-              ),
-              { variant: 'success' }
-            );
-          } catch (e: any) {
-            enqueueSnackbar(
-              e?.response?.data?.message ||
-                t('productInterest.error', 'Could not send interest'),
-              { variant: 'error' }
-            );
-          } finally {
-            setInterestSubmitting(false);
-          }
-        }}
       />
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}

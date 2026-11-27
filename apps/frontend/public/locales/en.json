@@ -7637,11 +7637,14 @@
       "toDo": "To do",
       "actionNeeded": "Action needed",
       "upcoming": "Upcoming",
+      "active": "Active",
       "past": "Past",
       "emptyActionNeeded": "Nothing needs your attention right now.",
       "emptyUpcoming": "No upcoming rentals",
+      "emptyActive": "No rentals in progress.",
       "emptyPast": "No past rentals yet.",
-      "emptyAll": "You have no rental requests or bookings yet."
+      "emptyAll": "You have no rental requests or bookings yet.",
+      "openCard": "Open {{name}}"
     },
     "actions": {
       "bookOffer": "Book offer",
@@ -9315,7 +9318,88 @@
       "description": "Browse cooked meals from restaurants near you and order while the kitchen is open."
     }
   },
+  "exportOrders": {
+    "nav": {
+      "client": "My export orders",
+      "agent": "Export orders",
+      "business": "Export orders",
+      "businessDescription": "Export orders placed on your products: confirm when goods are ready to ship.",
+      "admin": "Export orders",
+      "adminDescription": "Review export requests, issue proformas, and record payments"
+    },
+    "myOrders": "My export orders",
+    "myOrdersHint": "Track your purchase order, proforma approval, and delivery.",
+    "empty": "No export orders yet.",
+    "browse": "Browse exports",
+    "detailHint": "Documents and next actions for this export.",
+    "documents": "Documents",
+    "notes": "Notes",
+    "lines": "Items",
+    "approveProforma": "Approve proforma",
+    "requestAdjustment": "Request adjustment",
+    "payFull": "Pay in full",
+    "finance30": "Finance 30 days",
+    "finance60": "Finance 60 days",
+    "confirmDelivery": "Confirm delivery",
+    "loadError": "Could not load your export orders",
+    "actionError": "That action did not go through. Try again.",
+    "orderNumber": "Order {{bc}}",
+    "open": "Open",
+    "status": {
+      "SUBMITTED": "Submitted",
+      "IN_REVIEW": "Under review",
+      "CHANGES_REQUESTED": "Changes requested",
+      "REJECTED": "Declined",
+      "MFR_QUOTE": "Preparing your quote",
+      "PROFORMA_ISSUED": "Proforma ready",
+      "INVOICED": "Invoiced",
+      "DEPOSIT_REQUIRED": "Deposit due",
+      "DEPOSIT_RECEIVED": "Deposit received",
+      "CANCELLED": "Cancelled",
+      "IN_PRODUCTION": "In production",
+      "READY": "Ready",
+      "BALANCE_REQUIRED": "Balance due",
+      "PAID_IN_FULL": "Paid in full",
+      "FINANCED_30": "Financed (30 days)",
+      "FINANCED_60": "Financed (60 days)",
+      "SHIPPED": "Shipped",
+      "DELIVERED": "Delivered",
+      "CLOSED": "Closed",
+      "REVIEWED": "Reviewed"
+    },
+    "submitted": {
+      "title": "Request received",
+      "bcLabel": "Purchase order {{bc}}",
+      "intro": "We issued your purchase order. Here is what happens next.",
+      "illustration": "Purchase order received",
+      "keepBrowsing": "Keep browsing",
+      "viewOrder": "View my order",
+      "steps": {
+        "review": {
+          "title": "We review your request",
+          "body": "Our export team checks the item, quantity and destination. We may ask you for changes."
+        },
+        "proforma": {
+          "title": "You receive a proforma",
+          "body": "We confirm the manufacturer quote and send you a proforma invoice to approve."
+        },
+        "deposit": {
+          "title": "Approve and pay the deposit",
+          "body": "Once you approve the proforma, pay the deposit to start production."
+        },
+        "delivery": {
+          "title": "Pay the balance and receive your goods",
+          "body": "After production you settle the balance and we ship your order to you."
+        }
+      }
+    }
+  },
   "productInterest": {
+    "order": {
+      "noteHelp": "Your request for {{name}} goes to our export team. We issue a purchase order and prepare a proforma for your approval.",
+      "submit": "Send request",
+      "snackbar": "Export request {{bc}} received."
+    },
     "cta": "I'm interested",
     "dialogTitle": "I'm interested",
     "noteLabel": "Message (optional)",

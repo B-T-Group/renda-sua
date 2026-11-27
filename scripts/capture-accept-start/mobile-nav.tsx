@@ -14,7 +14,10 @@ export function useRoute() {
       bookingId: 'b1',
       requestId: params.get('requestId') ?? 'req-1',
       stage: 'pickup' as const,
-      segment: segment === 'upcoming' || segment === 'past' || segment === 'action_needed' ? segment : undefined,
+      segment:
+        segment === 'upcoming' || segment === 'past' || segment === 'action_needed' || segment === 'active'
+          ? segment
+          : undefined,
     },
   };
 }

@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  Chip,
   CircularProgress,
   Stack,
   Typography,
@@ -10,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useExportOrders } from '../../hooks/useExportOrders';
+import { ExportOrderStatusChip } from '../common/ExportOrderStatusChip';
 
 export default function BusinessExportOrdersPage() {
   const { t } = useTranslation();
@@ -78,7 +78,7 @@ export default function BusinessExportOrdersPage() {
           >
             <Box>
               <Typography fontWeight={600}>{row.bc_number}</Typography>
-              <Chip size="small" label={row.status} sx={{ mt: 0.5 }} />
+              <ExportOrderStatusChip size="small" status={row.status} sx={{ mt: 0.5 }} />
             </Box>
             {row.status === 'IN_PRODUCTION' && (
               <Button

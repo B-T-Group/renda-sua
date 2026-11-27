@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
@@ -103,9 +103,18 @@ export function ClientRentalRequestRow({
   const amount = Number.isFinite(total)
     ? requestAmountLine(row.units_requested, formatRequestAmount(total as number, currency, i18n.language))
     : null;
+  const photo = listing?.rental_item?.rental_item_images?.[0];
+  const imageUri = photo?.display_url || photo?.thumbnail || photo?.image_url || null;
+  const openCard = () => {
+    if (bookingId) onViewBooking(bookingId);
+    else if (listing?.id) onViewListing(listing.id);
+  };
 
   return (
-    <View
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('rentals.hub.openCard', 'Open {{name}}', { name: itemName })}
+      onPress={openCard}
       style={[
         styles.card,
         shadows.sm,
@@ -144,16 +153,17 @@ export function ClientRentalRequestRow({
       </View>
 
       <View style={[styles.header, { marginTop: spacing.sm }]}>
-        <Pressable
-          onPress={() => listing?.id && onViewListing(listing.id)}
-          style={[styles.thumb, { backgroundColor: colors.primary.main + '18' }]}
-        >
-          <MaterialCommunityIcons
-            name={rentalCategoryIcon(listing?.rental_item?.rental_category?.name || itemName)}
-            size={26}
-            color={colors.primary.main}
-          />
-        </Pressable>
+        <View style={[styles.thumb, { backgroundColor: colors.primary.main + '18', overflow: 'hidden' }]}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.photo} resizeMode="cover" accessibilityIgnoresInvertColors />
+          ) : (
+            <MaterialCommunityIcons
+              name={rentalCategoryIcon(listing?.rental_item?.rental_category?.name || itemName)}
+              size={26}
+              color={colors.primary.main}
+            />
+          )}
+        </View>
         <View style={styles.flex}>
           <Text style={[typography.subtitle1, { color: colors.text.primary, fontFamily: fontFamily.medium }]}>
             {heading}
@@ -317,11 +327,6 @@ export function ClientRentalRequestRow({
             {t('rentals.bookNow', 'Book now')}
           </Button>
         ) : null}
-        {row.status === 'booked' && bookingId ? (
-          <Button mode="contained" onPress={() => onViewBooking(bookingId)} labelStyle={styles.buttonLabel}>
-            {t('rentals.actions.openBooking', 'Open booking')}
-          </Button>
-        ) : null}
       </View>
       {modifyState === 'closed' ? (
         <Text
@@ -333,7 +338,7 @@ export function ClientRentalRequestRow({
           {t('rentals.modify.windowClosed', 'Changes close 2 hours before the rental starts.')}
         </Text>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -371,6 +376,7 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   thumb: { width: 56, height: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  photo: { width: 56, height: 56 },
   flex: { flex: 1, minWidth: 0 },
   metaRow: { flexDirection: 'row', alignItems: 'center' },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },

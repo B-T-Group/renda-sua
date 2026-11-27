@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  Chip,
   CircularProgress,
   MenuItem,
   Stack,
@@ -12,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { useExportOrders } from '../../../hooks/useExportOrders';
+import { ExportOrderStatusChip } from '../../common/ExportOrderStatusChip';
 
 export default function AdminExportOrdersPage() {
   const { t } = useTranslation();
@@ -105,7 +105,7 @@ export default function AdminExportOrdersPage() {
               </Typography>
             </Box>
             <Stack direction="row" spacing={1} alignItems="center">
-              <Chip size="small" label={row.status} />
+              <ExportOrderStatusChip size="small" status={row.status} />
               <Button
                 component={RouterLink}
                 to={`/admin/export-orders/${row.id}`}

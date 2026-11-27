@@ -23,9 +23,11 @@ import ManageRecipientsScreen from '../screens/client/ManageRecipientsScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import UserLikesScreen from '../screens/shared/UserLikesScreen';
 import FollowingStoresScreen from '../screens/client/FollowingStoresScreen';
-import ClientExportOrdersScreen from '../screens/client/ClientExportOrdersScreen';
 import ClientProductInterestScreen from '../screens/client/ClientProductInterestScreen';
 import ProductInterestSuccessScreen from '../screens/client/ProductInterestSuccessScreen';
+import ClientExportOrdersScreen from '../screens/client/ClientExportOrdersScreen';
+import ClientExportOrderDetailScreen from '../screens/client/ClientExportOrderDetailScreen';
+import ExportOrderSubmittedScreen from '../screens/client/ExportOrderSubmittedScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
 import DeliveryConfirmScreen from '../screens/client/DeliveryConfirmScreen';
 import AccountManagementScreen from '../screens/shared/AccountManagementScreen';
@@ -606,7 +608,17 @@ export function ClientRootNavigator() {
         <ClientRootStack.Screen
           name="ClientExportOrders"
           component={ClientExportOrdersScreen}
-          options={{ title: t('exportOrders.myOrdersTitle', 'My exports') }}
+          options={{ title: t('exportOrders.myOrders', 'My export orders') }}
+        />
+        <ClientRootStack.Screen
+          name="ClientExportOrderDetail"
+          component={ClientExportOrderDetailScreen}
+          options={{ title: t('exportOrders.myOrders', 'My export orders') }}
+        />
+        <ClientRootStack.Screen
+          name="ExportOrderSubmitted"
+          component={ExportOrderSubmittedScreen}
+          options={{ title: t('exportOrders.submitted.title', 'Request received') }}
         />
         <ClientRootStack.Screen
           name="ProductInterestSuccess"

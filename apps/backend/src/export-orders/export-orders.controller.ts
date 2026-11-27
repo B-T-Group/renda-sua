@@ -32,7 +32,10 @@ import {
 } from './dto/admin-export-order.dto';
 import { CreateExportOrderDto } from './dto/create-export-order.dto';
 import { ExportOrdersClientService } from './export-orders-client.service';
-import { ExportOrdersService } from './export-orders.service';
+import {
+  ExportOrdersService,
+  resolveExportCountry,
+} from './export-orders.service';
 
 @ApiTags('export-orders')
 @Controller('export-orders')
@@ -65,6 +68,36 @@ export class ExportOrdersController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Get('enabled')
+  @ApiOperation({
+    summary: 'Whether export interest opens an export order for a market',
+  })
+  @ApiQuery({
+    name: 'countryCode',
+    required: false,
+    type: String,
+    description: 'Destination country ISO-2 code; defaults to CM',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Flag resolved for the country (country row, then global)',
+    schema: {
+      example: {
+        success: true,
+        data: { enabled: true, countryCode: 'CM' },
+      },
+    },
+  })
+  async isEnabled(
+    @ReqContext() ctx: RequestContext,
+    @Query('countryCode') countryCode?: string
+  ) {
+    this.requireUser(ctx);
+    const country = resolveExportCountry(countryCode);
+    const enabled = await this.exportOrders.isExportOrdersEnabled(country);
+    return { success: true, data: { enabled, countryCode: country } };
   }
 
   @Get('mine')

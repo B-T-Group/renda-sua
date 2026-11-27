@@ -28,6 +28,44 @@
       }
     },
     {
+      "name": "Client — export flag for a market",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "X-Active-Persona", "value": "client" }
+        ],
+        "url": "{{baseUrl}}/export-orders/enabled?countryCode=CM"
+      }
+    },
+    {
+      "name": "Client — I'm interested (order when flag on, lead when off)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "X-Active-Persona", "value": "client" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"businessInventoryId\": \"{{inventoryId}}\",\n  \"note\": \"Need a quote\",\n  \"countryCode\": \"CM\"\n}"
+        },
+        "url": "{{baseUrl}}/product-interest"
+      }
+    },
+    {
+      "name": "Client — list my export orders",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "X-Active-Persona", "value": "client" }
+        ],
+        "url": "{{baseUrl}}/export-orders/mine?page=1&limit=20"
+      }
+    },
+    {
       "name": "Admin — review approve",
       "request": {
         "method": "POST",

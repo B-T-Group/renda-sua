@@ -7357,11 +7357,14 @@
       "toDo": "À faire",
       "actionNeeded": "Action requise",
       "upcoming": "À venir",
+      "active": "En cours",
       "past": "Passées",
       "emptyActionNeeded": "Rien ne nécessite votre attention pour le moment.",
       "emptyUpcoming": "Aucune location à venir",
+      "emptyActive": "Aucune location en cours.",
       "emptyPast": "Aucune location passée.",
-      "emptyAll": "Vous n’avez encore aucune demande ni réservation."
+      "emptyAll": "Vous n’avez encore aucune demande ni réservation.",
+      "openCard": "Ouvrir {{name}}"
     },
     "actions": {
       "bookOffer": "Réserver l’offre",
@@ -9332,7 +9335,88 @@
       "description": "Parcourez les plats préparés par les restaurants près de vous et commandez pendant les heures de service."
     }
   },
+  "exportOrders": {
+    "nav": {
+      "client": "Mes commandes export",
+      "agent": "Commandes export",
+      "business": "Commandes export",
+      "businessDescription": "Commandes export passées sur vos produits : confirmez quand la marchandise est prête à expédier.",
+      "admin": "Commandes export",
+      "adminDescription": "Examinez les demandes export, émettez les proformas et enregistrez les paiements"
+    },
+    "myOrders": "Mes commandes export",
+    "myOrdersHint": "Suivez votre bon de commande, l’approbation de la proforma et la livraison.",
+    "empty": "Aucune commande export pour le moment.",
+    "browse": "Parcourir les exports",
+    "detailHint": "Documents et prochaines actions pour cet export.",
+    "documents": "Documents",
+    "notes": "Notes",
+    "lines": "Articles",
+    "approveProforma": "Approuver la proforma",
+    "requestAdjustment": "Demander un ajustement",
+    "payFull": "Payer en totalité",
+    "finance30": "Financer à 30 jours",
+    "finance60": "Financer à 60 jours",
+    "confirmDelivery": "Confirmer la livraison",
+    "loadError": "Impossible de charger vos commandes export",
+    "actionError": "Cette action n’a pas abouti. Réessayez.",
+    "orderNumber": "Commande {{bc}}",
+    "open": "Ouvrir",
+    "status": {
+      "SUBMITTED": "Envoyée",
+      "IN_REVIEW": "En cours d’examen",
+      "CHANGES_REQUESTED": "Modifications demandées",
+      "REJECTED": "Refusée",
+      "MFR_QUOTE": "Devis en préparation",
+      "PROFORMA_ISSUED": "Proforma prête",
+      "INVOICED": "Facturée",
+      "DEPOSIT_REQUIRED": "Acompte à payer",
+      "DEPOSIT_RECEIVED": "Acompte reçu",
+      "CANCELLED": "Annulée",
+      "IN_PRODUCTION": "En production",
+      "READY": "Prête",
+      "BALANCE_REQUIRED": "Solde à payer",
+      "PAID_IN_FULL": "Payée en totalité",
+      "FINANCED_30": "Financée (30 jours)",
+      "FINANCED_60": "Financée (60 jours)",
+      "SHIPPED": "Expédiée",
+      "DELIVERED": "Livrée",
+      "CLOSED": "Clôturée",
+      "REVIEWED": "Évaluée"
+    },
+    "submitted": {
+      "title": "Demande reçue",
+      "bcLabel": "Bon de commande {{bc}}",
+      "intro": "Nous avons émis votre bon de commande. Voici la suite.",
+      "illustration": "Bon de commande reçu",
+      "keepBrowsing": "Continuer à parcourir",
+      "viewOrder": "Voir ma commande",
+      "steps": {
+        "review": {
+          "title": "Nous examinons votre demande",
+          "body": "Notre équipe export vérifie l’article, la quantité et la destination. Nous pouvons vous demander des modifications."
+        },
+        "proforma": {
+          "title": "Vous recevez une proforma",
+          "body": "Nous confirmons le devis du fabricant et vous envoyons une facture proforma à approuver."
+        },
+        "deposit": {
+          "title": "Approuvez et payez l’acompte",
+          "body": "Une fois la proforma approuvée, payez l’acompte pour lancer la production."
+        },
+        "delivery": {
+          "title": "Payez le solde et recevez votre marchandise",
+          "body": "Après la production, vous réglez le solde et nous expédions votre commande."
+        }
+      }
+    }
+  },
   "productInterest": {
+    "order": {
+      "noteHelp": "Votre demande pour {{name}} est transmise à notre équipe export. Nous émettons un bon de commande et préparons une proforma pour votre approbation.",
+      "submit": "Envoyer la demande",
+      "snackbar": "Demande export {{bc}} reçue."
+    },
     "cta": "Je suis intéressé(e)",
     "dialogTitle": "Je suis intéressé(e)",
     "noteLabel": "Message (optionnel)",

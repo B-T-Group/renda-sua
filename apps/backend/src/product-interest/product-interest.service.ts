@@ -4,7 +4,10 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { ExportOrdersService } from '../export-orders/export-orders.service';
+import {
+  ExportOrdersService,
+  resolveExportCountry,
+} from '../export-orders/export-orders.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -169,11 +172,13 @@ export class ProductInterestService {
     this.assertClient(user);
     const inventory = await this.fetchInventory(dto.businessInventoryId);
     this.assertInterestEligible(inventory);
-    if (await this.exportOrdersService.isExportOrdersEnabled()) {
+    const country = resolveExportCountry(dto.countryCode);
+    if (await this.exportOrdersService.isExportOrdersEnabled(country)) {
       const exportOrder = await this.exportOrdersService.createFromInterest({
         businessInventoryId: dto.businessInventoryId,
         note: dto.note,
         quantity: 1,
+        countryCode: country,
       });
       return {
         id: exportOrder.id,

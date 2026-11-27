@@ -361,13 +361,57 @@ describe('ProductInterestService', () => {
       export_order: true,
       bc_number: 'BC-9',
     });
+    expect(exportOrders.isExportOrdersEnabled).toHaveBeenCalledWith('CM');
     expect(exportOrders.createFromInterest).toHaveBeenCalledWith({
       businessInventoryId: 'inv-1',
       note: '  Need quote  ',
       quantity: 1,
+      countryCode: 'CM',
     });
     expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
     expect(hasuraSystem.executeQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves the flag and the order for the shopper market country', async () => {
+    hasuraUser.getUser.mockResolvedValue(clientUser);
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_inventory_by_pk: eligibleInventory,
+    });
+    exportOrders.isExportOrdersEnabled.mockResolvedValue(true);
+    exportOrders.createFromInterest.mockResolvedValue({
+      id: 'exp-2',
+      created_at: '2026-11-27T15:00:00.000Z',
+      status: 'SUBMITTED',
+      bc_number: 'BC-10',
+    });
+
+    await service.createInterest({
+      businessInventoryId: 'inv-1',
+      countryCode: 'ci',
+    });
+
+    expect(exportOrders.isExportOrdersEnabled).toHaveBeenCalledWith('CI');
+    expect(exportOrders.createFromInterest).toHaveBeenCalledWith(
+      expect.objectContaining({ countryCode: 'CI' })
+    );
+  });
+
+  it('keeps the lead flow when the flag is off for the market country', async () => {
+    hasuraUser.getUser.mockResolvedValue(clientUser);
+    hasuraSystem.executeQuery
+      .mockResolvedValueOnce({ business_inventory_by_pk: eligibleInventory })
+      .mockResolvedValueOnce({ product_interest_requests: [] });
+    exportOrders.isExportOrdersEnabled.mockResolvedValue(false);
+    mockCreatedRow();
+
+    await service.createInterest({
+      businessInventoryId: 'inv-1',
+      countryCode: 'CI',
+    });
+
+    expect(exportOrders.isExportOrdersEnabled).toHaveBeenCalledWith('CI');
+    expect(exportOrders.createFromInterest).not.toHaveBeenCalled();
+    expect(hasuraSystem.executeMutation).toHaveBeenCalledTimes(1);
   });
 
   it('does not fall through to a legacy interest when the export flag check throws', async () => {
