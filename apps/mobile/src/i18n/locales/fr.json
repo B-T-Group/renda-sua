@@ -9350,10 +9350,6 @@
     "pickerTitle": "Exporté depuis",
     "pickerHelp": "Voyez ce que chaque marché exporte. Votre marché reste {{place}}.",
     "pickerHelpNoMarket": "Voyez ce que chaque marché exporte.",
-    "itemsCount_one": "{{count}} article",
-    "itemsCount_other": "{{count}} articles",
-    "summary_one": "{{count}} produit · expédié vers {{markets}} marchés",
-    "summary_other": "{{count}} produits · expédiés vers {{markets}} marchés",
     "noOrigins": "Aucun export pour le moment",
     "copyLink": "Copier le lien",
     "copyPublicLink": "Copier le lien public",
@@ -9379,12 +9375,16 @@
     "loading": "Chargement des exports…",
     "loadError": "Nous n’avons pas pu charger ces exports. Réessayez dans un instant.",
     "pickCountry": "Choisissez un pays",
-    "statProducts_one": "produit",
-    "statProducts_other": "produits",
-    "statBusinesses_one": "entreprise",
-    "statBusinesses_other": "entreprises",
-    "statDestinations_one": "marché de destination",
-    "statDestinations_other": "marchés de destination"
+    "itemsCount": "{{count}} article",
+    "itemsCount_plural": "{{count}} articles",
+    "summary": "{{count}} produit · expédié vers {{markets}} marchés",
+    "summary_plural": "{{count}} produits · expédiés vers {{markets}} marchés",
+    "statProducts": "produit",
+    "statProducts_plural": "produits",
+    "statBusinesses": "entreprise",
+    "statBusinesses_plural": "entreprises",
+    "statDestinations": "marché de destination",
+    "statDestinations_plural": "marchés de destination"
   },
   "exportItem": {
     "badge": "Export uniquement",
@@ -9394,10 +9394,10 @@
     "originLine": "Exporté depuis votre marché, non vendu ici. Vous pouvez l’aimer ou le partager.",
     "thirdLine": "Non exporté vers votre marché ({{code}}). Vous pouvez l’aimer ou le partager.",
     "yourMarket": "Votre marché",
-    "cartRemoved_one": "{{count}} article retiré : il est réservé à l’export.",
-    "cartRemoved_other": "{{count}} articles retirés : ils sont réservés à l’export.",
     "partnerHelp": "Vous envoyez une demande partenaire pour {{name}} à l’entreprise. Elle vous contactera en dehors de l’application.",
     "notExportedError": "Cet article n’est pas exporté vers votre marché.",
-    "checkoutBlocked": "{{name}} est réservé à l’export. Retirez-le pour payer."
+    "checkoutBlocked": "{{name}} est réservé à l’export. Retirez-le pour payer.",
+    "cartRemoved": "{{count}} article retiré : il est réservé à l’export.",
+    "cartRemoved_plural": "{{count}} articles retirés : ils sont réservés à l’export."
   }
 }

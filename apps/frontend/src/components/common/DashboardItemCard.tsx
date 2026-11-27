@@ -445,10 +445,13 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
                       { count: galleryImages.length }
                     )}
                     size="small"
+                    data-testid="card-gallery-photos-badge"
                     sx={{
+                      // Top-left: the like heart owns top-right; bottom-left holds the
+                      // price pill or the Export only badge (same spot as BusinessItemCardView).
                       position: 'absolute',
                       top: 8,
-                      right: 8,
+                      left: 8,
                       zIndex: 1,
                       bgcolor: 'rgba(0, 0, 0, 0.65)',
                       color: 'common.white',

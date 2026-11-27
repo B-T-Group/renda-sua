@@ -4365,7 +4365,6 @@
       "mainImageUpdated": "Main image updated",
       "secondaryImageUpdated": "This image is now secondary.",
       "imagesCount": "Number of images",
-      "cardGalleryPhotosBadge": "{{count}} photos",
       "cardGalleryClickEnlarge": "Click to view full size",
       "cardGalleryClickForNext": "Click photo for next",
       "cardGalleryPrevious": "Previous photo",
@@ -4606,7 +4605,9 @@
       "initialDepositPercentHelp": "Whole number from 1 to 25.",
       "initialDepositPercentInvalid": "Enter a deposit percent from 1 to 25.",
       "preparationMinutes": "Preparation time (minutes)",
-      "preparationMinutesHelp": "Roughly how long this dish takes to cook."
+      "preparationMinutesHelp": "Roughly how long this dish takes to cook.",
+      "cardGalleryPhotosBadge_one": "{{count}} photo",
+      "cardGalleryPhotosBadge_other": "{{count}} photos"
     },
     "variants": {
       "sectionTitle": "Variants",

@@ -72,12 +72,12 @@ import { trackDiscoveryEvent } from '../../utils/discoveryAnalytics';
 import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { CatalogEmptyIllustration } from '../../components/illustrations/CatalogEmptyIllustration';
+import { ExportsFromEmptyState } from '../../components/exports/ExportsFromEmptyState';
 import {
   ExportsDirectionSwitch,
   type ExportsDirection,
 } from '../../components/exports/ExportsDirectionSwitch';
 import { useExportOrigins } from '../../hooks/useExportOrigins';
-import { exportCountryPlace } from '../../utils/exportCountries';
 import { CatalogFeedStop } from '../../components/browse/CatalogFeedStop';
 import { CATALOG_SORT_OPTIONS } from '../../constants/catalogSortOptions';
 import { FOOD_CATEGORY_NAME } from '../../utils/foodAvailability';
@@ -1319,22 +1319,7 @@ function BrowseCatalogScreenInner({
     }
 
     if (exportsFrom && debouncedSearch.length === 0) {
-      const place = exportCountryPlace(exportOriginCountry ?? '', i18n.language);
-      return (
-        <View style={styles.centerPad} testID="exports-from-empty">
-          <CatalogEmptyIllustration />
-          <Text style={[typography.subtitle2, { color: colors.text.primary, textAlign: 'center', marginTop: spacing.md }]}>
-            {t('exportsOrigin.emptyTitle', 'No exports from {{place}} yet', { place })}
-          </Text>
-          <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.xs }]}>
-            {t(
-              'exportsOrigin.emptyFromMarket',
-              'No business in {{place}} exports on Rendasua yet. Pick another country.',
-              { place }
-            )}
-          </Text>
-        </View>
-      );
+      return <ExportsFromEmptyState originCode={exportOriginCountry} />;
     }
 
     const hasFilters =

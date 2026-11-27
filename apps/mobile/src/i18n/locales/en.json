@@ -9404,10 +9404,6 @@
     "pickerTitle": "Exported from",
     "pickerHelp": "See what each market exports. Your market stays {{place}}.",
     "pickerHelpNoMarket": "See what each market exports.",
-    "itemsCount_one": "{{count}} item",
-    "itemsCount_other": "{{count}} items",
-    "summary_one": "{{count}} product · ships to {{markets}} markets",
-    "summary_other": "{{count}} products · ships to {{markets}} markets",
     "noOrigins": "No exports yet",
     "copyLink": "Copy link",
     "copyPublicLink": "Copy public link",
@@ -9433,12 +9429,16 @@
     "loading": "Loading exports…",
     "loadError": "We couldn’t load these exports. Try again in a moment.",
     "pickCountry": "Choose a country",
-    "statProducts_one": "product",
-    "statProducts_other": "products",
-    "statBusinesses_one": "business",
-    "statBusinesses_other": "businesses",
-    "statDestinations_one": "destination market",
-    "statDestinations_other": "destination markets"
+    "itemsCount": "{{count}} item",
+    "itemsCount_plural": "{{count}} items",
+    "summary": "{{count}} product · ships to {{markets}} markets",
+    "summary_plural": "{{count}} products · ships to {{markets}} markets",
+    "statProducts": "product",
+    "statProducts_plural": "products",
+    "statBusinesses": "business",
+    "statBusinesses_plural": "businesses",
+    "statDestinations": "destination market",
+    "statDestinations_plural": "destination markets"
   },
   "exportItem": {
     "badge": "Export only",
@@ -9448,10 +9448,10 @@
     "originLine": "Exported from your market. It isn’t sold here. You can still like or share it.",
     "thirdLine": "Not exported to your market ({{code}}). You can still like or share it.",
     "yourMarket": "Your market",
-    "cartRemoved_one": "{{count}} item was removed: it’s export only.",
-    "cartRemoved_other": "{{count}} items were removed: they’re export only.",
     "partnerHelp": "You’re sending a partner inquiry about {{name}} to the business. They’ll contact you outside the app.",
     "notExportedError": "This item isn’t exported to your market.",
-    "checkoutBlocked": "{{name}} is export only. Remove it to check out."
+    "checkoutBlocked": "{{name}} is export only. Remove it to check out.",
+    "cartRemoved": "{{count}} item was removed: it’s export only.",
+    "cartRemoved_plural": "{{count}} items were removed: they’re export only."
   }
 }

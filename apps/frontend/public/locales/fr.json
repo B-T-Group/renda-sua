@@ -4059,7 +4059,6 @@
       "mainImageUpdated": "Image principale mise à jour",
       "secondaryImageUpdated": "Cette image est maintenant secondaire.",
       "imagesCount": "Nombre d’images",
-      "cardGalleryPhotosBadge": "{{count}} photos",
       "cardGalleryClickEnlarge": "Cliquer pour agrandir",
       "cardGalleryClickForNext": "Cliquez sur la photo pour la suivante",
       "cardGalleryPrevious": "Photo précédente",
@@ -4300,7 +4299,9 @@
       "initialDepositPercentHelp": "Nombre entier de 1 à 25.",
       "initialDepositPercentInvalid": "Saisissez un pourcentage d'acompte de 1 à 25.",
       "preparationMinutes": "Temps de préparation (minutes)",
-      "preparationMinutesHelp": "Environ combien de temps ce plat prend à cuisiner."
+      "preparationMinutesHelp": "Environ combien de temps ce plat prend à cuisiner.",
+      "cardGalleryPhotosBadge_one": "{{count}} photo",
+      "cardGalleryPhotosBadge_other": "{{count}} photos"
     },
     "variants": {
       "sectionTitle": "Variantes",
