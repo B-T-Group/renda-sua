@@ -443,6 +443,8 @@ const ItemsPage: React.FC = () => {
     include_unavailable: discoveryEnabled ? true : undefined,
   });
 
+  const showDiscoverySort = Boolean(discoveryEnabled && pagination?.discovery);
+
   // Check if any filters are active
   const hasActiveFilters = Boolean(
     searchTerm ||
@@ -1067,14 +1069,9 @@ const ItemsPage: React.FC = () => {
                 size="medium"
               />
             ) : null}
-            {(
-              [
-                'deals',
-                'top_rated',
-                'fastest',
-                'cheapest',
-                'relevance',
-              ] as const
+            {(showDiscoverySort
+              ? (['deals', 'top_rated', 'fastest', 'cheapest', 'relevance'] as const)
+              : []
             ).map((mode) => {
               const selected = sort === mode;
               const label = t(
@@ -1223,7 +1220,7 @@ const ItemsPage: React.FC = () => {
 
         {/* Sort / filter bar */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-          {discoveryEnabled && pagination?.discovery ? (
+          {showDiscoverySort && pagination?.discovery ? (
             <CatalogSortControl
               currentSort={currentDiscoverySort as InventorySortMode}
               defaultSort={discoveryDefaultSort}
