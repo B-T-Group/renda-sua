@@ -2589,8 +2589,28 @@
       },
       "schedule": {
         "pickItem": "Article en location",
-        "empty": "Aucune réservation à venir pour cet article.",
-        "client": "Client"
+        "client": "Client",
+        "allItems": "Tous",
+        "loadError": "Impossible de charger le planning",
+        "viewDetails": "Voir les détails",
+        "openBookingA11y": "Ouvrir la réservation de {{name}}, {{date}}, {{time}}",
+        "showAll": "Voir tous les articles",
+        "emptyTitle": "Rien de prévu",
+        "emptyBody": "Les réservations confirmées apparaissent ici avec leur date, leur heure et leur prix.",
+        "emptyItemBody": "Aucune réservation à venir pour {{item}}.",
+        "emptyIllustrationA11y": "Calendrier vide",
+        "noItemsTitle": "Aucun article en location",
+        "noItemsBody": "Ajoutez une location à votre catalogue pour recevoir des réservations.",
+        "sections": {
+          "today": "Aujourd'hui",
+          "upcoming": "À venir",
+          "past": "Passées"
+        },
+        "duration": {
+          "days": "{{count}} j",
+          "hours": "{{count}} h",
+          "minutes": "{{count}} min"
+        }
       },
       "moderation": {
         "approved": "En ligne",

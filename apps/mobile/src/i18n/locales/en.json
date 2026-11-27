@@ -2656,8 +2656,28 @@
       },
       "schedule": {
         "pickItem": "Rental item",
-        "empty": "No upcoming bookings for this item.",
-        "client": "Client"
+        "client": "Client",
+        "allItems": "All",
+        "loadError": "Could not load the schedule",
+        "viewDetails": "View details",
+        "openBookingA11y": "Open booking for {{name}}, {{date}}, {{time}}",
+        "showAll": "Show all items",
+        "emptyTitle": "Nothing scheduled",
+        "emptyBody": "Confirmed bookings appear here with their date, time and price.",
+        "emptyItemBody": "No upcoming bookings for {{item}}.",
+        "emptyIllustrationA11y": "Empty calendar",
+        "noItemsTitle": "No rental items yet",
+        "noItemsBody": "Add a rental in your catalog to start receiving bookings.",
+        "sections": {
+          "today": "Today",
+          "upcoming": "Upcoming",
+          "past": "Past"
+        },
+        "duration": {
+          "days": "{{count}} d",
+          "hours": "{{count}} h",
+          "minutes": "{{count}} min"
+        }
       },
       "moderation": {
         "approved": "Live",
