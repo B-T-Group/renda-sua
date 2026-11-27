@@ -8255,7 +8255,9 @@
     "sectionSubtitle": "Goods listed from Canada — request interest to import",
     "seeAll": "See all exports",
     "badge": "Export",
-    "chip": "Exports"
+    "chip": "Exports",
+    "emptyTitle": "No export items for your market yet",
+    "emptyBody": "Check back soon as more goods become available to export."
   },
   "assistant": {
     "launcher": {

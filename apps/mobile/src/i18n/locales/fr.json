@@ -8191,7 +8191,9 @@
     "sectionSubtitle": "Produits listés depuis le Canada — demandez un intérêt pour importer",
     "seeAll": "Voir tous les exports",
     "badge": "Export",
-    "chip": "Exports"
+    "chip": "Exports",
+    "emptyTitle": "Aucun article à l’export pour votre marché pour l’instant",
+    "emptyBody": "Revenez bientôt : d’autres produits seront disponibles à l’export."
   },
   "assistant": {
     "launcher": {
