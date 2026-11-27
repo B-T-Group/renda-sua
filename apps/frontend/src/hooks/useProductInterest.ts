@@ -28,14 +28,27 @@ export interface ProductInterestPage {
   totalPages: number;
 }
 
+export interface ProductInterestResult {
+  id: string;
+  created_at?: string;
+  status?: string;
+  export_order?: boolean;
+  bc_number?: string | null;
+}
+
 export function useProductInterest() {
   const api = useApiClient();
 
   const submitInterest = useCallback(
-    async (businessInventoryId: string, note?: string) => {
+    async (
+      businessInventoryId: string,
+      note?: string,
+      countryCode?: string
+    ): Promise<ProductInterestResult> => {
       const res = await api.post('/product-interest', {
         businessInventoryId,
         note: note?.trim() || undefined,
+        countryCode: countryCode || undefined,
       });
       return res.data?.data;
     },

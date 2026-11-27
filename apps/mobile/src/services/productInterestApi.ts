@@ -27,17 +27,26 @@ export interface ProductInterestPage {
   totalPages: number;
 }
 
+export interface ProductInterestResult {
+  id: string;
+  status?: string;
+  export_order?: boolean;
+  bc_number?: string | null;
+}
+
 export async function submitProductInterest(
   businessInventoryId: string,
-  note?: string
-): Promise<unknown> {
-  const res = await apiRequest<{ success: boolean; data: unknown }>(
+  note?: string,
+  countryCode?: string
+): Promise<ProductInterestResult> {
+  const res = await apiRequest<{ success: boolean; data: ProductInterestResult }>(
     '/product-interest',
     {
       method: 'POST',
       body: JSON.stringify({
         businessInventoryId,
         note: note?.trim() || undefined,
+        countryCode: countryCode || undefined,
       }),
     }
   );

@@ -37,7 +37,24 @@ export class ProductInterestController {
   @Post()
   @ApiOperation({ summary: 'Submit interest in an interest-only catalog listing' })
   @ApiBody({ type: CreateProductInterestDto })
-  @ApiResponse({ status: 201, description: 'Interest submitted' })
+  @ApiResponse({
+    status: 201,
+    description:
+      'Interest submitted. When export orders are enabled for the market (countryCode, default CM) the response is an export order (`export_order: true`, `status`, `bc_number`); otherwise a lead-only interest row.',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          id: 'uuid',
+          created_at: '2026-11-27T15:00:00.000Z',
+          status: 'SUBMITTED',
+          export_order: true,
+          bc_number: 'BC-2026-0001',
+        },
+        message: 'Interest submitted successfully',
+      },
+    },
+  })
   @ApiResponse({ status: 400, description: 'Invalid listing or duplicate' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async create(

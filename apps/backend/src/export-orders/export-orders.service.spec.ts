@@ -1,6 +1,17 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { ExportOrdersService } from './export-orders.service';
+import {
+  ExportOrdersService,
+  resolveExportCountry,
+} from './export-orders.service';
 import type { ExportOrderRow } from './export-orders.types';
+
+describe('resolveExportCountry', () => {
+  it('upper-cases the code and defaults to CM', () => {
+    expect(resolveExportCountry('ci')).toBe('CI');
+    expect(resolveExportCountry(undefined)).toBe('CM');
+    expect(resolveExportCountry('')).toBe('CM');
+  });
+});
 
 describe('ExportOrdersService.isExportOrdersEnabled', () => {
   function serviceWith(hasura: { executeQuery: jest.Mock }) {

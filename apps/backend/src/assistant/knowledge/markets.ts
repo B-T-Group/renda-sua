@@ -11,7 +11,7 @@ The United States (US) is enabled for Stripe card payments. Groupe BT also has a
 
 Some goods listed from Canada are available for export into Cameroon, Côte d'Ivoire (CI), Togo, Congo-Brazzaville (CG), Gabon, the Philippines, and the Democratic Republic of the Congo (RDC, CD). Shoppers in those markets see an “Available for export” section and can submit interest (not local cart checkout).
 
-When the export-orders workflow flag is on, “I’m interested” opens a B2B export order (bon de commande → Canada admin review → proforma → invoice → deposit by wire in CAD). When the flag is off, interest remains a lead for the seller to follow up outside the app.
+When the export-orders workflow flag is on, “I’m interested” opens a B2B export order (bon de commande → Canada admin review → proforma → invoice → deposit by wire in CAD). Shoppers see their purchase order number right after sending the request and can follow every step under “My export orders” (web and mobile app). When the flag is off, interest remains a lead for the seller to follow up outside the app.
 
 The Democratic Republic of the Congo (RDC, CD) is open for that export interest only. Local shopping, delivery, pickup, and local payment are not available there yet. RDC is not the Republic of the Congo (Congo-Brazzaville, CG).
 
@@ -29,7 +29,7 @@ Les États-Unis (US) sont activés pour les paiements par carte Stripe. Le Group
 
 Certains produits listés depuis le Canada sont disponibles à l'export vers le Cameroun, la Côte d'Ivoire (CI), le Togo, le Congo-Brazzaville (CG), le Gabon, les Philippines et la République démocratique du Congo (RDC, CD). Les acheteurs de ces marchés voient une section « Disponible à l'export » et peuvent manifester leur intérêt (pas de panier local).
 
-Lorsque le flux commandes export est activé, « Je suis intéressé » crée une commande B2B (bon de commande → analyse Canada → proforma → facture → dépôt par virement en CAD). Sinon, l'intérêt reste une piste suivie hors application par le vendeur.
+Lorsque le flux commandes export est activé, « Je suis intéressé » crée une commande B2B (bon de commande → analyse Canada → proforma → facture → dépôt par virement en CAD). Le client voit son numéro de bon de commande dès l'envoi et suit chaque étape sous « Mes commandes export » (web et application mobile). Sinon, l'intérêt reste une piste suivie hors application par le vendeur.
 
 La République démocratique du Congo (RDC, CD) est ouverte uniquement pour cet intérêt à l'export. L'achat local, la livraison, le retrait et le paiement local n'y sont pas encore disponibles. La RDC n'est pas la République du Congo (Congo-Brazzaville, CG).
 

@@ -19,6 +19,16 @@ export function useExportOrders() {
     [api]
   );
 
+  const getEnabled = useCallback(
+    async (countryCode?: string): Promise<boolean> => {
+      const res = await api.get('/export-orders/enabled', {
+        params: { countryCode },
+      });
+      return res.data?.data?.enabled === true;
+    },
+    [api]
+  );
+
   const listMine = useCallback(
     async (page = 1, limit = 20, status?: string) => {
       const res = await api.get('/export-orders/mine', {
@@ -142,6 +152,7 @@ export function useExportOrders() {
 
   return {
     create,
+    getEnabled,
     listMine,
     getOne,
     getAdminOne,
