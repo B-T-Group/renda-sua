@@ -23,6 +23,7 @@ import ManageRecipientsScreen from '../screens/client/ManageRecipientsScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import UserLikesScreen from '../screens/shared/UserLikesScreen';
 import FollowingStoresScreen from '../screens/client/FollowingStoresScreen';
+import ClientExportOrdersScreen from '../screens/client/ClientExportOrdersScreen';
 import ClientProductInterestScreen from '../screens/client/ClientProductInterestScreen';
 import ProductInterestSuccessScreen from '../screens/client/ProductInterestSuccessScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
@@ -601,6 +602,11 @@ export function ClientRootNavigator() {
           options={{
             title: t('productInterest.clientTitle', 'My interest requests'),
           }}
+        />
+        <ClientRootStack.Screen
+          name="ClientExportOrders"
+          component={ClientExportOrdersScreen}
+          options={{ title: t('exportOrders.myOrdersTitle', 'My exports') }}
         />
         <ClientRootStack.Screen
           name="ProductInterestSuccess"

@@ -261,6 +261,7 @@ export type ClientRootStackParamList = {
   UserLikes: { filter?: 'all' | 'back_in_stock' } | undefined;
   FollowingStores: undefined;
   ClientProductInterest: undefined;
+  ClientExportOrders: undefined;
   ProductInterestSuccess: undefined;
   NotificationPreferences: undefined;
   SavedAccounts: { mode?: 'continue' | 'switch' };

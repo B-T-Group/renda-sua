@@ -10293,5 +10293,9 @@
     "businessCount": "Business declines (90 days)",
     "renterCount": "Renter declines (90 days)",
     "booking": "Booking"
+  },
+  "catalogShortcut": {
+    "myOrders": "My orders",
+    "myExports": "My exports"
   }
 }
