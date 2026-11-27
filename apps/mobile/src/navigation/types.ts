@@ -262,6 +262,9 @@ export type ClientRootStackParamList = {
   FollowingStores: undefined;
   ClientProductInterest: undefined;
   ProductInterestSuccess: undefined;
+  ClientExportOrders: undefined;
+  ClientExportOrderDetail: { orderId: string };
+  ExportOrderSubmitted: { orderId: string; bcNumber?: string };
   NotificationPreferences: undefined;
   SavedAccounts: { mode?: 'continue' | 'switch' };
   AccountManagement: undefined;

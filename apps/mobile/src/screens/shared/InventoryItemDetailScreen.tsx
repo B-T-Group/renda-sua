@@ -72,6 +72,7 @@ import { requestStockAvailabilityCheck } from '../../services/inventoryItemsApi'
 import { scheduleMetaAddToCart } from '../../services/metaConversionsApi';
 import { ProductInterestSheet } from '../../components/product-interest/ProductInterestSheet';
 import { useProductInterest } from '../../hooks/useProductInterest';
+import { useExportOrderMode } from '../../hooks/useExportOrderMode';
 import { useMarket } from '../../hooks/useMarket';
 
 function selectionHasStock(
@@ -113,6 +114,28 @@ function InventoryItemDetailScreen() {
   const [interestOpen, setInterestOpen] = useState(false);
   const [interestSubmitting, setInterestSubmitting] = useState(false);
   const { submitInterest } = useProductInterest();
+  const interestCountry = selectedMarket?.countryCode;
+  const interestOrderMode = useExportOrderMode(interestOpen, interestCountry);
+  const handleInterestSubmit = async (note: string) => {
+    setInterestSubmitting(true);
+    try {
+      const result = await submitInterest(inventoryItemId, note, interestCountry);
+      setInterestOpen(false);
+      const nav = navigation as { navigate: (name: string, params?: object) => void };
+      if (result?.export_order) {
+        nav.navigate('ExportOrderSubmitted', {
+          orderId: result.id,
+          bcNumber: result.bc_number ?? undefined,
+        });
+      } else {
+        nav.navigate('ProductInterestSuccess');
+      }
+    } catch (e: any) {
+      setSnack(e?.message || t('productInterest.error', 'Could not send interest'));
+    } finally {
+      setInterestSubmitting(false);
+    }
+  };
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [variantId, setVariantId] = useState<string | null>(null);
   const [stickyBarHeight, setStickyBarHeight] = useState(0);
@@ -1169,24 +1192,9 @@ function InventoryItemDetailScreen() {
         visible={interestOpen}
         itemName={item.item.name}
         submitting={interestSubmitting}
+        orderMode={interestOrderMode}
         onDismiss={() => setInterestOpen(false)}
-        onSubmit={async (note) => {
-          setInterestSubmitting(true);
-          try {
-            await submitInterest(inventoryItemId, note);
-            setInterestOpen(false);
-            (navigation as { navigate: (name: string) => void }).navigate(
-              'ProductInterestSuccess'
-            );
-          } catch (e: any) {
-            setSnack(
-              e?.message ||
-                t('productInterest.error', 'Could not send interest')
-            );
-          } finally {
-            setInterestSubmitting(false);
-          }
-        }}
+        onSubmit={handleInterestSubmit}
       />
 
       <RestockToast

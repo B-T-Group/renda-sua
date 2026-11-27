@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  Chip,
   CircularProgress,
   Stack,
   TextField,
@@ -11,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { useExportOrders } from '../../../hooks/useExportOrders';
+import { ExportOrderStatusChip } from '../../common/ExportOrderStatusChip';
 
 export default function AdminExportOrderDetailPage() {
   const { id = '' } = useParams();
@@ -64,7 +64,7 @@ export default function AdminExportOrderDetailPage() {
         <Typography variant="h4" sx={{ fontFamily: 'Georgia, serif' }}>
           {order.bc_number}
         </Typography>
-        <Chip label={order.status} />
+        <ExportOrderStatusChip status={order.status} />
       </Stack>
       <Typography sx={{ mb: 2 }} color="text.secondary">
         {order.client_user?.email} · {order.business?.name}

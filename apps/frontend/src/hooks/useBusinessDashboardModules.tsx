@@ -264,6 +264,17 @@ export function useBusinessDashboardModules({
         path: '/business/product-interest',
       },
       {
+        title: t('exportOrders.nav.business', 'Export orders'),
+        description: t(
+          'exportOrders.nav.businessDescription',
+          'Export orders placed on your products: confirm when goods are ready to ship.'
+        ),
+        icon: <RentalInboxIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: brandTokens.info.dark,
+        path: '/business/export-orders',
+      },
+      {
         title: t('business.dashboard.rentalScheduleModule', 'Rental schedule'),
         description: t(
           'business.dashboard.rentalScheduleModuleDescription',
@@ -401,6 +412,22 @@ export function useBusinessDashboardModules({
         requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
         section: 'operations',
         path: '/admin/orders',
+      },
+      {
+        title: t('exportOrders.nav.admin', 'Export orders'),
+        description: t(
+          'exportOrders.nav.adminDescription',
+          'Review export requests, issue proformas, and record payments'
+        ),
+        icon: <OrdersIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: brandTokens.info.main,
+        requiredAnyPermission: [
+          PlatformPermissions.EXPORT_REVIEW,
+          PlatformPermissions.EXPORT_FINANCE,
+        ],
+        section: 'operations',
+        path: '/admin/export-orders',
       },
       {
         title: t('business.dashboard.mapModule', 'Map'),

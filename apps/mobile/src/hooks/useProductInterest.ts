@@ -7,8 +7,8 @@ import {
 
 export function useProductInterest() {
   const submitInterest = useCallback(
-    (businessInventoryId: string, note?: string) =>
-      submitProductInterest(businessInventoryId, note),
+    (businessInventoryId: string, note?: string, countryCode?: string) =>
+      submitProductInterest(businessInventoryId, note, countryCode),
     []
   );
   const listClient = useCallback(

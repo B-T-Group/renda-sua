@@ -153,6 +153,15 @@ function ClientMenuTabScreenBase() {
             )}
             onPress={() => goTo('ClientProductInterest')}
           />
+          <UserMenuRow
+            icon="package-variant-closed"
+            label={t('exportOrders.myOrders', 'My export orders')}
+            subtitle={t(
+              'exportOrders.myOrdersHint',
+              'Track your purchase order, proforma approval, and delivery.'
+            )}
+            onPress={() => goTo('ClientExportOrders')}
+          />
           <AccountSettingsSection />
           <UserMenuRow
             icon="file-document-multiple-outline"

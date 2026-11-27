@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { useExportOrders } from '../../hooks/useExportOrders';
+import { ExportOrderStatusChip } from '../common/ExportOrderStatusChip';
 
 export default function AgentExportOrdersPage() {
   const { t } = useTranslation();
@@ -55,7 +56,7 @@ export default function AgentExportOrdersPage() {
             }}
           >
             <Typography fontWeight={600}>{row.bc_number}</Typography>
-            <Chip size="small" label={row.status} />
+            <ExportOrderStatusChip size="small" status={row.status} />
           </Box>
         ))}
         {items.length === 0 && (
