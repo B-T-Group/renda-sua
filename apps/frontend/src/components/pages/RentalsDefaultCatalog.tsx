@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { RentalCardSkeleton } from '../rentals/RentalLocationsStrip';
 import { RentalItemCard } from '../rentals/RentalItemCard';
+import { MyRentalsHeroEntry } from '../rentals/MyRentalsHeroEntry';
 import SEOHead from '../seo/SEOHead';
 import { useMarket } from '../../hooks/useMarket';
 import { formatExclusiveStay, formatExclusiveStayRange } from '../../utils/rentalRequestFormat';
@@ -149,7 +150,10 @@ function CatalogHero({ market }: { market: string }) {
         <Typography variant="overline" color="primary" fontWeight={700}>
           {t('rentals.catalog.heroEyebrow', 'Rentals')}
         </Typography>
-        <Typography variant="h3" fontWeight={800}>{t('rentals.catalog.heroTitle', 'Rentals')}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+          <Typography variant="h3" fontWeight={800}>{t('rentals.catalog.heroTitle', 'Rentals')}</Typography>
+          <MyRentalsHeroEntry />
+        </Box>
         <Typography color="text.secondary">
           {t('rentals.catalog.subtitleAt', 'Showing rentals in {{market}}', { market: market || t('rentals.catalog.yourMarket', 'your market') })}
         </Typography>

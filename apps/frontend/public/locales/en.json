@@ -7593,6 +7593,7 @@
     },
     "hub": {
       "title": "My rentals",
+      "titleCount": "My rentals, {{count}} to do",
       "toDo": "To do",
       "actionNeeded": "Action needed",
       "upcoming": "Upcoming",

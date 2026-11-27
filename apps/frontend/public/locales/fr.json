@@ -7313,6 +7313,7 @@
     },
     "hub": {
       "title": "Mes locations",
+      "titleCount": "Mes locations, {{count}} à faire",
       "toDo": "À faire",
       "actionNeeded": "Action requise",
       "upcoming": "À venir",

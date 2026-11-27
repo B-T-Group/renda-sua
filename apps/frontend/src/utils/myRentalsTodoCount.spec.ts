@@ -1,4 +1,4 @@
-import { countsForMyRentalsTodo, formatMyRentalsBadge, listingWallNowMs, myRentalsEntrySegment, myRentalsTodoCount } from './myRentalsTodoCount';
+import { countsForMyRentalsTodo, formatMyRentalsBadge, hubSegmentFromSearchParam, listingWallNowMs, myRentalsEntrySegment, myRentalsTodoCount } from './myRentalsTodoCount';
 
 const NOW = new Date('2026-11-12T18:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
@@ -29,5 +29,13 @@ describe('my rentals tab badge', () => {
   it('opens To do only when the count is above 0', () => {
     expect(myRentalsEntrySegment(2)).toBe('action_needed');
     expect(myRentalsEntrySegment(0)).toBe('upcoming');
+  });
+
+  it('reads the My rentals landing tab from the segment query', () => {
+    expect(hubSegmentFromSearchParam('upcoming')).toBe('upcoming');
+    expect(hubSegmentFromSearchParam('action_needed')).toBe('action_needed');
+    expect(hubSegmentFromSearchParam('past')).toBe('past');
+    expect(hubSegmentFromSearchParam(null)).toBe('action_needed');
+    expect(hubSegmentFromSearchParam('nope')).toBe('action_needed');
   });
 });
