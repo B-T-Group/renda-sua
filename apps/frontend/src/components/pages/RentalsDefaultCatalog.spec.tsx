@@ -19,11 +19,27 @@ jest.mock('../../hooks/useMarket', () => ({
 }));
 
 const mockSetSearchParams = jest.fn();
+const mockNavigate = jest.fn();
 const mockSearch = { params: new URLSearchParams() };
 
 jest.mock('react-router-dom', () => ({
-  useNavigate: () => jest.fn(),
+  useNavigate: () => mockNavigate,
   useSearchParams: () => [mockSearch.params, mockSetSearchParams],
+}));
+
+jest.mock('../../hooks/useClientFlags', () => ({
+  useClientFlags: () => ({
+    flags: { rentals_my_rentals_entry_enabled: true },
+    loading: false,
+  }),
+}));
+
+jest.mock('../../contexts/SessionAuthContext', () => ({
+  useSessionAuth: () => ({ isAuthenticated: true }),
+}));
+
+jest.mock('../../hooks/useClientRentalsTabBadge', () => ({
+  useClientRentalsTabBadge: () => ({ badge: '2', count: 2 }),
 }));
 
 const search = useRentalSearchCatalog as jest.Mock;
@@ -73,6 +89,7 @@ function renderCatalog() {
 describe('RentalsDefaultCatalog', () => {
   beforeEach(async () => {
     mockSearch.params = new URLSearchParams();
+    mockNavigate.mockReset();
     await i18n.changeLanguage('en');
     categories.mockReturnValue({
       categories: [
@@ -205,5 +222,21 @@ describe('RentalsDefaultCatalog', () => {
     });
     expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ q: '' }));
     jest.useRealTimers();
+  });
+
+  it('puts the My rentals control in the hero and opens To do when the badge is 2', () => {
+    search.mockReturnValue({
+      hits: [],
+      total: 0,
+      loading: false,
+      loadingMore: false,
+      loadMore: jest.fn(),
+      ready: true,
+    });
+    renderCatalog();
+    expect(screen.getByTestId('rental-my-rentals-entry')).toBeTruthy();
+    expect(screen.getByTestId('rental-my-rentals-badge').textContent).toBe('2');
+    fireEvent.click(screen.getByTestId('rental-my-rentals-entry'));
+    expect(mockNavigate).toHaveBeenCalledWith('/rentals/requests?segment=action_needed');
   });
 });
