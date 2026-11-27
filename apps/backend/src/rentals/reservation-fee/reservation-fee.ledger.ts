@@ -2,6 +2,7 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import type { AccountsService } from '../../accounts/accounts.service';
 import type { HasuraSystemService } from '../../hasura/hasura-system.service';
 import type { StripeCaptureService } from '../../stripe-payments/stripe-capture.service';
+import { stripeRefundWalletKey } from '../../stripe-payments/stripe-refund-wallet';
 import { assertLedgerResult, rentalLedgerKey } from '../rental-ledger';
 import { reservationFeeEntityId, type ReservationFeeStatus } from './reservation-fee.policy';
 
@@ -34,7 +35,7 @@ const FEE_CAS = `
  *
  * - hold: after the fee is paid.
  * - refund: release. A card fee also leaves the wallet and goes back to the card.
- * - forfeit: release, then pay the business (rentals carry no commission today).
+ * - forfeit: release, then pay the business (the rental commission is taken separately at return settlement).
  * - apply: release at settlement so the contract payment covers the full total.
  */
 export class ReservationFeeLedger {
@@ -163,22 +164,28 @@ export class ReservationFeeLedger {
   }
 
   private async refundToCard(booking: FeeBooking): Promise<void> {
+    const transactionId = await this.refundFeeCharge(booking);
+    const accountId = await this.clientAccountId(booking);
+    const left = await this.accounts.registerWithdrawalIfNotExists({
+      accountId,
+      amount: this.amount(booking),
+      memo: `Rental reservation fee refunded to card ${booking.id}`,
+      referenceId: transactionId,
+      idempotencyKey: stripeRefundWalletKey(transactionId),
+    });
+    assertLedgerResult(left, 'reservation fee card refund');
+  }
+
+  /** Card refund. The wallet key matches charge.refunded so the webhook does not debit again. */
+  private async refundFeeCharge(booking: FeeBooking): Promise<string> {
     const number = booking.booking_number;
     if (!number || !this.stripeCapture) throw feeRefundFailed();
     const refunded = await this.stripeCapture.refundCapturedPayment({
       orderNumber: reservationFeeEntityId(number),
       idempotencyKey: rentalLedgerKey(booking.id, 'fee:card-refund'),
     });
-    if (!refunded.success) throw feeRefundFailed();
-    const accountId = await this.clientAccountId(booking);
-    const left = await this.accounts.registerWithdrawalIfNotExists({
-      accountId,
-      amount: this.amount(booking),
-      memo: `Rental reservation fee refunded to card ${booking.id}`,
-      referenceId: this.ref(booking),
-      idempotencyKey: rentalLedgerKey(booking.id, 'fee:card-refund'),
-    });
-    assertLedgerResult(left, 'reservation fee card refund');
+    if (!refunded.success || !refunded.transactionId) throw feeRefundFailed();
+    return refunded.transactionId;
   }
 
   private ref(booking: FeeBooking): string {

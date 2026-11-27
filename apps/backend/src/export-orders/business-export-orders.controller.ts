@@ -12,7 +12,9 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiQuery,
+  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
@@ -52,8 +54,12 @@ export class BusinessExportOrdersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Manufacturer export order detail' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiResponse({ status: 200, description: 'Export order detail' })
+  @ApiResponse({ status: 403, description: 'Caller does not own this order' })
+  @ApiResponse({ status: 404, description: 'Export order not found' })
   async detail(@Param('id') id: string) {
-    const data = await this.exportOrders.getById(id);
+    const data = await this.exportOrders.getByIdForActor(id, 'business');
     return { success: true, data };
   }
 

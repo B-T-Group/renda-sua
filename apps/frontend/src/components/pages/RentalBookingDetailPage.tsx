@@ -15,9 +15,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
@@ -27,7 +27,10 @@ import {
   useRentalApi,
 } from '../../hooks/useRentalApi';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useRentalBookingUnreadCount } from '../../hooks/useRentalBookingUnreadCount';
 import { useRentalInspection } from '../../hooks/useRentalInspection';
+import { RentalMessagesButton } from '../rentals/RentalMessagesButton';
+import { MerchantEarningsCard } from '../rentals/MerchantEarningsCard';
 import LoadingPage from '../common/LoadingPage';
 import { UserMessagesComponent } from '../common/UserMessagesComponent';
 import {
@@ -40,6 +43,7 @@ import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import { BusinessDeclineBanner, DeclineOutcomeCard, declineCardView } from '../rentals/DeclinePickupScreens';
 import { RentalJourneyList } from '../rentals/RentalJourneyList';
 import { RentalStartPanel } from '../rentals/RentalStartPanel';
+import { STICKY_ACTION_CLEARANCE, StickyActionCard } from '../common/StickyActionCard';
 import { PayAtPickupPanel } from '../rentals/PayAtPickupPanel';
 import { CancelBookingDialog } from '../rentals/CancelBookingDialog';
 import { cancelFeeResult, dueAtPickup, reservationFee, showsPayAtPickupCard } from '../../utils/rentals/reservationFee';
@@ -80,7 +84,13 @@ import {
   bookingDetailTimelineIndex,
   messagesDefaultExpanded,
 } from '../../utils/rentalPhase';
-import { businessCanReplaceReport, didntReceiveWindowOpen, reportReadyToReview, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import {
+  businessCanReplaceReport,
+  didntReceiveWindowOpen,
+  reportReadyToReview,
+  showBusinessReturnReport,
+  unpaidCancelMinutesLeft,
+} from '../../utils/rentalInspection';
 import { RentalHandoverNotice } from '../rentals/RentalHandoverNotice';
 import {
   confirmationDepositHeld,
@@ -138,6 +148,7 @@ const DETAIL_STATUS_DEFAULTS: Record<string, string> = {
   'rentals.phases.reserved': 'Reserved',
   'rentals.phases.readyForPickup': 'Ready for pickup',
   'rentals.phases.inProgress': 'In progress',
+  'rentals.phases.awaitingConfirmation': 'Awaiting confirmation',
   'rentals.phases.done': 'Done',
   'rentals.bookingStatus.awaiting_return': 'Return due',
   'rentalInspection.phase.reportReady': 'Report ready to review',
@@ -270,6 +281,21 @@ const RentalBookingDetailPage: React.FC = () => {
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [confirmView, setConfirmView] = useState<ConfirmView | null>(null);
   const inspection = useRentalInspection(bookingId, booking);
+  const { hash } = useLocation();
+  const loadedBookingId = booking?.id;
+  useEffect(() => {
+    if (hash !== '#rental-inspection' || !loadedBookingId || inspection.loading) return;
+    document.getElementById('rental-inspection')?.scrollIntoView({ behavior: 'smooth' });
+  }, [hash, loadedBookingId, inspection.loading]);
+  const { unreadCount: unreadMessages, refresh: refreshUnreadMessages } =
+    useRentalBookingUnreadCount(bookingId);
+  const messagesSectionRef = useRef<HTMLDivElement | null>(null);
+  const [messagesExpandSignal, setMessagesExpandSignal] = useState(0);
+
+  const openMessages = useCallback(() => {
+    setMessagesExpandSignal((n) => n + 1);
+    messagesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
   useEffect(() => {
     if (profileLoading) return;
@@ -406,6 +432,7 @@ const RentalBookingDetailPage: React.FC = () => {
   const isStripePending =
     paymentRail === 'stripe' || (paymentRail == null && isStripeRail);
   const showPaymentPending = isClient && booking?.status === 'proposed';
+  const hasStickyAction = showPaymentPending || showCollect || showReturnPicker || (isClient && showStartPanel);
 
   if (!isAuthenticated) {
     return (
@@ -483,9 +510,11 @@ const RentalBookingDetailPage: React.FC = () => {
     Boolean(isClient) && flagsLoaded && flags.rentals_renter_return_report_enabled && returnPhase !== 'hidden';
   const showBusinessReport =
     Boolean(isBusiness) &&
-    flagsLoaded &&
-    flags.rentals_renter_return_report_enabled &&
-    Boolean(booking.renter_reported_returned_at);
+    showBusinessReturnReport(
+      flagsLoaded && flags.rentals_renter_return_report_enabled === true,
+      status,
+      booking.renter_reported_returned_at
+    );
   const returnLocation = booking.return_place?.name || locationName;
   const returnByLabel = returnDueAt
     ? formatRentalPeriod(
@@ -501,7 +530,9 @@ const RentalBookingDetailPage: React.FC = () => {
     reportReadyToReview({ status, pickup: inspection.pickup });
   const detailStatusKey = reviewReady
     ? bookingDetailStepLabelKey(REPORT_REVIEW_STEP, isBusiness ? 'business' : 'client')
-    : bookingDetailStatusLabelKey(status);
+    : bookingDetailStatusLabelKey(status, {
+        returnReportedAt: isBusiness ? null : booking.renter_reported_returned_at,
+      });
   const detailStatusLabel = t(
     detailStatusKey,
     DETAIL_STATUS_DEFAULTS[detailStatusKey] ?? status
@@ -694,14 +725,21 @@ const RentalBookingDetailPage: React.FC = () => {
           onConfirm={(actualEndAt) => void submitEarlyReturn(actualEndAt)}
         />
       ) : null}
-      <Box sx={{ minHeight: '100%', pb: { xs: 10, md: 5 }, bgcolor: alpha(theme.palette.divider, 0.04) }}>
+      <Box sx={{ minHeight: '100%', pb: hasStickyAction ? { xs: `${STICKY_ACTION_CLEARANCE + 72}px`, md: `${STICKY_ACTION_CLEARANCE}px` } : { xs: 10, md: 5 }, bgcolor: alpha(theme.palette.divider, 0.04) }}>
         <Container maxWidth="md" sx={{ py: { xs: 2, md: 3 } }}>
-          <Button
-            onClick={() => navigate(-1)}
-            sx={{ mb: 2, color: 'text.secondary' }}
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mb: 2 }}
           >
-            {t('common.back', 'Back')}
-          </Button>
+            <Button onClick={() => navigate(-1)} sx={{ color: 'text.secondary' }}>
+              {t('common.back', 'Back')}
+            </Button>
+            {bookingId && booking.status !== 'cancelled' ? (
+              <RentalMessagesButton unreadCount={unreadMessages} onClick={openMessages} />
+            ) : null}
+          </Stack>
 
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
@@ -775,54 +813,23 @@ const RentalBookingDetailPage: React.FC = () => {
               }
               action={
                 showPaymentPending ? (
-                  <Stack spacing={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      {isStripePending
-                        ? t(
-                            'rentals.bookingDetail.paymentPendingStripe',
-                            'Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.'
-                          )
-                        : t(
-                            'rentals.bookingDetail.paymentPendingMomo',
-                            'Approve the mobile money payment request on your phone to confirm this reservation. Use Retry payment if you did not receive it.'
-                          )}
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      color="cta"
-                      disabled={retryingPayment}
-                      onClick={() => void handleRetryPayment()}
-                    >
-                      {t('rentals.actions.completePayment', 'Complete payment')}
-                    </Button>
-                  </Stack>
-                ) : showCollect ? (
-                  <Stack spacing={1}>
-                    {inspection.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (
-                      <Alert severity="warning">
-                        {t('rentalInspection.autoCancel', 'Auto-cancel if unpaid: {{minutes}} min left. The clock started when Collect payment opened. Inspection time is not included.', {
-                          minutes: unpaidCancelMinutesLeft(booking.reserved_cancel_after),
-                        })}
-                      </Alert>
-                    ) : null}
-                    <Button
-                      variant="contained"
-                      onClick={() => void handlePickupPayment()}
-                    >
-                      {t('rentals.actions.collectPayment', 'Collect payment')}
-                    </Button>
-                  </Stack>
-                ) : showReturnPicker ? (
-                  <Button
-                    variant="contained"
-                    color="success"
-                    onClick={() => {
-                      setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
-                      setReturnDialogOpen(true);
-                    }}
-                  >
-                    {t('rentals.actions.confirmReturn', 'Confirm return')}
-                  </Button>
+                  <Typography variant="body2" color="text.secondary">
+                    {isStripePending
+                      ? t(
+                          'rentals.bookingDetail.paymentPendingStripe',
+                          'Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.'
+                        )
+                      : t(
+                          'rentals.bookingDetail.paymentPendingMomo',
+                          'Approve the mobile money payment request on your phone to confirm this reservation. Use Retry payment if you did not receive it.'
+                        )}
+                  </Typography>
+                ) : showCollect && inspection.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (
+                  <Alert severity="warning">
+                    {t('rentalInspection.autoCancel', 'Auto-cancel if unpaid: {{minutes}} min left. The clock started when Collect payment opened. Inspection time is not included.', {
+                      minutes: unpaidCancelMinutesLeft(booking.reserved_cancel_after),
+                    })}
+                  </Alert>
                 ) : null
               }
             />
@@ -1010,6 +1017,7 @@ const RentalBookingDetailPage: React.FC = () => {
               role={isBusiness ? 'business' : 'client'}
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ')}
               place={booking.rental_location_listing?.business_location?.name ?? ''}
+              address={booking.return_place?.address}
               money={formatConfirmationMoney(Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0, booking.currency, i18n.language)}
               returnLabel={formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language, listingZone)}
               starting={sharingPin}
@@ -1232,6 +1240,10 @@ const RentalBookingDetailPage: React.FC = () => {
               </Stack>
             </Paper>
 
+            {isBusiness && booking.merchant_earnings ? (
+              <MerchantEarningsCard earnings={booking.merchant_earnings} />
+            ) : null}
+
             {isBusiness && booking.client?.user ? (
               <Paper
                 elevation={0}
@@ -1310,12 +1322,14 @@ const RentalBookingDetailPage: React.FC = () => {
             />
 
             {bookingId && booking.status !== 'cancelled' ? (
-              <Box id="rental-messages">
+              <Box id="rental-messages" ref={messagesSectionRef}>
               <UserMessagesComponent
                 entityType="rental_booking"
                 entityId={bookingId}
                 title={t('rentals.messages.title', 'Messages')}
                 defaultExpanded={messagesDefaultExpanded(booking.status)}
+                expandSignal={messagesExpandSignal}
+                onMessagesRead={() => void refreshUnreadMessages()}
                 maxVisibleMessages={5}
               />
               </Box>
@@ -1324,56 +1338,35 @@ const RentalBookingDetailPage: React.FC = () => {
         </Container>
       </Box>
 
-      {(showPaymentPending || showCollect || showReturnPicker) && (
-        <Box
-          sx={{
-            display: { xs: 'block', md: 'none' },
-            position: 'fixed',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 10,
-            p: 1.5,
-            bgcolor: 'background.paper',
-            borderTop: 1,
-            borderColor: 'divider',
-            boxShadow: 3,
+      {showPaymentPending ? (
+        <StickyActionCard
+          testId="rental-booking-sticky"
+          actionColor="cta"
+          summaryLabel={t('rentals.bookingDetail.stickyTotal', 'Total')}
+          summaryValue={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+          actionLabel={t('rentals.actions.completePayment', 'Complete payment')}
+          disabled={retryingPayment}
+          onAction={() => void handleRetryPayment()}
+        />
+      ) : showCollect ? (
+        <StickyActionCard
+          testId="rental-booking-sticky"
+          summaryLabel={t('rentals.payAtPickup.dueAfterCheck', 'Due at pickup, after the item check')}
+          summaryValue={formatConfirmationMoney(dueAtPickup(booking) || Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+          actionLabel={t('rentals.actions.collectPayment', 'Collect payment')}
+          onAction={() => void handlePickupPayment()}
+        />
+      ) : showReturnPicker ? (
+        <StickyActionCard
+          testId="rental-booking-sticky"
+          actionColor="success"
+          actionLabel={t('rentals.actions.confirmReturn', 'Confirm return')}
+          onAction={() => {
+            setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
+            setReturnDialogOpen(true);
           }}
-        >
-          {showPaymentPending ? (
-            <Button
-              fullWidth
-              variant="contained"
-              color="cta"
-              disabled={retryingPayment}
-              onClick={() => void handleRetryPayment()}
-            >
-              {t('rentals.actions.completePayment', 'Complete payment')}
-            </Button>
-          ) : showCollect ? (
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={() => void handlePickupPayment()}
-            >
-              {t('rentals.actions.collectPayment', 'Collect payment')}
-            </Button>
-          ) : showReturnPicker ? (
-            <Button
-              fullWidth
-              variant="contained"
-              color="success"
-              onClick={() => {
-                setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
-                setReturnDialogOpen(true);
-              }}
-            >
-              {t('rentals.actions.confirmReturn', 'Confirm return')}
-            </Button>
-          ) : null}
-        </Box>
-      )}
-
+        />
+      ) : null}
 
       <Dialog
         open={returnDialogOpen}

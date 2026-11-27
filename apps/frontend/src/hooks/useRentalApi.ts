@@ -174,6 +174,31 @@ export interface RespondRentalRequestBody {
   unavailableReasonCode?: UnavailableRentalReasonCode;
   businessResponseNote?: string;
   expectedVersion?: number;
+  /** Rate (basis points) the business saw in the commission preview; the server rejects a stale one. */
+  acknowledgedCommissionRateBps?: number;
+}
+
+export interface RentalCommissionPreview {
+  enabled: boolean;
+  currency: string;
+  base_amount: number;
+  rate_bps: number;
+  commission_amount: number;
+  merchant_payout_amount: number;
+  source?: string;
+  campaign_code?: string | null;
+  promo_ends_at?: string | null;
+}
+
+/** Business-only booking earnings. Never present for the renter. */
+export interface RentalMerchantEarnings {
+  status: 'quoted' | 'earned' | 'reversed' | 'waived';
+  currency: string;
+  rate_bps: number | null;
+  base_amount: number | null;
+  commission_amount: number | null;
+  merchant_payout_amount: number | null;
+  commission_campaign_code: string | null;
 }
 
 export interface RentalSelectionWindow {
@@ -181,6 +206,36 @@ export interface RentalSelectionWindow {
   end_at: string;
   billing?: 'hourly' | 'all_day';
   calendar_date?: string;
+}
+
+/** A booking the renter reported returned that the business still has to confirm. */
+export interface BusinessReturnConfirmationRow {
+  id: string;
+  booking_number?: string | null;
+  status: string;
+  currency?: string | null;
+  renter_reported_returned_at: string;
+  inspection_policy_version?: number | null;
+  client?: {
+    user?: { first_name?: string | null; last_name?: string | null } | null;
+  } | null;
+  rental_location_listing: {
+    business_location?: {
+      name?: string | null;
+      address?: { country?: string | null } | null;
+    } | null;
+    rental_item: {
+      name: string;
+      currency?: string | null;
+      rental_category?: { name?: string | null } | null;
+      rental_item_images?: Array<{
+        id: string;
+        image_url: string;
+        display_url?: string | null;
+        thumbnail?: string | null;
+      }>;
+    };
+  };
 }
 
 export interface BusinessRentalRequestRow {
@@ -379,6 +434,7 @@ export interface RentalBookingPaymentStatus {
 
 export interface RentalBookingDetail {
   id: string;
+  merchant_earnings?: RentalMerchantEarnings | null;
   booking_number?: string | null;
   status: string;
   start_at: string;
@@ -564,6 +620,15 @@ export function useRentalApi() {
     }>('/rentals/business/requests');
     if (!data.success) return [];
     return data.data.requests ?? [];
+  }, [api]);
+
+  const fetchBusinessReturnConfirmations = useCallback(async () => {
+    const { data } = await api.get<{
+      success: boolean;
+      data: { bookings: BusinessReturnConfirmationRow[] };
+    }>('/rentals/business/return-confirmations');
+    if (!data.success) return [];
+    return data.data.bookings ?? [];
   }, [api]);
 
   const fetchDashboardRentalRequests = useCallback(async () => {
@@ -772,6 +837,24 @@ export function useRentalApi() {
     [api]
   );
 
+  const fetchCommissionPreview = useCallback(
+    async (requestId: string, totalOverride?: number) => {
+      const { data } = await api.get(`/rentals/business/requests/${requestId}/commission-preview`, {
+        params: totalOverride != null ? { totalOverride } : undefined,
+      });
+      return data.data as RentalCommissionPreview;
+    },
+    [api]
+  );
+
+  const dismissExpiryNotice = useCallback(
+    async (requestId: string) => {
+      const { data } = await api.post(`/rentals/requests/${requestId}/dismiss-expiry-notice`, {});
+      return data as { success: boolean };
+    },
+    [api]
+  );
+
   const createBooking = useCallback(
     async (rentalRequestId: string) => {
       const { data } = await api.post('/rentals/bookings', { rentalRequestId });
@@ -967,6 +1050,7 @@ export function useRentalApi() {
     fetchPublicRentalListing,
     fetchBusinessRentalRequests,
     fetchDashboardRentalRequests,
+    fetchBusinessReturnConfirmations,
     fetchClientRentalRequests,
     fetchBusinessRentalSchedule,
     fetchBusinessRentalItemActivity,
@@ -979,6 +1063,8 @@ export function useRentalApi() {
     createRequest,
     fetchRequestInspectionPolicy,
     respondRequest,
+    fetchCommissionPreview,
+    dismissExpiryNotice,
     createBooking,
     getBookingPaymentStatus,
     retryBookingPayment,

@@ -5,6 +5,7 @@ import type {
   BusinessRentalItemActivity,
   BusinessRentalItemActivityScope,
   BusinessRentalScheduleRow,
+  BusinessReturnConfirmationRow,
   ClientRentalBookingRow,
   ClientRentalRequestRow,
   CreateBusinessRentalItemBody,
@@ -21,6 +22,7 @@ import type {
   RentalListingRow,
   RentalListingsPage,
   RentalTakenWindow,
+  RentalCommissionPreview,
   RespondRentalRequestBody,
   TopRentalLocationRow,
   UpdateBusinessRentalItemBody,
@@ -556,6 +558,17 @@ export async function getDashboardRequests(
   return { requests: res.data?.requests ?? [], expiryNotices: res.data?.expiryNotices ?? [] };
 }
 
+export async function getReturnConfirmations(
+  init?: Init
+): Promise<BusinessReturnConfirmationRow[]> {
+  const res = await apiRequest<{
+    success: boolean;
+    data: { bookings: BusinessReturnConfirmationRow[] };
+  }>('/rentals/business/return-confirmations', { method: 'GET', signal: init?.signal });
+  if (!res.success) return [];
+  return res.data?.bookings ?? [];
+}
+
 export async function getBusinessRequests(
   init?: Init & { status?: string; id?: string }
 ): Promise<BusinessRentalRequestRow[]> {
@@ -581,6 +594,25 @@ export async function respondToRequest(
   return apiRequest(
     `/rentals/requests/${encodeURIComponent(requestId)}/respond`,
     { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export async function getCommissionPreview(
+  requestId: string,
+  totalOverride?: number
+): Promise<RentalCommissionPreview> {
+  const query = totalOverride != null ? `?totalOverride=${encodeURIComponent(String(totalOverride))}` : '';
+  const res = await apiRequest<{ success: boolean; data: RentalCommissionPreview }>(
+    `/rentals/business/requests/${encodeURIComponent(requestId)}/commission-preview${query}`,
+    { method: 'GET' }
+  );
+  return res.data;
+}
+
+export async function dismissExpiryNotice(requestId: string): Promise<RentalApiSuccess> {
+  return apiRequest(
+    `/rentals/requests/${encodeURIComponent(requestId)}/dismiss-expiry-notice`,
+    { method: 'POST', body: JSON.stringify({}) }
   );
 }
 
@@ -686,6 +718,16 @@ export async function getBookingMentionableParticipants(bookingId: string): Prom
   );
 }
 
+export async function getBookingUnreadCount(bookingId: string): Promise<{
+  success: boolean;
+  unreadCount?: number;
+}> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/messages/unread-count`,
+    { method: 'GET' }
+  );
+}
+
 export async function markBookingMessagesRead(
   bookingId: string,
   lastReadMessageId: string
@@ -731,11 +773,15 @@ export const rentalsApi = {
   deleteBusinessListing,
   getBusinessRequests,
   getDashboardRequests,
+  getReturnConfirmations,
   respondToRequest,
+  getCommissionPreview,
+  dismissExpiryNotice,
   getBusinessSchedule,
   confirmReturn,
   getBookingMessages,
   sendBookingMessage,
   getBookingMentionableParticipants,
+  getBookingUnreadCount,
   markBookingMessagesRead,
 };

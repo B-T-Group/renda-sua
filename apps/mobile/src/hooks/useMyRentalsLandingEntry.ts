@@ -9,7 +9,6 @@ import {
   trackMyRentalsEntryTap,
   trackNextRentalCardImpression,
 } from '../utils/rentals/myRentalsEntryAnalytics';
-import { presentSearchFirstEntry } from '../utils/rentals/presentSearchFirstEntry';
 import {
   bookingDismissVersion,
   claimNextCardImpression,
@@ -58,9 +57,11 @@ function dayLabel(count: number, t: TFunction): string {
   return t('rentals.searchFirst.dayCount', '{{count}} days', { count });
 }
 
-function statusLabel(status: string, t: TFunction): string {
-  if (status === 'active' || status === 'awaiting_return') {
-    return t('rentals.phases.inProgress', 'In progress');
+function statusLabel(row: ClientRentalBookingRow, t: TFunction): string {
+  if (row.status === 'active' || row.status === 'awaiting_return') {
+    return row.renter_reported_returned_at
+      ? t('rentals.phases.awaitingConfirmation', 'Awaiting confirmation')
+      : t('rentals.phases.inProgress', 'In progress');
   }
   return t('rentals.modify.accepted', 'Accepted');
 }
@@ -146,36 +147,33 @@ function pickNext(
   return picked;
 }
 
-export function useSearchFirstMyRentals(enabled: boolean, signedIn: boolean, hideHeader = false) {
+export function useSearchFirstMyRentals(enabled: boolean, signedIn: boolean) {
   const { t, i18n } = useTranslation();
   const entry = useMyRentalsLandingEntry(enabled, signedIn);
   if (!enabled) return undefined;
   const next = entry.nextBooking;
   const label = t('rentals.searchFirst.myRentals', 'My rentals');
-  return presentSearchFirstEntry(
-    {
-      label,
-      badge: entry.badge,
-      accessibilityLabel:
-        entry.todoCount > 0
-          ? t('rentals.searchFirst.myRentalsCount', 'My rentals, {{count}} to do', { count: entry.todoCount })
-          : label,
-      onPress: entry.onHeaderPress,
-      next: next
-        ? {
-            name: next.rental_location_listing?.rental_item?.name ?? '',
-            period: formatNextRentalPeriod(next.start_at, next.end_at, i18n.language, (count) =>
-              dayLabel(count, t)
-            ),
-            statusLabel: statusLabel(next.status, t),
-            imageUrl: bookingThumb(next),
-            onOpen: entry.onOpenNext,
-            onDismiss: entry.onDismissNext,
-          }
-        : null,
-    },
-    hideHeader
-  );
+  return {
+    label,
+    badge: entry.badge,
+    accessibilityLabel:
+      entry.todoCount > 0
+        ? t('rentals.searchFirst.myRentalsCount', 'My rentals, {{count}} to do', { count: entry.todoCount })
+        : label,
+    onPress: entry.onHeaderPress,
+    next: next
+      ? {
+          name: next.rental_location_listing?.rental_item?.name ?? '',
+          period: formatNextRentalPeriod(next.start_at, next.end_at, i18n.language, (count) =>
+            dayLabel(count, t)
+          ),
+          statusLabel: statusLabel(next, t),
+          imageUrl: bookingThumb(next),
+          onOpen: entry.onOpenNext,
+          onDismiss: entry.onDismissNext,
+        }
+      : null,
+  };
 }
 
 /** Badge count for the client Rentals tab. Keeps the last rows when a refresh fails. */

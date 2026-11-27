@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { StyleSheet } from 'react-native';
 import { act, cleanup, fireEvent } from '@testing-library/react-native';
 import { renderWithProviders } from '@/__tests__/test-utils';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -87,35 +86,6 @@ function renderSearch(over: Partial<RentalSearchFirstViewProps> = {}) {
     <ThemeProvider>
       <RentalSearchFirstView {...props(over)} />
     </ThemeProvider>
-  );
-}
-
-type StyledNode = { props: { style?: unknown }; children: Array<StyledNode | string> };
-
-function firstChild(node: StyledNode): StyledNode | null {
-  const child = node.children.find((item) => typeof item !== 'string');
-  return child ?? null;
-}
-
-function centeredDay(cell: StyledNode): boolean {
-  const cellStyle = StyleSheet.flatten(cell.props.style);
-  const wrap = firstChild(cell);
-  const text = wrap ? firstChild(wrap) : null;
-  const wrapStyle = wrap ? StyleSheet.flatten(wrap.props.style) : null;
-  const textStyle = text ? StyleSheet.flatten(text.props.style) : null;
-  return (
-    cellStyle?.alignItems === 'center' &&
-    cellStyle?.justifyContent === 'center' &&
-    cellStyle?.lineHeight == null &&
-    cellStyle?.paddingTop == null &&
-    wrapStyle?.alignItems === 'center' &&
-    wrapStyle?.justifyContent === 'center' &&
-    textStyle?.textAlign === 'center' &&
-    textStyle?.textAlignVertical === 'center' &&
-    textStyle?.includeFontPadding === false &&
-    textStyle?.lineHeight == null &&
-    textStyle?.padding === 0 &&
-    textStyle?.paddingTop === 0
   );
 }
 
@@ -270,131 +240,95 @@ describe('search-first rentals', () => {
     expect(view.getByTestId('rental-search-apply-dates')).toBeTruthy();
   });
 
-  it('greys out days before today and opens on the current month', async () => {
-    const onChange = jest.fn();
-    const view = await renderWithProviders(
-      <ThemeProvider>
-        <RentalSearchDateSheet
-          visible
-          now={new Date(2026, 10, 10)}
-          timeZone="Africa/Douala"
-          value={null}
-          onChange={onChange}
-          onApply={() => undefined}
-          onClose={() => undefined}
-        />
-      </ThemeProvider>
-    );
-    expect(view.getByText('November 2026')).toBeTruthy();
-    expect(view.getByTestId('rental-search-day-2026-11-01').props.accessibilityState).toMatchObject({ disabled: true });
-    expect(view.getByTestId('rental-search-day-2026-11-09').props.accessibilityState).toMatchObject({ disabled: true });
-    expect(view.getByTestId('rental-search-cal-prev').props.accessibilityState).toMatchObject({ disabled: true });
-    await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-11-01'));
-    });
-    expect(onChange).not.toHaveBeenCalled();
-    expect(view.getByTestId('rental-search-dates-blank')).toBeTruthy();
-    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-01'))).toBe(true);
-  });
+  const tuesday = new Date(Date.UTC(2026, 10, 10, 10, 20));
 
-  it('centers day numbers for open, in-range, and range-end cells', async () => {
+  function renderSheet(over: { value?: RentalDateRange | null; onChange?: (range: RentalDateRange | null) => void; onApply?: () => void } = {}) {
     function Sheet() {
-      const [value, setValue] = useState<RentalDateRange | null>(null);
+      const [value, setValue] = useState<RentalDateRange | null>(over.value ?? null);
       return (
         <ThemeProvider>
           <RentalSearchDateSheet
             visible
-            now={new Date(2026, 10, 10)}
-            value={value}
-            onChange={setValue}
-            onApply={() => undefined}
-            onClose={() => undefined}
-          />
-        </ThemeProvider>
-      );
-    }
-    const view = await renderWithProviders(<Sheet />);
-    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-20'))).toBe(true);
-    await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-11-11'));
-    });
-    await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-11-19'));
-    });
-    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-11'))).toBe(true);
-    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-15'))).toBe(true);
-    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-19'))).toBe(true);
-    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-01'))).toBe(true);
-  });
-
-  it('explains a range over 30 days in English and does not apply it', async () => {
-    const onApply = jest.fn();
-    const onChange = jest.fn();
-    function Sheet() {
-      const [value, setValue] = useState<RentalDateRange | null>(null);
-      return (
-        <ThemeProvider>
-          <RentalSearchDateSheet
-            visible
-            now={new Date(2026, 10, 10)}
+            now={tuesday}
+            timeZone="UTC"
             value={value}
             onChange={(range) => {
-              onChange(range);
+              over.onChange?.(range);
               setValue(range);
             }}
-            onApply={onApply}
+            onApply={over.onApply ?? (() => undefined)}
             onClose={() => undefined}
           />
         </ThemeProvider>
       );
     }
-    const view = await renderWithProviders(<Sheet />);
+    return renderWithProviders(<Sheet />);
+  }
+
+  it('offers a days-and-hours button instead of a date-only calendar', async () => {
+    const view = await renderSheet();
+    expect(view.getByText('Choose days and hours')).toBeTruthy();
+    expect(view.queryByTestId('rental-search-cal-prev')).toBeNull();
+    expect(view.queryByTestId('rental-search-day-2026-11-10')).toBeNull();
+    expect(view.getByTestId('rental-search-dates-blank')).toBeTruthy();
+  });
+
+  it('sets the shortcut with sensible times and shows them in the summary', async () => {
+    const onChange = jest.fn();
+    const view = await renderSheet({ onChange });
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-11-10'));
+      fireEvent.press(view.getByTestId('rental-search-quick-today'));
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ startDate: '2026-11-10', endDate: '2026-11-11', startTime: '13:00' })
+    );
+    expect(view.getByTestId('rental-search-dates-summary').props.children).toContain('13:00');
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-quick-weekend'));
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ startDate: '2026-11-14', endDate: '2026-11-16', startTime: '09:00' })
+    );
+    expect(view.getByText('Change days and hours')).toBeTruthy();
+  });
+
+  it('reopens the existing day-and-hours picker on the chosen window without prices', async () => {
+    const view = await renderSheet({
+      value: { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2, startTime: '09:00' },
     });
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-cal-next'));
+      fireEvent.press(view.getByTestId('rental-search-choose-times'));
     });
-    await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-12-11'));
-    });
-    expect(view.getByTestId('rental-search-dates-too-long').props.children).toContain('31 days');
-    expect(view.getByText(/30 days or fewer/)).toBeTruthy();
-    expect(onChange).toHaveBeenLastCalledWith(null);
+    expect(view.getByTestId('day-hours-sheet')).toBeTruthy();
+    expect(view.getByTestId('day-hours-summary').props.children).toContain('2 days');
+    expect(view.queryByTestId('day-hours-total')).toBeNull();
+  });
+
+  it('applies only when a window is chosen', async () => {
+    const onApply = jest.fn();
+    const view = await renderSheet({ onApply });
     await act(async () => {
       fireEvent.press(view.getByTestId('rental-search-apply-dates'));
     });
     expect(onApply).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-quick-week'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-apply-dates'));
+    });
+    expect(onApply).toHaveBeenCalledTimes(1);
   });
 
-  it('explains the 30-day limit in formal French', async () => {
+  it('labels the shortcuts and the picker button in formal French', async () => {
     await i18n.changeLanguage('fr');
-    function Sheet() {
-      const [value, setValue] = useState<RentalDateRange | null>(null);
-      return (
-        <ThemeProvider>
-          <RentalSearchDateSheet
-            visible
-            now={new Date(2026, 10, 10)}
-            value={value}
-            onChange={setValue}
-            onApply={() => undefined}
-            onClose={() => undefined}
-          />
-        </ThemeProvider>
-      );
-    }
-    const view = await renderWithProviders(<Sheet />);
+    const view = await renderSheet();
+    expect(view.getByText('Choisir les jours et les heures')).toBeTruthy();
+    expect(view.getByText('Choisissez vos jours et vos heures, ou un raccourci.')).toBeTruthy();
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-11-10'));
+      fireEvent.press(view.getByTestId('rental-search-quick-today'));
     });
-    await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-cal-next'));
-    });
-    await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-12-11'));
-    });
-    expect(view.getByText('Cette période compte 31 jours. Choisissez 30 jours ou moins.')).toBeTruthy();
+    expect(view.getByTestId('rental-search-dates-summary').props.children).toContain('dès');
   });
 
   it('labels a daily total as an estimate when the booking quote differs', async () => {

@@ -19,11 +19,27 @@ jest.mock('../../hooks/useMarket', () => ({
 }));
 
 const mockSetSearchParams = jest.fn();
+const mockNavigate = jest.fn();
 const mockSearch = { params: new URLSearchParams() };
 
 jest.mock('react-router-dom', () => ({
-  useNavigate: () => jest.fn(),
+  useNavigate: () => mockNavigate,
   useSearchParams: () => [mockSearch.params, mockSetSearchParams],
+}));
+
+jest.mock('../../hooks/useClientFlags', () => ({
+  useClientFlags: () => ({
+    flags: { rentals_my_rentals_entry_enabled: true },
+    loading: false,
+  }),
+}));
+
+jest.mock('../../contexts/SessionAuthContext', () => ({
+  useSessionAuth: () => ({ isAuthenticated: true }),
+}));
+
+jest.mock('../../hooks/useClientRentalsTabBadge', () => ({
+  useClientRentalsTabBadge: () => ({ badge: '2', count: 2 }),
 }));
 
 const search = useRentalSearchCatalog as jest.Mock;
@@ -73,6 +89,7 @@ function renderCatalog() {
 describe('RentalsDefaultCatalog', () => {
   beforeEach(async () => {
     mockSearch.params = new URLSearchParams();
+    mockNavigate.mockReset();
     await i18n.changeLanguage('en');
     categories.mockReturnValue({
       categories: [
@@ -205,5 +222,66 @@ describe('RentalsDefaultCatalog', () => {
     });
     expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ q: '' }));
     jest.useRealTimers();
+  });
+
+  it('puts the My rentals control in the hero and opens To do when the badge is 2', () => {
+    search.mockReturnValue({
+      hits: [],
+      total: 0,
+      loading: false,
+      loadingMore: false,
+      loadMore: jest.fn(),
+      ready: true,
+    });
+    renderCatalog();
+    expect(screen.getByTestId('rental-my-rentals-entry')).toBeTruthy();
+    expect(screen.getByTestId('rental-my-rentals-badge').textContent).toBe('2');
+    fireEvent.click(screen.getByTestId('rental-my-rentals-entry'));
+    expect(mockNavigate).toHaveBeenCalledWith('/rentals/requests?segment=action_needed');
+  });
+
+  function oneHit() {
+    return {
+      hits: [{ listing: listing('sony', 'Sony A7 IV kit', 45000, 'XAF'), available: true, nextAvailableDate: null, pricePerDay: 45000, totalForDates: null, dayCount: 1 }],
+      total: 1,
+      loading: false,
+      loadingMore: false,
+      loadMore: jest.fn(),
+      ready: true,
+    };
+  }
+
+  it('sends the date and time window to the search, shows it, and carries it to the listing', () => {
+    mockSearch.params = new URLSearchParams('start=2026-11-14&end=2026-11-16&start_time=09:00&end_time=17:00');
+    search.mockReturnValue(oneHit());
+    renderCatalog();
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({ startDate: '2026-11-14', endDate: '2026-11-16', startTime: '09:00', endTime: '17:00' })
+    );
+    expect(screen.getAllByText(/Sat.*09:00.*Sun.*17:00/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText('Sony A7 IV kit'));
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/rentals/sony?start_date=2026-11-14&end_date=2026-11-16&start_time=09%3A00&end_time=17%3A00'
+    );
+  });
+
+  it('writes the times to the page link and keeps whole days free of times', () => {
+    mockSearch.params = new URLSearchParams('start=2026-11-14&end=2026-11-16');
+    search.mockReturnValue(oneHit());
+    renderCatalog();
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ startDate: '2026-11-14', startTime: undefined }));
+    expect(screen.getByText(/2 days/)).toBeTruthy();
+  });
+
+  it('opens the day-and-hours picker for dates, without prices, and clears the window', () => {
+    mockSearch.params = new URLSearchParams('start=2026-11-14&end=2026-11-16&start_time=09:00');
+    search.mockReturnValue(oneHit());
+    renderCatalog();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByTestId('day-hours-sheet')).toBeTruthy();
+    expect(screen.queryByTestId('day-hours-total')).toBeNull();
+    fireEvent.click(screen.getByTestId('day-hours-close'));
+    fireEvent.click(screen.getByTestId('rentals-clear-dates'));
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ startDate: undefined, startTime: undefined }));
   });
 });

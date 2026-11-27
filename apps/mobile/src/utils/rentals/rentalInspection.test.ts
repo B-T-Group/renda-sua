@@ -17,6 +17,7 @@ import {
   didntReceiveMinutesLeft,
   showDidntReceiveLink,
   splitCorrectionReason,
+  showBusinessReturnReport,
   showLegacyReturnPicker,
   unitPhotosMeetMinimum,
   type InspectionUnit,
@@ -68,6 +69,11 @@ describe('inspection enrolment', () => {
       true
     );
     expect(showLegacyReturnPicker(false, 'active')).toBe(true);
+    expect(showBusinessReturnReport(true, 'awaiting_return', '2026-11-27T15:07:00Z')).toBe(true);
+    expect(showBusinessReturnReport(true, 'active', '2026-11-27T15:07:00Z')).toBe(true);
+    expect(showBusinessReturnReport(true, 'completed', '2026-11-27T15:07:00Z')).toBe(false);
+    expect(showBusinessReturnReport(true, 'awaiting_return', null)).toBe(false);
+    expect(showBusinessReturnReport(false, 'awaiting_return', '2026-11-27T15:07:00Z')).toBe(false);
   });
 });
 

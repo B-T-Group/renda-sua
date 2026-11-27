@@ -19,6 +19,7 @@ import type { ClientRootStackParamList } from '../../navigation/types';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { getBooking, getPaymentStatus, startRental } from '../../services/rentalsApi';
 import { settlePickupCardPayment, useRentalStripePayment } from '../../hooks/useRentalStripePayment';
+import { createModalDismissWaiter } from '../../utils/modalDismissWaiter';
 import { BOOKING_CLOCK, formatZonedWhen } from '../../utils/rentals/rentalStartWindow';
 import { bookingReturnDue, earlyReturnPreview, formatReturnClock } from '../../utils/rentals/returnDue';
 import { formatListingDay } from '../../utils/rentals/pickupPhotoTime';
@@ -48,6 +49,7 @@ export default function ClientInspectionScreen() {
   const { bookingId, stage } = useRoute<Route>().params;
   const model = useClientInspection(bookingId, stage);
   const { pay: payWithSheet } = useRentalStripePayment();
+  const confirmDismiss = useMemo(() => createModalDismissWaiter(), []);
   const [panel, setPanel] = useState<'review' | 'correction' | 'dispute'>('review');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
@@ -152,11 +154,13 @@ export default function ClientInspectionScreen() {
     setStarting(true);
     try {
       const result = await startRental(bookingId, cardAtPickup ? { stripe_payment_method: 'payment_sheet' } : undefined);
+      const confirmGone = confirmOpen ? confirmDismiss.wait() : Promise.resolve();
       setConfirmOpen(false);
       setNotice(null);
       if (cardAtPickup && result.paymentPending) {
         // Card pay at pickup: the rental starts when the card authorization webhook lands.
         setStartRail('card');
+        await confirmGone;
         const outcome = await settlePickupCardPayment(result, payWithSheet);
         if (outcome === 'cancelled' || outcome === 'failed') {
           setMomoPhase('failed');
@@ -264,6 +268,7 @@ export default function ClientInspectionScreen() {
           itemName={model.booking?.rental_location_listing?.rental_item?.name ?? ''}
           bookingNumber={model.booking?.booking_number ?? ''}
           place={model.booking?.rental_location_listing?.business_location?.name ?? ''}
+          address={model.booking?.return_place?.address}
           returnLabel={dueLabel}
           money={amountLabel}
           moneyLines={moneyLines}
@@ -462,7 +467,7 @@ export default function ClientInspectionScreen() {
           onClose={() => setDeclineOpen(false)}
         />
       ) : null}
-      <Modal visible={confirmOpen} transparent animationType="none" onRequestClose={() => setConfirmOpen(false)}>
+      <Modal visible={confirmOpen} transparent animationType="none" onRequestClose={() => setConfirmOpen(false)} onDismiss={confirmDismiss.onDismiss}>
         <Pressable style={styles.sheetBackdrop} onPress={() => !starting && setConfirmOpen(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: '#FFFFFF', width: '100%', paddingBottom: insets.bottom + 16 }]} onPress={() => undefined}>
             <Text style={[typography.h5, { color: colors.text.primary }]}>

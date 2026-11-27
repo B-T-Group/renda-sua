@@ -13,9 +13,6 @@ import {
   Button,
   Chip,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
   MenuItem,
   Paper,
   Stack,
@@ -27,9 +24,23 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { RentalCardSkeleton } from '../rentals/RentalLocationsStrip';
 import { RentalItemCard } from '../rentals/RentalItemCard';
+import { MyRentalsHeroEntry } from '../rentals/MyRentalsHeroEntry';
 import SEOHead from '../seo/SEOHead';
 import { useMarket } from '../../hooks/useMarket';
-import { formatExclusiveStay, formatExclusiveStayRange } from '../../utils/rentalRequestFormat';
+import type { PickedDay } from '../../utils/rentalDayHoursPicker';
+import { RentalDayHoursDialog } from '../rentals/dayHours/RentalDayHoursDialog';
+import {
+  ANY_TIME_LISTING,
+  formatStayLine,
+  formatStayWindow,
+  MAX_SEARCH_DAYS,
+  pickedDaysFromStay,
+  stayDayCount,
+  stayFromPickedDays,
+  stayFromParams,
+  stayTimes,
+  type SearchStay,
+} from '../../utils/rentalSearchWindow';
 import {
   useRentalSearchCatalog,
   useTopRentalCategories,
@@ -47,10 +58,10 @@ const RentalsDefaultCatalog: React.FC = () => {
   const [query, setQuery] = useState(draft);
   const [categoryId, setCategoryId] = useState(() => searchParams.get('category') ?? '');
   const [sort, setSort] = useState<RentalCatalogSort>(readSort(searchParams.get('sort')));
-  const [start, setStart] = useState(() => searchParams.get('start') ?? '');
-  const [end, setEnd] = useState(() => searchParams.get('end') ?? '');
+  const [stay, setStay] = useState<SearchStay | null>(() =>
+    stayFromParams(searchParams.get('start'), searchParams.get('end'), searchParams.get('start_time'), searchParams.get('end_time'))
+  );
   const [dateOpen, setDateOpen] = useState(false);
-  const stay = useMemo(() => catalogStay(start, end), [start, end]);
   const { categories, loading: categoriesLoading } = useTopRentalCategories();
   const catalog = useRentalSearchCatalog({
     sort,
@@ -58,6 +69,8 @@ const RentalsDefaultCatalog: React.FC = () => {
     categoryId,
     startDate: stay?.startDate,
     endDate: stay?.endDate,
+    startTime: stay?.startTime,
+    endTime: stay?.endTime,
   });
 
   useEffect(() => {
@@ -73,6 +86,7 @@ const RentalsDefaultCatalog: React.FC = () => {
     if (stay) {
       next.set('start', stay.startDate);
       next.set('end', stay.endDate);
+      Object.entries(stayTimes(stay)).forEach(([key, value]) => next.set(key === 'startTime' ? 'start_time' : 'end_time', value));
     }
     setSearchParams(next, { replace: true });
   }, [categoryId, query, setSearchParams, sort, stay]);
@@ -92,7 +106,7 @@ const RentalsDefaultCatalog: React.FC = () => {
             onClear={() => setDraft('')}
             placeholder={t('rentals.catalog.listPlaceholder', 'Search cameras, tools, sound...')}
           />
-          <DatesRow stay={stay} locale={i18n.language} onOpen={() => setDateOpen(true)} />
+          <DatesRow stay={stay} locale={i18n.language} onOpen={() => setDateOpen(true)} onClear={() => setStay(null)} />
         </Paper>
         <CategoryStrip
           categories={categories}
@@ -110,8 +124,8 @@ const RentalsDefaultCatalog: React.FC = () => {
           emptyMarket={emptyMarket}
           city={selectedMarket?.name ?? ''}
           hits={catalog.hits}
-          stayLabel={stay ? formatStay(stay, i18n.language) : null}
-          onOpen={(id) => navigate(`/rentals/${id}`)}
+          stayLabel={stay ? formatStayWindow(stay, i18n.language) : null}
+          onOpen={(id) => navigate(listingPath(id, stay))}
         />
         {catalog.hits.length > 0 && (catalog.hasMore ?? catalog.hits.length < catalog.total) ? (
           <Button fullWidth variant="outlined" sx={{ mt: 2 }} onClick={catalog.loadMore} disabled={catalog.loadingMore}>
@@ -121,19 +135,12 @@ const RentalsDefaultCatalog: React.FC = () => {
           </Button>
         ) : null}
       </Container>
-      <DateDialog
+      <DateWindowDialog
         open={dateOpen}
-        start={start}
-        end={end}
+        stay={stay}
         onClose={() => setDateOpen(false)}
-        onApply={(nextStart, nextEnd) => {
-          setStart(nextStart);
-          setEnd(nextEnd);
-          setDateOpen(false);
-        }}
-        onClear={() => {
-          setStart('');
-          setEnd('');
+        onApply={(next) => {
+          setStay(next);
           setDateOpen(false);
         }}
       />
@@ -149,7 +156,10 @@ function CatalogHero({ market }: { market: string }) {
         <Typography variant="overline" color="primary" fontWeight={700}>
           {t('rentals.catalog.heroEyebrow', 'Rentals')}
         </Typography>
-        <Typography variant="h3" fontWeight={800}>{t('rentals.catalog.heroTitle', 'Rentals')}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+          <Typography variant="h3" fontWeight={800}>{t('rentals.catalog.heroTitle', 'Rentals')}</Typography>
+          <MyRentalsHeroEntry />
+        </Box>
         <Typography color="text.secondary">
           {t('rentals.catalog.subtitleAt', 'Showing rentals in {{market}}', { market: market || t('rentals.catalog.yourMarket', 'your market') })}
         </Typography>
@@ -174,12 +184,10 @@ function SearchField({ value, onChange, onClear, placeholder }: { value: string;
   );
 }
 
-function DatesRow({ stay, locale, onOpen }: { stay: CatalogStay | null; locale: string; onOpen: () => void }) {
+function DatesRow({ stay, locale, onOpen, onClear }: { stay: SearchStay | null; locale: string; onOpen: () => void; onClear: () => void }) {
   const { t } = useTranslation();
   const label = stay
-    ? formatExclusiveStay(stay.startDate, stay.endDate, locale, (count) =>
-        t('rentals.catalog.dayCount', '{{count}} days', { count })
-      )
+    ? formatStayLine(stay, locale, (count) => t('rentals.catalog.dayCount', '{{count}} days', { count }))
     : null;
   return (
     <Paper variant="outlined" onClick={onOpen} sx={{ mt: 1.5, p: 1.5, display: 'flex', gap: 1.5, alignItems: 'center', cursor: 'pointer', borderColor: 'primary.main', bgcolor: 'rgba(10, 79, 181, 0.06)' }}>
@@ -200,6 +208,18 @@ function DatesRow({ stay, locale, onOpen }: { stay: CatalogStay | null; locale: 
       >
         {stay ? t('rentals.catalog.edit', 'Edit') : t('rentals.catalog.add', 'Add')}
       </Button>
+      {stay ? (
+        <Button
+          data-testid="rentals-clear-dates"
+          color="inherit"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClear();
+          }}
+        >
+          {t('rentals.catalog.clearDates', 'Clear dates')}
+        </Button>
+      ) : null}
     </Paper>
   );
 }
@@ -317,46 +337,49 @@ function EmptySearchMark() {
   );
 }
 
-function DateDialog({ open, start, end, onClose, onApply, onClear }: { open: boolean; start: string; end: string; onClose: () => void; onApply: (start: string, end: string) => void; onClear: () => void }) {
-  const { t } = useTranslation();
-  const [draftStart, setDraftStart] = useState(start);
-  const [draftEnd, setDraftEnd] = useState(end);
-  useEffect(() => {
-    if (!open) return;
-    setDraftStart(start);
-    setDraftEnd(end);
-  }, [end, open, start]);
-  const valid = catalogStay(draftStart, draftEnd) != null;
+function DateWindowDialog({ open, stay, onClose, onApply }: { open: boolean; stay: SearchStay | null; onClose: () => void; onApply: (stay: SearchStay) => void }) {
+  const { t, i18n } = useTranslation();
+  const [tooLong, setTooLong] = useState<number | null>(null);
+  const initialDays = useMemo(() => (stay ? pickedDaysFromStay(stay) : []), [stay]);
+  const handleContinue = (_rows: unknown, days: PickedDay[]) => {
+    const next = stayFromPickedDays(days);
+    if (!next) return;
+    const count = stayDayCount(next);
+    if (count > MAX_SEARCH_DAYS) {
+      setTooLong(count);
+      return;
+    }
+    setTooLong(null);
+    onApply(next);
+  };
   return (
-    <Dialog open={open} onClose={onClose}>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
-          <TextField type="date" label={t('rentals.catalog.start', 'Start')} value={draftStart} onChange={(event) => setDraftStart(event.target.value)} InputLabelProps={{ shrink: true }} />
-          <TextField type="date" label={t('rentals.catalog.end', 'End')} value={draftEnd} onChange={(event) => setDraftEnd(event.target.value)} InputLabelProps={{ shrink: true }} />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClear}>{t('rentals.catalog.clearDates', 'Clear dates')}</Button>
-        <Button onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
-        <Button variant="contained" disabled={!valid} onClick={() => onApply(draftStart, draftEnd)}>
-          {t('rentals.catalog.add', 'Add')}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <RentalDayHoursDialog
+      open={open}
+      listing={ANY_TIME_LISTING}
+      currency="XAF"
+      language={i18n.language}
+      initialDays={initialDays}
+      serverError={
+        tooLong == null
+          ? null
+          : t('rentals.catalog.datesTooLong', 'This range is {{count}} days. Choose 30 days or fewer.', { count: tooLong })
+      }
+      onClose={() => {
+        setTooLong(null);
+        onClose();
+      }}
+      onContinue={handleContinue}
+    />
   );
 }
 
-type CatalogStay = { startDate: string; endDate: string };
-
-function catalogStay(start: string, end: string): CatalogStay | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return null;
-  const dayCount = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000);
-  if (dayCount < 1 || dayCount > 30) return null;
-  return { startDate: start, endDate: end };
-}
-
-function formatStay(stay: CatalogStay, locale: string): string {
-  return formatExclusiveStayRange(stay.startDate, stay.endDate, locale);
+/** A listing link carries the window so the request form opens on the same days and hours. */
+function listingPath(id: string, stay: SearchStay | null): string {
+  if (!stay) return `/rentals/${id}`;
+  const params = new URLSearchParams({ start_date: stay.startDate, end_date: stay.endDate });
+  if (stay.startTime) params.set('start_time', stay.startTime);
+  if (stay.endTime) params.set('end_time', stay.endTime);
+  return `/rentals/${id}?${params.toString()}`;
 }
 
 function marketLabel(market: { name?: string; stateCode?: string | null; stateName?: string | null } | null, all: string): string {

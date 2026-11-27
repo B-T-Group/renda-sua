@@ -6,6 +6,7 @@ import {
   DialogTitle,
   FormControl,
   InputLabel,
+  Link,
   MenuItem,
   Select,
   Typography,
@@ -13,7 +14,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { contractHoursOffer, requestStartIso, totalOverrideTooHigh } from '../../utils/dashboardRentalRequests';
+import { contractHoursOffer, rebateToTotal, requestStartIso } from '../../utils/dashboardRentalRequests';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
 import { buildRequestCardModel } from '../../utils/rentalRequestCardModel';
 import type {
@@ -29,10 +30,16 @@ import {
 import { formatRequestAmount } from '../../utils/rentalRequestDisplay';
 import { formatRentalDay } from '../../utils/rentalRequestFormat';
 import { useClientFlags } from '../../hooks/useClientFlags';
+import { RentalCommissionBreakdown } from './RentalCommissionBreakdown';
 
 function isStaleVersion(error: unknown): boolean {
   const data = (error as { response?: { data?: { code?: string } } })?.response?.data;
   return data?.code === 'RENTAL_REQUEST_STALE_VERSION';
+}
+
+function isCommissionRateChanged(error: unknown): boolean {
+  const data = (error as { response?: { data?: { code?: string } } })?.response?.data;
+  return data?.code === 'COMMISSION_RATE_CHANGED';
 }
 
 const REASON_CODES: UnavailableRentalReasonCode[] = [
@@ -61,14 +68,6 @@ function totalRentalHoursForRequest(req: BusinessRentalRequestRow): number {
   return 0;
 }
 
-function parseTotalOverride(raw: string): number | null | 'invalid' {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const value = Number(trimmed);
-  if (!Number.isFinite(value) || value <= 0) return 'invalid';
-  return Number(value.toFixed(2));
-}
-
 function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnapshotBody {
   const windows = parseRentalSelectionWindowsFromJson(
     req.rental_selection_windows
@@ -94,6 +93,25 @@ function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnaps
 
 function formatMoney(amount: number, currency: string, language: string): string {
   return formatRequestAmount(amount, currency, language);
+}
+
+function webRebateCopy(
+  invalid: boolean,
+  newTotal: number | null,
+  currency: string | undefined,
+  language: string,
+  t: (key: string, fallback: string, options?: Record<string, unknown>) => string
+): string {
+  if (invalid) return t('business.rentals.rebateInvalid', 'Enter an amount less than the quoted total.');
+  if (newTotal != null && currency) {
+    return t('business.rentals.rebateNewTotal', 'New total: {{total}}', {
+      total: formatMoney(newTotal, currency, language),
+    });
+  }
+  return t(
+    'business.rentals.rebateHelper',
+    'This amount is taken off the quoted total. The renter reviews the new price before paying.'
+  );
 }
 
 const declineButtonSx = {
@@ -140,9 +158,12 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   const [availableNote, setAvailableNote] = useState('');
   const [reasonCode, setReasonCode] = useState<UnavailableRentalReasonCode | ''>('');
   const [unavailableNote, setUnavailableNote] = useState('');
-  const [totalOverride, setTotalOverride] = useState('');
+  const [rebateOpen, setRebateOpen] = useState(false);
+  const [rebate, setRebate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [commissionBps, setCommissionBps] = useState<number | null>(null);
+  const [commissionRefresh, setCommissionRefresh] = useState(0);
 
   const startIso = request ? requestStartIso(request) : null;
   const hourOffer = contractHoursOffer(startIso, new Date(), request?.listing_timezone);
@@ -151,7 +172,8 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     if (!open) return;
     const offer = contractHoursOffer(startIso, new Date(), request?.listing_timezone);
     setContractHours(String(offer.hidden ? 1 : offer.hours));
-    setTotalOverride('');
+    setRebate('');
+    setRebateOpen(false);
     setAvailableNote('');
     setReasonCode('');
     setUnavailableNote('');
@@ -166,13 +188,9 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
       setError(t('business.rentals.respondValidationHours', 'Enter a whole number of hours from 1 to {{count}}.', { count: offer.maxHours }));
       return;
     }
-    const overridden = parseTotalOverride(totalOverride);
-    const quote = buildPricingSnapshot(request).total;
-    const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(quote, overridden, request.total_override_ceiling ?? null);
-    if (overridden === 'invalid' || tooHigh) {
-      setError(overridden === 'invalid'
-        ? t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.')
-        : t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.'));
+    const overridden = rebateToTotal(rebate, buildPricingSnapshot(request).total);
+    if (overridden === 'invalid') {
+      setError(t('business.rentals.rebateInvalid', 'Enter an amount less than the quoted total.'));
       return;
     }
     setSubmitting(true);
@@ -186,6 +204,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
         contractExpiryHours: h,
         businessResponseNote: availableNote.trim() || undefined,
         expectedVersion: request.edit_version ?? 1,
+        acknowledgedCommissionRateBps: commissionBps ?? undefined,
       });
       onSuccess();
       onClose();
@@ -193,6 +212,11 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
       if (isStaleVersion(e)) {
         onStale?.();
         onClose();
+        return;
+      }
+      if (isCommissionRateChanged(e)) {
+        setCommissionRefresh((n) => n + 1);
+        setError(t('rentals.commission.rateChanged', 'The commission changed. Review the new numbers, then accept again.'));
         return;
       }
       const msg =
@@ -203,7 +227,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, canChangeTotal, contractHours, i18n.language, onClose, onStale, onSuccess, request, respondRequest, t, totalOverride]);
+  }, [availableNote, commissionBps, canChangeTotal, contractHours, i18n.language, onClose, onStale, onSuccess, rebate, request, respondRequest, t]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -260,9 +284,10 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     }
   }, [mode, request]);
 
-  const typedOverride = typeof parseTotalOverride(totalOverride) === 'number' ? parseTotalOverride(totalOverride) as number : null;
   const quoteTotal = offerPreview?.ok ? offerPreview.total : 0;
-  const overrideTooHigh = typedOverride != null && totalOverrideTooHigh(quoteTotal, typedOverride, request?.total_override_ceiling ?? null);
+  const rebateResult = rebateToTotal(rebate, quoteTotal);
+  const rebateInvalid = rebateResult === 'invalid';
+  const newTotal = typeof rebateResult === 'number' ? rebateResult : null;
 
   if (!open || !mode || !request) return null;
 
@@ -322,21 +347,46 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 </Typography>
               </>
             ) : null}
-            {canChangeTotal ? (
-            <TextField
-              label={t('business.rentals.changeTotalLabel', 'Change total (optional)')}
-              type="number"
-              value={totalOverride}
-              onChange={(e) => setTotalOverride(e.target.value)}
-              inputProps={{ min: 0.01, step: '0.01' }}
-              error={overrideTooHigh}
-              helperText={overrideTooHigh
-                ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.')
-                : t('business.rentals.changeTotalHelper', 'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.')
-              }
-              fullWidth
-            />
+            {canChangeTotal && !rebateOpen ? (
+              <Link
+                component="button"
+                type="button"
+                underline="always"
+                onClick={() => setRebateOpen(true)}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                {t('business.rentals.applyRebate', 'Apply rebate')}
+              </Link>
             ) : null}
+            {canChangeTotal && rebateOpen ? (
+              <>
+                <TextField
+                  label={t('business.rentals.rebateAmount', 'Rebate amount')}
+                  type="number"
+                  value={rebate}
+                  onChange={(e) => setRebate(e.target.value)}
+                  inputProps={{ min: 0.01, step: '0.01' }}
+                  error={rebateInvalid}
+                  helperText={webRebateCopy(rebateInvalid, newTotal, offerPreview?.ok ? offerPreview.cur : undefined, i18n.language, t)}
+                  fullWidth
+                />
+                <Link
+                  component="button"
+                  type="button"
+                  underline="always"
+                  onClick={() => { setRebate(''); setRebateOpen(false); }}
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  {t('business.rentals.removeRebate', 'Remove rebate')}
+                </Link>
+              </>
+            ) : null}
+            <RentalCommissionBreakdown
+              requestId={request.id}
+              totalOverride={canChangeTotal && newTotal != null ? newTotal : undefined}
+              refreshKey={commissionRefresh}
+              onRateChange={setCommissionBps}
+            />
             {hourOffer.hidden ? null : (
               <TextField
                 label={t('business.rentals.contractExpiryHoursLabel', 'Contract valid for (hours)')}
@@ -408,7 +458,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
             submitting ||
             declineBlocked(mode, reasonCode, unavailableNote) ||
             (mode === 'available' && offerPreview != null && !offerPreview.ok) ||
-            (mode === 'available' && overrideTooHigh)
+            (mode === 'available' && rebateInvalid)
           }
           onClick={() => void (mode === 'available' ? submitAvailable() : submitUnavailable())}
           sx={mode === 'unavailable' ? declineButtonSx : undefined}

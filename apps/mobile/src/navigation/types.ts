@@ -162,6 +162,8 @@ export type RentalRequestParams = {
   listingId: string;
   startDate?: string;
   endDate?: string;
+  startTime?: string;
+  endTime?: string;
 };
 
 export type GuestRootStackParamList = {
@@ -179,6 +181,8 @@ export type GuestRootStackParamList = {
     listingId: string;
     startDate?: string;
     endDate?: string;
+    startTime?: string;
+    endTime?: string;
     openRequest?: boolean;
   };
   RentalRequest: RentalRequestParams;
@@ -258,6 +262,9 @@ export type ClientRootStackParamList = {
   FollowingStores: undefined;
   ClientProductInterest: undefined;
   ProductInterestSuccess: undefined;
+  ClientExportOrders: undefined;
+  ClientExportOrderDetail: { orderId: string };
+  ExportOrderSubmitted: { orderId: string; bcNumber?: string };
   NotificationPreferences: undefined;
   SavedAccounts: { mode?: 'continue' | 'switch' };
   AccountManagement: undefined;
@@ -277,10 +284,13 @@ export type ClientRootStackParamList = {
     listingId: string;
     startDate?: string;
     endDate?: string;
+    startTime?: string;
+    endTime?: string;
     openRequest?: boolean;
   };
   RentalRequest: RentalRequestParams;
   RentalRequestSubmitted: { requestId?: string; inspectionPolicyVersion?: number | null };
+  RentalReserved: { bookingId: string };
   ModifyRentalRequest: { requestId: string };
   ClientMyRentals:
     | { notice?: 'updated'; segment?: 'action_needed' | 'upcoming' | 'past' }

@@ -2411,7 +2411,9 @@ export class InventoryItemsService {
       state,
       collection: query.collection,
       food_only: query.food_only ?? false,
-      includeExportInSearch: Boolean(query.search?.trim()),
+      export_only: query.export_only === true,
+      includeExportInSearch:
+        Boolean(query.search?.trim()) && query.export_only !== true,
     });
     if ('unsupported' in built) return 0;
     return this.countDistinctCatalogItemIds(built.where);

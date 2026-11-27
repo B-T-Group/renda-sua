@@ -9,6 +9,16 @@ const HOUR_MS = 60 * 60 * 1000;
 const CONTRACT_HOUR_CAP = 48;
 export const TOTAL_OVERRIDE_RATIO = 10;
 
+/** Rebate taken off the quote. Empty means no rebate. Returns the new total, or 'invalid'. */
+export function rebateToTotal(raw: string, quote: number): number | null | 'invalid' {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const rebate = Number(trimmed);
+  if (!Number.isFinite(rebate) || rebate <= 0) return 'invalid';
+  const next = Number((quote - rebate).toFixed(2));
+  return next > 0 ? next : 'invalid';
+}
+
 export function totalOverrideTooHigh(quote: number, value: number, ceiling: number | null = null): boolean {
   if (!(value > quote)) return false;
   if (ceiling != null && value > ceiling) return true;
@@ -129,11 +139,4 @@ export function startInDays(calendarDate: string | undefined, timeZone: string, 
   const todayMs = Date.parse(`${today}T00:00:00Z`);
   if (!Number.isFinite(start) || !Number.isFinite(todayMs)) return null;
   return Math.round((start - todayMs) / DAY_MS);
-}
-
-export function requestPhotoUrl(row: BusinessRentalRequestRow): string | null {
-  const image = row.rental_location_listing.rental_item.rental_item_images?.[0] as
-    | { display_url?: string | null; image_url?: string | null; thumbnail?: string | null }
-    | undefined;
-  return image?.display_url || image?.thumbnail || image?.image_url || null;
 }

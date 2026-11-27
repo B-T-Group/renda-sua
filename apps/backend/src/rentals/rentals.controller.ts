@@ -374,6 +374,18 @@ export class RentalsController {
     return { success: true, data: { schedule } };
   }
 
+  @Get('business/return-confirmations')
+  @ApiOperation({
+    summary:
+      'List active or awaiting-return bookings whose renter reported the item returned and the business has not confirmed',
+  })
+  @ApiResponse({ status: 200, description: 'Bookings returned, oldest report first' })
+  @ApiResponse({ status: 403, description: 'Not a business user' })
+  async getBusinessReturnConfirmations() {
+    const bookings = await this.renterReturns.listForBusiness();
+    return { success: true, data: { bookings } };
+  }
+
   @Post('business/items')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a rental item for the current business' })
@@ -661,6 +673,17 @@ export class RentalsController {
   @ApiResponse({ status: 404, description: 'Request not found' })
   async priceChangeSeen(@Param('id') requestId: string) {
     return this.rentalsService.markRentalPriceChangeSeen(requestId);
+  }
+
+  @Post('requests/:id/dismiss-expiry-notice')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Dismiss the dashboard "Request expired" notice (business)' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Notice dismissed; it no longer appears on the dashboard' })
+  @ApiResponse({ status: 403, description: 'Business profile required' })
+  @ApiResponse({ status: 404, description: 'No expired request of this business with that id' })
+  async dismissExpiryNotice(@Param('id') requestId: string) {
+    return this.rentalsService.dismissRentalExpiryNotice(requestId);
   }
 
   @Post('requests/:id/cancel')
@@ -986,6 +1009,28 @@ export class RentalsController {
     try {
       const messages = await this.rentalBookingMessaging.getMessages(bookingId);
       return { success: true, messages };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('bookings/:id/messages/unread-count')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Count unread messages from the other party on a rental booking',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: '{ success: true, unreadCount: number }' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Booking not found' })
+  async getBookingUnreadCount(@Param('id') bookingId: string) {
+    try {
+      const unreadCount = await this.rentalBookingMessaging.getUnreadCount(bookingId);
+      return { success: true, unreadCount };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(

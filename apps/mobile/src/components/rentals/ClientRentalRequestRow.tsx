@@ -75,7 +75,11 @@ export function ClientRentalRequestRow({
     void api.post(`/rentals/requests/${row.id}/price-change-seen`, {}).catch(() => undefined);
   }, [accepted, listing?.id, priceChanged, quoted, row.id, row.price_change_seen_at]);
   const phase = resolveRentalPhase(
-    { requestStatus: row.status, bookingStatus: row.rental_booking?.status ?? null },
+    {
+      requestStatus: row.status,
+      bookingStatus: row.rental_booking?.status ?? null,
+      returnReportedAt: row.rental_booking?.renter_reported_returned_at,
+    },
     'client'
   );
   const statusColors = rentalPhaseColors(phase.phase, colors);

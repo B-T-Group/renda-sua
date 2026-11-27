@@ -98,3 +98,11 @@ export function formatMyRentalsBadge(count: number): string | null {
 export function myRentalsEntrySegment(count: number): 'action_needed' | 'upcoming' {
   return count > 0 ? 'action_needed' : 'upcoming';
 }
+
+export type MyRentalsHubSegment = 'action_needed' | 'upcoming' | 'past';
+
+/** Landing tab from /rentals/requests?segment=. Unknown or missing values open To do. */
+export function hubSegmentFromSearchParam(param: string | null | undefined): MyRentalsHubSegment {
+  if (param === 'upcoming' || param === 'past' || param === 'action_needed') return param;
+  return 'action_needed';
+}

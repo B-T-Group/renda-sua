@@ -36,7 +36,7 @@ export class ExportOrdersCommissionService {
     const grand = Number(order.grand_total || 0) || 1;
     const share = (revenue * paymentAmount) / grand;
     const amount = round2(share * rate);
-    if (amount <= 0) return;
+    if (!Number.isFinite(amount) || amount <= 0) return;
     await this.hasura.executeMutation(INSERT_COMMISSION, {
       object: {
         export_order_id: orderId,
@@ -73,7 +73,7 @@ export class ExportOrdersCommissionService {
     if (rate <= 0) return;
     const base = Number(order.balance_amount || 0);
     const amount = round2(base * rate);
-    if (amount <= 0) return;
+    if (!Number.isFinite(amount) || amount <= 0) return;
     const docNumber = await this.docNumbers.next('CR');
     const expiresAt = new Date(
       Date.now() + CREDIT_EXPIRY_DAYS * 24 * 60 * 60 * 1000

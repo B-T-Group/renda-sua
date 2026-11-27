@@ -16,6 +16,7 @@ interface Props {
   visible: boolean;
   itemName: string;
   submitting?: boolean;
+  orderMode?: boolean;
   onDismiss: () => void;
   onSubmit: (note: string) => void;
 }
@@ -24,6 +25,7 @@ export function ProductInterestSheet({
   visible,
   itemName,
   submitting,
+  orderMode,
   onDismiss,
   onSubmit,
 }: Props) {
@@ -67,11 +69,17 @@ export function ProductInterestSheet({
           </Text>
           <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.md }}>
             <Text variant="bodyMedium" style={{ marginBottom: spacing.sm }}>
-              {t(
-                'productInterest.noteHelp',
-                'Tell the seller about {{name}}. They will contact you outside the app.',
-                { name: itemName }
-              )}
+              {orderMode
+                ? t(
+                    'productInterest.order.noteHelp',
+                    'Your request for {{name}} goes to our export team. We issue a purchase order and prepare a proforma for your approval.',
+                    { name: itemName }
+                  )
+                : t(
+                    'productInterest.noteHelp',
+                    'Tell the seller about {{name}}. They will contact you outside the app.',
+                    { name: itemName }
+                  )}
             </Text>
             <TextInput
               mode="outlined"
@@ -99,7 +107,9 @@ export function ProductInterestSheet({
               disabled={!!submitting}
               onPress={() => onSubmit(note)}
             >
-              {t('productInterest.submit', 'Send interest')}
+              {orderMode
+                ? t('productInterest.order.submit', 'Send request')
+                : t('productInterest.submit', 'Send interest')}
             </Button>
           </View>
         </Pressable>

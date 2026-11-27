@@ -13,7 +13,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
@@ -25,11 +25,13 @@ import LoadingPage from '../common/LoadingPage';
 import { RentalBookConfirmSummary } from '../rentals/RentalBookConfirmSummary';
 import { ReserveSummaryPanel } from '../rentals/ReserveSummaryPanel';
 import { buildReserveSummary } from '../../utils/rentals/reserveSummary';
+import { isReservedWithNothingDue } from '../../utils/rentals/reserveSuccess';
 import {
   ClientRentalRequestRowCard,
   isProposedContractOpen,
 } from '../rentals/ClientRentalRequestRowCard';
 import SEOHead from '../seo/SEOHead';
+import { hubSegmentFromSearchParam } from '../../utils/myRentalsTodoCount';
 import {
   resolveRentalPhase,
   type RentalHubGroup,
@@ -83,7 +85,15 @@ const ClientRentalRequestsPage: React.FC = () => {
   const [cancelModalId, setCancelModalId] = useState<string | null>(null);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [bookConfirmRequestId, setBookConfirmRequestId] = useState<string | null>(null);
-  const [hubSegment, setHubSegment] = useState<RentalHubGroup>('action_needed');
+  const [searchParams] = useSearchParams();
+  const segmentParam = searchParams.get('segment');
+  const [hubSegment, setHubSegment] = useState<RentalHubGroup>(() =>
+    hubSegmentFromSearchParam(segmentParam)
+  );
+
+  useEffect(() => {
+    if (segmentParam) setHubSegment(hubSegmentFromSearchParam(segmentParam));
+  }, [segmentParam]);
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
@@ -144,6 +154,10 @@ const ClientRentalRequestsPage: React.FC = () => {
       setBookConfirmRequestId(null);
       if (res.checkout_url) {
         window.location.href = res.checkout_url;
+        return;
+      }
+      if (isReservedWithNothingDue(res)) {
+        navigate(`/rentals/bookings/${res.bookingId}/reserved`);
         return;
       }
       if (res.reservation_fee && res.paymentPending && res.payment_rail === 'mobile_money') {
@@ -392,6 +406,7 @@ const ClientRentalRequestsPage: React.FC = () => {
       <ConfirmationModal
         open={Boolean(bookConfirmRequestId)}
         maxWidth="md"
+        fullScreenOnMobile
         title={t(
           'rentals.clientRequests.bookConfirmTitle',
           'Review and confirm your reservation'

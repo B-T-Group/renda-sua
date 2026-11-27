@@ -40,7 +40,13 @@ export default function RentalRequestScreen() {
   const { flags } = useClientFlags();
   const listingId = route.params?.listingId;
   const { listing, bookedWindows, loading, error, refetch } = useRentalListingDetail(listingId);
-  const dates = useRentalRequestDates(listing, route.params?.startDate, route.params?.endDate);
+  const dates = useRentalRequestDates(
+    listing,
+    route.params?.startDate,
+    route.params?.endDate,
+    route.params?.startTime,
+    route.params?.endTime
+  );
   const picker = useDayHoursPicker({
     listing,
     booked: bookedWindows,

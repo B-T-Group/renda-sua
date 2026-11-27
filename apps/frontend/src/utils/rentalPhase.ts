@@ -25,6 +25,8 @@ export type BusinessActionQueue =
 export interface RentalPhaseInput {
   requestStatus?: string | null;
   bookingStatus?: string | null;
+  /** renter_reported_returned_at: the renter says the item is back, the business has not confirmed. */
+  returnReportedAt?: string | null;
 }
 
 export interface RentalPhaseInfo {
@@ -34,6 +36,9 @@ export interface RentalPhaseInfo {
   hubGroup: RentalHubGroup;
   businessQueue: BusinessActionQueue | null;
 }
+
+export const RETURN_AWAITING_CONFIRMATION_LABEL = 'rentals.phases.awaitingConfirmation';
+const RETURN_AWAITING_CONFIRMATION_NEXT_STEP = 'rentals.returnReport.waitingTitle';
 
 const PHASE_LABEL: Record<RentalPhase, string> = {
   requested: 'rentals.phases.requested',
@@ -169,10 +174,15 @@ export function resolveRentalPhase(
     phase = 'offer_ready';
   }
 
+  const awaitingConfirmation = phase === 'in_progress' && Boolean(input.returnReportedAt);
+
   return {
     phase,
-    labelKey: PHASE_LABEL[phase],
-    nextStepKey: nextStepKeyFor(phase, role, book),
+    labelKey: awaitingConfirmation ? RETURN_AWAITING_CONFIRMATION_LABEL : PHASE_LABEL[phase],
+    nextStepKey:
+      awaitingConfirmation && role === 'client'
+        ? RETURN_AWAITING_CONFIRMATION_NEXT_STEP
+        : nextStepKeyFor(phase, role, book),
     hubGroup: hubGroupFor(phase, role),
     businessQueue: businessQueueFor(phase, book),
   };
@@ -190,12 +200,19 @@ export function resolveBookingPhase(
  * Active stays "In progress". Awaiting return uses the booking-status label
  * so those two steps are not both "In progress".
  * Lists and hubs keep resolveBookingPhase (both statuses remain in_progress).
+ * Once the renter reports the return, both read "Awaiting confirmation" until the business confirms.
  * Keep in sync with apps/mobile/src/utils/rentals/rentalPhase.ts
  */
 export const REPORT_REVIEW_STEP = 'report_review';
 
-export function bookingDetailStatusLabelKey(status: string): string {
+export function bookingDetailStatusLabelKey(
+  status: string,
+  options?: { returnReportedAt?: string | null }
+): string {
   if (status === REPORT_REVIEW_STEP) return 'rentalInspection.phase.reportReady';
+  if (options?.returnReportedAt && (status === 'active' || status === 'awaiting_return')) {
+    return RETURN_AWAITING_CONFIRMATION_LABEL;
+  }
   if (status === 'awaiting_return') return 'rentals.bookingStatus.awaiting_return';
   return resolveBookingPhase(status).labelKey;
 }

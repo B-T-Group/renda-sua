@@ -55,6 +55,7 @@ import { leaveMyRentals } from '../../utils/rentals/leaveMyRentals';
 import { myRentalsEntrySegment } from '../../utils/rentals/myRentalsEntry';
 import { trackRentalsClientTabBrowseTap } from '../../utils/rentals/clientRentalsTabAnalytics';
 import { rentalEditWindowOpen } from '../../utils/rentals/rentalRequestFormat';
+import { isReservedWithNothingDue } from '../../utils/rentals/reserveSuccess';
 
 type HubSegment = RentalHubGroup;
 
@@ -269,6 +270,12 @@ export default function ClientMyRentalsScreen({
         usePaymentSheet ? { stripe_payment_method: 'payment_sheet' } : undefined
       );
       const stripeOutcome = await settleRentalStripePayment(res, payWithSheet);
+      if (isReservedWithNothingDue(res, stripeOutcome)) {
+        setBookRow(null);
+        await Promise.all([refetchRequests(), refetchBookings()]);
+        navigation.navigate('RentalReserved', { bookingId: res.bookingId });
+        return;
+      }
       if (stripeOutcome === 'cancelled') {
         setSnack(
           t('client.rentals.paymentCancelled', 'Payment cancelled. You can retry from the booking.')
@@ -375,7 +382,10 @@ export default function ClientMyRentalsScreen({
 
   const renderBooking = useCallback(
     ({ item }: { item: ClientRentalBookingRow }) => {
-      const phase = resolveRentalPhase({ bookingStatus: item.status }, 'client');
+      const phase = resolveRentalPhase(
+        { bookingStatus: item.status, returnReportedAt: item.renter_reported_returned_at },
+        'client'
+      );
       const statusColors = rentalPhaseColors(phase.phase, colors);
       const name =
         item.rental_location_listing?.rental_item?.name ??

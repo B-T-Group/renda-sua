@@ -36,6 +36,10 @@ describe('reserve summary (01a/01b)', () => {
     expect(s.box.kind).toBe('fee');
     expect(s.box.lines.map((l) => l.text).join(' | ')).toMatch(/Refunded if you cancel before Sat 28 Nov/);
     expect(s.cancelLine).toBe('Free cancellation until Fri 27 Nov · 23:59');
+    expect(s.rows.some((r) => r.key === 'cancel')).toBe(false);
+    expect(s.rows.find((r) => r.key === 'pickup')?.stacked).toBe(true);
+    expect(s.footer.today.amount).toMatch(/^150.FCFA$/);
+    expect(s.footer.pickup.amount).toMatch(/^11.850.FCFA$/);
     expect(s.button).toMatch(/^Pay 150.FCFA & reserve$/);
   });
 
@@ -53,7 +57,9 @@ describe('reserve summary (01a/01b)', () => {
     expect(s.rows.find((r) => r.key === 'dates')?.value).toBe('Sat 28 Nov · 2:00–6:00 PM');
     expect(s.rows.find((r) => r.key === 'deposit')?.value).toBe('$180.00');
     expect(JSON.stringify(s)).toMatch(/Nothing is held on your card today/);
-    expect(s.footer.amount).toBe('$60.00');
+    expect(s.footer.today.amount).toBe('$0.00');
+    expect(s.footer.pickup.amount).toBe('$60.00');
+    expect(s.footer.pickup.sub).toBe('After you check the item · + $180.00 deposit hold');
   });
 });
 
@@ -105,7 +111,7 @@ describe('v3: listing-clock deadlines and same-day photo stamps', () => {
     expect(dayEndDeadline('fr', 'America/Toronto')).toBe('23:59');
     expect(dayEndDeadline('en', 'Africa/Douala')).toBe('23:59');
   });
-  it('free cancellation line on the Montréal listing', () => {
+  it('no-fee reservation: cancellation is simply free, no deadline line', () => {
     const s = buildReserveSummary({
       mode: 'free',
       windows: [W],
@@ -116,7 +122,8 @@ describe('v3: listing-clock deadlines and same-day photo stamps', () => {
       language: 'en',
       t,
     });
-    expect(s.cancelLine).toBe('Free cancellation until Fri 27 Nov · 11:59\u00a0PM');
+    expect(s.cancelLine).toBe('');
+    expect(s.rows.find((r) => r.key === 'cancel')?.value).toBe('Free');
   });
   it('shows only the time for a photo taken today, the date for an older one', () => {
     const now = Date.parse('2026-11-28T19:00:00Z');

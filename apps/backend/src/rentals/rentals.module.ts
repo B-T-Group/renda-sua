@@ -4,6 +4,7 @@ import { AdminAuthModule } from '../admin/admin-auth.module';
 import { AwsModule } from '../aws/aws.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { RentalCommissionModule } from '../rental-commission/rental-commission.module';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
@@ -43,6 +44,7 @@ import { DeclineRankingService } from './decline-ranking/decline-ranking.service
     MtnMomoModule,
     RentalCardWindowModule,
     RentalListingAiReviewModule,
+    RentalCommissionModule,
   ],
   controllers: [RentalsController, RentalSearchController, RentalInspectionsController, AdminRentalBookingsController],
   providers: [

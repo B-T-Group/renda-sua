@@ -30,6 +30,7 @@ import {
   ItemFormOptionDialog,
   type FormOption,
 } from '../../components/business/item-form/ItemFormOptionDialog';
+import { RentalTagsInput } from '../../components/business/rentals/RentalTagsInput';
 import { RentalWeeklyHoursEditor } from '../../components/business/rentals/RentalWeeklyHoursEditor';
 import { InspectionOptInCard } from '../../components/business/rentals/InspectionOptInCard';
 import { RentalModeSwitches } from '../../components/business/rentals/RentalModeSwitches';
@@ -58,7 +59,7 @@ export default function BusinessRentalItemEditScreen() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [tagsText, setTagsText] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(false);
   const [operationMode, setOperationMode] =
     useState<RentalOperationMode>('business_operated');
@@ -91,7 +92,7 @@ export default function BusinessRentalItemEditScreen() {
         setName(data.name);
         setDescription(data.description ?? '');
         setCategoryId(data.rental_category_id);
-        setTagsText((data.tags ?? []).join(', '));
+        setTags(data.tags ?? []);
         setIsActive(data.is_active);
         setOperationMode(
           data.operation_mode === 'take_home' ? 'take_home' : 'business_operated'
@@ -157,10 +158,7 @@ export default function BusinessRentalItemEditScreen() {
         description: description.trim() || undefined,
         rental_category_id: categoryId,
         currency: defaultCurrency || 'XAF',
-        tags: tagsText
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
+        tags,
         is_active: isActive,
         operation_mode: operationMode,
       });
@@ -209,7 +207,7 @@ export default function BusinessRentalItemEditScreen() {
     navigation,
     operationMode,
     t,
-    tagsText,
+    tags,
   ]);
 
   if (loading) {
@@ -309,13 +307,7 @@ export default function BusinessRentalItemEditScreen() {
           'Locked to your business country'
         )}
       </Text>
-      <TextInput
-        label={t('business.rentals.wizard.details.tags', 'Tags (comma-separated)')}
-        value={tagsText}
-        onChangeText={setTagsText}
-        mode="outlined"
-        style={styles.field}
-      />
+      <RentalTagsInput value={tags} onChange={setTags} />
       <View style={styles.switchRow}>
         <Text style={{ color: colors.text.primary }}>
           {t('business.rentals.catalog.active', 'Active')}

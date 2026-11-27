@@ -381,6 +381,11 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
           path: '/business/team',
           icon: <Assignment />,
         },
+        {
+          label: t('exportOrders.nav.business', 'Export orders'),
+          path: '/business/export-orders',
+          icon: <Assignment />,
+        },
         { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
         { label: t('common.messages', 'Messages'), path: '/messages', icon: <Assignment /> }
       );
@@ -396,11 +401,21 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
           path: '/product-interest',
           icon: <Assignment />,
         },
+        {
+          label: t('exportOrders.nav.client', 'My export orders'),
+          path: '/export-orders',
+          icon: <Assignment />,
+        },
         { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
         { label: t('common.messages', 'Messages'), path: '/messages', icon: <Assignment /> }
       );
     } else if (userType === 'agent') {
       submenuItems.push(
+        {
+          label: t('exportOrders.nav.agent', 'Export orders'),
+          path: '/agent/export-orders',
+          icon: <Assignment />,
+        },
         { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
         { label: t('common.messages', 'Messages'), path: '/messages', icon: <Assignment /> }
       );

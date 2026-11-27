@@ -6,6 +6,7 @@ import {
   respondWithinAmber,
   respondWithinHours,
   respondWindow,
+  rebateToTotal,
   totalOverrideTooHigh,
 } from './dashboardRentalRequests';
 
@@ -38,6 +39,13 @@ describe('dashboard rental request display', () => {
     expect(totalOverrideTooHigh(0, 1_000_000)).toBe(false);
     expect(totalOverrideTooHigh(0, 40_000, 50_000)).toBe(false);
     expect(totalOverrideTooHigh(0, 60_000, 50_000)).toBe(true);
+  });
+
+  it('subtracts a rebate from the quote and rejects one that wipes it out', () => {
+    expect(rebateToTotal('', 40)).toBeNull();
+    expect(rebateToTotal('5.5', 40)).toBe(34.5);
+    expect(rebateToTotal('40', 40)).toBe('invalid');
+    expect(rebateToTotal('-1', 40)).toBe('invalid');
   });
 
   it('formats an all-day stay and a multi-day stay like the dashboard', () => {

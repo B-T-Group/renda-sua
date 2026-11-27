@@ -34,6 +34,7 @@ export class DealsCarouselProvider implements CatalogModuleProvider {
       country_code: context.country,
       state: context.state,
       limit: CATALOG_CAROUSEL_LIMIT,
+      export_only: context.surface === 'export',
     });
     const products = rankListings(deals.items, CATALOG_CAROUSEL_LIMIT);
     return productModule(
@@ -59,6 +60,7 @@ export class PopularCarouselProvider implements CatalogModuleProvider {
       country_code: context.country,
       state: context.state,
       limit: CATALOG_CAROUSEL_LIMIT,
+      export_only: context.surface === 'export',
     });
     const products = rankListings(top.items, CATALOG_CAROUSEL_LIMIT);
     return productModule(

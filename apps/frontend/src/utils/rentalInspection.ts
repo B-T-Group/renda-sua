@@ -237,6 +237,11 @@ export function showLegacyReturnPicker(enrolled: boolean, status: string): boole
   return !enrolled && (status === 'active' || status === 'awaiting_return');
 }
 
+/** The renter reported the item back and the business has not confirmed it yet. */
+export function showBusinessReturnReport(flagOn: boolean, status: string, reportedAt?: string | null): boolean {
+  return flagOn && Boolean(reportedAt) && (status === 'active' || status === 'awaiting_return');
+}
+
 export function showEnrolledReturn(enrolled: boolean, status: string): boolean {
   return enrolled && (status === 'active' || status === 'awaiting_return');
 }

@@ -31,6 +31,8 @@ export const PlatformPermissions = {
   RBAC_MANAGE: 'platform.rbac.manage',
   RECHARGE_ACCOUNT: 'platform.financial.recharge_account',
   PAYMENT_PROGRAMS: 'platform.financial.payment_programs',
+  EXPORT_REVIEW: 'platform.export.review',
+  EXPORT_FINANCE: 'platform.export.finance',
 } as const;
 
 export type PlatformPermission =

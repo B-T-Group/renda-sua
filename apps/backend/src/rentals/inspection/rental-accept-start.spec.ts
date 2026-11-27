@@ -3,6 +3,7 @@ import type { ConfigService } from '@nestjs/config';
 import type { HasuraSystemService } from '../../hasura/hasura-system.service';
 import type { NotificationsService as NotificationsServiceType } from '../../notifications/notifications.service';
 import { RentalsService } from '../rentals.service';
+import { commissionOffStub } from '../../rental-commission/rental-commission.test-util';
 
 const { NotificationsService } = jest.requireActual<{
   NotificationsService: new (...args: unknown[]) => NotificationsServiceType;
@@ -45,6 +46,7 @@ function pickupNoticeService(pushes: string[]) {
 
 describe('accept and start', () => {
   const svc: any = Object.create(RentalsService.prototype);
+  svc.commission = commissionOffStub();
 
   const enrolled = (overrides: Record<string, unknown> = {}) => ({
     id: 'b1',

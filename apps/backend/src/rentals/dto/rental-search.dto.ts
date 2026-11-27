@@ -2,6 +2,7 @@ import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min
 import { Type } from 'class-transformer';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const CLOCK = /^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/;
 
 export class RentalSearchQueryDto {
   @IsOptional()
@@ -38,6 +39,16 @@ export class RentalSearchQueryDto {
   @IsOptional()
   @Matches(DATE)
   end_date?: string;
+
+  /** Listing wall-clock HH:mm on start_date. Omitted means the start of the day. */
+  @IsOptional()
+  @Matches(CLOCK)
+  start_time?: string;
+
+  /** Listing wall-clock HH:mm on the last day (end_date minus one day). 24:00 is the end of that day. */
+  @IsOptional()
+  @Matches(CLOCK)
+  end_time?: string;
 
   @IsOptional()
   @Type(() => Number)

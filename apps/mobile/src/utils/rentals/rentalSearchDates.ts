@@ -2,11 +2,25 @@ import { formatRentalDateRange, formatRentalPeriod, formatRentalShortMonth, type
 
 export const MAX_RENTAL_SEARCH_DAYS = 30;
 
+/**
+ * `endDate` is exclusive. `startTime` applies to `startDate` and `endTime` to the last day
+ * (`endDate` minus one), both as HH:mm listing wall-clock; `24:00` ends that day. No times
+ * means whole days.
+ */
 export interface RentalDateRange {
   startDate: string;
   endDate: string;
   dayCount: number;
+  startTime?: string;
+  endTime?: string;
 }
+
+export interface RentalRangeTimes {
+  startTime?: string;
+  endTime?: string;
+}
+
+const CLOCK = /^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/;
 
 export type RentalDateRangeResult =
   | { status: 'ok'; range: RentalDateRange }
@@ -37,13 +51,6 @@ export function addLocalDays(date: Date, days: number): Date {
   return next;
 }
 
-export function parseIsoLocal(iso: string): Date | null {
-  const ms = utcDayMs(iso);
-  if (ms == null) return null;
-  const utc = new Date(ms);
-  return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
-}
-
 /** End date is exclusive. A span longer than 30 days is reported, not dropped. */
 export function describeRentalDateRange(start: Date, end: Date): RentalDateRangeResult {
   const startDate = formatIsoDate(start);
@@ -65,19 +72,29 @@ export function rentalDateRange(start: Date, end: Date): RentalDateRange | null 
 }
 
 /** Dates from a search link. The end day is exclusive and the stay is at most 30 days. */
-export function rangeFromSearchParams(startDate?: string, endDate?: string): RentalDateRange | null {
+export function rangeFromSearchParams(
+  startDate?: string,
+  endDate?: string,
+  startTime?: string,
+  endTime?: string
+): RentalDateRange | null {
   if (!startDate || !endDate) return null;
   const start = Date.parse(`${startDate}T00:00:00Z`);
   const end = Date.parse(`${endDate}T00:00:00Z`);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
   const dayCount = Math.round((end - start) / 86_400_000);
   if (dayCount < 1 || dayCount > MAX_RENTAL_SEARCH_DAYS) return null;
-  return { startDate, endDate, dayCount };
+  const times = validTimes(startTime, endTime);
+  if (!times) return null;
+  if (dayCount === 1 && (times.startTime ?? '00:00') >= (times.endTime ?? '24:00')) return null;
+  return { startDate, endDate, dayCount, ...times };
 }
 
-export function todayRange(now = new Date()): RentalDateRange {
-  const start = startOfLocalDay(now);
-  return rentalDateRange(start, addLocalDays(start, 1))!;
+/** Only well-formed clock times survive. A one-day window must end after it starts. */
+function validTimes(startTime?: string, endTime?: string): RentalRangeTimes | null {
+  if ((startTime && !CLOCK.test(startTime)) || (endTime && !CLOCK.test(endTime))) return null;
+  if (startTime === '24:00') return null;
+  return { ...(startTime ? { startTime } : {}), ...(endTime ? { endTime } : {}) };
 }
 
 /** Saturday and Sunday. On Sunday the range is the remaining day. */
@@ -90,29 +107,33 @@ export function weekendRange(now = new Date()): RentalDateRange {
   return rentalDateRange(saturday, addLocalDays(saturday, 2))!;
 }
 
-export function weekRange(now = new Date()): RentalDateRange {
-  const start = startOfLocalDay(now);
-  return rentalDateRange(start, addLocalDays(start, 7))!;
-}
-
 export function shiftRange(range: RentalDateRange, days: number): RentalDateRange | null {
   const startMs = utcDayMs(range.startDate);
   const endMs = utcDayMs(range.endDate);
   if (startMs == null || endMs == null) return null;
   const start = new Date(startMs + days * 86_400_000);
   const end = new Date(endMs + days * 86_400_000);
-  return rentalDateRange(
+  const shifted = rentalDateRange(
     new Date(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()),
     new Date(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
   );
+  return shifted ? { ...shifted, ...timesOf(range) } : null;
 }
 
-export function rangeFromNextStart(nextDate: string, dayCount: number): RentalDateRange | null {
+export function timesOf(range: RentalRangeTimes): RentalRangeTimes {
+  return {
+    ...(range.startTime ? { startTime: range.startTime } : {}),
+    ...(range.endTime ? { endTime: range.endTime } : {}),
+  };
+}
+
+export function rangeFromNextStart(nextDate: string, dayCount: number, times: RentalRangeTimes = {}): RentalDateRange | null {
   const startMs = utcDayMs(nextDate);
   if (startMs == null || dayCount < 1) return null;
   const start = new Date(startMs);
   const local = new Date(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  return rentalDateRange(local, addLocalDays(local, dayCount));
+  const range = rentalDateRange(local, addLocalDays(local, dayCount));
+  return range ? { ...range, ...timesOf(times) } : null;
 }
 
 export function nearbyRanges(range: RentalDateRange, now = new Date()): RentalDateRange[] {
@@ -169,30 +190,6 @@ export function marketTimeZone(countryCode?: string | null): string | undefined 
   return MARKET_TIME_ZONES[countryCode.toUpperCase()];
 }
 
-/** Calendar year/month/day in a timezone. Month is 1-based. */
-export function calendarDateInTimeZone(
-  now: Date,
-  timeZone?: string
-): { year: number; month: number; day: number; iso: string } {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timeZone || undefined,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(now);
-    const year = Number(parts.find((part) => part.type === 'year')?.value);
-    const month = Number(parts.find((part) => part.type === 'month')?.value);
-    const day = Number(parts.find((part) => part.type === 'day')?.value);
-    if (!year || !month || !day) throw new Error('incomplete');
-    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return { year, month, day, iso };
-  } catch {
-    const iso = formatIsoDate(now);
-    return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), iso };
-  }
-}
-
 export function eachDateKey(range: RentalDateRange): string[] {
   const keys: string[] = [];
   const start = utcDayMs(range.startDate);
@@ -215,11 +212,6 @@ export function formatSearchStay(
 /** Same booked days, without the count (`22–24 Nov`). */
 export function formatSearchStayRange(range: RentalDateRange, locale: string): string {
   return formatRentalDateRange(bookedStayWindows(range), locale);
-}
-
-/** "14–15 Nov · 2 days" — booked days, matching the priced day count. `daysLabel` is already translated. */
-export function formatSheetDateLine(range: RentalDateRange, locale: string, daysLabel: string): string {
-  return `${formatSearchStayRange(range, locale)} · ${daysLabel}`;
 }
 
 function bookedStayWindows(range: RentalDateRange): PeriodWindow[] {

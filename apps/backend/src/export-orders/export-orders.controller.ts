@@ -32,7 +32,10 @@ import {
 } from './dto/admin-export-order.dto';
 import { CreateExportOrderDto } from './dto/create-export-order.dto';
 import { ExportOrdersClientService } from './export-orders-client.service';
-import { ExportOrdersService } from './export-orders.service';
+import {
+  ExportOrdersService,
+  resolveExportCountry,
+} from './export-orders.service';
 
 @ApiTags('export-orders')
 @Controller('export-orders')
@@ -67,6 +70,36 @@ export class ExportOrdersController {
     }
   }
 
+  @Get('enabled')
+  @ApiOperation({
+    summary: 'Whether export interest opens an export order for a market',
+  })
+  @ApiQuery({
+    name: 'countryCode',
+    required: false,
+    type: String,
+    description: 'Destination country ISO-2 code; defaults to CM',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Flag resolved for the country (country row, then global)',
+    schema: {
+      example: {
+        success: true,
+        data: { enabled: true, countryCode: 'CM' },
+      },
+    },
+  })
+  async isEnabled(
+    @ReqContext() ctx: RequestContext,
+    @Query('countryCode') countryCode?: string
+  ) {
+    this.requireUser(ctx);
+    const country = resolveExportCountry(countryCode);
+    const enabled = await this.exportOrders.isExportOrdersEnabled(country);
+    return { success: true, data: { enabled, countryCode: country } };
+  }
+
   @Get('mine')
   @ApiOperation({ summary: 'List export orders for current client' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -87,11 +120,14 @@ export class ExportOrdersController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get export order detail' })
+  @ApiOperation({ summary: 'Get export order detail for the current client' })
   @ApiParam({ name: 'id', type: String })
+  @ApiResponse({ status: 200, description: 'Export order detail' })
+  @ApiResponse({ status: 403, description: 'Caller does not own this order' })
+  @ApiResponse({ status: 404, description: 'Export order not found' })
   async getOne(@Param('id') id: string, @ReqContext() ctx: RequestContext) {
     this.requireUser(ctx);
-    const data = await this.exportOrders.getById(id);
+    const data = await this.exportOrders.getByIdForActor(id, 'client');
     return { success: true, data };
   }
 

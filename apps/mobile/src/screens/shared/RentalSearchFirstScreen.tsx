@@ -30,14 +30,15 @@ import {
 import storage from '../../services/storage/StorageService';
 import { useStore } from '../../stores/RootStore';
 import {
-  formatSearchStayRange,
   marketTimeZone,
   MAX_RENTAL_SEARCH_DAYS,
   nearbyRanges,
   rangeFromNextStart,
   subscribeRentalSearchStay,
+  timesOf,
   type RentalDateRange,
 } from '../../utils/rentals/rentalSearchDates';
+import { formatSearchWindow } from '../../utils/rentals/rentalSearchWindow';
 import { loadRecentSearches, rememberSearch } from '../../utils/rentals/recentRentalSearches';
 import { splitTopCategories } from '../../utils/rentals/rentalCategoryIcon';
 import {
@@ -72,8 +73,7 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   const { auth } = useStore();
   const myRentals = useSearchFirstMyRentals(
     flags.rentals_my_rentals_entry_enabled,
-    auth.isAuthenticated,
-    flags.rentals_client_tab_enabled
+    auth.isAuthenticated
   );
   const { selectedMarket } = useMarket();
   const geo = useRentalCatalogGeoParams();
@@ -160,6 +160,8 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
         operation_mode: takeHome ? 'take_home' : undefined,
         start_date: dates?.startDate,
         end_date: dates?.endDate,
+        start_time: dates?.startTime,
+        end_time: dates?.endTime,
         limit: 20,
       },
       { signal: ctrl.signal }
@@ -195,7 +197,7 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
       const parent = navigation.getParent() ?? navigation;
       (parent as { navigate: (name: string, params: object) => void }).navigate('RentalListingDetail', {
         listingId,
-        ...(range ? { startDate: range.startDate, endDate: range.endDate } : {}),
+        ...(range ? { startDate: range.startDate, endDate: range.endDate, ...timesOf(range) } : {}),
       });
     },
     [navigation]
@@ -323,7 +325,11 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
         }}
         onSeeDates={(id) => {
           const hit = visibleHits.find((row) => row.listing.id === id);
-          const next = rangeFromNextStart(hit?.nextAvailableDate ?? '', dates?.dayCount ?? hit?.dayCount ?? 1);
+          const next = rangeFromNextStart(
+            hit?.nextAvailableDate ?? '',
+            dates?.dayCount ?? hit?.dayCount ?? 1,
+            dates ? timesOf(dates) : {}
+          );
           if (next) setDates(next);
         }}
         onToggleTakeHome={() => setTakeHome((value) => !value)}
@@ -370,7 +376,7 @@ function toCard(
   const pricePerHour = Number(hit.listing.base_price_per_hour) || 0;
   const hourlyOnly = hit.listing.offers_daily === false;
   const windows = range && !hourlyOnly
-    ? allDaySelectionsForRange(range, hit.listing.weekly_availability ?? [], pricePerDay)
+    ? allDaySelectionsForRange(range, hit.listing.weekly_availability ?? [], pricePerDay, pricePerHour)
     : [];
   const quote = windows.length ? quoteRentalSelections(windows, pricePerHour, pricePerDay) : null;
   return {
@@ -386,7 +392,7 @@ function toCard(
     totalIsEstimate: dailyTotalDiffersFromQuote(hit.totalForDates, quote),
     dayCount: hit.dayCount,
     nextAvailableDate: hit.nextAvailableDate,
-    rangeLabel: range ? formatSearchStayRange(range, locale) : null,
+    rangeLabel: range ? formatSearchWindow(range, locale) : null,
     business: hit.listing.business_location?.name || hit.listing.rental_item?.business?.name || '',
     city: hit.listing.business_location?.address?.city || '',
     inspection: hit.inspection_enabled === true,

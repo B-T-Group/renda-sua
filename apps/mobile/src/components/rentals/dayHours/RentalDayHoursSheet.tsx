@@ -79,6 +79,11 @@ export interface RentalDayHoursSheetProps {
 
 type Notes = Record<string, BlockNote | null>;
 
+/** The browse search opens the picker without a listing, so there are no rates to show. */
+function isPriced(listing: DayHoursListing): boolean {
+  return listing.dayRate > 0 || listing.hourRate > 0;
+}
+
 /** Paper Text with the brand Inter face for its weight (R5: no synthetic weight on Android). */
 function Text({ style, ...rest }: ComponentProps<typeof PaperText>) {
   const weight = StyleSheet.flatten(style)?.fontWeight;
@@ -248,6 +253,7 @@ function SheetBody({
   }
 
   const canContinue = days.length > 0;
+  const priced = isPriced(listing);
   const sheet: ViewStyle = { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 12) };
 
   return (
@@ -264,7 +270,7 @@ function SheetBody({
           <MaterialCommunityIcons name="close" size={20} color={colors.text.primary} />
         </Pressable>
       </View>
-      <PriceChips listing={listing} currency={currency} lang={lang} />
+      {priced ? <PriceChips listing={listing} currency={currency} lang={lang} /> : null}
       {serverError && !errorCleared ? (
         <View testID="day-hours-server-error" accessibilityRole="alert" style={[styles.serverError, { backgroundColor: '#FDECEC', borderColor: '#F5C2C2' }]}>
           <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.error.main} />
@@ -359,7 +365,7 @@ function SheetBody({
                   : footerDetail(days, infos, lang, timeZone, { shared: sharedOn, todayKey })}
             </Text>
           </View>
-          {days.length ? (
+          {days.length && priced ? (
             <Text testID="day-hours-total" style={[styles.total, { color: colors.text.primary }]}>
               {pickerMoney(total, currency, lang)}
             </Text>
@@ -754,7 +760,9 @@ function DayRow({
           </Text>
         ) : null}
         <View style={styles.flex} />
-        <Text style={[styles.price, { color: colors.text.primary }]}>{pickerMoney(dayPrice(day, listing), currency, lang)}</Text>
+        {isPriced(listing) ? (
+          <Text style={[styles.price, { color: colors.text.primary }]}>{pickerMoney(dayPrice(day, listing), currency, lang)}</Text>
+        ) : null}
       </View>
       {open && note ? (
         <Banner testID={`${prefix}-note`} icon={note.kind === 'tooShort' ? 'alert-outline' : 'alert-outline'} color={colors.error.main} text={noteText(note, lang, timeZone, listing.minHours, listing.maxHours)} />
@@ -817,7 +825,9 @@ function SharedCard({
           </>
         ) : null}
         <View style={styles.flex} />
-        <Text style={[styles.price, { color: colors.text.primary }]}>{pickerMoney(totalPrice(days, listing), currency, lang)}</Text>
+        {isPriced(listing) ? (
+          <Text style={[styles.price, { color: colors.text.primary }]}>{pickerMoney(totalPrice(days, listing), currency, lang)}</Text>
+        ) : null}
       </View>
       {note ? (
         <Banner icon="alert-outline" color={colors.error.main} text={noteText(note, lang, timeZone, listing.minHours, listing.maxHours)} />

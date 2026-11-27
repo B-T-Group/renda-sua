@@ -67,7 +67,7 @@ export class RentalSearchService {
   }
 
   async search(query: RentalSearchQueryDto) {
-    const range = this.dateRange(query.start_date, query.end_date);
+    const range = this.dateRange(query);
     const market = await this.marketFor(query);
     const window = await this.cardWindow(market.country ?? query.country_code);
     if (!this.canPageFromIds()) return this.pageUncached(query, market, range, window);
@@ -116,9 +116,9 @@ export class RentalSearchService {
     return rankCategories(listings, bookings).slice(0, take);
   }
 
-  private dateRange(start?: string, end?: string): SearchDateRange | null {
+  private dateRange(query: RentalSearchQueryDto): SearchDateRange | null {
     try {
-      return parseSearchDateRange(start, end);
+      return parseSearchDateRange(query.start_date, query.end_date, query.start_time, query.end_time);
     } catch {
       throw new HttpException('start_date and end_date must be a range of 1 to 30 days', HttpStatus.BAD_REQUEST);
     }
@@ -356,7 +356,7 @@ export class RentalSearchService {
       limit: bounds.limit,
       availableCount,
       hasMore,
-      dates: range ? { startDate: range.startDate, endDate: range.endDate, dayCount: range.dayCount } : null,
+      dates: range ? searchDatesBody(range) : null,
       ...window,
     };
   }
@@ -398,6 +398,8 @@ export class RentalSearchService {
       maxPrice: query.max_price,
       startDate: query.start_date,
       endDate: query.end_date,
+      startTime: query.start_time,
+      endTime: query.end_time,
       operationMode: query.operation_mode,
       rankingEnabled,
       cardGuardEnabled: guard,
@@ -560,6 +562,16 @@ export class RentalSearchService {
     const cap = latestExclusiveEndDate(hit.latest_card_end_at, hit.timezone);
     return range.endDate > cap;
   }
+}
+
+function searchDatesBody(range: SearchDateRange) {
+  return {
+    startDate: range.startDate,
+    endDate: range.endDate,
+    dayCount: range.dayCount,
+    ...(range.startTime ? { startTime: range.startTime } : {}),
+    ...(range.endTime ? { endTime: range.endTime } : {}),
+  };
 }
 
 function stripCatalogIndex(hit: RentalSearchHit & { catalogIndex: number }): RentalSearchHit {

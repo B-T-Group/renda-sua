@@ -23,10 +23,10 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DashboardRentalRequestCard } from '../../components/business/DashboardRentalRequestCard';
 import { BusinessRentalCatalogCard } from '../../components/business/rentals/BusinessRentalCatalogCard';
+import { BusinessRentalScheduleTab } from '../../components/business/rentals/schedule/BusinessRentalScheduleTab';
 import { BusinessRentalRespondDialog } from '../../components/business/rentals/BusinessRentalRespondDialog';
 import { ModerationFilterBanner } from '../../components/common/ModerationFilterBanner';
 import { StatusPill } from '../../components/common/StatusPill';
-import { RentalPhaseStatusPill } from '../../components/common/RentalPhaseStatusPill';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { rentalsApi } from '../../services/rentalsApi';
@@ -38,12 +38,10 @@ import { useTabBarGeometry } from '../../navigation/tabBarGeometry';
 import type {
   BusinessRentalItemRow,
   BusinessRentalRequestRow,
-  BusinessRentalScheduleRow,
 } from '../../types/rentals';
 import { formatChangeDetail } from '../../utils/rentals/rentalRequestFormat';
 import { compareSoonestRequestStart } from '../../utils/rentals/dashboardRentalRequests';
 import {
-  formatRentalMoney,
   formatRentalRequestLocalDateTime,
   matchesBusinessQueue,
   rentalItemMatchesModerationFilter,
@@ -182,8 +180,6 @@ export default function BusinessRentalsStudioScreen() {
 
   const [items, setItems] = useState<BusinessRentalItemRow[]>([]);
   const [requests, setRequests] = useState<BusinessRentalRequestRow[]>([]);
-  const [scheduleItemId, setScheduleItemId] = useState('');
-  const [schedule, setSchedule] = useState<BusinessRentalScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,27 +192,17 @@ export default function BusinessRentalsStudioScreen() {
   const loadCatalog = useCallback(async () => {
     const list = await rentalsApi.getBusinessItems();
     setItems(list.filter((i) => !i.deleted_at));
-    if (!scheduleItemId && list[0]?.id) setScheduleItemId(list[0].id);
-  }, [scheduleItemId]);
+  }, []);
 
   const loadRequests = useCallback(async () => {
     const list = await rentalsApi.getBusinessRequests();
     setRequests(list);
   }, []);
 
-  const loadSchedule = useCallback(async () => {
-    if (!scheduleItemId) {
-      setSchedule([]);
-      return;
-    }
-    const list = await rentalsApi.getBusinessSchedule(scheduleItemId);
-    setSchedule(list);
-  }, [scheduleItemId]);
-
   const loadAll = useCallback(async () => {
     setError(null);
     try {
-      await Promise.all([loadCatalog(), loadRequests(), loadSchedule()]);
+      await Promise.all([loadCatalog(), loadRequests()]);
     } catch (e: unknown) {
       setError(
         e instanceof Error
@@ -224,7 +210,7 @@ export default function BusinessRentalsStudioScreen() {
           : t('business.rentals.loadError', 'Could not load rentals')
       );
     }
-  }, [loadCatalog, loadRequests, loadSchedule, t]);
+  }, [loadCatalog, loadRequests, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,10 +223,6 @@ export default function BusinessRentalsStudioScreen() {
       cancelled = true;
     };
   }, [loadAll]);
-
-  useEffect(() => {
-    void loadSchedule();
-  }, [loadSchedule]);
 
   useFocusEffect(
     useCallback(() => {
@@ -278,6 +260,11 @@ export default function BusinessRentalsStudioScreen() {
       return matchesBusinessQueue(info, queueFilter);
     });
   }, [flags.rentals_dashboard_requests_enabled, queueFilter, requests]);
+
+  const scheduleItems = useMemo(
+    () => items.map(({ id, name }) => ({ id, name })),
+    [items]
+  );
 
   const filteredCatalogItems = useMemo(() => {
     const list = items.filter((item) => {
@@ -662,100 +649,12 @@ export default function BusinessRentalsStudioScreen() {
       ) : null}
 
       {!loading && !error && tab === 'schedule' ? (
-        <FlatList
-          data={schedule}
-          keyExtractor={(row) => row.id}
-          contentContainerStyle={{
-            padding: spacing.md,
-            paddingBottom: Math.max(listBottomPadding - 64, insets.bottom + 24),
-          }}
-          refreshControl={refreshControl}
-          ListHeaderComponent={
-            <View style={{ marginBottom: spacing.md }}>
-              <Text
-                style={[typography.body2, { color: colors.text.secondary, marginBottom: 8 }]}
-              >
-                {t('business.rentals.schedule.pickItem', 'Rental item')}
-              </Text>
-              <View style={styles.itemChips}>
-                {items.map((it) => (
-                  <Pressable
-                    key={it.id}
-                    onPress={() => setScheduleItemId(it.id)}
-                    style={[
-                      styles.chip,
-                      {
-                        borderColor:
-                          scheduleItemId === it.id
-                            ? colors.primary.main
-                            : colors.divider,
-                        backgroundColor:
-                          scheduleItemId === it.id
-                            ? colors.primaryTint
-                            : colors.surface,
-                      },
-                    ]}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color:
-                          scheduleItemId === it.id
-                            ? colors.primary.main
-                            : colors.text.primary,
-                        fontSize: 13,
-                      }}
-                    >
-                      {it.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+        <BusinessRentalScheduleTab
+          items={scheduleItems}
+          contentBottomPadding={Math.max(listBottomPadding - 64, insets.bottom + 24)}
+          onOpenBooking={(bookingId) =>
+            navigation.navigate('BusinessRentalBookingDetail', { bookingId })
           }
-          ListEmptyComponent={
-            <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: 24 }}>
-              {t('business.rentals.schedule.empty', 'No upcoming bookings for this item.')}
-            </Text>
-          }
-          renderItem={({ item: row }) => {
-            const client = row.rental_request?.client?.user;
-            const name = [client?.first_name, client?.last_name]
-              .filter(Boolean)
-              .join(' ');
-            return (
-              <Pressable
-                onPress={() =>
-                  navigation.navigate('BusinessRentalBookingDetail', {
-                    bookingId: row.id,
-                  })
-                }
-                style={[
-                  styles.reqCard,
-                  {
-                    borderColor: colors.divider,
-                    backgroundColor: colors.surface,
-                    marginBottom: spacing.sm,
-                    padding: spacing.md,
-                  },
-                ]}
-              >
-                <View style={styles.rowBetween}>
-                  <Text style={{ color: colors.text.primary, fontWeight: '600', flex: 1 }}>
-                    {name || t('business.rentals.schedule.client', 'Client')}
-                  </Text>
-                  <RentalPhaseStatusPill bookingStatus={row.status} role="business" />
-                </View>
-                <Text style={{ color: colors.text.secondary, marginTop: 4, fontSize: 13 }}>
-                  {formatRentalRequestLocalDateTime(row.start_at)} →{' '}
-                  {formatRentalRequestLocalDateTime(row.end_at)}
-                </Text>
-                <Text style={{ color: colors.text.secondary, marginTop: 2, fontSize: 13 }}>
-                  {formatRentalMoney(row.total_amount, row.currency)}
-                </Text>
-              </Pressable>
-            );
-          }}
         />
       ) : null}
 
@@ -819,14 +718,6 @@ const styles = StyleSheet.create({
   thumbImage: { width: 56, height: 56 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   fab: { position: 'absolute', right: 16 },
-  itemChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    maxWidth: '100%',
-  },
   queueRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 },
   queueChip: {
     flexDirection: 'row',

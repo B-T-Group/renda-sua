@@ -31,4 +31,11 @@ describe('discovery (#342)', () => {
       '/inventory-items/search/recovery?search=tv&brand=Acme&country_code=CM&food_only=true'
     );
   });
+
+  it('sends export_only on the recovery path only for the exports lane', () => {
+    expect(searchRecoveryPath({ search: 'tv', country_code: 'CD', export_only: true })).toBe(
+      '/inventory-items/search/recovery?search=tv&country_code=CD&export_only=true'
+    );
+    expect(searchRecoveryPath({ search: 'tv', export_only: false })).not.toContain('export_only');
+  });
 });

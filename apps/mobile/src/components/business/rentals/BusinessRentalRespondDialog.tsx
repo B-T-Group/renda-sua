@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -19,14 +19,19 @@ import {
   parseRentalSelectionWindowsFromJson,
 } from '../../../utils/rentals';
 import { formatRequestAmount } from '../../../utils/rentals/rentalRequestFormat';
-import { contractHoursOffer, requestStartIso, totalOverrideTooHigh } from '../../../utils/rentals/dashboardRentalRequests';
+import { contractHoursOffer, rebateToTotal, requestStartIso } from '../../../utils/rentals/dashboardRentalRequests';
 import { buildRequestCardModel } from '../../../utils/rentals/rentalRequestCardModel';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useClientFlags } from '../../../contexts/ClientFlagsContext';
 import { rentalsApi } from '../../../services/rentalsApi';
+import { RentalCommissionBreakdown } from '../../rentals/RentalCommissionBreakdown';
 
 function isStaleVersion(error: unknown): boolean {
   return (error as { code?: string }).code === 'RENTAL_REQUEST_STALE_VERSION';
+}
+
+function isCommissionRateChanged(error: unknown): boolean {
+  return (error as { code?: string }).code === 'COMMISSION_RATE_CHANGED';
 }
 
 const REASON_CODES: UnavailableRentalReasonCode[] = [
@@ -44,14 +49,6 @@ export interface BusinessRentalRespondDialogProps {
   onDismiss: () => void;
   onSuccess: () => void;
   onStale?: () => void;
-}
-
-function parseTotalOverride(raw: string): number | null | 'invalid' {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const value = Number(trimmed);
-  if (!Number.isFinite(value) || value <= 0) return 'invalid';
-  return Number(value.toFixed(2));
 }
 
 function buildPricingSnapshot(req: BusinessRentalRequestRow) {
@@ -84,13 +81,16 @@ export function BusinessRentalRespondDialog({
     flags.rentals_dashboard_requests_enabled && flags.rentals_modify_request_enabled;
   const { colors } = useTheme();
   const [contractHours, setContractHours] = useState('48');
-  const [totalOverride, setTotalOverride] = useState('');
+  const [rebateOpen, setRebateOpen] = useState(false);
+  const [rebate, setRebate] = useState('');
   const [availableNote, setAvailableNote] = useState('');
   const [reasonCode, setReasonCode] = useState<UnavailableRentalReasonCode | ''>('');
   const [unavailableNote, setUnavailableNote] = useState('');
   const [reasonMenu, setReasonMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [commissionBps, setCommissionBps] = useState<number | null>(null);
+  const [commissionRefresh, setCommissionRefresh] = useState(0);
 
   const startIso = request ? requestStartIso(request) : null;
   const hourOffer = contractHoursOffer(startIso, new Date(), request?.listing_timezone);
@@ -100,6 +100,8 @@ export function BusinessRentalRespondDialog({
     if (!visible) return;
     const offer = contractHoursOffer(startIso, new Date(), request?.listing_timezone);
     setContractHours(String(offer.hidden ? 1 : offer.hours));
+    setRebate('');
+    setRebateOpen(false);
   }, [startIso, visible]);
 
   const offerPreview = useMemo(() => {
@@ -111,13 +113,15 @@ export function BusinessRentalRespondDialog({
     }
   }, [mode, request]);
 
-  const typedOverride = typeof parseTotalOverride(totalOverride) === 'number' ? Number(parseTotalOverride(totalOverride)) : null;
-  const ceiling = request?.total_override_ceiling ?? null;
-  const overrideTooHigh = typedOverride != null && totalOverrideTooHigh(offerPreview?.total ?? 0, typedOverride, ceiling);
+  const quoteTotal = offerPreview?.total ?? 0;
+  const rebateResult = rebateToTotal(rebate, quoteTotal);
+  const rebateInvalid = rebateResult === 'invalid';
+  const newTotal = typeof rebateResult === 'number' ? rebateResult : null;
 
   const resetAndClose = useCallback(() => {
     setContractHours(String(contractHoursOffer(request ? requestStartIso(request) : null, new Date(), request?.listing_timezone).hours || 1));
-    setTotalOverride('');
+    setRebate('');
+    setRebateOpen(false);
     setAvailableNote('');
     setReasonCode('');
     setUnavailableNote('');
@@ -133,12 +137,9 @@ export function BusinessRentalRespondDialog({
       setError(t('business.rentals.respondValidationHours', 'Enter a whole number of hours from 1 to {{count}}.', { count: offer.maxHours }));
       return;
     }
-    const overridden = parseTotalOverride(totalOverride);
-    const tooHigh = typeof overridden === 'number' && totalOverrideTooHigh(buildPricingSnapshot(request).total, overridden, request.total_override_ceiling ?? null);
-    if (overridden === 'invalid' || tooHigh) {
-      setError(tooHigh
-        ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.')
-        : t('business.rentals.changeTotalInvalid', 'Enter a total greater than zero.'));
+    const overridden = rebateToTotal(rebate, buildPricingSnapshot(request).total);
+    if (overridden === 'invalid') {
+      setError(t('business.rentals.rebateInvalid', 'Enter an amount less than the quoted total.'));
       return;
     }
     setSubmitting(true);
@@ -152,6 +153,7 @@ export function BusinessRentalRespondDialog({
         contractExpiryHours: h,
         businessResponseNote: availableNote.trim() || undefined,
         expectedVersion: request.edit_version ?? 1,
+        acknowledgedCommissionRateBps: commissionBps ?? undefined,
       });
       onSuccess();
       resetAndClose();
@@ -161,11 +163,16 @@ export function BusinessRentalRespondDialog({
         resetAndClose();
         return;
       }
+      if (isCommissionRateChanged(e)) {
+        setCommissionRefresh((n) => n + 1);
+        setError(t('rentals.commission.rateChanged', 'The commission changed. Review the new numbers, then accept again.'));
+        return;
+      }
       setError(respondErrorText(e, i18n.language, t));
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, canChangeTotal, contractHours, i18n.language, onStale, onSuccess, request, resetAndClose, t, totalOverride]);
+  }, [availableNote, canChangeTotal, commissionBps, contractHours, i18n.language, onStale, onSuccess, rebate, request, resetAndClose, t]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -237,25 +244,41 @@ export function BusinessRentalRespondDialog({
                     )}
                   </Text>
                 ) : null}
-                {canChangeTotal ? (
-                <TextInput
-                  label={t('business.rentals.changeTotalLabel', 'Change total (optional)')}
-                  value={totalOverride}
-                  onChangeText={setTotalOverride}
-                  keyboardType="decimal-pad"
-                  mode="outlined"
-                  style={styles.field}
-                />
+                {canChangeTotal && !rebateOpen ? (
+                  <Pressable onPress={() => setRebateOpen(true)} style={styles.rebateLink}>
+                    <Text style={{ color: colors.primary.main, textDecorationLine: 'underline' }}>
+                      {t('business.rentals.applyRebate', 'Apply rebate')}
+                    </Text>
+                  </Pressable>
                 ) : null}
-                {canChangeTotal ? (
-                <Text variant="bodySmall" style={{ color: overrideTooHigh ? colors.error.main : colors.text.secondary, marginBottom: 8 }}>
-                  {overrideTooHigh
-                    ? t('business.rentals.changeTotalTooHigh', 'Enter a total up to the quote, at most 10 times the quote, or within the currency limit.')
-                    : t(
-                    'business.rentals.changeTotalHelper',
-                    'The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.'
-                  )}
-                </Text>
+                {canChangeTotal && rebateOpen ? (
+                  <View>
+                    <TextInput
+                      label={t('business.rentals.rebateAmount', 'Rebate amount')}
+                      value={rebate}
+                      onChangeText={setRebate}
+                      keyboardType="decimal-pad"
+                      mode="outlined"
+                      error={rebateInvalid}
+                      style={styles.field}
+                    />
+                    <Text variant="bodySmall" style={{ color: rebateInvalid ? colors.error.main : colors.text.secondary, marginTop: 4 }}>
+                      {rebateCopy(rebateInvalid, newTotal, offerPreview?.currency, i18n.language, t)}
+                    </Text>
+                    <Pressable onPress={() => { setRebate(''); setRebateOpen(false); }} style={styles.rebateLink}>
+                      <Text style={{ color: colors.primary.main, textDecorationLine: 'underline' }}>
+                        {t('business.rentals.removeRebate', 'Remove rebate')}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                {request ? (
+                  <RentalCommissionBreakdown
+                    requestId={request.id}
+                    totalOverride={canChangeTotal && newTotal != null ? newTotal : undefined}
+                    refreshKey={commissionRefresh}
+                    onRateChange={setCommissionBps}
+                  />
                 ) : null}
                 {hourOffer.hidden ? null : (
                   <TextInput
@@ -330,8 +353,8 @@ export function BusinessRentalRespondDialog({
             loading={submitting}
             buttonColor={mode === 'unavailable' ? colors.error.main : colors.primary.main}
             textColor="#ffffff"
-            disabled={submitting || (mode === 'unavailable' && blocked) || (mode === 'available' && overrideTooHigh)}
-            accessibilityState={{ disabled: submitting || blocked || overrideTooHigh }}
+            disabled={submitting || (mode === 'unavailable' && blocked) || (mode === 'available' && rebateInvalid)}
+            accessibilityState={{ disabled: submitting || blocked || rebateInvalid }}
             onPress={() => {
               if (mode === 'unavailable' && blocked) return;
               if (mode === 'available') void submitAvailable();
@@ -382,6 +405,26 @@ export function confirmSoftDelete(
   ]);
 }
 
+function rebateCopy(
+  invalid: boolean,
+  newTotal: number | null,
+  currency: string | undefined,
+  language: string,
+  t: (key: string, fallback: string, options?: Record<string, unknown>) => string
+): string {
+  if (invalid) return t('business.rentals.rebateInvalid', 'Enter an amount less than the quoted total.');
+  if (newTotal != null && currency) {
+    return t('business.rentals.rebateNewTotal', 'New total: {{total}}', {
+      total: formatRequestAmount(newTotal, currency, language),
+    });
+  }
+  return t(
+    'business.rentals.rebateHelper',
+    'This amount is taken off the quoted total. The renter reviews the new price before paying.'
+  );
+}
+
 const styles = StyleSheet.create({
   field: { marginTop: 12 },
+  rebateLink: { alignSelf: 'flex-start', marginTop: 8, marginBottom: 4 },
 });

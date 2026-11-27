@@ -7,11 +7,15 @@ import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
 import { useClientFlags } from '../../hooks/useClientFlags';
-import { useRentalApi, type BusinessRentalRequestRow } from '../../hooks/useRentalApi';
+import { useBusinessReturnConfirmations } from '../../hooks/useBusinessReturnConfirmations';
+import { useRentalApi, type BusinessRentalRequestRow, type BusinessReturnConfirmationRow } from '../../hooks/useRentalApi';
+import { isInspectionEnrolled } from '../../utils/rentalInspection';
 import { BusinessRentalRespondDialog } from '../rentals/BusinessRentalRespondDialog';
 import { compareSoonestRequestStart } from '../../utils/dashboardRentalRequests';
 import { brandTokens } from '../../theme/brandTokens';
 import { BusinessDashboardRentalRequestCard } from './BusinessDashboardRentalRequestCard';
+import { BusinessDashboardReturnConfirmationCard } from './BusinessDashboardReturnConfirmationCard';
+import { BusinessReturnConfirmDialog } from './BusinessReturnConfirmDialog';
 
 type Notice = { id: string; itemName: string; renterName: string; window: 'sla' | 'start' };
 
@@ -23,11 +27,13 @@ export function BusinessDashboardRentalRequests() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { flags, loaded } = useClientFlags();
-  const { fetchDashboardRentalRequests, respondRequest } = useRentalApi();
+  const { fetchDashboardRentalRequests, respondRequest, dismissExpiryNotice } = useRentalApi();
   const [requests, setRequests] = useState<BusinessRentalRequestRow[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [target, setTarget] = useState<{ req: BusinessRentalRequestRow; mode: 'available' | 'unavailable' } | null>(null);
+  const [confirmRow, setConfirmRow] = useState<BusinessReturnConfirmationRow | null>(null);
   const enabled = loaded && flags.rentals_dashboard_requests_enabled;
+  const returns = useBusinessReturnConfirmations(loaded && flags.rentals_renter_return_report_enabled === true);
 
   const load = useCallback(async () => {
     const data = await fetchDashboardRentalRequests();
@@ -47,30 +53,87 @@ export function BusinessDashboardRentalRequests() {
     enqueueSnackbar(t(key, fallback, { item }), { variant: mode === 'available' ? 'success' : 'info' });
   }, [enqueueSnackbar, t, target]);
 
+  const openBooking = useCallback(
+    (row: BusinessReturnConfirmationRow, hash = '') => navigate(`/rentals/bookings/${row.id}${hash}`),
+    [navigate]
+  );
+
+  const onConfirmReturn = useCallback(
+    (row: BusinessReturnConfirmationRow) => {
+      if (isInspectionEnrolled(row)) openBooking(row, '#rental-inspection');
+      else setConfirmRow(row);
+    },
+    [openBooking]
+  );
+
+  const settleReturn = useCallback(async () => {
+    const row = confirmRow;
+    if (!row) return;
+    setConfirmRow(null);
+    const item = row.rental_location_listing.rental_item.name;
+    try {
+      const overtime = await returns.confirm(row);
+      const message = overtime
+        ? t('business.dashboard.rentalReturns.overtimeToast', 'Return confirmed for {{item}}. The renter was asked to pay for the extra time.', { item })
+        : t('business.dashboard.rentalReturns.confirmedToast', 'Return confirmed for {{item}}', { item });
+      enqueueSnackbar(message, { variant: 'success' });
+    } catch (error: unknown) {
+      enqueueSnackbar(error instanceof Error ? error.message : t('business.dashboard.rentalReturns.failed', 'Could not confirm the return'), { variant: 'error' });
+    }
+  }, [confirmRow, enqueueSnackbar, returns, t]);
+
   const currentNotice = notices[0];
 
-  if (!enabled || (requests.length === 0 && notices.length === 0)) return null;
+  const onDismissNotice = useCallback(
+    (id: string) => {
+      setNotices((rows) => rows.filter((row) => row.id !== id));
+      void dismissExpiryNotice(id).catch(() => undefined);
+    },
+    [dismissExpiryNotice]
+  );
+
+  const hasReturns = returns.rows.length > 0;
+  const itemCount = returns.rows.length + requests.length;
+  if (itemCount === 0 && notices.length === 0) return null;
 
   return (
-    <Box sx={{ mb: 3 }} component="section" aria-label={t('business.dashboard.rentalRequests.sectionA11y', 'Rental requests, {{count}}', { count: requests.length })}>
+    <Box sx={{ mb: 3 }} component="section" aria-label={
+      hasReturns
+        ? t('business.dashboard.rentalReturns.sectionA11y', 'Rental actions, {{count}}', { count: itemCount })
+        : t('business.dashboard.rentalRequests.sectionA11y', 'Rental requests, {{count}}', { count: requests.length })
+    }>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
         <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="overline">{t('business.dashboard.rentalRequests.sectionTitle', 'Rental requests')}</Typography>
-          {requests.length > 0 ? <Chip size="small" color="primary" label={requests.length} /> : null}
+          <Typography variant="overline">
+            {hasReturns
+              ? t('business.dashboard.rentalReturns.sectionTitle', 'Rental actions')
+              : t('business.dashboard.rentalRequests.sectionTitle', 'Rental requests')}
+          </Typography>
+          {itemCount > 0 ? <Chip size="small" color="primary" label={itemCount} /> : null}
         </Stack>
-        <Button size="small" onClick={() => navigate('/business/rentals/requests')}>
+        <Button size="small" onClick={() => navigate(requests.length > 0 ? '/business/rentals/requests' : '/business/rentals/schedule')}>
           {t('business.dashboard.rentalRequests.seeAll', 'See all')}
         </Button>
       </Stack>
       {currentNotice ? (
         <ExpiryNotice
           notice={currentNotice}
-          onDismiss={() => setNotices((rows) => rows.slice(1))}
+          onDismiss={() => onDismissNotice(currentNotice.id)}
           onView={() => navigate(`/business/rentals/requests?request=${encodeURIComponent(currentNotice.id)}`)}
         />
       ) : null}
-      {requests.length > 0 ? (
+      {itemCount > 0 ? (
         <Stack spacing={1.5}>
+          {returns.rows.map((row) => (
+            <BusinessDashboardReturnConfirmationCard
+              key={`return-${row.id}`}
+              row={row}
+              busy={returns.busyId === row.id}
+              onOpen={(target) => openBooking(target)}
+              onConfirm={onConfirmReturn}
+              onProblem={(target) => openBooking(target, '#rental-inspection')}
+            />
+          ))}
           {requests.map((request) => (
             <BusinessDashboardRentalRequestCard
               key={request.id}
@@ -81,6 +144,12 @@ export function BusinessDashboardRentalRequests() {
           ))}
         </Stack>
       ) : null}
+      <BusinessReturnConfirmDialog
+        open={confirmRow != null}
+        itemName={confirmRow?.rental_location_listing.rental_item.name ?? ''}
+        onClose={() => setConfirmRow(null)}
+        onConfirm={() => void settleReturn()}
+      />
       <BusinessRentalRespondDialog
         open={target != null}
         mode={target?.mode ?? null}

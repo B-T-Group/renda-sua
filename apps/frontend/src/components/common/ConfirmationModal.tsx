@@ -7,8 +7,10 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  useMediaQuery,
 } from '@mui/material';
 import type { Breakpoint } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,6 +33,8 @@ interface ConfirmationModalProps {
   additionalContent?: React.ReactNode;
   /** Wider dialog when showing structured details (e.g. booking summary). */
   maxWidth?: false | Breakpoint;
+  /** Take over the whole screen on phones (long summaries). */
+  fullScreenOnMobile?: boolean;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -45,8 +49,11 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   onCancel,
   additionalContent,
   maxWidth = 'sm',
+  fullScreenOnMobile = false,
 }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
 
   return (
     <Dialog
@@ -56,6 +63,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       aria-describedby="confirmation-dialog-description"
       maxWidth={maxWidth}
       fullWidth
+      fullScreen={fullScreenOnMobile && isPhone}
     >
       <DialogTitle id="confirmation-dialog-title">{title}</DialogTitle>
       <DialogContent>

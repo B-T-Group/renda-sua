@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { StickyActionCard } from '../../common/StickyActionCard';
 import type { InspectionPhoto, InspectionView } from '../../../utils/rentals/rentalInspection';
 import { listingCity } from '../../../utils/rentals/pickupPhotoTime';
 import { splitCorrectionReason } from '../../../utils/rentals/rentalInspection';
@@ -13,6 +14,7 @@ import { earlyReturnLine, earlyReturnPreview } from '../../../utils/rentals/retu
 import type { PayBreakdown } from '../../../utils/rentals/payBreakdown';
 import { PayBreakdownView, PayFooter } from '../PayBreakdownView';
 import { payLabelStyle } from '../../../utils/rentals/payButtonLabel';
+import { pickupPlaceLink } from '../../../utils/rentals/openPickupDirections';
 
 const REASON_ORDER = ['photo_mismatch', 'wear_hidden', 'missing_accessory', 'wrong_unit'] as const;
 
@@ -21,6 +23,7 @@ interface Props {
   photos: InspectionPhoto[];
   timeZone: string;
   place: string;
+  address?: string | null;
   returnLabel: string;
   money: string;
   /** Held/paid lines from startMoneyLines; falls back to the card hold sentence. */
@@ -51,7 +54,7 @@ export function PickupStartFlow(props: Props) {
   const checked = props.view.yourDecision === 'accept';
   const step = waiting ? 'wait' : checked ? 'start' : 'check';
   return (
-    <FlowFrame step={step} pay={props.pay} name={props.itemName} number={props.bookingNumber} business={props.place}>
+    <FlowFrame step={step} pay={props.pay} name={props.itemName} number={props.bookingNumber} business={props.place} footer={<FlowFooter step={step} {...props} />}>
       {step === 'wait' ? <Waiting {...props} /> : null}
       {step !== 'wait' ? <PhotoRow photos={props.photos} timeZone={props.timeZone} /> : null}
       {step === 'check' ? <CheckActions {...props} /> : null}
@@ -62,13 +65,13 @@ export function PickupStartFlow(props: Props) {
   );
 }
 
-function FlowFrame({ step, pay, name, number, business, children }: { step: string; pay?: boolean; name?: string; number?: string; business?: string; children: React.ReactNode }) {
+function FlowFrame({ step, pay, name, number, business, footer, children }: { step: string; pay?: boolean; name?: string; number?: string; business?: string; footer?: React.ReactNode; children: React.ReactNode }) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24, gap: spacing.md }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: footer ? spacing.lg : insets.bottom + 24, gap: spacing.md }}>
         <ItemHeader name={name} number={number} business={business} />
         <Stepper step={step} pay={pay} />
         {step === 'check' ? (
@@ -78,7 +81,27 @@ function FlowFrame({ step, pay, name, number, business, children }: { step: stri
         ) : null}
         {children}
       </ScrollView>
+      {footer}
     </View>
+  );
+}
+
+function FlowFooter(props: Props & { step: string }) {
+  if (props.step === 'check') return <MatchFooter {...props} />;
+  if (props.step === 'start') return <StartFooter {...props} />;
+  return null;
+}
+
+function MatchFooter(props: Props) {
+  const { t } = useTranslation();
+  return (
+    <StickyActionCard
+      testID="pickup-match-sticky"
+      actionIcon="check"
+      loading={props.busy}
+      onAction={props.onMatch}
+      actionLabel={props.pay ? t('rentals.payAtPickup.matchesPay', 'Matches · go to payment') : t('rentalInspection.matches', 'Matches')}
+    />
   );
 }
 
@@ -169,9 +192,6 @@ function CheckActions(props: Props) {
   return (
     <View style={{ gap: 8 }}>
       <ReuseNote photos={props.photos} timeZone={props.timeZone} />
-      <Button mode="contained" icon="check" buttonColor={colors.primary.main} loading={props.busy} onPress={props.onMatch}>
-        {props.pay ? t('rentals.payAtPickup.matchesPay', 'Matches · go to payment') : t('rentalInspection.matches', 'Matches')}
-      </Button>
       <Button mode="outlined" icon="camera" textColor={colors.text.secondary} onPress={() => setOpen(true)}>
         {t('rentalInspection.askPhotos', 'Doesn’t match · ask for new photos')}
       </Button>
@@ -305,9 +325,8 @@ function LockedStart() {
   );
 }
 
-function StartStep(props: Props) {
-  const { t, i18n } = useTranslation();
-  const { colors } = useTheme();
+function StartFooter(props: Props) {
+  const { t } = useTranslation();
   const phase = pickupPhase({
     now: Date.now(),
     startAt: props.startAt,
@@ -322,6 +341,28 @@ function StartStep(props: Props) {
       : props.pay
         ? t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money })
         : t('rentals.actions.startRental', 'Start rental');
+  const icon = locked ? 'lock' : props.breakdown?.rail === 'card' ? 'lock-outline' : props.breakdown ? 'cellphone' : props.pay ? 'credit-card-outline' : 'play';
+  return (
+    <StickyActionCard
+      testID="pickup-start-sticky"
+      summaryLabel={t('rentals.start.stickyPickupAt', 'Pickup at')}
+      summaryValue={props.place}
+      summaryVariant="place"
+      {...pickupPlaceLink(props.place, props.address, t)}
+      actionTestID="pickup-start-button"
+      actionLabel={payLabel}
+      actionLabelStyle={payLabelStyle(payLabel)}
+      actionIcon={icon}
+      disabled={locked}
+      loading={props.starting}
+      onAction={props.onStart}
+    />
+  );
+}
+
+function StartStep(props: Props) {
+  const { t, i18n } = useTranslation();
+  const { colors } = useTheme();
   return (
     <View style={{ gap: 8 }}>
       <View style={[styles.row, { alignItems: 'flex-start' }]} testID="pickup-checked-line">
@@ -344,9 +385,6 @@ function StartStep(props: Props) {
       ) : (
         <MoneyLines lines={props.moneyLines ?? { main: t('rentals.start.held', '{{amount}} held on your card', { amount: props.money }), sub: null, icon: 'card' }} />
       )}
-      <Button testID="pickup-start-button" mode="contained" icon={locked ? 'lock' : props.breakdown?.rail === 'card' ? 'lock-outline' : props.breakdown ? 'cellphone' : props.pay ? 'credit-card-outline' : 'play'} disabled={locked} loading={props.starting} buttonColor={colors.primary.main} onPress={props.onStart} labelStyle={payLabelStyle(payLabel)} maxFontSizeMultiplier={1.2}>
-        {payLabel}
-      </Button>
       {props.breakdown ? <PayFooter breakdown={props.breakdown} /> : null}
       <Button mode="outlined" icon="flag-outline" textColor={colors.primary.main} style={{ borderColor: colors.primary.main }} onPress={props.onReport}>
         {t('rentalInspection.reportProblem', 'Report a problem')}

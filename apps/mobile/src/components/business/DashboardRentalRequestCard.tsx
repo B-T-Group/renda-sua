@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessRentalRequestRow } from '../../types/rentals';
 import { respondWithinAmber, respondWithinHours } from '../../utils/rentals/dashboardRentalRequests';
-import { rentalCategoryIcon } from '../../utils/rentals/rentalCategoryIcon';
 import { buildRequestCardModel, type RequestCardModel } from '../../utils/rentals/rentalRequestCardModel';
+import { RentalItemThumb } from './RentalItemThumb';
 
 export function DashboardRentalRequestCard({
   request,
@@ -49,35 +49,11 @@ export function DashboardRentalRequestCard({
         onPress={onOpen ? () => onOpen(request) : undefined}
       >
         <View style={styles.row}>
-          <ItemThumb request={request} />
+          <RentalItemThumb item={request.rental_location_listing.rental_item} />
           <CardCopy model={model} hours={hours} amber={amber} open={open} onToggle={() => setOpen((value) => !value)} />
         </View>
       </Pressable>
       {showActions ? <CardActions request={request} disabled={model.acceptDisabled} onAccept={onAccept} onDecline={onDecline} /> : null}
-    </View>
-  );
-}
-
-function ItemThumb({ request }: { request: BusinessRentalRequestRow }) {
-  const { colors, borderRadius } = useTheme();
-  const [failed, setFailed] = useState(false);
-  const photo = request.rental_location_listing.rental_item.rental_item_images?.[0];
-  const uri = photo?.display_url || photo?.thumbnail || photo?.image_url;
-  if (uri && !failed) {
-    return (
-      <Image
-        source={{ uri }}
-        style={[styles.photo, { borderRadius: borderRadius.icon }]}
-        resizeMode="cover"
-        onError={() => setFailed(true)}
-      />
-    );
-  }
-  const name = request.rental_location_listing.rental_item.rental_category?.name
-    || request.rental_location_listing.rental_item.name;
-  return (
-    <View style={[styles.photo, styles.thumb, { backgroundColor: colors.primary.main + '14', borderRadius: borderRadius.icon }]}>
-      <MaterialCommunityIcons name={rentalCategoryIcon(name)} size={28} color={colors.primary.main} />
     </View>
   );
 }
@@ -246,15 +222,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     alignItems: 'flex-start',
-  },
-  photo: {
-    width: 64,
-    height: 64,
-    flexShrink: 0,
-  },
-  thumb: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   body: {
     flex: 1,

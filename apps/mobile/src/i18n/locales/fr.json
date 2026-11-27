@@ -2377,6 +2377,23 @@
         "dismissNotice": "Fermer",
         "pageA11y": "Demande {{current}} sur {{total}}"
       },
+      "rentalReturns": {
+        "sectionTitle": "Actions de location",
+        "sectionA11y": "Actions de location, {{count}}",
+        "pageA11y": "Élément {{current}} sur {{total}}",
+        "chip": "Retour à confirmer",
+        "reported": "Le locataire a signalé le retour · {{time}}",
+        "renter": "Locataire : {{name}}",
+        "confirm": "Confirmer le retour",
+        "reportProblem": "Signaler un problème",
+        "openBooking": "Ouvrir la réservation",
+        "confirmTitle": "Confirmer ce retour ?",
+        "confirmBody": "Vérifiez d’abord l’article. La confirmation termine la location de {{item}}.",
+        "confirmedToast": "Retour confirmé pour {{item}}",
+        "overtimeToast": "Retour confirmé pour {{item}}. Le locataire doit payer le temps supplémentaire.",
+        "failed": "Impossible de confirmer le retour",
+        "cancel": "Annuler"
+      },
       "activeOrders": {
         "sectionTitle": "Commandes actives",
         "sectionA11y": "Commandes actives, {{count}}",
@@ -2545,10 +2562,12 @@
       "offerTotal": "Total proposé",
       "respondDialogTitleAvailable": "Confirmer la disponibilité",
       "respondDialogTitleUnavailable": "Refuser la demande",
-      "changeTotalLabel": "Modifier le total (facultatif)",
-      "changeTotalHelper": "Le devis du locataire est une estimation. Si vous modifiez le total, il devra vérifier le nouveau prix avant de payer.",
-      "changeTotalInvalid": "Saisissez un total de zéro ou plus.",
-      "changeTotalTooHigh": "Saisissez un total au plus égal au devis, au maximum 10 fois le devis, ou dans la limite de la devise.",
+      "applyRebate": "Appliquer une remise",
+      "rebateAmount": "Montant de la remise",
+      "rebateHelper": "Ce montant est déduit du devis. Le locataire vérifie le nouveau prix avant de payer.",
+      "rebateInvalid": "Saisissez un montant inférieur au devis.",
+      "rebateNewTotal": "Nouveau total : {{total}}",
+      "removeRebate": "Retirer la remise",
       "submitResponse": "Envoyer",
       "contractHours": "Contrat valable (heures)",
       "contractExpiryHelper": "Jusqu’à {{count}} heures, sans dépasser le début.",
@@ -2587,8 +2606,28 @@
       },
       "schedule": {
         "pickItem": "Article en location",
-        "empty": "Aucune réservation à venir pour cet article.",
-        "client": "Client"
+        "client": "Client",
+        "allItems": "Tous",
+        "loadError": "Impossible de charger le planning",
+        "viewDetails": "Voir les détails",
+        "openBookingA11y": "Ouvrir la réservation de {{name}}, {{date}}, {{time}}",
+        "showAll": "Voir tous les articles",
+        "emptyTitle": "Rien de prévu",
+        "emptyBody": "Les réservations confirmées apparaissent ici avec leur date, leur heure et leur prix.",
+        "emptyItemBody": "Aucune réservation à venir pour {{item}}.",
+        "emptyIllustrationA11y": "Calendrier vide",
+        "noItemsTitle": "Aucun article en location",
+        "noItemsBody": "Ajoutez une location à votre catalogue pour recevoir des réservations.",
+        "sections": {
+          "today": "Aujourd'hui",
+          "upcoming": "À venir",
+          "past": "Passées"
+        },
+        "duration": {
+          "days": "{{count}} j",
+          "hours": "{{count}} h",
+          "minutes": "{{count}} min"
+        }
       },
       "moderation": {
         "approved": "En ligne",
@@ -2664,7 +2703,10 @@
           "description": "Description",
           "currency": "Devise",
           "selectCurrency": "Devise",
-          "tags": "Tags (séparés par des virgules)",
+          "tags": "Tags",
+          "tagsPlaceholder": "Saisissez un tag puis appuyez sur Entrée",
+          "tagsAdd": "Ajouter le tag",
+          "tagsRemove": "Retirer {{tag}}",
           "continue": "Continuer"
         },
         "location": {
@@ -2684,7 +2726,11 @@
           "depositHelpDaily": "Retenue sur les locations par carte pour couvrir le temps supplémentaire. Par défaut : deux tiers du prix par jour.",
           "depositInvalid": "Saisissez une caution valide.",
           "weeklyHours": "Horaires hebdomadaires",
-          "weeklyHoursDefaultHint": "Horaires par défaut — les clients peuvent réserver dans ces créneaux. Vous pourrez les personnaliser plus tard dans l’éditeur d’annonce."
+          "weeklyHoursDefaultHint": "Horaires par défaut — les clients peuvent réserver dans ces créneaux. Vous pourrez les personnaliser plus tard dans l’éditeur d’annonce.",
+          "weeklyHoursEditorHint": "Indiquez quand les clients peuvent récupérer et rendre cet article.",
+          "weeklyHoursStart": "Début",
+          "weeklyHoursEnd": "Fin",
+          "weeklyHoursCopyAll": "Appliquer {{hours}} à tous les jours ouverts"
         },
         "success": {
           "title": "Soumis pour approbation",
@@ -4048,7 +4094,7 @@
       },
       "lane": {
         "rentals": "Locations",
-        "exports": "Exportations",
+        "exports": "Export",
         "shop": "Boutique",
         "food": "Repas"
       },
@@ -6060,6 +6106,23 @@
     }
   },
   "rentals": {
+    "commission": {
+      "breakdownTitle": "Ce que vous gagnez sur cette location",
+      "subtotal": "Sous-total de la location",
+      "fee": "Commission Rendasua ({{rate}} %)",
+      "youReceive": "Vous recevez",
+      "noRenterFee": "Le locataire ne paie aucun frais supplémentaire. La commission est prélevée sur votre paiement, uniquement à la fin de la location.",
+      "promo": "Tarif pionnier jusqu'au {{date}}",
+      "rateChanged": "La commission a changé. Vérifiez les nouveaux montants, puis acceptez à nouveau.",
+      "loadFailed": "Impossible de charger la commission. Réessayez.",
+      "illustrationLabel": "Total de la location réparti entre vous et Rendasua",
+      "earningsTitle": "Vos gains",
+      "statusQuoted": "Versé sur votre compte à la fin de la location",
+      "statusEarned": "Versé sur votre compte",
+      "statusReversed": "Commission remboursée",
+      "statusWaived": "Aucune commission : cette réservation n'a pas eu lieu",
+      "clientNoFees": "Aucun frais de service Rendasua pour les locataires. Le prix affiché est le prix que vous payez."
+    },
     "earlyReturn": {
       "addMeridiem": "Ajoutez AM ou PM",
       "returnBy": "À rendre avant {{time}}",
@@ -6125,7 +6188,7 @@
     "loading": "Chargement des locations",
     "loadingSubtitle": "Veuillez patienter",
     "metaDescription": "Parcourez les locations opérées par les entreprises sur Rendasua",
-    "businessOperatedNotice": "Location opérée par l’entreprise : la prestation se fait avec vous sur place (pas d’emprunt non accompagné).",
+    "businessOperatedNotice": "Location opérée par l’entreprise : vous louez l’article et un opérateur qui le fait fonctionner pour vous, comme une voiture avec chauffeur.",
     "takeHomeNotice": "Location à emporter : récupérez l’article, utilisez-le hors site et rendez-le avant l’heure de fin réservée.",
     "modes": {
       "operatedShort": "Opéré",
@@ -6277,8 +6340,9 @@
       "notify": "Prévenez-moi",
       "notified": "Vous serez prévenu une seule fois.",
       "datesSheetTitle": "Quand en avez-vous besoin ?",
-      "datesBlank": "Choisissez un début et une fin, ou un raccourci.",
-      "datesPickEnd": "Choisissez maintenant la date de fin.",
+      "datesBlank": "Choisissez vos jours et vos heures, ou un raccourci.",
+      "chooseDatesTimes": "Choisir les jours et les heures",
+      "changeDatesTimes": "Modifier les jours et les heures",
       "datesTooLong": "Cette période compte {{count}} jours. Choisissez 30 jours ou moins.",
       "today": "Aujourd’hui",
       "weekend": "Ce week-end",
@@ -6511,6 +6575,7 @@
       "reservedShort": "Réservée",
       "readyForPickup": "Prêt pour le retrait",
       "inProgress": "En cours",
+      "awaitingConfirmation": "En attente de confirmation",
       "done": "Terminé"
     },
     "hub": {
@@ -6600,6 +6665,8 @@
       "notYet": "Pas encore",
       "startedBanner": "Location démarrée à {{time}}. L’entreprise a été prévenue pour remettre l’article.",
       "pickupOpens": "Retrait dès le {{day}}",
+      "stickyPickupAt": "Retrait chez",
+      "directionsTo": "Obtenir l’itinéraire vers {{name}}",
       "bookedDay": "Réservé le {{day}} · {{range}}"
     },
     "business": {
@@ -6687,6 +6754,7 @@
     },
     "messages": {
       "title": "Messages",
+      "openWithUnread": "Messages, {{count}} non lus",
       "emptyHint": "Écrivez à l’autre partie pour le retrait, le retour ou la location."
     },
     "messaging": {
@@ -6778,6 +6846,7 @@
       "payButton": "Payer {{amount}} · démarrer la location",
       "cardCancelled": "Paiement annulé. Rien n’a été débité. Vous pouvez réessayer.",
       "cardFailed": "Le paiement par carte n’a pas abouti. Réessayez ou utilisez une autre carte.",
+      "cardUnavailable": "Impossible d’ouvrir le paiement par carte. Rien n’a été débité. Réessayez.",
       "cardConfirming": "Paiement reçu. Démarrage de votre location…",
       "cardWaitingTitle": "Confirmation de votre paiement par carte…",
       "cardWaitingBody": "Restez au comptoir. Cette page se met à jour dès que le paiement passe, puis le commerce vous remet l’article.",
@@ -6809,6 +6878,25 @@
       "comeBy": "Venez avant {{deadline}} le {{day}}. Sinon, la réservation est annulée.",
       "payButtonMomo": "Payer {{amount}} et démarrer"
     },
+    "reserved": {
+      "pageTitle": "Réservé",
+      "headline": "Votre réservation est confirmée",
+      "intro": "Il n’y a plus rien à faire pour l’instant. Voici la suite.",
+      "nextHeading": "LA SUITE",
+      "collectTitle": "Récupérez votre article",
+      "collectBody": "Le {{when}}, rendez-vous à {{place}} pour le récupérer.",
+      "collectBodyNoPlace": "Le {{when}}, rendez-vous au lieu de retrait pour le récupérer.",
+      "checkTitle": "Vérifiez l’article",
+      "checkBody": "Le commerce vous montre l’article. Comparez-le aux photos avant de l’accepter.",
+      "payTitle": "Payez et repartez avec",
+      "payBody": "Au retrait, inspectez l’article. S’il vous convient, payez {{due}} dans l’application et repartez avec.",
+      "payBodyDeposit": "Au retrait, inspectez l’article. S’il vous convient, payez {{due}} dans l’application et repartez avec. Un dépôt de {{deposit}} est aussi bloqué sur votre carte.",
+      "cancelTitle": "Un imprévu ?",
+      "cancelBody": "Vous pouvez annuler gratuitement avant le début de la location.",
+      "cancelBodyFee": "Annulez avant le {{day}} et vos {{fee}} de frais de réservation sont remboursés.",
+      "viewRental": "Voir la location",
+      "goDashboard": "Aller au tableau de bord"
+    },
     "reserve": {
       "dates": "Dates",
       "rental": "Location",
@@ -6830,7 +6918,12 @@
       "freeCancelUntil": "Annulation gratuite jusqu’au {{day}} · {{deadline}}",
       "payToday": "À payer aujourd’hui",
       "payTodayFeeSub": "Frais de réservation · {{rail}}",
-      "payTodayZero": "À payer aujourd’hui : {{zero}}",
+      "cancellation": "Annulation",
+      "cancellationFree": "Gratuite",
+      "payTodayNone": "Aucun paiement maintenant",
+      "payAtPickup": "À payer au retrait",
+      "payAtPickupFeeSub": "Après le contrôle de l’article · frais déjà déduits",
+      "plusDeposit": "+ {{deposit}} de dépôt bloqué",
       "payAtPickupSub": "Après le contrôle de l’article",
       "fullDay": "Journée complète",
       "offerFrom": "Offre acceptée par {{business}}"
@@ -8081,7 +8174,88 @@
       "checkBack": "Revenez bientôt, des restaurants rejoignent la plateforme."
     }
   },
+  "exportOrders": {
+    "nav": {
+      "client": "Mes commandes export",
+      "agent": "Commandes export",
+      "business": "Commandes export",
+      "businessDescription": "Commandes export passées sur vos produits : confirmez quand la marchandise est prête à expédier.",
+      "admin": "Commandes export",
+      "adminDescription": "Examinez les demandes export, émettez les proformas et enregistrez les paiements"
+    },
+    "myOrders": "Mes commandes export",
+    "myOrdersHint": "Suivez votre bon de commande, l’approbation de la proforma et la livraison.",
+    "empty": "Aucune commande export pour le moment.",
+    "browse": "Parcourir les exports",
+    "detailHint": "Documents et prochaines actions pour cet export.",
+    "documents": "Documents",
+    "notes": "Notes",
+    "lines": "Articles",
+    "approveProforma": "Approuver la proforma",
+    "requestAdjustment": "Demander un ajustement",
+    "payFull": "Payer en totalité",
+    "finance30": "Financer à 30 jours",
+    "finance60": "Financer à 60 jours",
+    "confirmDelivery": "Confirmer la livraison",
+    "loadError": "Impossible de charger vos commandes export",
+    "actionError": "Cette action n’a pas abouti. Réessayez.",
+    "orderNumber": "Commande {{bc}}",
+    "open": "Ouvrir",
+    "status": {
+      "SUBMITTED": "Envoyée",
+      "IN_REVIEW": "En cours d’examen",
+      "CHANGES_REQUESTED": "Modifications demandées",
+      "REJECTED": "Refusée",
+      "MFR_QUOTE": "Devis en préparation",
+      "PROFORMA_ISSUED": "Proforma prête",
+      "INVOICED": "Facturée",
+      "DEPOSIT_REQUIRED": "Acompte à payer",
+      "DEPOSIT_RECEIVED": "Acompte reçu",
+      "CANCELLED": "Annulée",
+      "IN_PRODUCTION": "En production",
+      "READY": "Prête",
+      "BALANCE_REQUIRED": "Solde à payer",
+      "PAID_IN_FULL": "Payée en totalité",
+      "FINANCED_30": "Financée (30 jours)",
+      "FINANCED_60": "Financée (60 jours)",
+      "SHIPPED": "Expédiée",
+      "DELIVERED": "Livrée",
+      "CLOSED": "Clôturée",
+      "REVIEWED": "Évaluée"
+    },
+    "submitted": {
+      "title": "Demande reçue",
+      "bcLabel": "Bon de commande {{bc}}",
+      "intro": "Nous avons émis votre bon de commande. Voici la suite.",
+      "illustration": "Bon de commande reçu",
+      "keepBrowsing": "Continuer à parcourir",
+      "viewOrder": "Voir ma commande",
+      "steps": {
+        "review": {
+          "title": "Nous examinons votre demande",
+          "body": "Notre équipe export vérifie l’article, la quantité et la destination. Nous pouvons vous demander des modifications."
+        },
+        "proforma": {
+          "title": "Vous recevez une proforma",
+          "body": "Nous confirmons le devis du fabricant et vous envoyons une facture proforma à approuver."
+        },
+        "deposit": {
+          "title": "Approuvez et payez l’acompte",
+          "body": "Une fois la proforma approuvée, payez l’acompte pour lancer la production."
+        },
+        "delivery": {
+          "title": "Payez le solde et recevez votre marchandise",
+          "body": "Après la production, vous réglez le solde et nous expédions votre commande."
+        }
+      }
+    }
+  },
   "productInterest": {
+    "order": {
+      "noteHelp": "Votre demande pour {{name}} est transmise à notre équipe export. Nous émettons un bon de commande et préparons une proforma pour votre approbation.",
+      "submit": "Envoyer la demande",
+      "snackbar": "Demande export {{bc}} reçue."
+    },
     "cta": "Je suis intéressé(e)",
     "dialogTitle": "Je suis intéressé(e)",
     "noteLabel": "Message (optionnel)",

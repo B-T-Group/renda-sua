@@ -5,6 +5,7 @@ import {
   bookingDetailTimeline,
   bookingDetailTimelineIndex,
   resolveBookingPhase,
+  resolveRentalPhase,
 } from './rentalPhase';
 
 describe('booking detail status labels', () => {
@@ -47,6 +48,45 @@ describe('booking detail status labels', () => {
     expect(resolveBookingPhase('awaiting_return').labelKey).toBe('rentals.phases.inProgress');
   });
 
+  it('labels a reported return "Awaiting confirmation" on client list and detail', () => {
+    const reportedAt = '2026-11-26T20:40:00.000Z';
+    const key = 'rentals.phases.awaitingConfirmation';
+    for (const status of ['active', 'awaiting_return']) {
+      const info = resolveRentalPhase({ bookingStatus: status, returnReportedAt: reportedAt }, 'client');
+      expect(info.labelKey).toBe(key);
+      expect(info.phase).toBe('in_progress');
+      expect(info.hubGroup).toBe('action_needed');
+      expect(info.nextStepKey).toBe('rentals.returnReport.waitingTitle');
+      expect(bookingDetailStatusLabelKey(status, { returnReportedAt: reportedAt })).toBe(key);
+    }
+    const business = resolveRentalPhase(
+      { bookingStatus: 'awaiting_return', returnReportedAt: reportedAt },
+      'business'
+    );
+    expect(business.nextStepKey).toBe('rentals.nextStep.awaitingReturnBusiness');
+  });
+
+  it('keeps every other status label when no return is reported', () => {
+    expect(resolveRentalPhase({ bookingStatus: 'active', returnReportedAt: null }).labelKey).toBe(
+      'rentals.phases.inProgress'
+    );
+    expect(bookingDetailStatusLabelKey('awaiting_return', { returnReportedAt: null })).toBe(
+      'rentals.bookingStatus.awaiting_return'
+    );
+    expect(
+      resolveRentalPhase({ bookingStatus: 'completed', returnReportedAt: '2026-11-26T20:40:00.000Z' })
+        .labelKey
+    ).toBe('rentals.phases.done');
+    expect(bookingDetailStatusLabelKey('confirmed', { returnReportedAt: '2026-11-26T20:40:00.000Z' })).toBe(
+      'rentals.phases.readyForPickup'
+    );
+  });
+
+  it('uses Awaiting confirmation / En attente de confirmation', () => {
+    expect(readLocale('en').rentals.phases.awaitingConfirmation).toBe('Awaiting confirmation');
+    expect(readLocale('fr').rentals.phases.awaitingConfirmation).toBe('En attente de confirmation');
+  });
+
   it('uses In progress / En cours and Return due / Retour dû', () => {
     const en = readLocale('en');
     const fr = readLocale('fr');
@@ -59,7 +99,7 @@ describe('booking detail status labels', () => {
 
 function readLocale(language: 'en' | 'fr'): {
   rentals: {
-    phases: { inProgress: string };
+    phases: { inProgress: string; awaitingConfirmation: string };
     bookingStatus: { awaiting_return: string };
   };
 } {

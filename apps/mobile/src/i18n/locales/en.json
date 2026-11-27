@@ -2444,6 +2444,23 @@
         "dismissNotice": "Dismiss",
         "pageA11y": "Request {{current}} of {{total}}"
       },
+      "rentalReturns": {
+        "sectionTitle": "Rental actions",
+        "sectionA11y": "Rental actions, {{count}}",
+        "pageA11y": "Item {{current}} of {{total}}",
+        "chip": "Return to confirm",
+        "reported": "Renter reported the return · {{time}}",
+        "renter": "Renter: {{name}}",
+        "confirm": "Confirm return",
+        "reportProblem": "Report a problem",
+        "openBooking": "Open booking",
+        "confirmTitle": "Confirm this return?",
+        "confirmBody": "Check the item first. Confirming completes the rental for {{item}}.",
+        "confirmedToast": "Return confirmed for {{item}}",
+        "overtimeToast": "Return confirmed for {{item}}. The renter was asked to pay for the extra time.",
+        "failed": "Could not confirm the return",
+        "cancel": "Cancel"
+      },
       "activeOrders": {
         "sectionTitle": "Active orders",
         "sectionA11y": "Active orders, {{count}}",
@@ -2612,10 +2629,12 @@
       "offerTotal": "Quoted total",
       "respondDialogTitleAvailable": "Confirm availability",
       "respondDialogTitleUnavailable": "Decline request",
-      "changeTotalLabel": "Change total (optional)",
-      "changeTotalHelper": "The renter’s quote is an estimate. If you change the total, they’ll be asked to review the new price before paying.",
-      "changeTotalInvalid": "Enter a total of zero or more.",
-      "changeTotalTooHigh": "Enter a total up to the quote, at most 10 times the quote, or within the currency limit.",
+      "applyRebate": "Apply rebate",
+      "rebateAmount": "Rebate amount",
+      "rebateHelper": "This amount is taken off the quoted total. The renter reviews the new price before paying.",
+      "rebateInvalid": "Enter an amount less than the quoted total.",
+      "rebateNewTotal": "New total: {{total}}",
+      "removeRebate": "Remove rebate",
       "submitResponse": "Send response",
       "contractHours": "Contract valid for (hours)",
       "contractExpiryHelper": "Up to {{count}} hours, and not past the start.",
@@ -2654,8 +2673,28 @@
       },
       "schedule": {
         "pickItem": "Rental item",
-        "empty": "No upcoming bookings for this item.",
-        "client": "Client"
+        "client": "Client",
+        "allItems": "All",
+        "loadError": "Could not load the schedule",
+        "viewDetails": "View details",
+        "openBookingA11y": "Open booking for {{name}}, {{date}}, {{time}}",
+        "showAll": "Show all items",
+        "emptyTitle": "Nothing scheduled",
+        "emptyBody": "Confirmed bookings appear here with their date, time and price.",
+        "emptyItemBody": "No upcoming bookings for {{item}}.",
+        "emptyIllustrationA11y": "Empty calendar",
+        "noItemsTitle": "No rental items yet",
+        "noItemsBody": "Add a rental in your catalog to start receiving bookings.",
+        "sections": {
+          "today": "Today",
+          "upcoming": "Upcoming",
+          "past": "Past"
+        },
+        "duration": {
+          "days": "{{count}} d",
+          "hours": "{{count}} h",
+          "minutes": "{{count}} min"
+        }
       },
       "moderation": {
         "approved": "Live",
@@ -2735,7 +2774,10 @@
           "description": "Description",
           "currency": "Currency",
           "selectCurrency": "Currency",
-          "tags": "Tags (comma-separated)",
+          "tags": "Tags",
+          "tagsPlaceholder": "Type a tag and press enter",
+          "tagsAdd": "Add tag",
+          "tagsRemove": "Remove {{tag}}",
           "continue": "Continue"
         },
         "location": {
@@ -2755,7 +2797,11 @@
           "depositHelpDaily": "Held on card rentals to cover extra time. Default is two-thirds of the day price.",
           "depositInvalid": "Enter a valid security deposit.",
           "weeklyHours": "Weekly hours",
-          "weeklyHoursDefaultHint": "Default hours — customers can book in these windows. You can customize later in the listing editor."
+          "weeklyHoursDefaultHint": "Default hours — customers can book in these windows. You can customize later in the listing editor.",
+          "weeklyHoursEditorHint": "Set when customers can pick up and return this item.",
+          "weeklyHoursStart": "Start",
+          "weeklyHoursEnd": "End",
+          "weeklyHoursCopyAll": "Use {{hours}} for all open days"
         },
         "success": {
           "title": "Submitted for approval",
@@ -6110,6 +6156,23 @@
     "loadMoreReviews": "Load more reviews"
   },
   "rentals": {
+    "commission": {
+      "breakdownTitle": "What you earn on this rental",
+      "subtotal": "Rental subtotal",
+      "fee": "Rendasua commission ({{rate}}%)",
+      "youReceive": "You receive",
+      "noRenterFee": "The renter pays no extra fee. The commission comes out of your payout, only when the rental is completed.",
+      "promo": "Early-adopter rate until {{date}}",
+      "rateChanged": "The commission changed. Review the new numbers, then accept again.",
+      "loadFailed": "Could not load the commission. Try again.",
+      "illustrationLabel": "Rental total split between you and Rendasua",
+      "earningsTitle": "Your earnings",
+      "statusQuoted": "Paid to you when the rental is completed",
+      "statusEarned": "Paid to your account",
+      "statusReversed": "Commission refunded",
+      "statusWaived": "No commission: this booking did not go ahead",
+      "clientNoFees": "No Rendasua service fee for renters. The price you see is the price you pay."
+    },
     "earlyReturn": {
       "addMeridiem": "Add AM or PM",
       "returnBy": "Return by {{time}}",
@@ -6175,7 +6238,7 @@
     "loading": "Loading rentals",
     "loadingSubtitle": "Please wait",
     "metaDescription": "Browse business-operated rentals on Rendasua",
-    "businessOperatedNotice": "Business-operated rental: the business runs this with you at their location (not unattended take-home).",
+    "businessOperatedNotice": "Business-operated rental: you rent the item and an operator who runs it for you, like a car with a driver.",
     "takeHomeNotice": "Take-home rental: pick up this item, use it off-site, and return it by the booked end time.",
     "modes": {
       "operatedShort": "Operated",
@@ -6331,8 +6394,9 @@
       "notify": "Notify me",
       "notified": "You'll be notified once.",
       "datesSheetTitle": "When do you need it?",
-      "datesBlank": "Choose a start and end, or a shortcut.",
-      "datesPickEnd": "Now choose the end date.",
+      "datesBlank": "Pick your days and hours, or choose a shortcut.",
+      "chooseDatesTimes": "Choose days and hours",
+      "changeDatesTimes": "Change days and hours",
       "datesTooLong": "This range is {{count}} days. Choose 30 days or fewer.",
       "today": "Today",
       "weekend": "This weekend",
@@ -6575,6 +6639,7 @@
       "reservedShort": "Reserved",
       "readyForPickup": "Ready for pickup",
       "inProgress": "In progress",
+      "awaitingConfirmation": "Awaiting confirmation",
       "done": "Done"
     },
     "hub": {
@@ -6664,6 +6729,8 @@
       "notYet": "Not yet",
       "startedBanner": "Rental started at {{time}}. The business has been notified to hand over the item.",
       "pickupOpens": "Pickup opens {{day}}",
+      "stickyPickupAt": "Pickup at",
+      "directionsTo": "Get directions to {{name}}",
       "bookedDay": "Booked {{day}} · {{range}}"
     },
     "business": {
@@ -6751,6 +6818,7 @@
     },
     "messages": {
       "title": "Messages",
+      "openWithUnread": "Messages, {{count}} unread",
       "emptyHint": "Message the other party about pickup, return, or the rental."
     },
     "messaging": {
@@ -6842,6 +6910,7 @@
       "payButton": "Pay {{amount}} · start rental",
       "cardCancelled": "Payment cancelled. Nothing was charged. You can try again.",
       "cardFailed": "Card payment didn’t go through. Try again or use another card.",
+      "cardUnavailable": "We couldn’t open the card payment. Nothing was charged. Try again.",
       "cardConfirming": "Payment received. Starting your rental…",
       "cardWaitingTitle": "Confirming your card payment…",
       "cardWaitingBody": "Stay at the counter. This page updates when the payment goes through, then the business hands you the item.",
@@ -6873,6 +6942,25 @@
       "comeBy": "Come by {{deadline}} on {{day}}. If you don’t, the reservation is cancelled.",
       "payButtonMomo": "Pay {{amount}} & start"
     },
+    "reserved": {
+      "pageTitle": "Reserved",
+      "headline": "You’re reserved",
+      "intro": "Nothing more to do now. Here is what happens next.",
+      "nextHeading": "WHAT’S NEXT",
+      "collectTitle": "Collect your item",
+      "collectBody": "At {{when}}, go to {{place}} to collect it.",
+      "collectBodyNoPlace": "At {{when}}, go to the pickup place to collect it.",
+      "checkTitle": "Check the item",
+      "checkBody": "The business shows you the item. Check it against the photos before you accept it.",
+      "payTitle": "Pay and take it",
+      "payBody": "At pickup, inspect the item. If everything looks good, pay {{due}} in the app and take it.",
+      "payBodyDeposit": "At pickup, inspect the item. If everything looks good, pay {{due}} in the app and take it. A {{deposit}} deposit is also held on your card.",
+      "cancelTitle": "Plans changed?",
+      "cancelBody": "You can cancel for free before the rental starts.",
+      "cancelBodyFee": "Cancel before {{day}} and your {{fee}} reservation fee is refunded.",
+      "viewRental": "View rental",
+      "goDashboard": "Go to dashboard"
+    },
     "reserve": {
       "dates": "Dates",
       "rental": "Rental",
@@ -6894,7 +6982,12 @@
       "freeCancelUntil": "Free cancellation until {{day}} · {{deadline}}",
       "payToday": "Pay today",
       "payTodayFeeSub": "Reservation fee · {{rail}}",
-      "payTodayZero": "Pay today: {{zero}}",
+      "cancellation": "Cancellation",
+      "cancellationFree": "Free",
+      "payTodayNone": "No payment now",
+      "payAtPickup": "Pay at pickup",
+      "payAtPickupFeeSub": "After you check the item · fee already deducted",
+      "plusDeposit": "+ {{deposit}} deposit hold",
       "payAtPickupSub": "After you check the item",
       "fullDay": "Full day",
       "offerFrom": "Offer accepted by {{business}}"
@@ -8145,7 +8238,88 @@
       "checkBack": "Check back soon as restaurants join the platform."
     }
   },
+  "exportOrders": {
+    "nav": {
+      "client": "My export orders",
+      "agent": "Export orders",
+      "business": "Export orders",
+      "businessDescription": "Export orders placed on your products: confirm when goods are ready to ship.",
+      "admin": "Export orders",
+      "adminDescription": "Review export requests, issue proformas, and record payments"
+    },
+    "myOrders": "My export orders",
+    "myOrdersHint": "Track your purchase order, proforma approval, and delivery.",
+    "empty": "No export orders yet.",
+    "browse": "Browse exports",
+    "detailHint": "Documents and next actions for this export.",
+    "documents": "Documents",
+    "notes": "Notes",
+    "lines": "Items",
+    "approveProforma": "Approve proforma",
+    "requestAdjustment": "Request adjustment",
+    "payFull": "Pay in full",
+    "finance30": "Finance 30 days",
+    "finance60": "Finance 60 days",
+    "confirmDelivery": "Confirm delivery",
+    "loadError": "Could not load your export orders",
+    "actionError": "That action did not go through. Try again.",
+    "orderNumber": "Order {{bc}}",
+    "open": "Open",
+    "status": {
+      "SUBMITTED": "Submitted",
+      "IN_REVIEW": "Under review",
+      "CHANGES_REQUESTED": "Changes requested",
+      "REJECTED": "Declined",
+      "MFR_QUOTE": "Preparing your quote",
+      "PROFORMA_ISSUED": "Proforma ready",
+      "INVOICED": "Invoiced",
+      "DEPOSIT_REQUIRED": "Deposit due",
+      "DEPOSIT_RECEIVED": "Deposit received",
+      "CANCELLED": "Cancelled",
+      "IN_PRODUCTION": "In production",
+      "READY": "Ready",
+      "BALANCE_REQUIRED": "Balance due",
+      "PAID_IN_FULL": "Paid in full",
+      "FINANCED_30": "Financed (30 days)",
+      "FINANCED_60": "Financed (60 days)",
+      "SHIPPED": "Shipped",
+      "DELIVERED": "Delivered",
+      "CLOSED": "Closed",
+      "REVIEWED": "Reviewed"
+    },
+    "submitted": {
+      "title": "Request received",
+      "bcLabel": "Purchase order {{bc}}",
+      "intro": "We issued your purchase order. Here is what happens next.",
+      "illustration": "Purchase order received",
+      "keepBrowsing": "Keep browsing",
+      "viewOrder": "View my order",
+      "steps": {
+        "review": {
+          "title": "We review your request",
+          "body": "Our export team checks the item, quantity and destination. We may ask you for changes."
+        },
+        "proforma": {
+          "title": "You receive a proforma",
+          "body": "We confirm the manufacturer quote and send you a proforma invoice to approve."
+        },
+        "deposit": {
+          "title": "Approve and pay the deposit",
+          "body": "Once you approve the proforma, pay the deposit to start production."
+        },
+        "delivery": {
+          "title": "Pay the balance and receive your goods",
+          "body": "After production you settle the balance and we ship your order to you."
+        }
+      }
+    }
+  },
   "productInterest": {
+    "order": {
+      "noteHelp": "Your request for {{name}} goes to our export team. We issue a purchase order and prepare a proforma for your approval.",
+      "submit": "Send request",
+      "snackbar": "Export request {{bc}} received."
+    },
     "cta": "I'm interested",
     "dialogTitle": "I'm interested",
     "noteLabel": "Message (optional)",

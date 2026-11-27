@@ -784,7 +784,7 @@ const RentalListingDetailPage: React.FC = () => {
                 >
                   {t(
                     'rentals.businessOperatedNotice',
-                    'All rentals are operated by the business (you do not take equipment home unattended).'
+                    'Business-operated rental: you rent the item and an operator who runs it for you, like a car with a driver.'
                   )}
                 </Alert>
               </Stack>
@@ -935,6 +935,8 @@ const RentalListingDetailPage: React.FC = () => {
                   currency={row.rental_item.currency}
                   initialStartDate={searchParams.get('start_date') || undefined}
                   initialEndDate={searchParams.get('end_date') || undefined}
+                  initialStartTime={searchParams.get('start_time') || undefined}
+                  initialEndTime={searchParams.get('end_time') || undefined}
                   cardWindow={row}
                   offersDaily={row.offers_daily}
                   offersHourly={row.offers_hourly}

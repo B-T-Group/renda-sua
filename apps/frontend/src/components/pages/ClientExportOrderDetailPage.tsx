@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  Chip,
   CircularProgress,
   Stack,
   TextField,
@@ -11,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { useExportOrders } from '../../hooks/useExportOrders';
+import { ExportOrderStatusChip } from '../common/ExportOrderStatusChip';
 
 export default function ClientExportOrderDetailPage() {
   const { id = '' } = useParams();
@@ -21,6 +21,7 @@ export default function ClientExportOrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const reload = useCallback(async () => {
     const data = await getOne(id);
@@ -32,6 +33,8 @@ export default function ClientExportOrderDetailPage() {
     (async () => {
       try {
         await reload();
+      } catch {
+        if (!cancelled) setLoadFailed(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -51,6 +54,16 @@ export default function ClientExportOrderDetailPage() {
     }
   };
 
+  if (loadFailed) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography color="error">
+          {t('exportOrders.loadError', 'Could not load your export orders')}
+        </Typography>
+      </Box>
+    );
+  }
+
   if (loading || !order) {
     return (
       <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
@@ -65,7 +78,7 @@ export default function ClientExportOrderDetailPage() {
         <Typography variant="h4" sx={{ fontFamily: 'Georgia, serif' }}>
           {order.bc_number}
         </Typography>
-        <Chip label={order.status} />
+        <ExportOrderStatusChip status={order.status} />
       </Stack>
       <Typography color="text.secondary" sx={{ mb: 2 }}>
         {t('exportOrders.detailHint', 'Documents and next actions for this export.')}

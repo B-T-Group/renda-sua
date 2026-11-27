@@ -20,14 +20,14 @@ export interface BrowseLaneNavItem {
 export const BROWSE_LANES: BrowseLaneNavItem[] = [
   {
     key: 'rentals',
-    labelKey: 'rentals.title',
+    labelKey: 'client.home.lane.rentals',
     labelDefault: 'Rentals',
     path: '/rentals',
     icon: <Handshake />,
   },
   {
     key: 'exports',
-    labelKey: 'exportCatalog.chip',
+    labelKey: 'client.home.lane.exports',
     labelDefault: 'Exports',
     path: '/exports',
     icon: <FlightTakeoff />,
@@ -41,7 +41,7 @@ export const BROWSE_LANES: BrowseLaneNavItem[] = [
   },
   {
     key: 'food',
-    labelKey: 'foods.title',
+    labelKey: 'client.home.lane.food',
     labelDefault: 'Food',
     path: '/foods',
     icon: <RestaurantMenu />,

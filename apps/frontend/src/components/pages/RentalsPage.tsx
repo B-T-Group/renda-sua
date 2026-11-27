@@ -30,6 +30,7 @@ import SEOHead from '../seo/SEOHead';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { useMarket } from '../../hooks/useMarket';
 import RentalsDefaultCatalog from './RentalsDefaultCatalog';
+import { MyRentalsHeroEntry } from '../rentals/MyRentalsHeroEntry';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useRentalCategories } from '../../hooks/useRentalCategories';
 import {
@@ -225,18 +226,28 @@ const RentalsLegacyCatalog: React.FC = () => {
             >
               {t('rentals.catalog.heroEyebrow', 'Rentals')}
             </Typography>
-            <Typography
-              variant="h3"
-              component="h1"
+            <Box
               sx={{
-                fontWeight: 800,
-                letterSpacing: '-0.02em',
-                fontSize: { xs: '1.75rem', sm: '2.25rem', md: '2.75rem' },
-                maxWidth: 720,
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 2,
               }}
             >
-              {t('rentals.title', 'Rentals')}
-            </Typography>
+              <Typography
+                variant="h3"
+                component="h1"
+                sx={{
+                  fontWeight: 800,
+                  letterSpacing: '-0.02em',
+                  fontSize: { xs: '1.75rem', sm: '2.25rem', md: '2.75rem' },
+                  maxWidth: 720,
+                }}
+              >
+                {t('rentals.title', 'Rentals')}
+              </Typography>
+              <MyRentalsHeroEntry />
+            </Box>
             <Typography
               color="text.secondary"
               sx={{ mt: 1.5, maxWidth: 640, lineHeight: 1.65, fontSize: { xs: '0.95rem', sm: '1rem' } }}
@@ -480,7 +491,7 @@ function CatalogNotice() {
       <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
         {t(
           'rentals.businessOperatedNotice',
-          'All rentals are operated by the business (you do not take equipment home unattended).'
+          'Business-operated rental: you rent the item and an operator who runs it for you, like a car with a driver.'
         )}
       </Typography>
     </Paper>

@@ -5,6 +5,7 @@
  */
 import { HttpException } from '@nestjs/common';
 import { RentalsService } from '../rentals.service';
+import { commissionOffStub } from '../../rental-commission/rental-commission.test-util';
 import { RentalsCronService } from '../rentals-cron.service';
 import * as Q from '../rentals-queries';
 import {
@@ -78,6 +79,7 @@ function momoBooking(over: Row = {}): Row {
 
 function harness(initial: Row, opts: { inspection?: Row; walletBalance?: number; flaggedPickup?: boolean } = {}) {
   const svc: any = Object.create(RentalsService.prototype);
+  svc.commission = commissionOffStub();
   const row: Row = { ...initial };
   const ledger: Array<{ type: string; amount: number; key?: string }> = [];
   const gate = {
@@ -149,7 +151,7 @@ function harness(initial: Row, opts: { inspection?: Row; walletBalance?: number;
   svc.stripeService = { retrievePaymentIntent: jest.fn(async () => ({ client_secret: 'pi_reused' })) };
   svc.stripeCaptureService = {
     cancelOrderPaymentIntent: jest.fn(async () => ({ success: true, skipped: true })),
-    refundCapturedPayment: jest.fn(async () => ({ success: true })),
+    refundCapturedPayment: jest.fn(async () => ({ success: true, transactionId: 'stx-fee' })),
     captureRentalBookingPaymentIntent: jest.fn(async () => ({ success: true, captured: true })),
   };
   svc.initiateRentalBookingPayment = jest.fn().mockResolvedValue(undefined);
@@ -482,7 +484,10 @@ describe('5. unpaid booking cancel', () => {
     await svc.cancelRentalBooking('b1');
     expect(row).toMatchObject({ status: 'cancelled', payment_status: 'cancelled', reservation_fee_status: 'refunded' });
     expect(svc.stripeCaptureService.refundCapturedPayment).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'fee:RB-1' }));
-    expect(ledger.map((l) => l.type)).toEqual(['release', 'withdrawal']);
+    expect(ledger).toEqual([
+      expect.objectContaining({ type: 'release', amount: 1 }),
+      expect.objectContaining({ type: 'withdrawal', amount: 1, key: 'stripe-refund:stx-fee' }),
+    ]);
   });
 
   it('renter cancel on the start day keeps the fee for the business', async () => {

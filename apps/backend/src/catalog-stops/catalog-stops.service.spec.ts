@@ -608,6 +608,50 @@ describe('CatalogStopsService', () => {
     });
   });
 
+  describe('export_only scope (/exports)', () => {
+    it('getTopInCategory keeps only export_available items exported to the viewer country', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ business_inventory: [] });
+      await service.getTopInCategory({ country_code: 'cd', state: 'Kinshasa', export_only: true });
+      const [, variables] = hasuraSystemService.executeQuery.mock.calls[0];
+      expect(variables.itemWhere).toEqual(
+        expect.objectContaining({
+          moderation_status: { _eq: 'approved' },
+          export_available: { _eq: true },
+          export_markets: { country_code: { _eq: 'CD' } },
+        })
+      );
+      expect(variables.locationWhere.address).toEqual({ country: { _is_null: false } });
+    });
+
+    it('getTopInCategory does not add export filters when export_only is off', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ business_inventory: [] });
+      await service.getTopInCategory({ country_code: 'CM' });
+      const [, variables] = hasuraSystemService.executeQuery.mock.calls[0];
+      expect(variables.itemWhere.export_available).toBeUndefined();
+      expect(variables.itemWhere.export_markets).toBeUndefined();
+    });
+
+    it('getDeals passes the export item scope', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ item_deals: [] });
+      await service.getDeals({ country_code: 'CD', export_only: true });
+      const [query, variables] = hasuraSystemService.executeQuery.mock.calls[0];
+      expect(query).toContain('$itemExportScope: items_bool_exp!');
+      expect(variables.itemExportScope).toEqual({
+        export_available: { _eq: true },
+        export_markets: { country_code: { _eq: 'CD' } },
+      });
+    });
+
+    it('returns nothing without querying when no viewer market is known', async () => {
+      await expect(service.getTopInCategory({ export_only: true })).resolves.toEqual({
+        category_name: 'All',
+        items: [],
+      });
+      await expect(service.getDeals({ export_only: true })).resolves.toEqual({ items: [] });
+      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+    });
+  });
+
   describe('F-M7: only approved (moderated) items surface', () => {
     const APPROVED = /moderation_status:\s*\{\s*_eq:\s*"approved"\s*\}/;
 

@@ -14,6 +14,7 @@ import {
   StripePaymentsDatabaseService,
   type StripePaymentTransaction,
 } from './stripe-payments-database.service';
+import { stripeRefundWalletKey } from './stripe-refund-wallet';
 import { StripeService } from './stripe.service';
 import { OrderTaxLifecycleService } from '../stripe-tax/order-tax-lifecycle.service';
 import { StripeTaxOrderPersistenceService } from '../stripe-tax/stripe-tax-order-persistence.service';
@@ -574,7 +575,7 @@ export class StripePaymentCallbackProcessor {
       transactionType: 'withdrawal',
       memo: `Stripe refund reversal - ${tx.reference}`,
       referenceId: tx.id,
-      idempotencyKey: `stripe-refund:${tx.id}`,
+      idempotencyKey: stripeRefundWalletKey(tx.id),
     });
     if (!result.success) {
       this.logger.error(
