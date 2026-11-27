@@ -7,8 +7,8 @@ const up = readFileSync(
 );
 
 describe('rental commission migration', () => {
-  it('seeds the commission flag on and a 15% default rule', () => {
-    expect(up).toMatch(/\('rentals_commission_enabled'[\s\S]*?'boolean', true,/);
+  it('seeds the commission flag off and a 15% default rule', () => {
+    expect(up).toMatch(/\('rentals_commission_enabled'[\s\S]*?'boolean', false,/);
     expect(up).toMatch(/INSERT INTO public\.rental_commission_rules \(scope, rate_bps, reason\)\s+SELECT 'default', 1500/);
   });
 

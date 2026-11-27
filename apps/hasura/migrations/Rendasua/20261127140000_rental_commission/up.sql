@@ -138,8 +138,8 @@ INSERT INTO public.application_configurations
 SELECT v.k, v.n, v.d, v.t, v.b, v.num, v.dt, v.mn, v.mx, NULL, ARRAY['rentals', 'commission']::text[], 'active', 1
 FROM (VALUES
   ('rentals_commission_enabled', 'Rental commission',
-   'When true, Rendasua takes its commission from the merchant on each rental accepted after this is on. The rate is frozen on the booking at accept. Country row wins over the global row. Default true.',
-   'boolean', true, NULL::numeric, NULL::timestamptz, NULL::numeric, NULL::numeric),
+   'When true, Rendasua takes its commission from the merchant on each rental accepted after this is on. The rate is frozen on the booking at accept. Country row wins over the global row. Default false. Turn on per environment by hand.',
+   'boolean', false, NULL::numeric, NULL::timestamptz, NULL::numeric, NULL::numeric),
   ('rental_commission_early_adopter_rate_bps', 'Rental commission early-adopter rate (bps)',
    'Promo rate in basis points for early-adopter merchants. 1000 = 10%.',
    'number', NULL, 1000, NULL, 0, 10000),
