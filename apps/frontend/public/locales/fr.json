@@ -6870,6 +6870,7 @@
   },
   "rentals": {
     "earlyReturn": {
+      "addMeridiem": "Ajoutez AM ou PM",
       "returnBy": "À rendre avant {{time}}",
       "action": "Rendre plus tôt",
       "sheetTitle": "Rendre plus tôt ?",

@@ -2,6 +2,7 @@ import {
   bookedRange,
   dayFieldLabel,
   parseTimeField,
+  timeFieldNeedsMeridiem,
   returnDayChoices,
   timeFieldText,
   bookedUntil,
@@ -152,6 +153,16 @@ describe('edit-time fields in the listing format (S2)', () => {
     expect(parseTimeField('15h40')).toBe('15:40');
     expect(parseTimeField('13:00 PM')).toBeNull();
     expect(parseTimeField('3pm')).toBeNull();
+  });
+
+  it('asks for AM or PM on 12-hour listings only', () => {
+    expect(timeFieldNeedsMeridiem('3:40', 'en', TORONTO)).toBe(true);
+    expect(timeFieldNeedsMeridiem('12:05', 'en', TORONTO)).toBe(true);
+    expect(timeFieldNeedsMeridiem('3:40 PM', 'en', TORONTO)).toBe(false);
+    expect(timeFieldNeedsMeridiem('15:40', 'en', TORONTO)).toBe(false);
+    expect(timeFieldNeedsMeridiem('0:30', 'en', TORONTO)).toBe(false);
+    expect(timeFieldNeedsMeridiem('3:40', 'fr', TORONTO)).toBe(false);
+    expect(timeFieldNeedsMeridiem('3:40', 'en', DOUALA)).toBe(false);
   });
 
   it('offers pickup day to today on the listing clock', () => {

@@ -279,3 +279,16 @@ export function parseTimeField(text: string): string | null {
   } else if (h > 23) return null;
   return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
 }
+
+/**
+ * True when a 12-hour listing (EN Americas) gets a bare "3:40" with no AM/PM.
+ * Hours 1–12 are ambiguous there, so the field asks for AM or PM instead of
+ * silently reading it as 03:40. 24-hour listings and "0:xx"/"13:xx"+ are not ambiguous.
+ */
+export function timeFieldNeedsMeridiem(text: string, language?: string | null, timeZone?: string | null): boolean {
+  if (!uses12hClock(language, timeZone)) return false;
+  const m = /^\s*(\d{1,2})\s*[:h.]\s*(\d{2})\s*$/i.exec(text);
+  if (!m) return false;
+  const h = Number(m[1]);
+  return h >= 1 && h <= 12;
+}

@@ -6061,6 +6061,7 @@
   },
   "rentals": {
     "earlyReturn": {
+      "addMeridiem": "Ajoutez AM ou PM",
       "returnBy": "À rendre avant {{time}}",
       "action": "Rendre plus tôt",
       "sheetTitle": "Rendre plus tôt ?",
@@ -6574,7 +6575,7 @@
       "latePickup": "Retrait en retard",
       "pickupOn": "Retrait le {{when}} · {{time}}",
       "todayTitle": "Récupérez votre article · {{time}}",
-      "beforeBody": "Vous pouvez démarrer la location le jour du retrait, une fois chez le commerce.",
+      "beforeBody": "Vous pouvez démarrer la location le jour du retrait, une fois sur place.",
       "todayBody": "À l’accueil, touchez Démarrer la location. On vous remet l’article dès que vous démarrez.",
       "momoBody": "À l’accueil, touchez Démarrer la location. Vous payez à ce moment, et on vous remet l’article une fois le paiement reçu.",
       "momoLine": "Mobile Money · {{amount}}",
