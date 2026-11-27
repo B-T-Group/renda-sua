@@ -68,6 +68,7 @@ import {
   DiscoveryRecoveryLadder,
 } from '../../components/browse/DiscoveryRecoveryLadder';
 import { fetchSearchRecovery } from '../../services/inventoryItemsApi';
+import { hasRecoveryContent } from '../../utils/discoveryRecovery';
 import { trackDiscoveryEvent } from '../../utils/discoveryAnalytics';
 import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
@@ -483,6 +484,9 @@ function BrowseCatalogScreenInner({
     return n;
   }, [catalogFilters, exportOnly]);
 
+  // The export lane counts as a filter above; users only "filter" when they pick something themselves.
+  const userFilterCount = activeFilterCount - (exportOnly ? 1 : 0);
+
   // AC-1.4: a new search text resets sort to the default; filter changes keep it.
   useEffect(() => {
     setDiscoverySort(null);
@@ -496,7 +500,7 @@ function BrowseCatalogScreenInner({
       setRecovery(null);
       return;
     }
-    if (debouncedSearch.length === 0 && activeFilterCount === 0) {
+    if (debouncedSearch.length === 0 && userFilterCount === 0) {
       setRecovery(null);
       return;
     }
@@ -552,7 +556,7 @@ function BrowseCatalogScreenInner({
     correction,
     forceOriginal,
     debouncedSearch,
-    activeFilterCount,
+    userFilterCount,
     catalogFilters.category,
     catalogFilters.subcategory,
     catalogFilters.brand,
@@ -1255,7 +1259,12 @@ function BrowseCatalogScreenInner({
     if (discoveryOn && recoveryLoading) return <CatalogItemSkeleton count={6} />;
 
     // Discovery: recovery ladder (flag on, total = 0)
-    if (discoveryOn && recovery && !recoveryLoading) {
+    if (
+      discoveryOn &&
+      recovery &&
+      !recoveryLoading &&
+      hasRecoveryContent(recovery, flags.assistant_shopping_v1)
+    ) {
       return (
         <DiscoveryRecoveryLadder
           recovery={recovery}
@@ -1267,8 +1276,7 @@ function BrowseCatalogScreenInner({
       );
     }
 
-    const hasFilters =
-      activeFilterCount > 0 || debouncedSearch.length > 0;
+    const hasFilters = userFilterCount > 0 || debouncedSearch.length > 0;
     return (
       <View style={styles.centerPad}>
         <CatalogEmptyIllustration />
@@ -1277,21 +1285,25 @@ function BrowseCatalogScreenInner({
             ? hasFilters
               ? t('foods.empty.noMatches', 'No dishes match your search')
               : t('foods.empty.noDishes', 'No restaurants near you yet')
-            : t('public.items.emptyTitle', 'No items found')}
+            : exportOnly
+              ? t('exportCatalog.emptyTitle', 'No export items for your market yet')
+              : t('public.items.emptyTitle', 'No items found')}
         </Text>
         <Text style={[typography.body2, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.xs }]}>
           {foodOnly
             ? hasFilters
               ? t('foods.empty.tryAgain', 'Try another dish name or clear the filters.')
               : t('foods.empty.checkBack', 'Check back soon as restaurants join the platform.')
-            : t('public.items.empty', 'No listings match your search.')}
+            : exportOnly && !hasFilters
+              ? t('exportCatalog.emptyBody', 'Check back soon as more goods become available to export.')
+              : t('public.items.empty', 'No listings match your search.')}
         </Text>
         {hasFilters && !foodOnly ? (
           <Text style={[typography.caption, { color: colors.text.disabled, marginTop: spacing.sm, textAlign: 'center' }]}>
             {t('public.items.emptyHint', 'Try clearing filters or adjusting your search.')}
           </Text>
         ) : null}
-        {activeFilterCount > 0 ? (
+        {userFilterCount > 0 ? (
           <Chip icon="filter-off" style={{ marginTop: spacing.md }} onPress={onClearAllFilters}>
             {t('public.items.emptyClearFilters', 'Clear all filters')}
           </Chip>
@@ -1308,7 +1320,8 @@ function BrowseCatalogScreenInner({
     handleAskRenda,
     handleItemPress,
     onItemPress,
-    activeFilterCount,
+    userFilterCount,
+    exportOnly,
     colors.text.disabled,
     colors.text.secondary,
     debouncedSearch.length,
