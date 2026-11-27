@@ -207,7 +207,7 @@ export class ReelsFeedService {
       [reel],
       reel.market_country
     );
-    return map.get(`${reel.business_id}:${reel.subject_id}`) ?? null;
+    return map.get(`${reel.business_id}:${reel.subject_id}`)?.id ?? null;
   }
 
   private async insertViewEvent(params: RecordViewParams): Promise<void> {
