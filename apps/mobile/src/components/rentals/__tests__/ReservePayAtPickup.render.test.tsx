@@ -9,7 +9,7 @@ import i18n from '../../../i18n';
 import type { ClientRentalRequestRow } from '../../../types/rentals';
 import { PayAtPickupCard } from '../PayAtPickupCard';
 import { RentalBookConfirmSheet } from '../RentalBookConfirmSheet';
-import { RentalStartCard, type StartCardBooking } from '../RentalStartCard';
+import { RentalStartAction, RentalStartCard, type RentalStartCardProps, type StartCardBooking } from '../RentalStartCard';
 
 const NOW = Date.parse('2026-11-28T15:00:00Z');
 
@@ -114,21 +114,23 @@ describe('Reserve now, pay at pickup', () => {
       reservation_fee_status: 'paid',
       security_deposit_amount: 180,
     };
+    const startProps: RentalStartCardProps = {
+      booking,
+      timeZone: 'America/Toronto',
+      role: 'client',
+      place: 'Sono',
+      money: '$59.00',
+      returnLabel: 'Sat 28 Nov · 6:00 PM',
+      open: true,
+      onOpen: () => undefined,
+      onClose: () => undefined,
+      onConfirm: () => undefined,
+      now: NOW,
+    };
     await renderWithProviders(
       <ThemeProvider>
-        <RentalStartCard
-          booking={booking}
-          timeZone="America/Toronto"
-          role="client"
-          place="Sono"
-          money="$59.00"
-          returnLabel="Sat 28 Nov · 6:00 PM"
-          open
-          onOpen={() => undefined}
-          onClose={() => undefined}
-          onConfirm={() => undefined}
-          now={NOW}
-        />
+        <RentalStartCard {...startProps} />
+        <RentalStartAction {...startProps} />
       </ThemeProvider>
     );
     expect(screen.getAllByText('Pay & start · $59.00').length).toBeGreaterThanOrEqual(1);

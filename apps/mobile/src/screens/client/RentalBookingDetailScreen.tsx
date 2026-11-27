@@ -23,7 +23,8 @@ import {
 } from '../../components/rentals/DidntReceiveReportButton';
 import { DeclineOutcomeCard, declineCardView } from '../../components/rentals/DeclinePickupScreens';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
-import { RentalStartCard } from '../../components/rentals/RentalStartCard';
+import { RentalStartAction, RentalStartCard, type RentalStartCardProps } from '../../components/rentals/RentalStartCard';
+import { StickyActionCard } from '../../components/common/StickyActionCard';
 import { RentalJourneyList } from '../../components/rentals/RentalJourneyList';
 import { RenterReturnCard } from '../../components/rentals/RenterReturnCard';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
@@ -57,7 +58,7 @@ import {
   formatListingDeadline,
   formatRequestAmount,
 } from '../../utils/rentals/rentalRequestFormat';
-import { clientInspectionAction, pickupGate, reportReadyToReview } from '../../utils/rentals/rentalInspection';
+import { clientInspectionAction, reportReadyToReview } from '../../utils/rentals/rentalInspection';
 import {
   confirmationTimeZone,
   confirmationZoneDefault,
@@ -247,12 +248,6 @@ export default function RentalBookingDetailScreen() {
       return undefined;
     }, [confirmationsOn, refetch, snapshot.reload])
   );
-  const gate = pickupGate({
-    enrolled: snapshot.enrolled,
-    status: booking?.status ?? '',
-    submitted: snapshot.pickup?.status === 'submitted' && !snapshot.pickup.yourDecision,
-    accepted: snapshot.pickup?.yourDecision === 'accept',
-  });
   const reviewAction = clientInspectionAction({
     status: booking?.status ?? '',
     pickup: snapshot.pickup,
@@ -522,6 +517,32 @@ export default function RentalBookingDetailScreen() {
     );
   }
 
+  const showStartCard =
+    (booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active') && !showReturnReport;
+  const startProps: RentalStartCardProps = {
+    booking,
+    timeZone: confirmationTimeZone(booking.rental_location_listing?.business_location?.address?.country, booking.currency),
+    role: 'client',
+    place: booking.rental_location_listing?.business_location?.name ?? '',
+    money: formatConfirmationMoney(
+      Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0,
+      booking.currency,
+      i18n.language
+    ),
+    returnLabel: returnByLabel,
+    starting: actionLoading,
+    open: startOpen,
+    onOpen: () => setStartOpen(true),
+    onClose: () => setStartOpen(false),
+    onConfirm: () => void onStartRental(),
+  };
+  const reviewLabel =
+    reviewStage === 'return'
+      ? t('rentalInspection.returnReview', 'Review the return against pickup photos')
+      : snapshot.pickup?.yourDecision === 'accept'
+        ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
+        : t('rentalInspection.reviewTitle', 'Review item condition');
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
       <ScrollView
@@ -529,7 +550,7 @@ export default function RentalBookingDetailScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           padding: spacing.md,
-          paddingBottom: insets.bottom + (paymentPending || reviewStage ? 120 : spacing.xl + 32),
+          paddingBottom: paymentPending || reviewStage ? spacing.lg : insets.bottom + spacing.xl + 32,
         }}
         refreshControl={
           <RefreshControl
@@ -646,27 +667,10 @@ export default function RentalBookingDetailScreen() {
           </View>
         ) : null}
 
-        {(booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active') && !showReturnReport ? (
+        {showStartCard ? (
           <View style={{ marginTop: spacing.md }}>
             <RentalStartCard
-              booking={booking}
-              timeZone={confirmationTimeZone(
-                booking.rental_location_listing?.business_location?.address?.country,
-                booking.currency
-              )}
-              role="client"
-              place={booking.rental_location_listing?.business_location?.name ?? ''}
-              money={formatConfirmationMoney(
-                Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0,
-                booking.currency,
-                i18n.language
-              )}
-              returnLabel={returnByLabel}
-              starting={actionLoading}
-              open={startOpen}
-              onOpen={() => setStartOpen(true)}
-              onClose={() => setStartOpen(false)}
-              onConfirm={() => void onStartRental()}
+              {...startProps}
               actions={
                 earlyOk ? (
                   <RenterEarlyReturn
@@ -1055,51 +1059,22 @@ export default function RentalBookingDetailScreen() {
         ) : null}
       </ScrollView>
 
-      {paymentPending || reviewStage ? (
-        <View
-          style={{
-            borderTopWidth: 1,
-            borderTopColor: colors.divider,
-            backgroundColor: colors.surface,
-            paddingHorizontal: spacing.md,
-            paddingTop: spacing.sm,
-            paddingBottom: insets.bottom + spacing.sm,
-            gap: spacing.sm,
-          }}
-        >
-          {paymentPending ? (
-            <Button
-              mode="contained"
-              loading={actionLoading || sheetLoading}
-              onPress={() => void onRetry()}
-            >
-              {t('rentals.actions.completePayment', 'Complete payment')}
-            </Button>
-          ) : (
-            <Button
-              mode="contained"
-              buttonColor={colors.primary.main}
-              icon={
-                confirmationsOn && reviewStage === 'pickup' && snapshot.pickup?.yourDecision !== 'accept'
-                  ? 'clipboard-check'
-                  : undefined
-              }
-              style={{ minHeight: 48 }}
-              onPress={() =>
-                navigation.navigate('ClientInspection', {
-                  bookingId: booking.id,
-                  stage: reviewStage ?? 'pickup',
-                })
-              }
-            >
-              {reviewStage === 'return'
-                ? t('rentalInspection.returnReview', 'Review the return against pickup photos')
-                : snapshot.pickup?.yourDecision === 'accept'
-                  ? t('rentalInspection.acceptAndStart', 'Accept condition & start rental')
-                  : t('rentalInspection.reviewTitle', 'Review item condition')}
-            </Button>
-          )}
-        </View>
+      {paymentPending ? (
+        <StickyActionCard
+          testID="rental-detail-sticky"
+          actionLabel={t('rentals.actions.completePayment', 'Complete payment')}
+          loading={actionLoading || sheetLoading}
+          onAction={() => void onRetry()}
+        />
+      ) : reviewStage ? (
+        <StickyActionCard
+          testID="rental-detail-sticky"
+          actionLabel={reviewLabel}
+          actionIcon={confirmationsOn && reviewStage === 'pickup' && snapshot.pickup?.yourDecision !== 'accept' ? 'clipboard-check' : undefined}
+          onAction={() => navigation.navigate('ClientInspection', { bookingId: booking.id, stage: reviewStage })}
+        />
+      ) : showStartCard ? (
+        <RentalStartAction {...startProps} />
       ) : null}
 
       <CancelBookingDialog

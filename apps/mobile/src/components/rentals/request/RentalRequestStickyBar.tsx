@@ -1,8 +1,5 @@
-import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Button, Text } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../../../contexts/ThemeContext';
+import { StickyActionCard } from '../../common/StickyActionCard';
 
 export interface RentalRequestStickyBarProps {
   totalAmount: string;
@@ -28,64 +25,21 @@ export function RentalRequestStickyBar({
   blockedReason,
 }: RentalRequestStickyBarProps) {
   const { t } = useTranslation();
-  const { colors, spacing } = useTheme();
-  const insets = useSafeAreaInsets();
-
   return (
-    <View
+    <StickyActionCard
       testID="rental-request-sticky"
-      style={[
-        styles.bar,
-        {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.divider,
-          paddingHorizontal: spacing.md,
-          paddingTop: spacing.sm,
-          paddingBottom: Math.max(insets.bottom, spacing.sm),
-        },
-      ]}
-    >
-      <View style={styles.totalRow}>
-        <Text style={[styles.totalLabel, { color: colors.text.secondary }]}>
-          {t('rentals.requestForm.total', 'Total')}
-        </Text>
-        <View style={styles.amounts}>
-          {previousAmount ? (
-            <Text style={[styles.previous, { color: colors.text.secondary }]}>{previousAmount}</Text>
-          ) : null}
-          <Text testID="rental-request-total" style={[styles.totalValue, { color: colors.primary.main }]}>
-            {totalAmount}
-          </Text>
-        </View>
-      </View>
-      <Text style={[styles.legal, { color: blockedReason ? '#B45309' : colors.text.secondary, fontWeight: blockedReason ? '600' : '400' }]}>
-        {blockedReason ?? legal ?? t('rentals.searchFirst.nothingCharged', 'Nothing is charged until the business accepts.')}
-      </Text>
-      <Button
-        mode="contained"
-        icon={sendIcon}
-        onPress={onSend}
-        disabled={sendDisabled}
-        loading={sending}
-        testID="rental-request-send"
-        contentStyle={styles.sendContent}
-        labelStyle={styles.sendLabel}
-        style={{ borderRadius: 12 }}
-      >
-        {sendLabel}
-      </Button>
-    </View>
+      summaryLabel={t('rentals.requestForm.total', 'Total')}
+      summaryValue={totalAmount}
+      summaryPrevious={previousAmount}
+      summaryValueTestID="rental-request-total"
+      note={blockedReason ?? legal ?? t('rentals.searchFirst.nothingCharged', 'Nothing is charged until the business accepts.')}
+      noteTone={blockedReason ? 'warning' : 'default'}
+      actionLabel={sendLabel}
+      actionIcon={sendIcon}
+      actionTestID="rental-request-send"
+      disabled={sendDisabled}
+      loading={sending}
+      onAction={onSend}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  bar: { borderTopWidth: 1, gap: 8 },
-  totalRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  totalLabel: { fontSize: 13, fontWeight: '700' },
-  amounts: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  previous: { fontSize: 14, textDecorationLine: 'line-through' },
-  totalValue: { fontSize: 20, fontWeight: '800' },
-  legal: { fontSize: 12, lineHeight: 16 },
-  sendContent: { height: 48 },
-  sendLabel: { fontSize: 15, fontWeight: '700' },
-});

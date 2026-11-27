@@ -6607,6 +6607,7 @@
       "notYet": "Pas encore",
       "startedBanner": "Location démarrée à {{time}}. L’entreprise a été prévenue pour remettre l’article.",
       "pickupOpens": "Retrait dès le {{day}}",
+      "stickyPickupAt": "Retrait chez",
       "bookedDay": "Réservé le {{day}} · {{range}}"
     },
     "business": {
