@@ -352,6 +352,28 @@ describe('StripePaymentCallbackProcessor', () => {
         expect(reverse).toHaveBeenCalledWith(expect.anything(), 100);
       });
 
+      it('debits the wallet once on the stripe payment row, the same key a direct refund uses', async () => {
+        databaseService.getTransactionByPaymentIntentId.mockResolvedValue(
+          makeTransaction({ status: 'success', amount: 1, id: 'stx-fee' })
+        );
+        accountsService.registerTransaction.mockResolvedValue({ success: true });
+        await processor.onChargeRefunded({
+          payment_intent: 'pi_fee',
+          amount_refunded: 100,
+          currency: 'cad',
+          refunded: true,
+          refunds: { data: [] },
+        } as never);
+        expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+          expect.objectContaining({
+            transactionType: 'withdrawal',
+            amount: 1,
+            referenceId: 'stx-fee',
+            idempotencyKey: 'stripe-refund:stx-fee',
+          })
+        );
+      });
+
       it('never reverses more than the ledger amount even without a refund record', async () => {
         databaseService.getTransactionByPaymentIntentId.mockResolvedValue(
           makeTransaction({ status: 'success', amount: 100 })
