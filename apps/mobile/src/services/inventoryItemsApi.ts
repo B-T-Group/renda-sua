@@ -336,6 +336,7 @@ export interface FetchSearchRecoveryParams {
   state?: string;
   collection?: string;
   food_only?: boolean;
+  export_only?: boolean;
 }
 
 export function searchRecoveryPath(params: FetchSearchRecoveryParams): string {
@@ -353,6 +354,7 @@ export function searchRecoveryPath(params: FetchSearchRecoveryParams): string {
   if (params.state?.trim()) search.set('state', params.state.trim());
   if (params.collection?.trim()) search.set('collection', params.collection.trim());
   if (params.food_only === true) search.set('food_only', 'true');
+  if (params.export_only === true) search.set('export_only', 'true');
   const q = search.toString();
   return q ? `/inventory-items/search/recovery?${q}` : '/inventory-items/search/recovery';
 }

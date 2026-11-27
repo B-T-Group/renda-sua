@@ -394,8 +394,10 @@ function BrowseCatalogScreenInner({
     [facetItems, catalogFilters.category, foodOnly]
   );
 
+  // Mid-feed stops (top in category, deals, collections, stores, bag) are local-market rails;
+  // the export grid is already the content, so none of them belong on the exports lane.
   const stopsEnabled =
-    catalogReady && debouncedSearch.length === 0 && !foodOnly;
+    catalogReady && debouncedSearch.length === 0 && !foodOnly && !exportOnly;
 
   const discoveryOn = flags.discovery_sort_v1;
   const listSearch = discoveryOn && correction ? correction.corrected : debouncedSearch;
@@ -511,6 +513,7 @@ function BrowseCatalogScreenInner({
         country_code: catalogCountryCode,
         state: catalogState,
         food_only: foodOnly || undefined,
+        export_only: exportOnly || undefined,
       },
       { signal: controller.signal }
     )
@@ -558,6 +561,7 @@ function BrowseCatalogScreenInner({
     catalogCountryCode,
     catalogState,
     foodOnly,
+    exportOnly,
   ]);
 
   // search.results_shown: once per settled result set for a search query.
