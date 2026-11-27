@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
@@ -83,7 +83,13 @@ import {
   bookingDetailTimelineIndex,
   messagesDefaultExpanded,
 } from '../../utils/rentalPhase';
-import { businessCanReplaceReport, didntReceiveWindowOpen, reportReadyToReview, unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
+import {
+  businessCanReplaceReport,
+  didntReceiveWindowOpen,
+  reportReadyToReview,
+  showBusinessReturnReport,
+  unpaidCancelMinutesLeft,
+} from '../../utils/rentalInspection';
 import { RentalHandoverNotice } from '../rentals/RentalHandoverNotice';
 import {
   confirmationDepositHeld,
@@ -274,6 +280,12 @@ const RentalBookingDetailPage: React.FC = () => {
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [confirmView, setConfirmView] = useState<ConfirmView | null>(null);
   const inspection = useRentalInspection(bookingId, booking);
+  const { hash } = useLocation();
+  const loadedBookingId = booking?.id;
+  useEffect(() => {
+    if (hash !== '#rental-inspection' || !loadedBookingId || inspection.loading) return;
+    document.getElementById('rental-inspection')?.scrollIntoView({ behavior: 'smooth' });
+  }, [hash, loadedBookingId, inspection.loading]);
   const { unreadCount: unreadMessages, refresh: refreshUnreadMessages } =
     useRentalBookingUnreadCount(bookingId);
   const messagesSectionRef = useRef<HTMLDivElement | null>(null);
@@ -497,10 +509,11 @@ const RentalBookingDetailPage: React.FC = () => {
     Boolean(isClient) && flagsLoaded && flags.rentals_renter_return_report_enabled && returnPhase !== 'hidden';
   const showBusinessReport =
     Boolean(isBusiness) &&
-    flagsLoaded &&
-    flags.rentals_renter_return_report_enabled &&
-    Boolean(booking.renter_reported_returned_at) &&
-    (status === 'active' || status === 'awaiting_return');
+    showBusinessReturnReport(
+      flagsLoaded && flags.rentals_renter_return_report_enabled === true,
+      status,
+      booking.renter_reported_returned_at
+    );
   const returnLocation = booking.return_place?.name || locationName;
   const returnByLabel = returnDueAt
     ? formatRentalPeriod(

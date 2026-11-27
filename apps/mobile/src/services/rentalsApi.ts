@@ -5,6 +5,7 @@ import type {
   BusinessRentalItemActivity,
   BusinessRentalItemActivityScope,
   BusinessRentalScheduleRow,
+  BusinessReturnConfirmationRow,
   ClientRentalBookingRow,
   ClientRentalRequestRow,
   CreateBusinessRentalItemBody,
@@ -556,6 +557,17 @@ export async function getDashboardRequests(
   return { requests: res.data?.requests ?? [], expiryNotices: res.data?.expiryNotices ?? [] };
 }
 
+export async function getReturnConfirmations(
+  init?: Init
+): Promise<BusinessReturnConfirmationRow[]> {
+  const res = await apiRequest<{
+    success: boolean;
+    data: { bookings: BusinessReturnConfirmationRow[] };
+  }>('/rentals/business/return-confirmations', { method: 'GET', signal: init?.signal });
+  if (!res.success) return [];
+  return res.data?.bookings ?? [];
+}
+
 export async function getBusinessRequests(
   init?: Init & { status?: string; id?: string }
 ): Promise<BusinessRentalRequestRow[]> {
@@ -748,6 +760,7 @@ export const rentalsApi = {
   deleteBusinessListing,
   getBusinessRequests,
   getDashboardRequests,
+  getReturnConfirmations,
   respondToRequest,
   dismissExpiryNotice,
   getBusinessSchedule,

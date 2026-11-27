@@ -374,6 +374,18 @@ export class RentalsController {
     return { success: true, data: { schedule } };
   }
 
+  @Get('business/return-confirmations')
+  @ApiOperation({
+    summary:
+      'List active or awaiting-return bookings whose renter reported the item returned and the business has not confirmed',
+  })
+  @ApiResponse({ status: 200, description: 'Bookings returned, oldest report first' })
+  @ApiResponse({ status: 403, description: 'Not a business user' })
+  async getBusinessReturnConfirmations() {
+    const bookings = await this.renterReturns.listForBusiness();
+    return { success: true, data: { bookings } };
+  }
+
   @Post('business/items')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a rental item for the current business' })

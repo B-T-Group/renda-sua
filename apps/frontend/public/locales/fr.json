@@ -2839,6 +2839,23 @@
         "viewRequest": "Voir la demande",
         "dismissNotice": "Fermer"
       },
+      "rentalReturns": {
+        "sectionTitle": "Actions de location",
+        "sectionA11y": "Actions de location, {{count}}",
+        "pageA11y": "Élément {{current}} sur {{total}}",
+        "chip": "Retour à confirmer",
+        "reported": "Le locataire a signalé le retour · {{time}}",
+        "renter": "Locataire : {{name}}",
+        "confirm": "Confirmer le retour",
+        "reportProblem": "Signaler un problème",
+        "openBooking": "Ouvrir la réservation",
+        "confirmTitle": "Confirmer ce retour ?",
+        "confirmBody": "Vérifiez d’abord l’article. La confirmation termine la location de {{item}}.",
+        "confirmedToast": "Retour confirmé pour {{item}}",
+        "overtimeToast": "Retour confirmé pour {{item}}. Le locataire doit payer le temps supplémentaire.",
+        "failed": "Impossible de confirmer le retour",
+        "cancel": "Annuler"
+      },
       "welcome": "Bienvenue sur votre tableau de bord d'entreprise",
       "accountSummary": "Résumé du Compte",
       "adminManagement": "Gestion Administrateur",

@@ -121,6 +121,35 @@ const LIST = `
   }
 `;
 
+const BUSINESS_LIST = `
+  query BusinessReturnConfirmations($businessId: uuid!) {
+    rental_bookings(
+      where: {
+        business_id: { _eq: $businessId }
+        renter_reported_returned_at: { _is_null: false }
+        status: { _in: ["active", "awaiting_return"] }
+      }
+      order_by: { renter_reported_returned_at: asc }
+      limit: 50
+    ) {
+      id booking_number status start_at end_at return_due_at actual_start_at
+      renter_reported_returned_at security_deposit_amount currency inspection_policy_version
+      client { user { first_name last_name } }
+      rental_location_listing {
+        business_location { name address { country } }
+        rental_item {
+          name
+          currency
+          rental_category { name }
+          rental_item_images(order_by: { display_order: asc }, limit: 1) {
+            id display_url thumbnail thumbnail_status image_url alt_text
+          }
+        }
+      }
+    }
+  }
+`;
+
 const PLACE = `
   query ReturnPlace($id: uuid!) {
     rental_bookings_by_pk(id: $id) {
@@ -170,6 +199,18 @@ export class RentalRenterReturnService {
     const result = await this.hasura.executeQuery<{
       rental_bookings: Array<Record<string, unknown>>;
     }>(LIST, {});
+    return result.rental_bookings ?? [];
+  }
+
+  /** Bookings the renter reported returned that the current business has not confirmed yet. */
+  async listForBusiness(): Promise<Array<Record<string, unknown>>> {
+    const user = await this.users.getUser();
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
+      throw new HttpException('Business profile required', HttpStatus.FORBIDDEN);
+    }
+    const result = await this.hasura.executeQuery<{
+      rental_bookings: Array<Record<string, unknown>>;
+    }>(BUSINESS_LIST, { businessId: user.business.id });
     return result.rental_bookings ?? [];
   }
 

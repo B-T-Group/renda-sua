@@ -2444,6 +2444,23 @@
         "dismissNotice": "Dismiss",
         "pageA11y": "Request {{current}} of {{total}}"
       },
+      "rentalReturns": {
+        "sectionTitle": "Rental actions",
+        "sectionA11y": "Rental actions, {{count}}",
+        "pageA11y": "Item {{current}} of {{total}}",
+        "chip": "Return to confirm",
+        "reported": "Renter reported the return · {{time}}",
+        "renter": "Renter: {{name}}",
+        "confirm": "Confirm return",
+        "reportProblem": "Report a problem",
+        "openBooking": "Open booking",
+        "confirmTitle": "Confirm this return?",
+        "confirmBody": "Check the item first. Confirming completes the rental for {{item}}.",
+        "confirmedToast": "Return confirmed for {{item}}",
+        "overtimeToast": "Return confirmed for {{item}}. The renter was asked to pay for the extra time.",
+        "failed": "Could not confirm the return",
+        "cancel": "Cancel"
+      },
       "activeOrders": {
         "sectionTitle": "Active orders",
         "sectionA11y": "Active orders, {{count}}",
