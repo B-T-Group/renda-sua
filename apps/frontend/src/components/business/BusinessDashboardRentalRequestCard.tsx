@@ -76,7 +76,11 @@ function CardCopy({
       {model.renterName ? <Typography variant="body2" noWrap>{model.renterName}</Typography> : null}
       {model.place ? <Typography variant="body2" color="text.secondary" noWrap>{model.place}</Typography> : null}
       <ScheduleLine model={model} open={open} onToggle={onToggle} />
-      {model.receiveLine ? <Typography fontWeight={800}>{model.receiveLine}</Typography> : null}
+      {model.receiveLine ? (
+        <Typography fontWeight={800} color={model.expired ? 'text.secondary' : 'text.primary'}>
+          {model.receiveLine}
+        </Typography>
+      ) : null}
       {model.breakdown ? <Typography variant="caption" color="text.secondary">{model.breakdown}</Typography> : null}
       {model.depositAmount ? <Typography variant="caption" display="block">{t('rentals.requestCard.deposit', 'Deposit {{amount}}', { amount: model.depositAmount })}</Typography> : null}
       {model.changeDetail ? <Typography variant="caption" color="info.main" display="block">{t('rentals.modify.changed', 'Changed: {{detail}}', { detail: model.changeDetail })}</Typography> : null}
@@ -117,6 +121,18 @@ function categoryIcon(name: string) {
 
 function CardChips({ model }: { model: RequestCardModel }) {
   const { t } = useTranslation();
+  if (model.expired) {
+    return (
+      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+        <Chip
+          size="small"
+          data-testid="rental-request-expired-chip"
+          label={t('rentals.requestCard.expired', 'Expired')}
+          sx={{ bgcolor: 'action.hover', color: 'text.secondary', fontWeight: 800 }}
+        />
+      </Stack>
+    );
+  }
   return (
     <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
       <Chip size="small" label={t('business.dashboard.rentalRequests.requested', 'Requested')} />
@@ -176,12 +192,12 @@ function DecisionButtons({
     ? t('rentals.requestCard.acceptUnavailable', 'Accept unavailable — dates are taken')
     : t('business.dashboard.rentalRequests.accept', 'Accept');
   return (
-    <Stack direction="row" spacing={1}>
-      <IconButton aria-label={acceptLabel} disabled={disabled} color="success" onClick={() => onAccept(request)} sx={{ bgcolor: 'success.main', color: 'common.white', '&:hover': { bgcolor: 'success.dark' } }}>
-        <CheckIcon />
-      </IconButton>
-      <IconButton aria-label={t('business.dashboard.rentalRequests.decline', 'Decline')} color="error" onClick={() => onDecline(request)} sx={{ border: 1, borderColor: 'divider' }}>
+    <Stack direction="row" spacing={1} data-testid="rental-request-actions">
+      <IconButton data-testid="rental-request-decline" aria-label={t('business.dashboard.rentalRequests.decline', 'Decline')} color="error" onClick={() => onDecline(request)} sx={{ border: 1, borderColor: 'divider' }}>
         <CloseIcon />
+      </IconButton>
+      <IconButton data-testid="rental-request-accept" aria-label={acceptLabel} disabled={disabled} color="success" onClick={() => onAccept(request)} sx={{ bgcolor: 'success.main', color: 'common.white', '&:hover': { bgcolor: 'success.dark' } }}>
+        <CheckIcon />
       </IconButton>
     </Stack>
   );

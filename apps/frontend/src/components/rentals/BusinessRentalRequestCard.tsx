@@ -1,6 +1,9 @@
+import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import HandymanOutlinedIcon from '@mui/icons-material/HandymanOutlined';
+import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Chip,
@@ -8,21 +11,23 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { BusinessRentalRequestRow } from '../../hooks/useRentalApi';
 import {
-  formatRentalMoney,
+  formatRequestAmount,
   parseRentalPricingSnapshot,
-  parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
 import {
   computeRentalPricingLines,
   parseRentalSelectionWindowsFromJson,
 } from '../../utils/rentalPricingLines';
 import { resolveRentalPhase } from '../../utils/rentalPhase';
+import { expiredRequestWindow, isExpiredRentalRequest, requestPhotoUrl } from '../../utils/dashboardRentalRequests';
+import { buildRequestCardModel } from '../../utils/rentalRequestCardModel';
+import { RentalRequestExpiredBanner } from '../business/RentalRequestExpiredBanner';
 
 function changeDetail(summary: BusinessRentalRequestRow['change_summary']): string {
   if (!summary?.fields?.length) return '';
@@ -35,6 +40,13 @@ function changeDetail(summary: BusinessRentalRequestRow['change_summary']): stri
   }
   if (summary.fields.includes('notes')) bits.push('notes');
   return bits.join(', ');
+}
+
+
+function finiteQuotedTotal(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const amount = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(amount) ? amount : null;
 }
 
 function exclusiveRange(windows: Array<{ calendar_date?: string }> | undefined): string {
@@ -63,21 +75,6 @@ function formatDateTimeWithoutTimezone(value?: string | null): string {
   });
 }
 
-function formatDateOnly(value?: string | null): string {
-  if (!value) {
-    return '-';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-  });
-}
-
 export interface BusinessRentalRequestCardProps {
   request: BusinessRentalRequestRow;
   onAccept: (request: BusinessRentalRequestRow) => void;
@@ -89,7 +86,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   onAccept,
   onReject,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
   const firstName = request.client?.user?.first_name?.trim() || '';
@@ -101,34 +98,29 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   const bookingIsActive = booking?.status === 'active';
   const actualStartAt = booking?.actual_start_at ?? null;
   const itemName = request.rental_location_listing?.rental_item?.name ?? '—';
-  const img = request.rental_location_listing?.rental_item?.rental_item_images?.[0];
-  const imgUrl =
-    (img?.image_url?.trim() ||
-      (img as { imageUrl?: string | null } | undefined)?.imageUrl?.trim() ||
-      '') as string;
-  const imgAlt = img?.alt_text?.trim() || itemName;
+  const imgUrl = requestPhotoUrl(request);
+  const imgAlt = itemName;
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
-  const selectionWindows = useMemo(
-    () => parseRentalSelectionWindows(request.rental_selection_windows),
-    [request.rental_selection_windows]
-  );
+  const model = buildRequestCardModel(request, i18n.language, new Date(), t);
   const currency = request.rental_location_listing?.rental_item?.currency ?? 'XAF';
   const pricingPreview = useMemo(() => {
     const quoted = parseRentalPricingSnapshot(request.rental_pricing_snapshot);
+    const frozen = finiteQuotedTotal(request.quoted_total) ?? quoted?.total ?? null;
     if (quoted?.lines?.length) {
-      return { lines: quoted.lines, total: quoted.total, currency: quoted.currency };
+      return { lines: quoted.lines, total: frozen ?? quoted.total, currency: quoted.currency };
     }
     const windows = parseRentalSelectionWindowsFromJson(request.rental_selection_windows);
     if (!windows.length) {
-      return { lines: [], total: 0, currency };
+      return { lines: [], total: frozen ?? 0, currency: quoted?.currency ?? currency };
     }
     const ratePerHour = Number(request.rental_location_listing.base_price_per_hour);
     const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
     const units = Math.max(1, Math.floor(Number(request.units_requested)) || 1);
     const computed = computeRentalPricingLines(windows, ratePerHour, ratePerDay, units);
-    return { lines: computed.lines, total: computed.total, currency };
+    return { lines: computed.lines, total: frozen ?? computed.total, currency: quoted?.currency ?? currency };
   }, [
     currency,
+    request.quoted_total,
     request.rental_location_listing.base_price_per_day,
     request.rental_location_listing.base_price_per_hour,
     request.rental_pricing_snapshot,
@@ -180,14 +172,16 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   return (
     <Paper
       elevation={0}
+      data-testid="rental-request-row"
       role={cardOpensBooking ? 'button' : undefined}
       tabIndex={cardOpensBooking ? 0 : undefined}
       aria-label={
         cardOpensBooking
           ? t('business.rentals.openRequestCardA11y', 'Open {{item}}, {{status}}', {
               item: itemName,
-              status:
-                request.status === 'pending'
+              status: isExpiredRentalRequest(request)
+                ? t('rentals.requestCard.expired', 'Expired')
+                : request.status === 'pending'
                   ? t('rentals.modify.requested', 'Requested')
                   : t(phase.labelKey, request.status),
             })
@@ -242,23 +236,23 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
             }}
           />
         ) : (
-          <Avatar
-            variant="rounded"
+          <Box
+            aria-hidden
             sx={{
               width: 104,
               height: 104,
               borderRadius: 2,
-              fontWeight: 900,
-              bgcolor: alpha(theme.palette.primary.main, 0.12),
-              color: 'primary.main',
               border: 1,
               borderColor: 'divider',
               flexShrink: 0,
-              fontSize: '1.1rem',
+              bgcolor: 'action.hover',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            {itemName?.trim()?.[0]?.toUpperCase() ?? 'R'}
-          </Avatar>
+            <ItemCategoryIcon request={request} />
+          </Box>
         )}
 
         <Stack spacing={1.25} sx={{ flex: 1, minWidth: 0 }}>
@@ -279,15 +273,31 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
             <Stack direction="row" spacing={0.5}>
               <Chip
                 size="small"
-                color={statusChipColor}
-                label={request.status === 'pending' ? t('rentals.modify.requested', 'Requested') : t(phase.labelKey, request.status)}
-                sx={{ fontWeight: 800 }}
+                data-testid={isExpiredRentalRequest(request) ? 'rental-request-expired-chip' : undefined}
+                color={isExpiredRentalRequest(request) ? 'default' : statusChipColor}
+                label={
+                  isExpiredRentalRequest(request)
+                    ? t('rentals.requestCard.expired', 'Expired')
+                    : request.status === 'pending'
+                      ? t('rentals.modify.requested', 'Requested')
+                      : t(phase.labelKey, request.status)
+                }
+                sx={{
+                  fontWeight: 800,
+                  ...(isExpiredRentalRequest(request)
+                    ? { bgcolor: 'action.hover', color: 'text.secondary' }
+                    : {}),
+                }}
               />
               {(request.change_summary?.fields?.length ?? 0) > 0 ? (
                 <Chip size="small" color="primary" variant="outlined" label={t('rentals.modify.updated', 'Updated')} />
               ) : null}
             </Stack>
           </Stack>
+          {isExpiredRentalRequest(request) ? (
+            <RentalRequestExpiredBanner window={expiredRequestWindow(request)} />
+          ) : null}
+
           {(request.change_summary?.fields?.length ?? 0) > 0 ? (
             <Typography variant="body2" color="primary.main">
               {t('rentals.modify.changed', 'Changed: {{detail}}', {
@@ -310,19 +320,23 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
           ) : null}
 
           <Typography variant="body2" color="text.secondary">
-            {selectionWindows.length
-              ? selectionWindows
-                  .map((w) =>
-                    w.billing === 'all_day'
-                      ? formatDateOnly(w.start_at)
-                      : `${formatDateTimeWithoutTimezone(w.start_at)} → ${formatDateTimeWithoutTimezone(w.end_at)}`
-                  )
-                  .join(' · ')
-              : '—'}
+            {model.schedule.summary || '—'}
           </Typography>
 
-          <Typography variant="body2" fontWeight={700}>
-            {formatRentalMoney(pricingPreview.total, pricingPreview.currency)}
+          <Typography
+            variant="body2"
+            fontWeight={700}
+            color={isExpiredRentalRequest(request) ? 'text.secondary' : 'text.primary'}
+          >
+            {isExpiredRentalRequest(request)
+              ? t('rentals.requestCard.wouldHaveReceived', 'Would have received {{amount}}', {
+                  amount: formatRequestAmount(
+                    pricingPreview.total,
+                    pricingPreview.currency,
+                    i18n.language
+                  ),
+                })
+              : formatRequestAmount(pricingPreview.total, pricingPreview.currency, i18n.language)}
           </Typography>
 
           <Stack
@@ -334,18 +348,20 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
               <>
                 <Button
                   size="small"
-                  variant="contained"
-                  onClick={stopAnd(() => onAccept(request))}
-                >
-                  {t('rentals.actions.accept', 'Accept')}
-                </Button>
-                <Button
-                  size="small"
                   variant="outlined"
                   color="warning"
+                  data-testid="rental-request-decline"
                   onClick={stopAnd(() => onReject(request))}
                 >
                   {t('rentals.actions.decline', 'Decline')}
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  data-testid="rental-request-accept"
+                  onClick={stopAnd(() => onAccept(request))}
+                >
+                  {t('rentals.actions.accept', 'Accept')}
                 </Button>
               </>
             ) : null}
@@ -367,3 +383,19 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
     </Paper>
   );
 };
+
+function ItemCategoryIcon({ request }: { request: BusinessRentalRequestRow }) {
+  const name =
+    request.rental_location_listing.rental_item.rental_category?.name ||
+    request.rental_location_listing.rental_item.name;
+  const Icon = categoryIcon(name);
+  return <Icon color="action" sx={{ fontSize: 40 }} />;
+}
+
+function categoryIcon(name: string) {
+  if (/camera|photo|caméra|appareil/i.test(name)) return PhotoCameraOutlinedIcon;
+  if (/equipment|équipement|equipement|tool|outil|light/i.test(name)) return HandymanOutlinedIcon;
+  if (/power|électr|electr|éclair/i.test(name)) return BoltOutlinedIcon;
+  return CategoryOutlinedIcon;
+}
+

@@ -101,11 +101,17 @@ function CardCopy({
   return (
     <View style={styles.body}>
       <View style={styles.metaRow}>
-        <Text variant="labelSmall" style={styles.metaChip}>
-          {t('business.dashboard.rentalRequests.requested', 'Requested')}
-        </Text>
-        <StartChip model={model} />
-        {model.updated ? <UpdatedChip /> : null}
+        {model.expired ? (
+          <ExpiredChip />
+        ) : (
+          <>
+            <Text variant="labelSmall" style={styles.metaChip}>
+              {t('business.dashboard.rentalRequests.requested', 'Requested')}
+            </Text>
+            <StartChip model={model} />
+            {model.updated ? <UpdatedChip /> : null}
+          </>
+        )}
       </View>
       {model.acceptDisabled ? (
         <Text variant="labelSmall" style={{ color: colors.warning.dark }} numberOfLines={2}>
@@ -120,8 +126,24 @@ function CardCopy({
         </Text>
       ) : null}
       <ScheduleLine model={model} open={open} onToggle={onToggle} />
-      {model.receiveLine ? <Text variant="titleSmall" numberOfLines={1}>{model.receiveLine}</Text> : null}
-      {model.breakdown ? <Text variant="labelSmall" numberOfLines={1}>{model.breakdown}</Text> : null}
+      {model.receiveLine ? (
+        <Text
+          variant="titleSmall"
+          numberOfLines={1}
+          style={model.expired ? { color: colors.text.secondary } : undefined}
+        >
+          {model.receiveLine}
+        </Text>
+      ) : null}
+      {model.breakdown ? (
+        <Text
+          variant="labelSmall"
+          numberOfLines={1}
+          style={model.expired ? { color: colors.text.secondary } : undefined}
+        >
+          {model.breakdown}
+        </Text>
+      ) : null}
       {model.depositAmount ? (
         <Text variant="labelSmall" numberOfLines={1}>
           {t('rentals.requestCard.deposit', 'Deposit {{amount}}', { amount: model.depositAmount })}
@@ -146,6 +168,18 @@ function CardCopy({
           {t('rentals.requestCard.sent', 'Sent {{time}}', { time: model.sentClock })}
         </Text>
       ) : null}
+    </View>
+  );
+}
+
+function ExpiredChip() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <View testID="rental-request-expired-chip" style={[styles.updated, { backgroundColor: colors.surfaceInput }]}>
+      <Text style={{ color: colors.text.secondary, fontSize: 11, fontWeight: '700' }}>
+        {t('rentals.requestCard.expired', 'Expired')}
+      </Text>
     </View>
   );
 }
@@ -215,8 +249,9 @@ export function CardActions({
     ? t('rentals.requestCard.acceptUnavailable', 'Accept unavailable — dates are taken')
     : t('business.dashboard.rentalRequests.accept', 'Accept');
   return (
-    <View style={styles.actions}>
+    <View testID="rental-request-actions" style={styles.actions}>
       <Pressable
+        testID="rental-request-decline"
         accessibilityLabel={t('business.dashboard.rentalRequests.decline', 'Decline')}
         onPress={() => onDecline(request)}
         style={[styles.iconBtn, styles.decline, { borderColor: colors.divider }]}
@@ -224,6 +259,7 @@ export function CardActions({
         <MaterialCommunityIcons name="close" color={colors.error.main} size={22} />
       </Pressable>
       <Pressable
+        testID="rental-request-accept"
         accessibilityLabel={acceptLabel}
         accessibilityState={{ disabled }}
         disabled={disabled}
