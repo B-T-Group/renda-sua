@@ -1,4 +1,4 @@
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
@@ -6,12 +6,17 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { formatSearchMoney } from '../../../utils/rentals';
 import { formatCatalogMoney } from '../../../utils/rentals/rentalRequestFormat';
 import { formatRentalDay } from '../../../utils/rentals/rentalRequestFormat';
+import { fromHourlyPrice, pickerLang } from '../../../utils/rentals/dayHoursCopy';
+import { withRateUnit } from '../../../utils/rentals/moneyRateUnit';
 
 export interface RentalSearchCardModel {
   id: string;
   name: string;
   imageUrl?: string | null;
   pricePerDay: number;
+  /** Hourly-only listings show "from 3 000 FCFA / h" and no day total. */
+  hourlyOnly?: boolean;
+  pricePerHour?: number;
   currency: string;
   available: boolean | null;
   totalForDates: number | null;
@@ -28,11 +33,12 @@ export interface RentalSearchCardModel {
 
 export function RentalSearchResultCard({
   card,
-  onRent,
+  onOpen,
   onSeeDates,
 }: {
   card: RentalSearchCardModel;
-  onRent: (id: string) => void;
+  /** Opens the listing's details page; renting starts there. */
+  onOpen: (id: string) => void;
   onSeeDates: (id: string) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -42,14 +48,19 @@ export function RentalSearchResultCard({
   const place = [card.business, card.city].filter(Boolean).join(', ');
   const showAvailability = card.available != null && card.rangeLabel;
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={() => onOpen(card.id)}
+      accessibilityRole="button"
+      accessibilityLabel={t('rentals.searchFirst.viewDetailsFor', 'View details for {{name}}', { name: card.name })}
+      testID={`rental-search-card-${card.id}`}
+      style={({ pressed }) => [
         styles.card,
         {
           backgroundColor: colors.surface,
           borderColor: colors.divider,
           borderRadius: borderRadius.lg,
           marginBottom: spacing.sm,
+          opacity: pressed ? 0.85 : 1,
         },
       ]}
     >
@@ -73,7 +84,7 @@ export function RentalSearchResultCard({
         {place ? <Text style={{ color: colors.text.secondary }}>{place}</Text> : null}
         {showAvailability && card.available ? (
           <Text style={[styles.badge, { backgroundColor: colors.cta.soft, color: colors.cta.dark }]}>
-            {t('rentals.searchFirst.freeFor', 'Free {{range}}', { range: card.rangeLabel })}
+            {t('rentals.searchFirst.freeFor', 'Available {{range}}', { range: card.rangeLabel })}
           </Text>
         ) : null}
         {showAvailability && card.available === false ? (
@@ -83,10 +94,12 @@ export function RentalSearchResultCard({
             })}
           </Text>
         ) : null}
-        <Text style={{ color: colors.text.primary, fontWeight: '700', marginTop: 6 }}>
-          {daily} {t('rentals.searchFirst.perDay', '/ day')}
+        <Text testID={`rental-search-price-${card.id}`} style={{ color: colors.text.primary, fontWeight: '700', marginTop: 6 }}>
+          {card.hourlyOnly
+            ? fromHourlyPrice(card.pricePerHour ?? 0, card.currency, pickerLang(i18n.language))
+            : withRateUnit(daily, t('rentals.searchFirst.perDay', '/ day'))}
         </Text>
-        {card.available && card.totalForDates != null && card.dayCount ? (
+        {!card.hourlyOnly && card.available && card.totalForDates != null && card.dayCount ? (
           <Text style={{ color: colors.text.secondary }} testID={`rental-search-total-${card.id}`}>
             {card.totalIsEstimate
               ? t('rentals.searchFirst.totalEstimate', 'Est. {{amount}} for {{count}} days', {
@@ -99,7 +112,7 @@ export function RentalSearchResultCard({
                 })}
           </Text>
         ) : null}
-        {!card.rangeLabel && !card.catalog ? (
+        {!card.rangeLabel && !card.catalog && !card.hourlyOnly ? (
           <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
             {t('rentals.searchFirst.totalsAfterDates', 'Totals appear once you add dates')}
           </Text>
@@ -114,20 +127,12 @@ export function RentalSearchResultCard({
           >
             {t('rentals.searchFirst.seeDates', 'See dates')}
           </Button>
-        ) : (
-          <Button
-            mode="contained"
-            icon="key-variant"
-            buttonColor={colors.primary.main}
-            onPress={() => onRent(card.id)}
-            style={styles.action}
-            testID={`rental-search-rent-${card.id}`}
-          >
-            {t('rentals.searchFirst.rent', 'Rent')}
-          </Button>
-        )}
+        ) : null}
       </View>
-    </View>
+      <View style={styles.chevron}>
+        <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.secondary} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -151,4 +156,5 @@ const styles = StyleSheet.create({
   body: { flex: 1, minWidth: 0 },
   badge: { alignSelf: 'flex-start', overflow: 'hidden', borderRadius: 8, marginTop: 6, paddingHorizontal: 8, paddingVertical: 3, fontWeight: '600' },
   action: { alignSelf: 'flex-start', marginTop: 8 },
+  chevron: { alignSelf: 'center', marginLeft: -4 },
 });

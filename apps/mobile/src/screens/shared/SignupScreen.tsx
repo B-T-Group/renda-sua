@@ -556,7 +556,7 @@ function SignupScreen({ navigation, route }: SignupScreenProps) {
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
     const tabNav = navigation.getParent();
     if (tabNav) {
-      tabNav.navigate('GuestBrowse' as never);
+      tabNav.navigate('GuestHome' as never);
       return;
     }
   }, [navigation]);

@@ -10,13 +10,18 @@ import {
   returnAlreadyConfirmed,
   returnNotEscalated,
   returnReportDisabled,
+  returnReportNotReceivedOpen,
 } from './rental-renter-return.errors';
+import { earlyReturnZone, isEarlyReturn } from '../early-return/early-return.policy';
+import { bookingReturnDueInstantMs } from '../return-due';
 import { assertCanReportReturn, escalationCutoff } from './rental-renter-return.policy';
 
 export interface ReturnReportResult {
   success: true;
   alreadyReported: boolean;
   wasOverdue: boolean;
+  /** Reported before the return was due (listing clock): an early return. */
+  early?: boolean;
   report: { rentalBookingId: string; reportedAt: string };
 }
 
@@ -33,10 +38,13 @@ interface ReturnBooking {
   status: string;
   actual_start_at: string | null;
   end_at: string | null;
+  return_due_at?: string | null;
   renter_reported_returned_at: string | null;
   renter_return_escalated_at: string | null;
   inspection_policy_version: number | null;
   business?: { user_id?: string | null } | null;
+  client?: { user?: { first_name?: string | null } | null } | null;
+  rental_not_received_reports?: Array<{ id: string }> | null;
   rental_location_listing?: {
     rental_item?: { name?: string | null } | null;
     business_location?: { address?: { country?: string | null } | null } | null;
@@ -46,14 +54,16 @@ interface ReturnBooking {
 const BOOKING = `
   query ReturnReportBooking($id: uuid!) {
     rental_bookings_by_pk(id: $id) {
-      id booking_number client_id status actual_start_at end_at
+      id booking_number client_id status actual_start_at end_at return_due_at
       renter_reported_returned_at renter_return_escalated_at inspection_policy_version
       business { user_id }
+      client { user { first_name } }
       rental_location_listing {
         rental_item { name }
         business_location { address { country } }
       }
     }
+    rental_not_received_reports(where: { rental_booking_id: { _eq: $id } }, limit: 1) { id }
   }
 `;
 
@@ -101,7 +111,7 @@ const LIST = `
       order_by: { renter_reported_returned_at: asc }
       limit: 50
     ) {
-      id booking_number status end_at security_deposit_amount currency
+      id booking_number status end_at return_due_at security_deposit_amount currency
       renter_reported_returned_at renter_return_escalated_at inspection_policy_version
       rental_location_listing {
         rental_item { name }
@@ -140,12 +150,14 @@ export class RentalRenterReturnService {
     const actor = await this.requireRenter(bookingId);
     if (!(await this.flagOn(actor.booking))) throw returnReportDisabled();
     if (actor.booking.status === 'completed') throw returnAlreadyConfirmed();
-    if (actor.booking.renter_reported_returned_at) return this.present(actor.booking, true);
+    if (actor.booking.renter_reported_returned_at) return this.withEarly(this.present(actor.booking, true), actor.booking);
+    if (actor.booking.rental_not_received_reports?.length) throw returnReportNotReceivedOpen();
     assertCanReportReturn(actor.booking, now);
     const stamped = await this.stamp(bookingId, now);
     if (!stamped) return this.afterLostStamp(bookingId);
-    await this.notifyBusiness(actor.booking);
-    return this.present({ ...actor.booking, renter_reported_returned_at: now.toISOString() }, false);
+    const reported = { ...actor.booking, renter_reported_returned_at: now.toISOString() };
+    await this.notifyBusiness(reported);
+    return this.withEarly(this.present(reported, false), reported);
   }
 
   async escalateDue(now = new Date()): Promise<number> {
@@ -205,11 +217,12 @@ export class RentalRenterReturnService {
   }
 
   private async loadBooking(bookingId: string): Promise<ReturnBooking | null> {
-    const result = await this.hasura.executeQuery<{ rental_bookings_by_pk: ReturnBooking | null }>(
-      BOOKING,
-      { id: bookingId }
-    );
-    return result.rental_bookings_by_pk ?? null;
+    const result = await this.hasura.executeQuery<{
+      rental_bookings_by_pk: ReturnBooking | null;
+      rental_not_received_reports?: Array<{ id: string }> | null;
+    }>(BOOKING, { id: bookingId });
+    const booking = result.rental_bookings_by_pk ?? null;
+    return booking ? { ...booking, rental_not_received_reports: result.rental_not_received_reports ?? [] } : null;
   }
 
   private async stamp(bookingId: string, now: Date): Promise<boolean> {
@@ -232,12 +245,30 @@ export class RentalRenterReturnService {
       bookingId: booking.id,
       bookingNumber: booking.booking_number ?? booking.id,
       rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+      early: this.earlyNotice(booking),
     });
+  }
+
+  /** Early variant of the business notice: renter, report time and booked end on the listing clock. */
+  private earlyNotice(booking: ReturnBooking) {
+    if (!isEarlyReturn(booking.renter_reported_returned_at, booking)) return undefined;
+    const zone = earlyReturnZone(booking);
+    return {
+      renterName: booking.client?.user?.first_name?.trim() || '',
+      returnedAt: booking.renter_reported_returned_at ?? '',
+      endAt: booking.return_due_at || booking.end_at || '',
+      timeZone: zone,
+    };
+  }
+
+  private withEarly(result: ReturnReportResult, booking: ReturnBooking): ReturnReportResult {
+    return { ...result, early: isEarlyReturn(booking.renter_reported_returned_at, booking) };
   }
 
   private present(booking: ReturnBooking, alreadyReported: boolean): ReturnReportResult {
     const reportedAt = booking.renter_reported_returned_at ?? '';
-    const end = booking.end_at ? new Date(booking.end_at).getTime() : Number.NaN;
+    // Due is listing wall clock (return_due_at after an hourly early start, else end_at).
+    const end = bookingReturnDueInstantMs(booking);
     const at = new Date(reportedAt).getTime();
     return {
       success: true,

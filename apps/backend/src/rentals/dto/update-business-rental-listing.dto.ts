@@ -61,12 +61,22 @@ export class UpdateBusinessRentalListingDto {
   @ApiProperty({
     required: false,
     description:
-      'Security deposit authorized/charged on top of the rental total (defaults to 8x hourly rate)',
+      'Security deposit authorized/charged on top of the rental total (clients default an empty field to 8x the hourly rate, or 8x the day price / 12 without hourly)',
   })
   @IsOptional()
   @IsNumber()
   @Min(0)
   security_deposit_amount?: number;
+
+  @ApiProperty({
+    required: false,
+    default: false,
+    description:
+      'Charge a reservation fee at Reserve (flat 1.00 on the Stripe rail or 150 FCFA on Mobile Money, capped at the rental, counts toward the total). Off by default.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  reservation_fee_enabled?: boolean;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -91,6 +101,16 @@ export class UpdateBusinessRentalListingDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  @ApiProperty({ required: false, description: 'Rent by the hour' })
+  @IsOptional()
+  @IsBoolean()
+  offers_hourly?: boolean;
+
+  @ApiProperty({ required: false, description: 'Rent by the day' })
+  @IsOptional()
+  @IsBoolean()
+  offers_daily?: boolean;
 
   @ApiProperty({ required: false, type: [UpdateRentalWeeklyAvailabilityDto] })
   @IsOptional()

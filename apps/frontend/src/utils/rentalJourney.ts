@@ -12,6 +12,8 @@ export interface JourneyStep {
   label: string;
   state: 'done' | 'current' | 'upcoming';
   aside?: string;
+  /** Small line under the label ("Booked until 6:00 PM"). */
+  sub?: string;
 }
 
 export interface JourneyInput {
@@ -20,6 +22,8 @@ export interface JourneyInput {
   paid: boolean;
   pickupAside?: string;
   paidAside?: string;
+  /** Returned early (AC10): the return step reads "Returned early" with its time. */
+  early?: { aside?: string; sub?: string };
 }
 
 const LABELS: Record<JourneyKey, [string, string]> = {
@@ -34,7 +38,7 @@ const LABELS: Record<JourneyKey, [string, string]> = {
 const ORDER: JourneyKey[] = ['offer', 'paid', 'pickup', 'progress', 'return', 'done'];
 
 export function rentalJourney(input: JourneyInput): JourneyStep[] {
-  const current = currentKey(input.status);
+  const current = input.early && input.status === 'active' ? 'return' : currentKey(input.status);
   const paidKey = input.payAtPickup && !input.paid ? 'booked' : 'paid';
   return ORDER.map((key) => {
     const index = ORDER.indexOf(key);
@@ -42,13 +46,16 @@ export function rentalJourney(input: JourneyInput): JourneyStep[] {
     const state = index < at ? 'done' : index === at ? 'current' : 'upcoming';
     const label = key === 'paid' && paidKey === 'booked'
       ? ['rentals.journey.bookedPay', 'Booked · pay at pickup']
-      : LABELS[key];
+      : key === 'return' && input.early
+        ? ['rentals.earlyReturn.returnedEarlyStep', 'Returned early']
+        : LABELS[key];
     return {
       key,
       labelKey: label[0],
       label: label[1],
       state,
       aside: journeyAside(key, state, input),
+      sub: key === 'return' && input.early ? input.early.sub : undefined,
     };
   });
 }
@@ -56,6 +63,7 @@ export function rentalJourney(input: JourneyInput): JourneyStep[] {
 function journeyAside(key: JourneyKey, state: JourneyStep['state'], input: JourneyInput): string | undefined {
   if (key === 'paid') return input.paidAside;
   if (key === 'pickup' && state !== 'upcoming') return input.pickupAside;
+  if (key === 'return' && input.early) return input.early.aside;
   return undefined;
 }
 

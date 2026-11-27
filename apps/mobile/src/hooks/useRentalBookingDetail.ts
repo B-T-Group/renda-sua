@@ -132,11 +132,11 @@ export function useRentalBookingDetail(
     [bookingId, load]
   );
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (options?: { stripe_payment_method?: 'payment_sheet' }) => {
     if (!bookingId?.trim()) throw new Error('Missing booking');
     setActionLoading(true);
     try {
-      const res = await startRental(bookingId.trim());
+      const res = await startRental(bookingId.trim(), options);
       await load(bookingId.trim());
       return res;
     } finally {

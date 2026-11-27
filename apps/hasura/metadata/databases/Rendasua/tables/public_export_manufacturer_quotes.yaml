@@ -1,0 +1,27 @@
+table:
+  name: export_manufacturer_quotes
+  schema: public
+object_relationships:
+  - name: export_order
+    using:
+      foreign_key_constraint_on: export_order_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - confirmed_prices
+        - lead_time_days
+        - valid_until
+        - attachment_upload_id
+        - notes
+        - confirmed_by_user_id
+        - confirmed_at
+        - created_at
+      filter:
+        export_order:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

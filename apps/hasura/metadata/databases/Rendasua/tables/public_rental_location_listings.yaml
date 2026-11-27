@@ -62,7 +62,10 @@ insert_permissions:
         - dropoff_instructions
         - base_price_per_hour
         - base_price_per_day
+        - offers_hourly
+        - offers_daily
         - security_deposit_amount
+        - reservation_fee_enabled
         - min_rental_hours
         - max_rental_hours
         - units_available
@@ -78,7 +81,10 @@ select_permissions:
         - dropoff_instructions
         - base_price_per_hour
         - base_price_per_day
+        - offers_hourly
+        - offers_daily
         - security_deposit_amount
+        - reservation_fee_enabled
         - min_rental_hours
         - max_rental_hours
         - units_available
@@ -116,7 +122,10 @@ select_permissions:
         - dropoff_instructions
         - base_price_per_hour
         - base_price_per_day
+        - offers_hourly
+        - offers_daily
         - security_deposit_amount
+        - reservation_fee_enabled
         - min_rental_hours
         - max_rental_hours
         - units_available
@@ -146,7 +155,10 @@ select_permissions:
         - dropoff_instructions
         - base_price_per_hour
         - base_price_per_day
+        - offers_hourly
+        - offers_daily
         - security_deposit_amount
+        - reservation_fee_enabled
         - min_rental_hours
         - max_rental_hours
         - units_available
@@ -182,7 +194,10 @@ update_permissions:
         - dropoff_instructions
         - base_price_per_hour
         - base_price_per_day
+        - offers_hourly
+        - offers_daily
         - security_deposit_amount
+        - reservation_fee_enabled
         - min_rental_hours
         - max_rental_hours
         - units_available

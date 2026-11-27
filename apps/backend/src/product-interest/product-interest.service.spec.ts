@@ -12,6 +12,10 @@ describe('ProductInterestService', () => {
   const notifications = {
     sendBusinessProductInterestNotification: jest.fn(),
   };
+  const exportOrders = {
+    isExportOrdersEnabled: jest.fn().mockResolvedValue(false),
+    createFromInterest: jest.fn(),
+  };
 
   let service: ProductInterestService;
 
@@ -50,7 +54,8 @@ describe('ProductInterestService', () => {
     service = new ProductInterestService(
       hasuraSystem as any,
       hasuraUser as any,
-      notifications as any
+      notifications as any,
+      exportOrders as any
     );
   });
 

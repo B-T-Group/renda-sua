@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -7,9 +7,9 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RentalSlotPicker } from '../../components/rentals/RentalSlotPicker';
-import { CardWindowDateSheet } from '../../components/rentals/request/CardWindowDateSheet';
 import { CardWindowNotice } from '../../components/rentals/request/CardWindowNotice';
-import { RentalSearchDateSheet } from '../../components/rentals/search/RentalSearchDateSheet';
+import { RentalDayHoursSheet } from '../../components/rentals/dayHours/RentalDayHoursSheet';
+import { useDayHoursPicker } from '../../components/rentals/dayHours/useDayHoursPicker';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
@@ -25,6 +25,8 @@ import {
 } from '../../utils/rentals/cardWindow';
 import { requestWindowIso } from '../../utils/rentals/rentalSearchPreset';
 import { formatRequestAmount } from '../../utils/rentals/rentalRequestFormat';
+import { fromHourlyPrice, pickerLang } from '../../utils/rentals/dayHoursCopy';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 
 type RequestRoute = { RentalRequest: RentalRequestParams };
 
@@ -39,18 +41,24 @@ export default function RentalRequestScreen() {
   const listingId = route.params?.listingId;
   const { listing, bookedWindows, loading, error, refetch } = useRentalListingDetail(listingId);
   const dates = useRentalRequestDates(listing, route.params?.startDate, route.params?.endDate);
+  const picker = useDayHoursPicker({
+    listing,
+    booked: bookedWindows,
+    seed: dates.presetSelections,
+    language: i18n.language,
+    openOnStart: true,
+  });
   const guardOn = flags.rentals_card_window_guard_enabled;
-  const [payingByCard, setPayingByCard] = useState<boolean | null>(null);
-  const cardOn = payingByCard ?? listing?.payment_rail === 'stripe';
+  const cardOn = listing?.payment_rail === 'stripe';
   const latest = guardOn ? effectiveCardEnd(listing, cardOn) : null;
-  const endIso = selectionEndIso(dates.presetSelections);
+  const endIso = selectionEndIso(picker.rows ?? dates.presetSelections);
   const unfit = cardEndMisses(endIso, latest);
   const zone = listing?.timezone || dates.timeZone || 'Africa/Douala';
   const cutoff = latest ? formatCardCutoff(latest, zone, i18n.language) : '';
   const openDates = useCallback(() => {
     if (guardOn) void refetch();
-    dates.openDateEditor();
-  }, [dates, guardOn, refetch]);
+    picker.setOpen(true);
+  }, [guardOn, picker, refetch]);
   const onLoginRequired = useLoginRequired(navigation);
   const onSubmitted = useCallback(
     (requestId: string) => {
@@ -82,7 +90,8 @@ export default function RentalRequestScreen() {
 
   const item = listing.rental_item;
   const image = item.rental_item_images?.[0];
-  const selectionKey = dates.presetSelections.map((row) => `${row.id}:${row.startMs}`).join('|') || 'request';
+  const selectionKey = `dh:${picker.selectionKey}`;
+  const picked = picker.rows;
 
   return (
     <View style={[styles.fill, { backgroundColor: colors.pageBackground }]}>
@@ -93,30 +102,26 @@ export default function RentalRequestScreen() {
       >
         <RentalSlotPicker
           key={selectionKey}
-          layout="screen"
           listingId={listing.id}
           isAuthenticated={auth.isAuthenticated}
           bookedWindows={bookedWindows}
           minRentalHours={listing.min_rental_hours}
           maxRentalHours={listing.max_rental_hours}
           unitsAvailable={Number(listing.units_available) || 1}
-          weeklyAvailability={listing.weekly_availability}
           basePricePerHour={toNumber(listing.base_price_per_hour)}
           basePricePerDay={toNumber(listing.base_price_per_day)}
           currency={item.currency || 'XAF'}
           onLoginRequired={onLoginRequired}
           onSubmitted={auth.isAuthenticated ? onSubmitted : undefined}
-          initialSelections={dates.presetSelections}
-          datesFilled={Boolean(dates.stay)}
-          requestBlocked={dates.requestBlocked}
-          requestBusy={dates.checkingStay}
+          initialSelections={picked ?? dates.presetSelections}
+          datesFilled={picked ? picked.length > 0 : Boolean(dates.stay)}
           onSeeDates={openDates}
           itemName={item.name}
-          itemMeta={itemMeta(item.business?.name, toNumber(listing.base_price_per_day), toNumber(listing.base_price_per_hour), item.currency || 'XAF', i18n.language, t)}
+          itemMeta={itemMeta(item.business?.name, listing.offers_daily === false ? 0 : toNumber(listing.base_price_per_day), toNumber(listing.base_price_per_hour), item.currency || 'XAF', i18n.language, t)}
           imageUrl={image?.display_url || image?.image_url || null}
-          dateLine={dates.dateLine}
+          dateLine={picked ? picker.dateLine : dates.dateLine}
           onEditDates={openDates}
-          unavailableLabel={dates.unavailableLabel}
+          onServerRuleError={picker.reopenWithError}
           cardSendDisabled={unfit}
           blockedReason={unfit ? t('rentals.cardWindow.sendReason', cardWindowSendReason(i18n.language)) : undefined}
           notice={
@@ -131,36 +136,20 @@ export default function RentalRequestScreen() {
           }
         />
       </KeyboardAvoidingView>
-      {guardOn ? (
-        <CardWindowDateSheet
-          visible={dates.editOpen}
-          locale={i18n.language}
+      {picker.model ? (
+        <RentalDayHoursSheet
+          visible={picker.open}
+          listing={picker.model}
+          currency={item.currency || 'XAF'}
+          language={i18n.language}
           timeZone={zone}
-          latestIso={latest}
-          momoAvailable={listing.momo_available === true && cardOn}
-          payingByCard={cardOn}
-          pickup={dates.stay?.startDate}
-          onClose={() => dates.setEditOpen(false)}
-          onPayWithMomo={() => setPayingByCard(false)}
-          onApply={(stay) => {
-            dates.setEditOpen(false);
-            void dates.commitStay(stay);
-          }}
+          city={listing.business_location?.address?.city}
+          initialDays={picker.initialDays}
+          onClose={picker.close}
+          serverError={picker.serverError}
+          onContinue={picker.onContinue}
         />
-      ) : (
-        <RentalSearchDateSheet
-          visible={dates.editOpen}
-          value={dates.draftStay}
-          timeZone={dates.timeZone}
-          onChange={dates.setDraftStay}
-          onApply={() => {
-            if (!dates.draftStay || dates.draftStay.dayCount < 1 || dates.draftStay.dayCount > 30) return;
-            dates.setEditOpen(false);
-            void dates.commitStay(dates.draftStay);
-          }}
-          onClose={() => dates.setEditOpen(false)}
-        />
-      )}
+      ) : null}
     </View>
   );
 }
@@ -183,9 +172,9 @@ function itemMeta(
   language: string,
   t: (key: string, fallback: string) => string
 ): string {
-  const amount = formatRequestAmount(daily > 0 ? daily : hourly, currency, language);
-  const unit = daily > 0 ? t('rentals.searchFirst.perDay', '/ day') : t('rentals.requestForm.perHour', '/ hour');
-  return [businessName, `${amount} ${unit}`].filter(Boolean).join(' · ');
+  if (daily <= 0) return [businessName, fromHourlyPrice(hourly, currency, pickerLang(language))].filter(Boolean).join(' · ');
+  const amount = formatRequestAmount(daily, currency, language);
+  return [businessName, withRateUnit(amount, t('rentals.searchFirst.perDay', '/ day'))].filter(Boolean).join(' · ');
 }
 
 function selectionEndIso(rows: Array<{ startMs: number; endMs: number; billing?: string; calendarDate?: string }>): string | null {

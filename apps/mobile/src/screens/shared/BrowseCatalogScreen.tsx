@@ -39,7 +39,6 @@ import { useCatalogStopTopInCategory } from '../../hooks/useCatalogStopTopInCate
 import { useCatalogStopBagComplements } from '../../hooks/useCatalogStopBagComplements';
 import { useStore } from '../../stores/RootStore';
 import { useMarket } from '../../hooks/useMarket';
-import { MarketSelector } from '../../components/market/MarketSelector';
 import { MarketSwitchBanner } from '../../components/market/MarketSwitchBanner';
 import type {
   CatalogInventoryItem,
@@ -205,8 +204,6 @@ export interface BrowseCatalogScreenProps {
   inventoryRequestsWithAuth?: boolean;
   /** Optional control rendered beside the sticky search bar (e.g. notification bell). */
   headerTrailing?: React.ReactNode;
-  /** Optional control on the market row, right-aligned (e.g. assistant icon). */
-  headerMarketTrailing?: React.ReactNode;
   /**
    * When false, skip top safe-area inset (parent already applied it — e.g. client home
    * with Actions needed above the catalog). Defaults to true.
@@ -249,7 +246,6 @@ function BrowseCatalogScreenInner({
   nearbyAgentsCount = 0,
   inventoryRequestsWithAuth = false,
   headerTrailing,
-  headerMarketTrailing,
   applyTopSafeArea = true,
   foodOnly: legacyFoodOnly = false,
   exportOnly: forcedExportOnly = false,
@@ -1365,12 +1361,6 @@ function BrowseCatalogScreenInner({
           </View>
           {headerTrailing}
         </View>
-        <View style={styles.marketRow}>
-          <View style={styles.marketSelectorWrap}>
-            <MarketSelector />
-          </View>
-          {headerMarketTrailing}
-        </View>
       </Reanimated.View>
       <FlashList
         ref={listRef}
@@ -1462,17 +1452,6 @@ const styles = StyleSheet.create({
   },
   searchFlex: {
     flex: 1,
-    minWidth: 0,
-  },
-  marketRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 4,
-  },
-  marketSelectorWrap: {
-    flexShrink: 1,
     minWidth: 0,
   },
   centerPad: { paddingVertical: 48, alignItems: 'center', paddingHorizontal: 24 },

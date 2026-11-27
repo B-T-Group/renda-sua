@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { ExportOrdersService } from '../export-orders/export-orders.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -159,7 +160,8 @@ export class ProductInterestService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly exportOrdersService: ExportOrdersService
   ) {}
 
   async createInterest(dto: CreateProductInterestDto) {
@@ -167,6 +169,20 @@ export class ProductInterestService {
     this.assertClient(user);
     const inventory = await this.fetchInventory(dto.businessInventoryId);
     this.assertInterestEligible(inventory);
+    if (await this.exportOrdersService.isExportOrdersEnabled()) {
+      const exportOrder = await this.exportOrdersService.createFromInterest({
+        businessInventoryId: dto.businessInventoryId,
+        note: dto.note,
+        quantity: 1,
+      });
+      return {
+        id: exportOrder.id,
+        created_at: exportOrder.created_at,
+        status: exportOrder.status,
+        export_order: true,
+        bc_number: exportOrder.bc_number,
+      };
+    }
     await this.assertNotDuplicate(user.id, inventory.id);
     const note = dto.note?.trim() || null;
     const created = await this.insertInterest(user.id, inventory, note);

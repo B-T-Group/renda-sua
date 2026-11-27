@@ -118,8 +118,10 @@ describe('renter start without a PIN', () => {
   });
 
   it('does not cancel an unpaid reservation before the end of the start day', () => {
-    const now = new Date();
-    expect(svc.unpaidReservationDue(booking({ start_at: now.toISOString() }), now)).toBe(false);
+    // Pinned: start_at is the listing wall clock, so Date.now() broke this between midnight in Douala and UTC.
+    const now = new Date('2026-11-26T12:00:00.000Z'); // 13:00 in Douala
+    expect(svc.unpaidReservationDue(booking({ start_at: '2026-11-26T09:00:00.000Z' }), now)).toBe(false);
+    expect(svc.unpaidReservationDue(booking({ start_at: '2026-11-26T09:00:00.000Z' }), new Date('2026-11-26T23:30:00.000Z'))).toBe(true);
   });
 });
 

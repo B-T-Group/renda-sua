@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Snackbar, Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import { rentalsApi } from '../../services/rentalsApi';
+import { brandFaceStyle } from '../../theme/fonts';
 import type { BusinessRentalRequestRow } from '../../types/rentals';
 import { compareSoonestRequestStart } from '../../utils/rentals/dashboardRentalRequests';
 import { PagedCarousel } from '../common/PagedCarousel';
@@ -15,6 +17,9 @@ import { BusinessRentalRespondDialog } from './rentals/BusinessRentalRespondDial
 import { DashboardRentalRequestCard } from './DashboardRentalRequestCard';
 
 type Notice = { id: string; itemName: string; renterName: string; window: 'sla' | 'start' };
+
+/** Approved 26 Nov 2026 notice accent — softer than warning.light (the old solid amber fill). */
+const AMBER_EDGE = '#E8A23A';
 
 export function DashboardRentalRequests() {
   const { t } = useTranslation();
@@ -60,6 +65,12 @@ export function DashboardRentalRequests() {
     []
   );
 
+  const openStudio = useCallback(() => {
+    navigation.navigate('BusinessRentalsStudio', { tab: 'requests' });
+  }, [navigation]);
+
+  const currentNotice = notices[0];
+
   if (!enabled || (requests.length === 0 && notices.length === 0)) return null;
 
   return (
@@ -71,43 +82,45 @@ export function DashboardRentalRequests() {
       }}
       accessibilityLabel={t('business.dashboard.rentalRequests.sectionA11y', 'Rental requests, {{count}}', { count: requests.length })}
     >
-      {notices[0] ? <ExpiryNotice notice={notices[0]} /> : null}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+        <Text variant="labelLarge">
+          {t('business.dashboard.rentalRequests.sectionTitle', 'Rental requests')}
+          {requests.length > 0 ? ` ${requests.length}` : ''}
+        </Text>
+        <Text onPress={openStudio} style={{ color: colors.primary.main }}>
+          {t('business.dashboard.rentalRequests.seeAll', 'See all')}
+        </Text>
+      </View>
+      {currentNotice ? (
+        <ExpiryNotice
+          notice={currentNotice}
+          onDismiss={() => setNotices((rows) => rows.slice(1))}
+          onView={() => navigation.navigate('BusinessRentalRequestDetail', { requestId: currentNotice.id })}
+        />
+      ) : null}
       {requests.length > 0 ? (
-        <>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
-            <Text variant="labelLarge">
-              {t('business.dashboard.rentalRequests.sectionTitle', 'Rental requests')} {requests.length}
-            </Text>
-            <Text
-              onPress={() => navigation.navigate('BusinessRentalsStudio', { tab: 'requests' })}
-              style={{ color: colors.primary.main }}
-            >
-              {t('business.dashboard.rentalRequests.seeAll', 'See all')}
-            </Text>
-          </View>
-          {pageWidth > 0 ? (
-            requests.length === 1 ? (
-              renderCard(requests[0], pageWidth)
-            ) : (
-              <PagedCarousel
-                data={requests}
-                keyExtractor={(item) => item.id}
-                pageWidth={pageWidth}
-                autoAdvanceMs={null}
-                showDots
-                accessibilityLabelForIndex={(current, total) =>
-                  t('business.dashboard.rentalRequests.pageA11y', 'Request {{current}} of {{total}}', {
-                    current: current + 1,
-                    total,
-                  })
-                }
-                renderItem={({ item, width }) => renderCard(item, width)}
-              />
-            )
+        pageWidth > 0 ? (
+          requests.length === 1 ? (
+            renderCard(requests[0], pageWidth)
           ) : (
-            <View style={{ minHeight: 180 }} />
-          )}
-        </>
+            <PagedCarousel
+              data={requests}
+              keyExtractor={(item) => item.id}
+              pageWidth={pageWidth}
+              autoAdvanceMs={null}
+              showDots
+              accessibilityLabelForIndex={(current, total) =>
+                t('business.dashboard.rentalRequests.pageA11y', 'Request {{current}} of {{total}}', {
+                  current: current + 1,
+                  total,
+                })
+              }
+              renderItem={({ item, width }) => renderCard(item, width)}
+            />
+          )
+        ) : (
+          <View style={{ minHeight: 180 }} />
+        )
       ) : null}
       <BusinessRentalRespondDialog
         visible={target != null}
@@ -123,16 +136,144 @@ export function DashboardRentalRequests() {
   );
 }
 
-function ExpiryNotice({ notice }: { notice: Notice }) {
+function ExpiryNotice({
+  notice,
+  onDismiss,
+  onView,
+}: {
+  notice: Notice;
+  onDismiss: () => void;
+  onView: () => void;
+}) {
   const { t } = useTranslation();
-  const { colors, spacing } = useTheme();
-  const text = notice.window === 'start'
-    ? t('business.dashboard.rentalRequests.expiredStart', 'Request expired — no response before the start time')
-    : t('business.dashboard.rentalRequests.expiredSla', 'Request expired — no response in 24h');
+  const { colors, spacing, typography, borderRadius, shadows } = useTheme();
+  const reason =
+    notice.window === 'start'
+      ? t(
+          'business.dashboard.rentalRequests.expiredStartReason',
+          "You didn't reply before the start time. The renter can send a new request."
+        )
+      : t(
+          'business.dashboard.rentalRequests.expiredSlaReason',
+          "You didn't reply within 24 hours. The renter can send a new request."
+        );
   const who = [notice.itemName, notice.renterName].filter(Boolean).join(' · ');
   return (
-    <View style={{ marginBottom: spacing.sm, padding: spacing.sm, borderRadius: 12, backgroundColor: colors.warning.light }}>
-      <Text style={{ color: colors.warning.dark }}>{text}{who ? ` — ${who}` : ''}</Text>
+    <View
+      testID="rental-request-expiry-notice"
+      accessibilityRole="summary"
+      style={[
+        styles.card,
+        shadows.sm,
+        {
+          marginBottom: spacing.sm,
+          padding: spacing.md,
+          paddingLeft: spacing.md + 4,
+          borderRadius: borderRadius.card,
+          borderColor: colors.divider,
+          backgroundColor: colors.surface,
+        },
+      ]}
+    >
+      <View style={[styles.edge, { backgroundColor: AMBER_EDGE }]} />
+      <View style={styles.header}>
+        <View style={[styles.clock, { backgroundColor: colors.warningTint }]}>
+          <MaterialCommunityIcons name="clock-outline" size={18} color={AMBER_EDGE} />
+        </View>
+        <View style={styles.copy}>
+          <Text style={[brandFaceStyle('700'), styles.title, { color: colors.text.primary }]}>
+            {t('business.dashboard.rentalRequests.expiredTitle', 'Request expired')}
+          </Text>
+          {who ? (
+            <Text style={[brandFaceStyle('600'), typography.bodySmall, { color: colors.text.primary, marginTop: 2 }]}>
+              {who}
+            </Text>
+          ) : null}
+          <Text style={[typography.bodySmall, { color: colors.text.secondary, marginTop: 4 }]}>{reason}</Text>
+          <Pressable
+            testID="rental-request-expiry-view"
+            accessibilityRole="button"
+            accessibilityLabel={t('business.dashboard.rentalRequests.viewRequest', 'View request')}
+            onPress={onView}
+            style={[styles.viewBtn, { backgroundColor: colors.primary.main, marginTop: spacing.sm }]}
+          >
+            <MaterialCommunityIcons name="arrow-right" size={16} color={colors.primary.contrast} />
+            <Text style={[brandFaceStyle('600'), styles.viewLabel, { color: colors.primary.contrast }]}>
+              {t('business.dashboard.rentalRequests.viewRequest', 'View request')}
+            </Text>
+          </Pressable>
+        </View>
+        <Pressable
+          testID="rental-request-expiry-dismiss"
+          accessibilityRole="button"
+          accessibilityLabel={t('business.dashboard.rentalRequests.dismissNotice', 'Dismiss')}
+          onPress={onDismiss}
+          hitSlop={8}
+          style={[styles.dismiss, { backgroundColor: colors.surfaceInput }]}
+        >
+          <MaterialCommunityIcons name="close" size={16} color={colors.text.secondary} />
+        </Pressable>
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  edge: {
+    position: 'absolute',
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 4,
+    borderTopRightRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  clock: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  title: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  viewBtn: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minHeight: 36,
+  },
+  viewLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  dismiss: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+});

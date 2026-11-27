@@ -47,7 +47,7 @@ export const CatalogBrowseSearchBar = memo(function CatalogBrowseSearchBar({
         ]}
       >
         <MaterialCommunityIcons name="magnify" size={22} color={colors.text.secondary} style={styles.leading} />
-        <Text numberOfLines={1} style={[typography.body1, styles.input, { color: colors.text.secondary }]}>
+        <Text numberOfLines={1} style={[typography.body1, styles.placeholder, { color: colors.text.secondary }]}>
           {placeholderText}
         </Text>
       </Pressable>
@@ -127,6 +127,14 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 0,
     minHeight: 44,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+  },
+  placeholder: {
+    flex: 1,
+    alignSelf: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   spinner: {
     marginLeft: 8,

@@ -5,8 +5,6 @@ import { HasuraModule } from '../hasura/hasura.module';
 import { CatalogExperienceContextBuilder } from './catalog-experience.context';
 import { CatalogExperienceController } from './catalog-experience.controller';
 import { CatalogExperienceService } from './catalog-experience.service';
-import { MarketLanesController } from './market-lanes.controller';
-import { MarketLanesService } from './market-lanes.service';
 import { CategoryCarouselProvider } from './providers/category-carousel.provider';
 import { CollectionCarouselProvider } from './providers/collection-carousel.provider';
 import { ProductGridProvider } from './providers/product-grid.provider';
@@ -18,11 +16,10 @@ import { RecentlyViewedProvider } from './providers/recently-viewed.provider';
 
 @Module({
   imports: [HasuraModule, CatalogStopsModule, CollectionsModule],
-  controllers: [CatalogExperienceController, MarketLanesController],
+  controllers: [CatalogExperienceController],
   providers: [
     CatalogExperienceContextBuilder,
     CatalogExperienceService,
-    MarketLanesService,
     CategoryCarouselProvider,
     CollectionCarouselProvider,
     DealsCarouselProvider,

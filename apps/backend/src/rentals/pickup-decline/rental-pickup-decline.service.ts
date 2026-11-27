@@ -387,9 +387,11 @@ export class RentalPickupDeclineService implements OnModuleInit {
   private async moveFunds(booking: DeclineBooking, ledger: Ledger): Promise<void> {
     if (ledger.rail === 'momo_paid') {
       await this.consumeOrBusy(booking, ledger.amount);
-      return;
+    } else {
+      await this.rentals.releaseFreeCancelFunds(booking);
     }
-    await this.rentals.releaseFreeCancelFunds(booking);
+    // Not as described: a paid reservation fee always comes back (card, or the wallet).
+    await this.rentals.refundReservationFeeFor?.(booking.id, 'not_as_described');
   }
 
   private async resume(booking: DeclineBooking, row: DeclineRow): Promise<HeldDecline> {

@@ -145,11 +145,11 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   const [submitting, setSubmitting] = useState(false);
 
   const startIso = request ? requestStartIso(request) : null;
-  const hourOffer = contractHoursOffer(startIso);
+  const hourOffer = contractHoursOffer(startIso, new Date(), request?.listing_timezone);
 
   useEffect(() => {
     if (!open) return;
-    const offer = contractHoursOffer(startIso);
+    const offer = contractHoursOffer(startIso, new Date(), request?.listing_timezone);
     setContractHours(String(offer.hidden ? 1 : offer.hours));
     setTotalOverride('');
     setAvailableNote('');
@@ -160,7 +160,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
 
   const submitAvailable = useCallback(async () => {
     if (!request) return;
-    const offer = contractHoursOffer(requestStartIso(request));
+    const offer = contractHoursOffer(requestStartIso(request), new Date(), request.listing_timezone);
     const h = offer.hidden ? 1 : parseInt(contractHours, 10);
     if (!offer.hidden && (!Number.isInteger(h) || h < 1 || h > offer.maxHours)) {
       setError(t('business.rentals.respondValidationHours', 'Enter a whole number of hours from 1 to {{count}}.', { count: offer.maxHours }));

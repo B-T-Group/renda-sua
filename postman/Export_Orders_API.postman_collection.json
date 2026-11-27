@@ -1,0 +1,100 @@
+{
+  "info": {
+    "name": "Rendasua Export Orders",
+    "description": "Phase 1–3 export order transitions (B2B).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "token", "value": "" },
+    { "key": "exportOrderId", "value": "" },
+    { "key": "inventoryId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Client — create SUBMITTED",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "X-Active-Persona", "value": "client" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"businessInventoryId\": \"{{inventoryId}}\",\n  \"quantity\": 10,\n  \"characteristics\": \"Spec A\",\n  \"note\": \"Urgent\"\n}"
+        },
+        "url": "{{baseUrl}}/export-orders"
+      }
+    },
+    {
+      "name": "Admin — review approve",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"decision\": \"APPROVE\",\n  \"notes\": \"OK\"\n}"
+        },
+        "url": "{{baseUrl}}/admin/export-orders/{{exportOrderId}}/review"
+      }
+    },
+    {
+      "name": "Admin — issue proforma",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lines\": [{ \"lineId\": \"LINE_UUID\", \"unitPrice\": 100, \"manufacturerUnitCost\": 60 }],\n  \"depositRate\": 0.4,\n  \"validityDays\": 7\n}"
+        },
+        "url": "{{baseUrl}}/admin/export-orders/{{exportOrderId}}/proforma"
+      }
+    },
+    {
+      "name": "Client — approve proforma",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "X-Active-Persona", "value": "client" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"approve\"\n}"
+        },
+        "url": "{{baseUrl}}/export-orders/{{exportOrderId}}/proforma-action"
+      }
+    },
+    {
+      "name": "Finance — record deposit",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 400,\n  \"allocation\": \"deposit\",\n  \"method\": \"wire\",\n  \"reference\": \"WIRE-1\"\n}"
+        },
+        "url": "{{baseUrl}}/admin/export-finance/orders/{{exportOrderId}}/payments"
+      }
+    },
+    {
+      "name": "Admin — dashboard",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/admin/export-orders/dashboard"
+      }
+    }
+  ]
+}

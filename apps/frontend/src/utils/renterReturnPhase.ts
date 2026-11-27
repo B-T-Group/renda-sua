@@ -1,3 +1,5 @@
+import { listingNowMs } from './rentalDayHoursPicker';
+
 export const RETURN_ESCALATION_MS = 24 * 60 * 60 * 1000;
 
 export type RenterReturnPhase = 'hidden' | 'due' | 'overdue' | 'waiting' | 'escalated';
@@ -8,13 +10,16 @@ export interface RenterReturnInput {
   reportedAt?: string | null;
   escalatedAt?: string | null;
   now?: Date;
+  /** Listing zone. end_at is its wall clock stored as UTC components; unknown uses the device clock. */
+  timeZone?: string | null;
 }
 
 export function renterReturnPhase(input: RenterReturnInput): RenterReturnPhase {
   if (!isOpenReturn(input.status)) return 'hidden';
   const now = input.now ?? new Date();
-  const pastDue = returnByPassed(input.endAt, now);
-  if (input.status === 'active' && !pastDue) return 'hidden';
+  const pastDue = returnByPassed(input.endAt, now, input.timeZone);
+  // A renter who tapped Return early waits for the business like any reported return.
+  if (input.status === 'active' && !pastDue && !input.reportedAt) return 'hidden';
   if (!input.reportedAt) return pastDue ? 'overdue' : 'due';
   return escalated(input, now) ? 'escalated' : 'waiting';
 }
@@ -22,20 +27,25 @@ export function renterReturnPhase(input: RenterReturnInput): RenterReturnPhase {
 export function listReturnChip(input: RenterReturnInput): 'overdue' | 'waiting' | null {
   if (!isOpenReturn(input.status)) return null;
   if (input.reportedAt) return escalated(input, input.now ?? new Date()) ? null : 'waiting';
-  return returnByPassed(input.endAt, input.now ?? new Date()) ? 'overdue' : null;
+  return returnByPassed(input.endAt, input.now ?? new Date(), input.timeZone) ? 'overdue' : null;
 }
 
-export function formatDoualaStamp(iso: string, language: string): string {
+/**
+ * A real instant (e.g. renter_reported_returned_at) as "26 Nov · 15:40" on the
+ * listing clock. Pass the listing zone; Africa/Douala is the fallback for unknown.
+ */
+export function formatReturnStamp(iso: string, language: string, timeZone?: string | null): string {
+  const zone = timeZone || 'Africa/Douala';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   const french = language.toLowerCase().startsWith('fr');
   const day = new Intl.DateTimeFormat(french ? 'fr-FR' : 'en-GB', {
-    timeZone: 'Africa/Douala',
+    timeZone: zone,
     day: 'numeric',
     month: 'short',
   }).format(date);
   const time = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Africa/Douala',
+    timeZone: zone,
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
@@ -47,9 +57,9 @@ function isOpenReturn(status: string): boolean {
   return status === 'active' || status === 'awaiting_return';
 }
 
-function returnByPassed(endAt: string | null | undefined, now: Date): boolean {
+function returnByPassed(endAt: string | null | undefined, now: Date, timeZone?: string | null): boolean {
   const end = endAt ? new Date(endAt).getTime() : Number.NaN;
-  return Number.isFinite(end) && end <= now.getTime();
+  return Number.isFinite(end) && end <= listingNowMs(now.getTime(), timeZone);
 }
 
 function escalated(input: RenterReturnInput, now: Date): boolean {

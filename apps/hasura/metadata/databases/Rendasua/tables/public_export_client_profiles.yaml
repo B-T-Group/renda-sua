@@ -1,0 +1,16 @@
+table:
+  name: export_client_profiles
+  schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - client_user_id
+        - legal_identifiers
+        - kyc_status
+        - credit_limit
+        - created_at
+        - updated_at
+      filter:
+        client_user_id:
+          _eq: X-Hasura-User-Id

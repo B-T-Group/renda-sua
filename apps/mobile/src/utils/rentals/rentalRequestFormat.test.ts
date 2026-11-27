@@ -17,7 +17,12 @@ import {
   formatListingDeadline,
   formatListingDue,
   formatRentalDateRange,
+  formatRentalDay,
   formatRentalPeriod,
+  formatReturnDay,
+  formatRequestedPeriod,
+  appendReturnDay,
+  bookingDetailPeriodLines,
   isSingleRequestedPeriod,
   LISTING_TIME_ZONE,
   modifySaveNeedsConfirm,
@@ -25,6 +30,7 @@ import {
   rentalSelectionFingerprint,
   RENTAL_EDIT_LEAD_MS,
   readPriceConfirmQuote,
+  formatRentalShortMonth,
 } from './rentalRequestFormat';
 
 const NBSP = '\u00A0';
@@ -32,6 +38,21 @@ const NBSP = '\u00A0';
 function joined(text: string): string {
   return text.replace(/ /g, NBSP);
 }
+
+
+describe('formatRentalShortMonth', () => {
+  it('uses typographic French abbreviations, lowercase with a period when truncated', () => {
+    expect(formatRentalShortMonth('2026-11-27', 'en')).toBe('Nov');
+    expect(formatRentalShortMonth('2026-11-27', 'fr')).toBe('nov.');
+    expect(formatRentalShortMonth('2026-11-27', 'fr-FR')).toBe('nov.');
+    expect(formatRentalShortMonth('2026-06-01', 'fr')).toBe('juin');
+    expect(formatRentalDay('2026-11-28', 'fr')).toBe('28 nov.');
+    expect(formatRentalDateRange([
+      { calendar_date: '2026-11-27', start_at: '', end_at: '' },
+      { calendar_date: '2026-11-29', start_at: '', end_at: '' },
+    ], 'fr')).toBe('27\u201329 nov.');
+  });
+});
 
 describe('formatRequestAmount', () => {
   it('puts the amount before FCFA in English and French', () => {
@@ -200,7 +221,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(one.priceLabel).toBe(`2 days × 380${NBSP}FCFA / day`);
+    expect(one.priceLabel).toBe(`2 days × 380${NBSP}FCFA${NBSP}/${NBSP}day`);
     expect(one.priceAmount).toBe(`760${NBSP}FCFA`);
     expect(one.hoursCaption).toBeUndefined();
 
@@ -215,7 +236,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(two.priceLabel).toBe(`1 days × 380${NBSP}FCFA / day × 2`);
+    expect(two.priceLabel).toBe(`1 days × 380${NBSP}FCFA${NBSP}/${NBSP}day × 2`);
   });
 
   it('keeps the hourly caption and a negative total sign', () => {
@@ -230,7 +251,7 @@ describe('request price copy', () => {
       language: 'en',
       t: copy,
     });
-    expect(hourly.priceLabel).toBe(`8 h × 16${NBSP}FCFA / hour × 3`);
+    expect(hourly.priceLabel).toBe(`8 h × 16${NBSP}FCFA${NBSP}/${NBSP}hour × 3`);
     expect(hourly.hoursCaption).toBe('8 billable hours total');
     expect(hourly.totalAmount).toBe(`-128${NBSP}FCFA`);
     expect(hourly.priceLabel?.startsWith('FCFA')).toBe(false);
@@ -395,10 +416,28 @@ describe('rental edit confirmation', () => {
   const now = Date.parse('2026-11-12T10:00:00.000Z');
 
   it('closes the edit at exactly 2 hours and for an unusable start', () => {
-    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS).toISOString(), now)).toBe(false);
-    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS + 1).toISOString(), now)).toBe(true);
-    expect(rentalEditWindowOpen('not-a-date', now)).toBe(false);
-    expect(rentalEditWindowOpen('', now)).toBe(false);
+    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS).toISOString(), 'UTC', now)).toBe(false);
+    expect(rentalEditWindowOpen(new Date(now + RENTAL_EDIT_LEAD_MS + 1).toISOString(), 'UTC', now)).toBe(true);
+    expect(rentalEditWindowOpen('not-a-date', 'UTC', now)).toBe(false);
+    expect(rentalEditWindowOpen('', 'UTC', now)).toBe(false);
+  });
+
+  it('reads now on the listing wall clock (start is stored as UTC components)', () => {
+    // 9:40 AM in Toronto (EST) on 26 Nov; a 12:00 start is stored as T12:00:00Z.
+    const toronto = Date.parse('2026-11-26T14:40:00.000Z');
+    expect(rentalEditWindowOpen('2026-11-26T12:00:00.000Z', 'America/Toronto', toronto)).toBe(true);
+    expect(rentalEditWindowOpen('2026-11-26T11:30:00.000Z', 'America/Toronto', toronto)).toBe(false);
+    // Summer (EDT): 9:40 AM is 13:40Z.
+    const july = Date.parse('2026-07-15T13:40:00.000Z');
+    expect(rentalEditWindowOpen('2026-07-15T12:00:00.000Z', 'America/Toronto', july)).toBe(true);
+    // 9:40 AM in Douala is 08:40Z; 11:00 is too close, raw UTC would have said open.
+    const douala = Date.parse('2026-11-26T08:40:00.000Z');
+    expect(rentalEditWindowOpen('2026-11-26T11:00:00.000Z', 'Africa/Douala', douala)).toBe(false);
+    expect(rentalEditWindowOpen('2026-11-26T12:00:00.000Z', 'Africa/Douala', douala)).toBe(true);
+    // 9:40 AM in Manila is 01:40Z.
+    const manila = Date.parse('2026-11-26T01:40:00.000Z');
+    expect(rentalEditWindowOpen('2026-11-26T12:00:00.000Z', 'Asia/Manila', manila)).toBe(true);
+    expect(rentalEditWindowOpen('2026-11-26T11:00:00.000Z', 'Asia/Manila', manila)).toBe(false);
   });
 
   it('asks for confirmation only when the new total is higher by more than one centime', () => {
@@ -436,19 +475,19 @@ const bookedHour = (start: string, end: string) => ({
 describe('clientRequestPeriodLines', () => {
   it('shows a single day once, in English and French, with no times and no number', () => {
     const lines = clientRequestPeriodLines([bookedDay('2026-11-12')], 'en', days);
-    expect(lines).toEqual(['12 Nov · 1 day']);
-    expect(clientRequestPeriodLines([bookedDay('2026-11-12')], 'fr', jours)).toEqual(['12 nov. · 1 jour']);
+    expect(lines).toEqual(['12 Nov · 1 day · Return 13\u00A0Nov']);
+    expect(clientRequestPeriodLines([bookedDay('2026-11-12')], 'fr', jours)).toEqual(['12 nov. · 1 jour · Retour le 13\u00A0nov.']);
     expect(lines.join(' ')).not.toMatch(/^1\.|08:00|18:00/);
     expect(isSingleRequestedPeriod([bookedDay('2026-11-12')])).toBe(true);
   });
 
   it('shows a contiguous stay once, including a cross-month stay', () => {
     const stay = [bookedDay('2026-11-12'), bookedDay('2026-11-13'), bookedDay('2026-11-14')];
-    expect(clientRequestPeriodLines(stay, 'en', days)).toEqual(['12\u201314 Nov · 3 days']);
-    expect(clientRequestPeriodLines(stay, 'fr', jours)).toEqual(['12\u201314 nov. · 3 jours']);
+    expect(clientRequestPeriodLines(stay, 'en', days)).toEqual(['12\u201314 Nov · 3 days · Return 15\u00A0Nov']);
+    expect(clientRequestPeriodLines(stay, 'fr', jours)).toEqual(['12\u201314 nov. · 3 jours · Retour le 15\u00A0nov.']);
     const cross = [bookedDay('2026-11-30'), bookedDay('2026-12-01'), bookedDay('2026-12-02')];
-    expect(clientRequestPeriodLines(cross, 'en', days)).toEqual(['30 Nov \u2013 2 Dec · 3 days']);
-    expect(clientRequestPeriodLines(cross, 'fr', jours)).toEqual(['30 nov. \u2013 2 d\u00e9c. · 3 jours']);
+    expect(clientRequestPeriodLines(cross, 'en', days)).toEqual(['30 Nov \u2013 2 Dec · 3 days · Return 3\u00A0Dec']);
+    expect(clientRequestPeriodLines(cross, 'fr', jours)).toEqual(['30 nov. \u2013 2 d\u00e9c. · 3 jours · Retour le 3\u00A0d\u00e9c.']);
   });
 
   it('shows one hourly window with listing wall-clock times and no number', () => {
@@ -474,7 +513,7 @@ describe('clientRequestPeriodLines', () => {
       '2. 14 nov. · 15:00\u201318:00',
     ]);
     const gaps = [bookedDay('2026-11-12'), bookedDay('2026-11-20')];
-    expect(clientRequestPeriodLines(gaps, 'en', days)).toEqual(['1. 12 Nov · 1 day', '2. 20 Nov · 1 day']);
+    expect(clientRequestPeriodLines(gaps, 'en', days)).toEqual(['1. 12 Nov · 1 day · Return 13\u00A0Nov', '2. 20 Nov · 1 day · Return 21\u00A0Nov']);
     expect(clientRequestPeriodLines([], 'en', days)).toEqual([]);
   });
 });
@@ -485,20 +524,55 @@ describe('bookingRequestedPeriodLines', () => {
     expect(bookingPeriodWindows([], span)).toEqual([
       { start_at: span.start_at, end_at: span.end_at },
     ]);
-    expect(bookingRequestedPeriodLines([], span, 'en', days)).toEqual(['12 Nov · 1 day']);
-    expect(bookingRequestedPeriodLines([], span, 'fr', jours)).toEqual(['12 nov. · 1 jour']);
+    expect(bookingRequestedPeriodLines([], span, 'en', days)).toEqual(['12 Nov · 1 day · Return 13\u00A0Nov']);
+    expect(bookingRequestedPeriodLines([], span, 'fr', jours)).toEqual(['12 nov. · 1 jour · Retour le 13\u00A0nov.']);
   });
 
   it('keeps selection windows and does not add the overall span', () => {
     const windows = [bookedDay('2026-11-12'), bookedDay('2026-11-13'), bookedDay('2026-11-14')];
     const span = { start_at: '2026-11-12T08:00:00.000Z', end_at: '2026-11-15T08:00:00.000Z' };
     expect(bookingPeriodWindows(windows, span)).toBe(windows);
-    expect(bookingRequestedPeriodLines(windows, span, 'en', days)).toEqual(['12\u201314 Nov · 3 days']);
+    expect(bookingRequestedPeriodLines(windows, span, 'en', days)).toEqual(['12\u201314 Nov · 3 days · Return 15\u00A0Nov']);
   });
 
   it('returns nothing when the booking has neither windows nor a span', () => {
     expect(bookingPeriodWindows([], null)).toEqual([]);
     expect(bookingRequestedPeriodLines([], { start_at: '', end_at: '' }, 'en', days)).toEqual([]);
+  });
+});
+
+
+describe('return day', () => {
+  const bookedDay = (date: string) => ({
+    billing: 'all_day' as const,
+    calendar_date: date,
+    start_at: `${date}T08:00:00.000Z`,
+    end_at: `${date}T18:00:00.000Z`,
+  });
+  const days = (count: number) => (count === 1 ? '1 day' : `${count} days`);
+  const jours = (count: number) => (count === 1 ? '1 jour' : `${count} jours`);
+
+  it('labels the exclusive end as Return / Retour le', () => {
+    expect(formatReturnDay('2026-11-29', 'en')).toBe('Return 29\u00A0Nov');
+    expect(formatReturnDay('2026-11-29', 'fr')).toBe('Retour le 29\u00A0nov.');
+    expect(appendReturnDay('27\u201328 Nov · 2 days', '2026-11-29', 'en')).toBe(
+      '27\u201328 Nov · 2 days · Return 29\u00A0Nov'
+    );
+  });
+
+  it('adds the return morning on a daily request summary and leaves formatRentalPeriod unchanged', () => {
+    const stay = [bookedDay('2026-11-27'), bookedDay('2026-11-28')];
+    expect(formatRequestedPeriod(stay, 'en', days)).toBe('27\u201328 Nov · 2 days · Return 29\u00A0Nov');
+    expect(formatRequestedPeriod(stay, 'fr', jours)).toBe('27\u201328 nov. · 2 jours · Retour le 29\u00A0nov.');
+    expect(formatRentalPeriod(stay, 'en', days)).toBe('27\u201328 Nov · 2 days');
+  });
+
+  it('appends the return morning to a cross-day booked span from the last booked day', () => {
+    const stay = [bookedDay('2026-11-27'), bookedDay('2026-11-28')];
+    const span = { start_at: '2026-11-27T08:00:00.000Z', end_at: '2026-11-28T18:00:00.000Z' };
+    expect(bookingDetailPeriodLines(stay, span, 'en', days, '27 Nov 08:00 → 28 Nov 18:00')).toEqual([
+      '27 Nov 08:00 → 28 Nov 18:00 · Return 29\u00A0Nov',
+    ]);
   });
 });
 

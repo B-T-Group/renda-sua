@@ -20,7 +20,6 @@ import { alpha, useTheme } from '@mui/material/styles';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { MarketSelector } from '../market/MarketSelector';
 import {
   RentalCardSkeleton,
   RentalLocationsStrip,
@@ -251,9 +250,6 @@ const RentalsLegacyCatalog: React.FC = () => {
                     'Browse verified business-operated rentals. Filter by category and location, then request dates on the listing page.'
                   )}
             </Typography>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
-              <MarketSelector catalogContext="rentals" />
-            </Stack>
             <CatalogNotice />
           </Container>
         </Box>

@@ -1,8 +1,8 @@
-import { browseLaneNavItems, isBrowseLanePathActive } from './browseMarketLanes';
+import { BROWSE_LANES, isBrowseLanePathActive } from './browseMarketLanes';
 
-describe('browseLaneNavItems', () => {
-  it('maps visible lanes in order with paths', () => {
-    const items = browseLaneNavItems(['rentals', 'exports', 'shop', 'food']);
+describe('BROWSE_LANES', () => {
+  it('lists all four lanes in order with paths', () => {
+    const items = BROWSE_LANES;
     expect(items.map((item) => item.key)).toEqual([
       'rentals',
       'exports',

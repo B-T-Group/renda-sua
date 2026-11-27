@@ -336,6 +336,16 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
         reservedCancelAfter: null,
       })
     ).toBe(false);
+    // Default zone Africa/Douala (UTC+1): the start day ends at 23:00Z.
+    expect(
+      reservedBookingExpired({
+        now: new Date('2026-11-09T22:59:59.000Z'),
+        startAt,
+        policyVersion: null,
+        pickupInspectionPending: false,
+        reservedCancelAfter: null,
+      })
+    ).toBe(false);
     expect(
       reservedBookingExpired({
         now: new Date('2026-11-09T23:00:00.000Z'),
@@ -362,7 +372,7 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
   it('keeps an early accept open until the end of the start day', () => {
     const acceptedAt = new Date(startAt.getTime() - 3 * 60 * 60 * 1000);
     const deadline = extendedReservedDeadline(startAt, acceptedAt);
-    expect(deadline.toISOString()).toBe('2026-11-09T23:00:00.000Z');
+    expect(deadline.toISOString()).toBe('2026-11-10T00:00:00.000Z');
     expect(
       reservedBookingExpired({
         now: new Date(acceptedAt.getTime() + 30 * 60 * 1000),
@@ -377,7 +387,7 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
   it('keeps a late accept open until the end of the start day', () => {
     const acceptedAt = new Date(startAt.getTime() + 2 * 60 * 60 * 1000);
     const deadline = extendedReservedDeadline(startAt, acceptedAt);
-    expect(deadline.toISOString()).toBe('2026-11-09T23:00:00.000Z');
+    expect(deadline.toISOString()).toBe('2026-11-10T00:00:00.000Z');
     expect(deadline.getTime()).toBeGreaterThan(startAt.getTime() + 60 * 60 * 1000);
   });
 });

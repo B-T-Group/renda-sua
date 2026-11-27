@@ -149,6 +149,8 @@ export class RentalSearchService {
       nowMs: now,
       pricePerDay,
     });
+    // Hourly-only listings have no day price, so no day total either (clients show "from X / h").
+    if (listing.offers_daily === false) return { listing, pricePerDay, dayCount: range.dayCount, catalogIndex, ...availability, totalForDates: null };
     return { listing, pricePerDay, dayCount: range.dayCount, catalogIndex, ...availability };
   }
 

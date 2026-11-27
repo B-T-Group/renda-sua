@@ -10,6 +10,8 @@ export const GET_LISTING_FOR_REQUEST = `
       units_available
       base_price_per_hour
       base_price_per_day
+      offers_hourly
+      offers_daily
       security_deposit_amount
       weekly_availability(order_by: { weekday: asc }) {
         weekday
@@ -93,7 +95,10 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
       id
       base_price_per_hour
       base_price_per_day
+      offers_hourly
+      offers_daily
       security_deposit_amount
+      reservation_fee_enabled
       min_rental_hours
       max_rental_hours
       units_available
@@ -163,7 +168,10 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
       moderation_status
       base_price_per_hour
       base_price_per_day
+      offers_hourly
+      offers_daily
       security_deposit_amount
+      reservation_fee_enabled
       min_rental_hours
       max_rental_hours
       units_available
@@ -261,7 +269,12 @@ export const GET_RENTAL_REQUEST_FULL = `
         units_available
         base_price_per_hour
         base_price_per_day
+        offers_hourly
+        offers_daily
+        block_min_hours: min_rental_hours
+        block_max_hours: max_rental_hours
         security_deposit_amount
+        reservation_fee_enabled
         weekly_availability(order_by: { weekday: asc }) {
           weekday
           is_available
@@ -579,8 +592,16 @@ export const GET_RENTAL_BOOKING_FULL = `
       reserved_cancel_after
       payment_timing
       payment_status
+      card_pay_at_pickup
+      reservation_fee_amount
+      reservation_fee_status
+      reservation_fee_ref
+      reservation_fee_rail
+      reservation_fee_settled_at
       actual_start_at
+      return_due_at
       actual_end_at
+      renter_reported_returned_at
       pickup_inspection_pending
       end_reminder_sent_at
       rental_pricing_snapshot
@@ -625,7 +646,13 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       reserved_cancel_after
       payment_timing
       payment_status
+      card_pay_at_pickup
+      reservation_fee_amount
+      reservation_fee_status
+      reservation_fee_rail
+      reservation_fee_settled_at
       actual_start_at
+      return_due_at
       actual_end_at
       renter_reported_returned_at
       renter_return_escalated_at
@@ -705,8 +732,15 @@ export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
       overtime_amount
       payment_timing
       payment_status
+      card_pay_at_pickup
+      reservation_fee_amount
+      reservation_fee_status
+      reservation_fee_ref
+      reservation_fee_rail
+      reservation_fee_settled_at
       condition_declined_at
       actual_start_at
+      return_due_at
       actual_end_at
       rental_pricing_snapshot
       rental_start_pin_hash
@@ -1025,12 +1059,16 @@ export const LIST_ACTIVE_BOOKINGS_ENDING_SOON = `
     rental_bookings(
       where: {
         status: { _eq: active }
-        end_at: { _gt: $now, _lte: $until }
         end_reminder_sent_at: { _is_null: true }
+        _or: [
+          { end_at: { _gt: $now, _lte: $until } }
+          { return_due_at: { _gt: $now, _lte: $until } }
+        ]
       }
     ) {
       id
       end_at
+      return_due_at
     }
   }
 `;
@@ -1040,12 +1078,13 @@ export const LIST_ACTIVE_BOOKINGS_PAST_END = `
     rental_bookings(
       where: {
         status: { _eq: active }
-        end_at: { _lte: $now }
+        _or: [{ end_at: { _lte: $now } }, { return_due_at: { _lte: $now } }]
         period_ended_notified_at: { _is_null: true }
       }
     ) {
       id
       end_at
+      return_due_at
       period_ended_notified_at
     }
   }
@@ -1078,7 +1117,10 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
         business_location_id
         base_price_per_hour
         base_price_per_day
+        offers_hourly
+        offers_daily
         security_deposit_amount
+        reservation_fee_enabled
         is_active
         deleted_at
         moderation_status
@@ -1113,7 +1155,10 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
         business_location_id
         base_price_per_hour
         base_price_per_day
+        offers_hourly
+        offers_daily
         security_deposit_amount
+        reservation_fee_enabled
         min_rental_hours
         max_rental_hours
         units_available
@@ -1223,6 +1268,17 @@ export const PUBLISH_RENTAL_LISTING_FROM_DRAFT = `
   }
 `;
 
+export const GET_RENTAL_LISTING_MODES = `
+  query GetRentalListingModes($id: uuid!) {
+    rental_location_listings_by_pk(id: $id) {
+      offers_hourly
+      offers_daily
+      base_price_per_hour
+      base_price_per_day
+    }
+  }
+`;
+
 export const GET_RENTAL_LISTING_MIN_MAX = `
   query GetRentalListingMinMax($id: uuid!) {
     rental_location_listings_by_pk(id: $id) {
@@ -1256,9 +1312,10 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
         base_price_per_hour
         base_price_per_day
         security_deposit_amount
+        reservation_fee_enabled
         business_location {
           name
-          address { city }
+          address { city country }
         }
         rental_item {
           name
@@ -1270,9 +1327,13 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
         id
         status
         end_at
+        return_due_at
         contract_expires_at
         payment_timing
         payment_status
+        card_pay_at_pickup
+        reservation_fee_amount
+        reservation_fee_status
         renter_reported_returned_at
         renter_return_escalated_at
       }
@@ -1288,6 +1349,7 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
       status
       start_at
       end_at
+      return_due_at
       total_amount
       currency
       units_booked
@@ -1296,6 +1358,9 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
       overtime_amount
       payment_timing
       payment_status
+      card_pay_at_pickup
+      reservation_fee_amount
+      reservation_fee_status
       renter_reported_returned_at
       renter_return_escalated_at
       created_at
@@ -1346,7 +1411,10 @@ export const LIST_RECENT_NO_RESPONSE_REQUESTS = `
       responded_at
       rental_selection_windows
       client { user { first_name last_name } }
-      rental_location_listing { rental_item { name } }
+      rental_location_listing {
+        rental_item { name }
+        business_location { address { country } }
+      }
     }
   }
 `;
@@ -1444,6 +1512,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         booking_number
         end_at
         actual_start_at
+        return_due_at
         payment_timing
         payment_status
         total_amount
@@ -1458,6 +1527,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         base_price_per_hour
         base_price_per_day
         security_deposit_amount
+        reservation_fee_enabled
         business_location {
           name
           address {
@@ -1874,6 +1944,7 @@ export const GET_BUSINESS_RENTAL_ITEM_ACTIVITY_BOOKINGS = `
       start_at
       end_at
       actual_start_at
+      return_due_at
       actual_end_at
       total_amount
       overtime_amount

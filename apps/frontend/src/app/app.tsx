@@ -293,6 +293,22 @@ function App() {
               }
             />
             <Route
+              path="/export-orders"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.ClientExportOrdersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/export-orders/:id"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.ClientExportOrderDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/rentals/request-submitted"
               element={
                 <ProtectedRoute>
@@ -528,6 +544,14 @@ function App() {
               <Route
                 path="/admin/orders/:orderId"
                 element={<LazyPages.AdminOrderDetailPage />}
+              />
+              <Route
+                path="/admin/export-orders"
+                element={<LazyPages.AdminExportOrdersPage />}
+              />
+              <Route
+                path="/admin/export-orders/:id"
+                element={<LazyPages.AdminExportOrderDetailPage />}
               />
               <Route
                 path="/admin/location-transfers"
@@ -956,6 +980,14 @@ function App() {
               }
             />
             <Route
+              path="/agent/export-orders"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AgentExportOrdersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/merchant-agreement"
               element={
                 <ProtectedRoute>
@@ -1044,6 +1076,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.BusinessProductInterestPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/export-orders"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessExportOrdersPage />
                 </ProtectedRoute>
               }
             />

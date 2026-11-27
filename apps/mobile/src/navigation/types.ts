@@ -186,14 +186,15 @@ export type GuestRootStackParamList = {
   AssistantChat: { context?: AssistantContext; prefill?: string } | undefined;
 };
 
-/** Guest shell: browse catalog + rentals + food + auth stack in bottom tabs. */
+/** Guest shell: one Home tab (lane menu: rentals, exports, shop, food) + reels + auth stack. */
 export type GuestTabParamList = {
-  GuestBrowse:
-    | { segment?: 'all' | 'food'; category?: string; categoryRequestId?: number }
+  GuestHome:
+    | {
+        segment?: 'all' | 'food' | 'rentals' | 'exports';
+        category?: string;
+        categoryRequestId?: number;
+      }
     | undefined;
-  GuestRentals: undefined;
-  GuestExports: undefined;
-  GuestFoods: undefined;
   GuestReels: undefined;
   GuestAuth: NavigatorScreenParams<AuthStackParamList>;
 };

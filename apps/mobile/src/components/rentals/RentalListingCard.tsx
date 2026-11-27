@@ -8,7 +8,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useImageFallback } from '../../hooks/useImageFallback';
 import type { RentalListingRow } from '../../types/rentals';
 import { formatRentalMoney } from '../../utils/rentals';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
+import { listingRentModes } from '../../utils/rentals/listingRentModes';
 
 function toNumber(v: string | number): number {
   const n = typeof v === 'string' ? parseFloat(v) : v;
@@ -30,6 +32,7 @@ function RentalListingCardInner({ listing, onPress }: RentalListingCardProps) {
   const currency = item.currency || 'XAF';
   const hourly = formatRentalMoney(toNumber(listing.base_price_per_hour), currency);
   const daily = formatRentalMoney(toNumber(listing.base_price_per_day), currency);
+  const modes = listingRentModes(listing);
   const distance =
     listing.distance_text && listing.duration_text
       ? t('rentals.routeFromYou', '{{distance}} • {{duration}} from you', {
@@ -107,16 +110,20 @@ function RentalListingCardInner({ listing, onPress }: RentalListingCardProps) {
             {item.business?.name ? ` · ${item.business.name}` : ''}
           </Text>
           <View style={[styles.priceRow, { marginTop: spacing.sm }]}>
-            <Text style={[typography.body2, { color: colors.text.primary, fontWeight: '700' }]}>
-              {hourly}
-              <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '400' }]}>
-                {' '}
-                {t('client.rentals.perHour', 'per hour')}
+            {modes.hourly ? (
+              <Text style={[typography.body2, { color: colors.text.primary, fontWeight: '700' }]}>
+                {hourly}
+                <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '400' }]}>
+                  {' '}
+                  {t('client.rentals.perHour', 'per hour')}
+                </Text>
               </Text>
-            </Text>
-            <Text style={[typography.caption, { color: colors.text.secondary }]}>
-              {daily} {t('rentals.perDay', '/ day')}
-            </Text>
+            ) : null}
+            {modes.daily ? (
+              <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                {withRateUnit(daily, t('rentals.perDay', '/ day'))}
+              </Text>
+            ) : null}
           </View>
           {distance ? (
             <View style={[styles.metaRow, { marginTop: spacing.xs }]}>

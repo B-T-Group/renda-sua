@@ -29,7 +29,7 @@ const ALLOWED_KEYS = new Set([
 ]);
 
 const client: LauncherEventContext = { persona: 'client', screen: 'ClientBrowse', market: 'cm', language: 'fr-CM', threadId: 't-1' };
-const guest: LauncherEventContext = { persona: 'guest', screen: 'GuestBrowse', market: 'CA', language: 'en', threadId: 'thread-9' };
+const guest: LauncherEventContext = { persona: 'guest', screen: 'GuestHome', market: 'CA', language: 'en', threadId: 'thread-9' };
 
 function lastCall() {
   return trackSiteEvent.mock.calls.at(-1)?.[0] as { eventType: string; metadata: Record<string, string>; anonymousId?: string };

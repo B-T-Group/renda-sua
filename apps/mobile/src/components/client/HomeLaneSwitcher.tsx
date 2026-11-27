@@ -13,8 +13,10 @@ export type HomeLane = 'rentals' | 'exports' | 'shop' | 'food';
 type Props = {
   value: HomeLane;
   onChange: (lane: HomeLane) => void;
-  lanes: HomeLane[];
 };
+
+/** Fixed order shown in every market: Rentals, Exports, Shop, Food. */
+export const HOME_LANES: HomeLane[] = ['rentals', 'exports', 'shop', 'food'];
 
 const LANE_ICONS: Record<HomeLane, keyof typeof MaterialCommunityIcons.glyphMap> = {
   rentals: 'hand-coin',
@@ -23,16 +25,16 @@ const LANE_ICONS: Record<HomeLane, keyof typeof MaterialCommunityIcons.glyphMap>
   food: 'food',
 };
 
-export function HomeLaneSwitcher({ value, onChange, lanes }: Props) {
+export function HomeLaneSwitcher({ value, onChange }: Props) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const [width, setWidth] = useState(0);
-  const index = Math.max(0, lanes.indexOf(value));
+  const index = Math.max(0, HOME_LANES.indexOf(value));
   const offset = useSharedValue(index);
   useEffect(() => {
     offset.value = withTiming(index, { duration: motion.duration.normal });
   }, [index, offset]);
-  const laneCount = Math.max(lanes.length, 1);
+  const laneCount = HOME_LANES.length;
   const indicator = useAnimatedStyle(() => ({
     transform: [{ translateX: (width / laneCount) * offset.value }],
   }));
@@ -46,9 +48,6 @@ export function HomeLaneSwitcher({ value, onChange, lanes }: Props) {
     if (lane !== value) haptics.selection();
     onChange(lane);
   };
-  if (lanes.length < 2) {
-    return null;
-  }
   return (
     <View
       onLayout={(event) => setWidth(event.nativeEvent.layout.width - 8)}
@@ -76,7 +75,7 @@ export function HomeLaneSwitcher({ value, onChange, lanes }: Props) {
           ]}
         />
       ) : null}
-      {lanes.map((lane) => (
+      {HOME_LANES.map((lane) => (
         <Pressable
           key={lane}
           accessibilityRole="button"

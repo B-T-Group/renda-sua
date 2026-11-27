@@ -36,7 +36,6 @@ function renderModify(onModifySave: jest.Mock) {
     <NavigationContainer>
       <ThemeProvider>
         <RentalSlotPicker
-          layout="screen"
           submitMode="modify"
           listingId="listing-1"
           isAuthenticated
@@ -78,7 +77,7 @@ describe('modify price confirm from the server', () => {
     expect(onModifySave).toHaveBeenCalledTimes(1);
     expect(onModifySave.mock.calls[0][0].confirmedTotal).toBeUndefined();
     expect(view.getByText('Update your request?')).toBeTruthy();
-    expect(view.getAllByText('15–16 Dec · 2 days').length).toBeGreaterThan(0);
+    expect(view.getAllByText(/15–16 Dec · 2 days · Return 17\sDec/).length).toBeGreaterThan(0);
     expect(view.queryByText('15–17 Dec · 2 days')).toBeNull();
     expect(view.getByText('1 200 FCFA')).toBeTruthy();
     await act(async () => {

@@ -106,4 +106,146 @@ describe('rental price change', () => {
     expect(applyAcceptedPrice(computed, sent).snapshot.total).toBe(10000);
     expect(applyAcceptedPrice(computed, { total: 3000, currency: 'XAF', lines: [{ subtotal: 5000 }] }).snapshot.total).toBe(3000);
   });
+
+  it('keeps the server total when every line is one unit of a multi-unit booking', () => {
+    const computed = {
+      ...snap,
+      total: 15000,
+      unitsBooked: 2,
+      lines: [
+        { kind: 'all_day' as const, calendarDate: '2026-11-14', ratePerDay: 5000, subtotal: 10000 },
+        { kind: 'hourly' as const, subtotal: 5000, billableHours: 2, ratePerHour: 1250, startAt: 'a', endAt: 'b' },
+      ],
+    };
+    const kept = applyAcceptedPrice(computed, {
+      total: 7500,
+      currency: 'XAF',
+      lines: [{ subtotal: 5000 }, { subtotal: 2500 }],
+    });
+    expect(kept.snapshot.total).toBe(15000);
+    expect(kept.currencyMismatch).toBe(false);
+  });
+
+  it('keeps the server total when the line count differs but the amount is still one unit', () => {
+    const computed = {
+      ...snap,
+      total: 10000,
+      unitsBooked: 2,
+      lines: [
+        { kind: 'all_day' as const, calendarDate: '2026-11-14', ratePerDay: 2500, subtotal: 5000 },
+        { kind: 'all_day' as const, calendarDate: '2026-11-15', ratePerDay: 2500, subtotal: 5000 },
+      ],
+    };
+    expect(applyAcceptedPrice(computed, {
+      total: 5000,
+      currency: 'XAF',
+      lines: [{ subtotal: 5000 }],
+    }).snapshot.total).toBe(10000);
+  });
+
+  it('charges a real discount when the sent lines are not one unit of the server total', () => {
+    const computed = {
+      ...snap,
+      total: 10000,
+      unitsBooked: 2,
+      lines: [
+        { kind: 'all_day' as const, calendarDate: '2026-11-14', ratePerDay: 2500, subtotal: 5000 },
+        { kind: 'all_day' as const, calendarDate: '2026-11-15', ratePerDay: 2500, subtotal: 5000 },
+      ],
+    };
+    expect(applyAcceptedPrice(computed, {
+      total: 4000,
+      currency: 'XAF',
+      lines: [{ subtotal: 4000 }],
+    }).snapshot.total).toBe(4000);
+    expect(applyAcceptedPrice(computed, {
+      total: 4000,
+      currency: 'XAF',
+      lines: [{ subtotal: 2000 }, { subtotal: 2000 }],
+    }).snapshot.total).toBe(4000);
+  });
+
+  it('charges a one-unit discount and does not throw when the unit count is missing', () => {
+    const one = {
+      ...snap,
+      total: 5000,
+      unitsBooked: 1,
+      lines: [{ kind: 'all_day' as const, calendarDate: '2026-11-14', ratePerDay: 5000, subtotal: 5000 }],
+    };
+    expect(applyAcceptedPrice(one, {
+      total: 4000,
+      currency: 'XAF',
+      lines: [{ subtotal: 4000 }],
+    }).snapshot.total).toBe(4000);
+    const missing = {
+      ...snap,
+      total: 5000,
+      lines: [{ kind: 'all_day' as const, calendarDate: '2026-11-14', ratePerDay: 5000, subtotal: 5000 }],
+    };
+    expect(applyAcceptedPrice(missing, {
+      total: 4000,
+      currency: 'XAF',
+      lines: [{ subtotal: 4000 }],
+    }).snapshot.total).toBe(4000);
+    expect(applyAcceptedPrice({ ...missing, unitsBooked: Number.NaN }, {
+      total: 4000,
+      currency: 'XAF',
+      lines: [{ subtotal: 4000 }],
+    }).snapshot.total).toBe(4000);
+  });
+
+  it('floors the unit count and ignores one-unit lines inside a two-cent tolerance', () => {
+    const computed = {
+      ...snap,
+      total: 10000,
+      unitsBooked: 2.9,
+      lines: [{ kind: 'all_day' as const, calendarDate: '2026-11-14', ratePerDay: 5000, subtotal: 10000 }],
+    };
+    expect(applyAcceptedPrice(computed, {
+      total: 5000,
+      currency: 'XAF',
+      lines: [{ subtotal: 5000 }],
+    }).snapshot.total).toBe(10000);
+    const asText = { ...computed, unitsBooked: '2' as unknown as number };
+    expect(applyAcceptedPrice(asText, {
+      total: 5000.01,
+      currency: 'XAF',
+      lines: [{ subtotal: 5000.01 }],
+    }).snapshot.total).toBe(10000);
+    expect(applyAcceptedPrice(asText, {
+      total: 5000.05,
+      currency: 'XAF',
+      lines: [{ subtotal: 5000.05 }],
+    }).snapshot.total).toBe(5000.05);
+  });
+
+  it('keeps the quote on a currency mismatch even when the lines look like one unit', () => {
+    const computed = {
+      ...snap,
+      total: 10000,
+      unitsBooked: 2,
+      lines: [{ kind: 'all_day' as const, calendarDate: '2026-11-14', ratePerDay: 5000, subtotal: 10000 }],
+    };
+    const mismatch = applyAcceptedPrice(computed, {
+      total: 5000,
+      currency: 'CAD',
+      lines: [{ subtotal: 5000 }],
+    });
+    expect(mismatch.snapshot.total).toBe(10000);
+    expect(mismatch.currencyMismatch).toBe(true);
+  });
+
+  it('puts the leftover cent on the last line so the lines still sum to the override', () => {
+    const priced = {
+      ...snap,
+      total: 30.01,
+      lines: [
+        { kind: 'hourly' as const, subtotal: 10, billableHours: 1, ratePerHour: 10, startAt: 'a', endAt: 'b' },
+        { kind: 'hourly' as const, subtotal: 10, billableHours: 1, ratePerHour: 10, startAt: 'a', endAt: 'b' },
+        { kind: 'hourly' as const, subtotal: 10.01, billableHours: 1, ratePerHour: 10.01, startAt: 'a', endAt: 'b' },
+      ],
+    };
+    const next = quoteWithTotalOverride(priced, 10, true);
+    expect(next.lines.map((line) => line.subtotal)).toEqual([3.33, 3.33, 3.34]);
+  });
 });

@@ -64,6 +64,7 @@ select_permissions:
         - rental_start_overwrite_code_used_at
         - period_ended_notified_at
         - actual_start_at
+        - return_due_at
         - actual_end_at
         - renter_reported_returned_at
         - renter_return_escalated_at
@@ -79,6 +80,11 @@ select_permissions:
         - refund_amount
         - refund_currency
         - refunded_at
+        - card_pay_at_pickup
+        - reservation_fee_amount
+        - reservation_fee_status
+        - reservation_fee_rail
+        - reservation_fee_settled_at
         - created_at
         - updated_at
       filter:
@@ -110,6 +116,7 @@ select_permissions:
         - payment_status
         - period_ended_notified_at
         - actual_start_at
+        - return_due_at
         - actual_end_at
         - renter_reported_returned_at
         - renter_return_escalated_at
@@ -125,6 +132,11 @@ select_permissions:
         - refund_amount
         - refund_currency
         - refunded_at
+        - card_pay_at_pickup
+        - reservation_fee_amount
+        - reservation_fee_status
+        - reservation_fee_rail
+        - reservation_fee_settled_at
         - created_at
         - updated_at
       filter:

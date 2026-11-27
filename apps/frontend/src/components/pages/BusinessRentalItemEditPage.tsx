@@ -18,6 +18,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { InspectionOptInCard } from '../rentals/InspectionOptInCard';
+import { RentalModeSwitches } from '../rentals/RentalModeSwitches';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import {
@@ -34,6 +35,8 @@ import RentalListingModerationStatusChip from '../rentals/RentalListingModeratio
 import { RichTextEditor } from '../common/RichTextEditor';
 import SEOHead from '../seo/SEOHead';
 import { depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
+import { listingReservationFee } from '../../utils/rentals/reservationFee';
 
 function rentalDeleteErrorMessage(error: unknown, fallback: string): string {
   const err = error as { response?: { data?: { message?: string | string[] } } };
@@ -46,7 +49,10 @@ function rentalDeleteErrorMessage(error: unknown, fallback: string): string {
 interface ListingFormState {
   base_price_per_hour: string;
   base_price_per_day: string;
+  offers_daily: boolean;
+  offers_hourly: boolean;
   security_deposit_amount: string;
+  reservation_fee_enabled: boolean;
   min_rental_hours: string;
   max_rental_hours: string;
   units_available: string;
@@ -69,8 +75,11 @@ function listingFormsFromDetail(
     out[l.id] = {
       base_price_per_hour: String(l.base_price_per_hour),
       base_price_per_day: String(l.base_price_per_day ?? ''),
+      offers_daily: l.offers_daily !== false,
+      offers_hourly: l.offers_hourly !== false,
       security_deposit_amount:
         l.security_deposit_amount != null ? String(l.security_deposit_amount) : '',
+      reservation_fee_enabled: l.reservation_fee_enabled === true,
       min_rental_hours: String(l.min_rental_hours),
       max_rental_hours: l.max_rental_hours != null ? String(l.max_rental_hours) : '',
       units_available: String(l.units_available),
@@ -110,8 +119,14 @@ function buildListingUpdateBody(
 ): UpdateBusinessRentalListingBody | null {
   const parsed = parsePriceFields(f, currency);
   if (!parsed) return null;
+  if (!f.offers_daily && !f.offers_hourly) return null;
+  if (f.offers_hourly && !(parsed.base_price_per_hour > 0)) return null;
+  if (f.offers_daily && !(parsed.base_price_per_day > 0)) return null;
   return {
     ...parsed,
+    offers_daily: f.offers_daily,
+    offers_hourly: f.offers_hourly,
+    reservation_fee_enabled: f.reservation_fee_enabled,
     pickup_instructions: f.pickup_instructions.trim(),
     dropoff_instructions: f.dropoff_instructions.trim(),
     is_active: f.is_active,
@@ -129,7 +144,10 @@ function parsePriceFields(f: ListingFormState, currency: string): {
 } | null {
   const base = Number(f.base_price_per_hour);
   const day = Number(f.base_price_per_day);
-  const deposit = depositOnSave(currency, f.security_deposit_amount, base);
+  const deposit = depositOnSave(currency, f.security_deposit_amount, base, {
+    daily: day,
+    offersHourly: f.offers_hourly,
+  });
   const minD = Number(f.min_rental_hours);
   const maxRaw = f.max_rental_hours.trim();
   const maxD = maxRaw === '' ? null : Number(maxRaw);
@@ -152,7 +170,7 @@ function parsePriceFields(f: ListingFormState, currency: string): {
 }
 
 const BusinessRentalItemEditPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -271,7 +289,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
       const body = buildListingUpdateBody(f, item?.currency || lockedCurrency);
       if (!body) {
         enqueueSnackbar(
-          t('business.rentals.listingInvalid', 'Check listing numbers and max ≥ min.'),
+          t('business.rentals.rentBy.listingInvalid', 'Check listing numbers, max ≥ min, and a price for each way you rent.'),
           { variant: 'warning' }
         );
         return;
@@ -643,24 +661,36 @@ const BusinessRentalItemEditPage: React.FC = () => {
                 </Alert>
               ) : null}
               <Stack spacing={2}>
-                <TextField
-                  label={t('business.rentals.pricePerHour', 'Price per hour')}
-                  value={f.base_price_per_hour}
-                  onChange={(e) =>
-                    patchListingForm(l.id, { base_price_per_hour: e.target.value })
+                <RentalModeSwitches
+                  value={{ offersDaily: f.offers_daily, offersHourly: f.offers_hourly }}
+                  onChange={(next) =>
+                    patchListingForm(l.id, { offers_daily: next.offersDaily, offers_hourly: next.offersHourly })
                   }
-                  type="number"
-                  fullWidth
                 />
-                <TextField
-                  label={t('business.rentals.pricePerDay', 'Full day price (daily rate)')}
-                  value={f.base_price_per_day}
-                  onChange={(e) =>
-                    patchListingForm(l.id, { base_price_per_day: e.target.value })
-                  }
-                  type="number"
-                  fullWidth
-                />
+                {f.offers_hourly ? (
+                  <TextField
+                    label={t('business.rentals.pricePerHour', 'Price per hour')}
+                    value={f.base_price_per_hour}
+                    onChange={(e) =>
+                      patchListingForm(l.id, { base_price_per_hour: e.target.value })
+                    }
+                    type="number"
+                    fullWidth
+                  />
+                ) : null}
+                {f.offers_daily ? (
+                  <TextField
+                    label={
+                      t('business.rentals.rentBy.dayPrice', 'Price per day')
+                    }
+                    value={f.base_price_per_day}
+                    onChange={(e) =>
+                      patchListingForm(l.id, { base_price_per_day: e.target.value })
+                    }
+                    type="number"
+                    fullWidth
+                  />
+                ) : null}
                 {showsCardDeposit(item?.currency || lockedCurrency) ? (
                   <TextField
                     label={t('business.rentals.securityDeposit', 'Security deposit')}
@@ -672,10 +702,17 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     }
                     type="number"
                     fullWidth
-                    helperText={t(
-                      'business.rentals.securityDepositHelper',
-                      'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-                    )}
+                    helperText={
+                      !f.offers_hourly
+                        ? t(
+                            'business.rentals.securityDepositHelperDaily',
+                            'Held on card rentals to cover extra time. Default is two-thirds of the day price.'
+                          )
+                        : t(
+                            'business.rentals.securityDepositHelper',
+                            'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                          )
+                    }
                   />
                 ) : null}
                 <TextField
@@ -787,6 +824,29 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     </Button>
                   </Box>
                 ))}
+                <FormControlLabel
+                  data-testid={`reservation-fee-${l.id}`}
+                  control={
+                    <Switch
+                      checked={f.reservation_fee_enabled}
+                      onChange={(_, v) => patchListingForm(l.id, { reservation_fee_enabled: v })}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" color="text.primary" fontWeight={600}>{t('business.rentals.reservationFee.label', 'Ask for a reservation fee')}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('business.rentals.reservationFee.help', '{{amount}} when the renter reserves. It counts toward the total.', {
+                          amount: formatConfirmationMoney(
+                            listingReservationFee(item?.currency || lockedCurrency),
+                            item?.currency || lockedCurrency || 'CAD',
+                            i18n.language
+                          ),
+                        })}
+                      </Typography>
+                    </Box>
+                  }
+                />
                 <FormControlLabel
                   control={
                     <Switch

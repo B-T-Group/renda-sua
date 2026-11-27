@@ -106,7 +106,7 @@ function snapshotOmitsUnits(
   const units = Math.floor(Number(computed.unitsBooked));
   const sent = override.lines ?? [];
   const total = Number(override.total);
-  if (units <= 1 || !sent.length || !closeMoney(sumSubtotals(sent), total)) return false;
+  if (!(units > 1) || !sent.length || !closeMoney(sumSubtotals(sent), total)) return false;
   const priced = computed.lines ?? [];
   if (priced.length === sent.length) return sent.every((line, index) => scaledLine(line, priced[index], units));
   const scaled = Number((sumSubtotals(sent) * units).toFixed(2));

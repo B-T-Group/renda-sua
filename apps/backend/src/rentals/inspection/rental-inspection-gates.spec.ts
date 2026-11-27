@@ -43,7 +43,7 @@ describe('enrolled rental gates', () => {
       status: 'active',
       payment_status: 'paid',
       actual_end_at: '2026-07-17T12:00:00.000Z',
-      end_at: '2026-07-17T12:00:00.000Z',
+      end_at: '2026-07-17T13:00:00.000Z', // 13:00 on the Douala clock (no country) = 12:00Z
       total_amount: 160,
       security_deposit_amount: 0,
       units_booked: 1,
@@ -151,7 +151,7 @@ describe('enrolled rental gates', () => {
       status: 'awaiting_return',
       payment_status: 'paid',
       actual_end_at: '2026-07-17T12:00:00.000Z',
-      end_at: '2026-07-17T12:00:00.000Z',
+      end_at: '2026-07-17T13:00:00.000Z', // 13:00 on the Douala clock (no country) = 12:00Z
       total_amount: 160,
       security_deposit_amount: 0,
       units_booked: 1,
@@ -199,7 +199,7 @@ describe('enrolled rental gates', () => {
       payment_status: 'authorized',
       authorized_amount: 260,
       actual_end_at: '2026-07-17T13:00:00.000Z',
-      end_at: '2026-07-17T12:00:00.000Z',
+      end_at: '2026-07-17T13:00:00.000Z', // 13:00 on the Douala clock (no country) = 12:00Z
       total_amount: 160,
       security_deposit_amount: 100,
       units_booked: 1,
@@ -289,7 +289,7 @@ describe('enrolled rental gates', () => {
       payment_status: 'paid',
       booking_number: 'RB1',
       actual_end_at: '2026-07-17T14:00:00.000Z',
-      end_at: '2026-07-17T12:00:00.000Z',
+      end_at: '2026-07-17T13:00:00.000Z', // 13:00 on the Douala clock (no country) = 12:00Z
       total_amount: 160,
       security_deposit_amount: 0,
       units_booked: 1,
@@ -323,7 +323,7 @@ describe('enrolled rental gates', () => {
       payment_status: 'authorized',
       authorized_amount: 200,
       actual_end_at: '2026-07-17T12:00:00.000Z',
-      end_at: '2026-07-17T12:00:00.000Z',
+      end_at: '2026-07-17T13:00:00.000Z', // 13:00 on the Douala clock (no country) = 12:00Z
       total_amount: 160,
       security_deposit_amount: 40,
       units_booked: 1,

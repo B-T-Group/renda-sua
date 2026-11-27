@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bon de commande {{bcNumber}}</title>
+    <style>
+      body { font-family: Georgia, serif; color: #1a1a1a; margin: 40px; }
+      h1 { font-size: 22px; margin: 0 0 8px; }
+      .muted { color: #555; font-size: 12px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+      th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
+      th { background: #f3f3f3; }
+      .banner { background: #0b3d2e; color: #fff; padding: 16px 20px; margin: -40px -40px 24px; }
+      .note { margin-top: 24px; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="banner">
+      <h1>Rendasua — Bon de commande</h1>
+      <div class="muted" style="color:#cde;">{{bcNumber}} · v{{version}} · {{issuedAt}}</div>
+    </div>
+    <p><strong>Client:</strong> {{clientName}}<br />
+      <strong>Agent:</strong> {{agentLabel}}<br />
+      <strong>Pays:</strong> {{countryCode}} · Devise docs: CAD<br />
+      <em>Aucun prix affiché — confirmation manufacturier requise.</em>
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Produit</th>
+          <th>Caractéristiques</th>
+          <th>Qté</th>
+          <th>Particularités</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#lines}}
+        <tr>
+          <td>{{product_name}}</td>
+          <td>{{characteristics}}</td>
+          <td>{{quantity}} {{unit}}</td>
+          <td>{{particularities}}</td>
+        </tr>
+        {{/lines}}
+      </tbody>
+    </table>
+    <p class="note">{{clientNote}}</p>
+    <p class="muted">Document généré automatiquement · non modifiable une fois émis · {{bcNumber}}</p>
+  </body>
+</html>

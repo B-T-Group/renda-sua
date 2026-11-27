@@ -1,3 +1,4 @@
+import { wallNow } from '../wall-clock';
 import { listingTimeZone, parseSlotKey, serverCaptureTimestamp, uploadPlatform } from './pickup-photo-rules';
 
 export const INSPECTION_OPTIN_KEY = 'rentals_inspection_optin_enabled';
@@ -44,9 +45,10 @@ export function optOutKeepsStamp(existingPolicy: number | null): number | null {
   return existingPolicy;
 }
 
-export function isBeforeRentalStart(startAt: Date, now: Date): boolean {
+/** startAt is listing wall clock (UTC components); `now` is read on that clock. */
+export function isBeforeRentalStart(startAt: Date, now: Date, timeZone: string): boolean {
   if (Number.isNaN(startAt.getTime()) || Number.isNaN(now.getTime())) return false;
-  return now.getTime() < startAt.getTime();
+  return wallNow(now, timeZone).getTime() < startAt.getTime();
 }
 
 export function reuseDamage(input: {

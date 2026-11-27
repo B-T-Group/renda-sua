@@ -1,47 +1,27 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Button, Checkbox, Text, TextInput } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppModal } from '../common/AppModal';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useCreateRentalRequest } from '../../hooks/useCreateRentalRequest';
 import { trackSiteEvent } from '../../services/analytics/AppEventsService';
 import { consumeRentalRequestAttribution } from '../../utils/rentalAssistantAttribution';
 import type { ClientRootStackParamList, GuestRootStackParamList } from '../../navigation/types';
 import type { RentalTakenWindow } from '../../types/rentals';
-import { RentalTimeOptionSheet } from './RentalTimeOptionSheet';
 import { RentalRequestScreenForm } from './request/RentalRequestScreenForm';
 import { cardWindowErrorMessage } from '../../utils/rentals/cardWindow';
+import { submitRuleText } from '../../utils/rentals/dayHoursCopy';
 import { CardWindowNotice } from './request/CardWindowNotice';
 import {
-  bookedSegmentsForLocalDay,
-  dayHasRemainingCapacity,
   estimateTotalFromSelectionRanges,
-  formatRentalMoney,
-  formatSelectionLabel,
-  freeSlotEndsLocal,
-  freeSlotStartsLocal,
-  listingDayBoundsLocal,
   localPickerInstantToRequestParts,
-  maximalFreeHourRangesLocal,
-  mergeRangeIntoSelections,
   remainingUnitsInRange,
   requestedSlotUtcIso,
   totalBillableHours,
   type SelectionRange,
-  type WeeklyRow,
 } from '../../utils/rentals';
 import {
-  formatRequestDay,
-  formatRequestChipDay,
-  formatRequestChipWeekday,
-  requestChipDateKeys,
-  requestChipSelected,
-  formatRentalPeriod,
+  formatRequestedPeriod,
   formatRequestAmount,
   modifySaveNeedsConfirm,
   readPriceConfirmQuote,
@@ -49,40 +29,8 @@ import {
   rentalSelectionFingerprint,
   requestPriceCopy,
   requestSelectionLabel,
-  selectedRequestDateKeys,
-  selectionCalendarKey,
 } from '../../utils/rentals/rentalRequestFormat';
 import { RentalModifyPriceSheet } from './RentalModifySheets';
-
-const RENTAL_MIN_START_BUFFER_MS = 2 * 60 * 60 * 1000;
-const DAY_OPTIONS = 14;
-
-function parseDateInputLocal(dateStr: string): Date {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0);
-}
-
-function initialDateKey(layout: 'screen' | undefined, rows: SelectionRange[]): string {
-  if (layout !== 'screen') return todayDateInputValue();
-  const dated = rows.find((row) => row.calendarDate);
-  if (dated?.calendarDate) return dated.calendarDate;
-  return rows[0] ? selectionCalendarKey(rows[0]) : todayDateInputValue();
-}
-
-function todayDateInputValue(): string {
-  const n = new Date();
-  const mo = String(n.getMonth() + 1).padStart(2, '0');
-  const da = String(n.getDate()).padStart(2, '0');
-  return `${n.getFullYear()}-${mo}-${da}`;
-}
-
-function addDaysKey(base: string, offset: number): string {
-  const d = parseDateInputLocal(base);
-  d.setDate(d.getDate() + offset);
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const da = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mo}-${da}`;
-}
 
 function openedDayCount(rows: SelectionRange[]): number {
   const allDay = rows.filter((row) => row.billing === 'all_day').length;
@@ -102,16 +50,6 @@ function selectionPeriodWindows(rows: SelectionRange[]) {
   });
 }
 
-function formatSlotTime(ms: number, locale?: string): string {
-  try {
-    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(
-      new Date(ms)
-    );
-  } catch {
-    return new Date(ms).toLocaleTimeString();
-  }
-}
-
 export interface RentalSlotPickerProps {
   listingId: string;
   isAuthenticated: boolean;
@@ -119,14 +57,11 @@ export interface RentalSlotPickerProps {
   minRentalHours?: number;
   maxRentalHours?: number | null;
   unitsAvailable?: number;
-  weeklyAvailability?: WeeklyRow[];
   basePricePerHour?: number;
   basePricePerDay?: number;
   currency?: string;
   onLoginRequired?: () => void;
   onSubmitted?: (requestId: string) => void;
-  /** When true, omits outer card chrome (for bottom sheets). */
-  embedded?: boolean;
   /** Dates chosen in search. Shown as all-day rows and submitted at the daily rate. */
   initialSelections?: SelectionRange[];
   /** Search dates are already on the sheet, so the empty-state prompt stays hidden. */
@@ -136,13 +71,13 @@ export interface RentalSlotPickerProps {
   /** A date edit is still asking the server, so the request stays disabled. */
   requestBusy?: boolean;
   onSeeDates?: () => void;
-  /** Full-screen request page. The legacy sheet keeps the previous layout. */
-  layout?: 'screen';
   itemName?: string;
   itemMeta?: string;
   imageUrl?: string | null;
   dateLine?: string;
   onEditDates?: () => void;
+  /** Day-and-hours picker: the server refused the request; reopen the picker showing this text. */
+  onServerRuleError?: (text: string) => void;
   unavailableLabel?: string;
   notice?: ReactNode;
   blockedReason?: string;
@@ -170,6 +105,10 @@ export interface RentalSlotPickerProps {
   }) => Promise<void>;
 }
 
+/**
+ * Rental request form (create and modify). Days and hours are chosen in the day-and-hours
+ * sheet the screen owns; this form shows them, units, notes, price and sends the request.
+ */
 export function RentalSlotPicker({
   listingId,
   isAuthenticated,
@@ -177,24 +116,22 @@ export function RentalSlotPicker({
   minRentalHours = 1,
   maxRentalHours = null,
   unitsAvailable = 1,
-  weeklyAvailability = [],
   basePricePerHour = 0,
   basePricePerDay = 0,
   currency = 'XAF',
   onLoginRequired,
   onSubmitted,
-  embedded = false,
   initialSelections = [],
   datesFilled = false,
   requestBlocked = false,
   requestBusy = false,
   onSeeDates,
-  layout,
   itemName,
   itemMeta,
   imageUrl,
   dateLine,
   onEditDates,
+  onServerRuleError,
   unavailableLabel,
   notice,
   blockedReason,
@@ -207,21 +144,9 @@ export function RentalSlotPicker({
   onModifySave,
 }: RentalSlotPickerProps) {
   const { t, i18n } = useTranslation();
-  const { colors, typography, spacing, borderRadius, shadows } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation();
   const { submit, loading: submitting } = useCreateRentalRequest();
-
-  const [dateStr, setDateStr] = useState(() => initialDateKey(layout, initialSelections));
-  const [startMs, setStartMs] = useState<number | ''>('');
-  const [endMs, setEndMs] = useState<number | ''>('');
-  const [allDayChecked, setAllDayChecked] = useState(false);
-  const [selections, setSelections] = useState<SelectionRange[]>(initialSelections);
-  const [showAdvancedRanges, setShowAdvancedRanges] = useState(
-    layout !== 'screen' && initialSelections.length > 0
-  );
-  const [builderOpen, setBuilderOpen] = useState(false);
+  const [selections] = useState<SelectionRange[]>(initialSelections);
   const [unitsRequested, setUnitsRequested] = useState(initialUnits);
   const [notes, setNotes] = useState(initialNotes);
   const [priceUpOpen, setPriceUpOpen] = useState(false);
@@ -232,81 +157,8 @@ export function RentalSlotPicker({
   );
   const [msg, setMsg] = useState<string | null>(null);
   const [cardFallback, setCardFallback] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [timePicker, setTimePicker] = useState<'start' | 'end' | null>(null);
 
   const stock = Math.max(1, Math.floor(Number(unitsAvailable)) || 1);
-
-  const todayKey = useMemo(() => todayDateInputValue(), []);
-  const dayKeys = useMemo(
-    () => Array.from({ length: DAY_OPTIONS }, (_, i) => addDaysKey(todayKey, i)),
-    [todayKey]
-  );
-
-  const dayAnchor = useMemo(() => parseDateInputLocal(dateStr), [dateStr]);
-  const dayBounds = useMemo(
-    () => listingDayBoundsLocal(dayAnchor, weeklyAvailability),
-    [dayAnchor, weeklyAvailability]
-  );
-
-  const dayStartEnd = useMemo(() => {
-    const start = new Date(dayAnchor);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
-    return { start, end };
-  }, [dayAnchor]);
-
-  const bookedSegs = useMemo(
-    () => bookedSegmentsForLocalDay(dayStartEnd.start, dayStartEnd.end, bookedWindows),
-    [bookedWindows, dayStartEnd.end, dayStartEnd.start]
-  );
-
-  const minStartMs = useMemo(
-    () => Date.now() + RENTAL_MIN_START_BUFFER_MS,
-    [listingId]
-  );
-  const slotStarts = useMemo(() => {
-    if (!dayBounds) return [];
-    return freeSlotStartsLocal(dayBounds.open, dayBounds.close, bookedSegs, minStartMs, stock);
-  }, [bookedSegs, dayBounds, minStartMs, stock]);
-
-  const slotEnds = useMemo(() => {
-    if (!dayBounds || startMs === '') return [];
-    return freeSlotEndsLocal(Number(startMs), dayBounds.close, bookedSegs, stock);
-  }, [bookedSegs, dayBounds, startMs, stock]);
-
-  const startOptions = useMemo(
-    () =>
-      slotStarts.map((d) => ({
-        valueMs: d.getTime(),
-        label: formatSlotTime(d.getTime(), i18n.language),
-      })),
-    [i18n.language, slotStarts]
-  );
-
-  const endOptions = useMemo(
-    () =>
-      slotEnds.map((d) => ({
-        valueMs: d.getTime(),
-        label: formatSlotTime(d.getTime(), i18n.language),
-      })),
-    [i18n.language, slotEnds]
-  );
-
-  const selectTime = (valueMs: number) => {
-    if (timePicker === 'start') {
-      setStartMs(valueMs);
-      setEndMs('');
-    } else if (timePicker === 'end') {
-      setEndMs(valueMs);
-    }
-    setTimePicker(null);
-  };
-
-  const canAllDay =
-    !!dayBounds &&
-    dayHasRemainingCapacity(dayBounds.open, dayBounds.close, bookedWindows, stock, 1);
 
   const remainingForSelection = useMemo(() => {
     if (selections.length === 0) return stock;
@@ -322,174 +174,10 @@ export function RentalSlotPicker({
     setUnitsRequested((prev) => Math.min(Math.max(1, prev), Math.max(1, remainingForSelection)));
   }, [remainingForSelection]);
 
-  useEffect(() => {
-    if (!showAdvancedRanges || layout === 'screen') return;
-    setStartMs('');
-    setEndMs('');
-    setAllDayChecked(false);
-  }, [layout, showAdvancedRanges]);
-
-  useEffect(() => {
-    if (layout !== 'screen' || !builderOpen) return;
-    const chosen = selections.find((row) => selectionCalendarKey(row) === dateStr);
-    setAllDayChecked(chosen?.billing === 'all_day');
-    setStartMs('');
-    setEndMs('');
-  }, [builderOpen, dateStr, layout, selections]);
-
-  useEffect(() => {
-    if (showAdvancedRanges) return;
-    setAllDayChecked(false);
-    if (!dayBounds) {
-      setStartMs('');
-      setEndMs('');
-      return;
-    }
-    const starts = freeSlotStartsLocal(
-      dayBounds.open,
-      dayBounds.close,
-      bookedSegs,
-      minStartMs,
-      stock
-    );
-    if (starts.length === 0) {
-      setStartMs('');
-      setEndMs('');
-      return;
-    }
-    const first = starts[0].getTime();
-    const minEndMs = first + minRentalHours * 3600000;
-    const ends = freeSlotEndsLocal(first, dayBounds.close, bookedSegs, stock);
-    const validEnd = ends.find((slot) => slot.getTime() >= minEndMs)?.getTime();
-    setStartMs(first);
-    setEndMs(validEnd ?? '');
-  }, [bookedSegs, dateStr, dayBounds, minRentalHours, minStartMs, showAdvancedRanges, stock]);
-
-  const buildCurrentRange = useCallback((): SelectionRange | null => {
-    if (allDayChecked) {
-      if (!dayBounds || !canAllDay) return null;
-      const openMs = dayBounds.open.getTime();
-      if (openMs <= minStartMs) {
-        const ranges = maximalFreeHourRangesLocal(
-          dayBounds.open,
-          dayBounds.close,
-          bookedSegs,
-          minStartMs,
-          stock
-        );
-        if (ranges.length === 0) return null;
-        const first = ranges[0];
-        return {
-          id: `draft-${first.startMs}`,
-          startMs: first.startMs,
-          endMs: first.endMs,
-          billing: 'hourly',
-        };
-      }
-      return {
-        id: `draft-all-${dateStr}`,
-        startMs: openMs,
-        endMs: dayBounds.close.getTime(),
-        billing: 'all_day',
-        calendarDate: dateStr,
-      };
-    }
-    if (startMs === '' || endMs === '') return null;
-    const s = Number(startMs);
-    const e = Number(endMs);
-    if (!(e > s)) return null;
-    return { id: `draft-${s}`, startMs: s, endMs: e, billing: 'hourly' };
-  }, [
-    allDayChecked,
-    bookedSegs,
-    canAllDay,
-    dateStr,
-    dayBounds,
-    endMs,
-    minStartMs,
-    startMs,
-    stock,
-  ]);
-
-  const effectiveSelections = useMemo(() => {
-    if (layout === 'screen') return selections;
-    if (showAdvancedRanges) return selections;
-    if (selections.length > 0) return selections;
-    const draft = buildCurrentRange();
-    return draft ? [draft] : [];
-  }, [buildCurrentRange, layout, selections, showAdvancedRanges]);
-
-  const addRange = useCallback(() => {
-    setMsg(null);
-    if (allDayChecked) {
-      if (!dayBounds || !canAllDay) return;
-      const openMs = dayBounds.open.getTime();
-      if (openMs > minStartMs) {
-        setSelections((prev) =>
-          mergeRangeIntoSelections(prev, openMs, dayBounds.close.getTime(), {
-            billing: 'all_day',
-            calendarDate: dateStr,
-          })
-        );
-      } else {
-        const ranges = maximalFreeHourRangesLocal(
-          dayBounds.open,
-          dayBounds.close,
-          bookedSegs,
-          minStartMs,
-          stock
-        );
-        if (ranges.length === 0) return;
-        setSelections((prev) => {
-          let next = prev;
-          for (const r of ranges) {
-            next = mergeRangeIntoSelections(next, r.startMs, r.endMs, { billing: 'hourly' });
-          }
-          return next;
-        });
-      }
-      setStartMs('');
-      setEndMs('');
-      setAllDayChecked(false);
-      return;
-    }
-    if (!dayBounds || startMs === '' || endMs === '') {
-      setMsg(t('rentals.requestForm.pickStartEnd', 'Choose a start and end time.'));
-      return;
-    }
-    const s = Number(startMs);
-    const e = Number(endMs);
-    if (!(e > s)) {
-      setMsg(t('rentals.requestForm.endAfterStart', 'End must be after start.'));
-      return;
-    }
-    if (s < minStartMs) {
-      setMsg(t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.'));
-      return;
-    }
-    if (remainingUnitsInRange(s, e, bookedWindows, stock) < 1) {
-      setMsg(t('rentals.requestForm.noUnitsLeft', 'No units left for that time.'));
-      return;
-    }
-    setSelections((prev) => mergeRangeIntoSelections(prev, s, e, { billing: 'hourly' }));
-    setStartMs('');
-    setEndMs('');
-  }, [
-    allDayChecked,
-    bookedSegs,
-    bookedWindows,
-    canAllDay,
-    dateStr,
-    dayBounds,
-    endMs,
-    minStartMs,
-    startMs,
-    stock,
-    t,
-  ]);
+  const effectiveSelections = selections;
 
   const hoursTotal = useMemo(() => totalBillableHours(effectiveSelections), [effectiveSelections]);
-  const { lines: estimateLines, total: estimatedTotal } = useMemo(
+  const { total: estimatedTotal } = useMemo(
     () =>
       estimateTotalFromSelectionRanges(
         effectiveSelections,
@@ -500,14 +188,17 @@ export function RentalSlotPicker({
     [basePricePerDay, basePricePerHour, effectiveSelections, unitsRequested]
   );
 
-  const validateBeforeSubmit = useCallback((): string | null => {
+  /** Min/max hours apply per hour block (full days exempt), matching the server. Lead time and free hours were checked in the sheet. */
+  const validateBeforeSubmit = (): string | null => {
     if (effectiveSelections.length === 0) {
       return t('rentals.requestForm.addOneRange', 'Add at least one time range.');
     }
-    if (hoursTotal < minRentalHours) {
+    const blocks = effectiveSelections.filter((r) => r.billing !== 'all_day');
+    const hoursOf = (r: SelectionRange) => Math.max(1, Math.ceil((r.endMs - r.startMs) / 3600000));
+    if (blocks.some((r) => hoursOf(r) < minRentalHours)) {
       return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
     }
-    if (maxRentalHours != null && hoursTotal > maxRentalHours) {
+    if (maxRentalHours != null && blocks.some((r) => hoursOf(r) > maxRentalHours)) {
       return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
     }
     if (unitsRequested < 1 || unitsRequested > remainingForSelection) {
@@ -516,41 +207,7 @@ export function RentalSlotPicker({
         'Not enough units available for the selected times.'
       );
     }
-    for (const r of effectiveSelections) {
-      if (r.startMs < minStartMs) {
-        return t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.');
-      }
-      if (remainingUnitsInRange(r.startMs, r.endMs, bookedWindows, stock) < unitsRequested) {
-        return t(
-          'rentals.requestForm.unitsUnavailable',
-          'Not enough units available for the selected times.'
-        );
-      }
-    }
     return null;
-  }, [
-    bookedWindows,
-    effectiveSelections,
-    hoursTotal,
-    maxRentalHours,
-    minRentalHours,
-    minStartMs,
-    remainingForSelection,
-    stock,
-    t,
-    unitsRequested,
-  ]);
-
-  const openConfirm = () => {
-    if (requestBlocked || requestBusy || cardSendDisabled) return;
-    setMsg(null);
-    setCardFallback(null);
-    const err = validateBeforeSubmit();
-    if (err) {
-      setMsg(err);
-      return;
-    }
-    setConfirmOpen(true);
   };
 
   const submitRequest = async () => {
@@ -558,7 +215,6 @@ export function RentalSlotPicker({
     const err = validateBeforeSubmit();
     if (err) {
       setMsg(err);
-      setConfirmOpen(false);
       return;
     }
     const windows = effectiveSelections.map((r) => {
@@ -586,7 +242,6 @@ export function RentalSlotPicker({
         unitsRequested,
         clientRequestNote: notes.trim() || undefined,
       });
-      setConfirmOpen(false);
       const attribution = consumeRentalRequestAttribution(listingId);
       if (attribution) {
         trackSiteEvent({
@@ -606,25 +261,27 @@ export function RentalSlotPicker({
         navigation as unknown as NativeStackNavigationProp<ClientRootStackParamList>
       ).navigate('RentalRequestSubmitted', { requestId: res.requestId });
     } catch (e: unknown) {
+      if (dayHoursRuleError(e)) return;
       const friendly = cardWindowErrorMessage(e, i18n.language);
       setCardFallback(friendly);
       setMsg(friendly ?? (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed')));
-      setConfirmOpen(false);
     }
   };
 
-  const cardStyle = embedded
-    ? undefined
-    : [
-        styles.card,
-        shadows.sm,
-        {
-          borderColor: colors.divider,
-          backgroundColor: colors.surface,
-          borderRadius: borderRadius.md,
-          padding: spacing.md,
-        },
-      ];
+  /** Day-and-hours server rules: say why in EN/FR and send the renter back to the sheet. */
+  function dayHoursRuleError(e: unknown): boolean {
+    const text = submitRuleText(e, i18n.language);
+    if (!text) return false;
+    setCardFallback(null);
+    if (onServerRuleError) {
+      setMsg(null);
+      onServerRuleError(text);
+    } else {
+      setMsg(text);
+      onEditDates?.();
+    }
+    return true;
+  }
 
   const buildModifyBody = () => {
     const windows = effectiveSelections.map((r) => {
@@ -666,270 +323,121 @@ export function RentalSlotPicker({
         setPriceUpOpen(true);
         return;
       }
+      if (dayHoursRuleError(e)) return;
       const friendly = cardWindowErrorMessage(e, i18n.language);
       setCardFallback(friendly);
       setMsg(friendly ?? (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed')));
     }
   };
 
-  if (layout === 'screen') {
-    const allDayLabel = t('rentals.requestForm.allDayLabel', 'All day');
-    const modifying = submitMode === 'modify';
-    const dirty = rentalSelectionFingerprint(effectiveSelections, unitsRequested, notes) !== openedFingerprint;
-    const dayCountLabel = (count: number) =>
-      t('rentals.requestForm.dayCount', '{{count}} day', { count });
-    const shownDateLine = modifying && effectiveSelections.length
-      ? formatRentalPeriod(selectionPeriodWindows(effectiveSelections), i18n.language, dayCountLabel)
-      : dateLine;
-    const savedDateLine = modifying && savedSelections?.length
-      ? formatRentalPeriod(selectionPeriodWindows(savedSelections), i18n.language, dayCountLabel)
-      : dateLine;
-    const selectedKeys = selectedRequestDateKeys(selections);
-    const price = requestBlocked
-      ? { totalAmount: '—' }
-      : requestPriceCopy({
-          rows: effectiveSelections,
-          hours: hoursTotal,
-          units: unitsRequested,
-          total: estimatedTotal,
-          dayRate: basePricePerDay,
-          hourRate: basePricePerHour,
-          currency,
-          language: i18n.language,
-          t,
-        });
-    const shownTime = (ms: number | '') => {
-      if (allDayChecked) return allDayLabel;
-      if (ms === '') return t('rentals.requestForm.selectTime', 'Select');
-      return formatSlotTime(Number(ms), i18n.language);
-    };
-    return (
-      <View style={styles.screen}>
-        <RentalRequestScreenForm
-          itemName={itemName ?? ''}
-          itemMeta={itemMeta}
-          imageUrl={imageUrl}
-          dateLine={shownDateLine}
-          onEditDates={onEditDates}
-          datesFilled={datesFilled}
-          unavailableLabel={unavailableLabel}
-          notice={
-            <>
-              {notice}
-              {cardFallback && onEditDates ? (
-                <CardWindowNotice
-                  tone="error"
-                  title={i18n.language.startsWith('fr') ? 'Impossible de continuer' : 'Can’t continue with these dates'}
-                  body={cardFallback}
-                  action={i18n.language.startsWith('fr') ? 'Modifier les dates' : 'Change dates'}
-                  onAction={onEditDates}
-                />
-              ) : null}
-            </>
-          }
-          onSeeDates={onSeeDates}
-          rows={selections.map((row) => ({
-            id: row.id,
-            label: requestSelectionLabel(row, i18n.language, allDayLabel),
-            removeLabel: t('rentals.requestForm.removeDay', 'Remove {{day}}', {
-              day: formatRequestDay(selectionCalendarKey(row), i18n.language),
-            }),
-          }))}
-          onRemove={(id) => setSelections((prev) => prev.filter((row) => row.id !== id))}
-          builderOpen={builderOpen}
-          onToggleBuilder={() => {
-            setBuilderOpen((open) => !open);
-            setShowAdvancedRanges(true);
-          }}
-          chips={requestChipDateKeys(todayKey, selectedKeys).map((key) => ({
-            key,
-            weekday: formatRequestChipWeekday(key, i18n.language),
-            day: formatRequestChipDay(key),
-            selected: requestChipSelected(key, selectedKeys),
-          }))}
-          onPickChip={setDateStr}
-          startValue={shownTime(startMs)}
-          endValue={shownTime(endMs)}
-          onPressStart={() => setTimePicker('start')}
-          onPressEnd={() => setTimePicker('end')}
-          timesDisabled={allDayChecked || !dayBounds}
-          allDayChecked={allDayChecked}
-          allDayEnabled={canAllDay}
-          allDayHint={
-            canAllDay
-              ? undefined
-              : t(
-                  'rentals.requestForm.allDayDisabledHint',
-                  'Add all available hours is disabled when any time that day is already booked.'
-                )
-          }
-          onToggleAllDay={() => canAllDay && setAllDayChecked((checked) => !checked)}
-          onAdd={addRange}
-          addDisabled={!dayBounds || (allDayChecked ? !canAllDay : startMs === '' || endMs === '')}
-          closedDayLabel={
-            dayBounds
-              ? undefined
-              : t('rentals.requestForm.closedDay', 'The business is closed on this day. Pick another date.')
-          }
-          units={unitsRequested}
-          unitsMax={remainingForSelection}
-          stock={stock}
-          onChangeUnits={(next) =>
-            setUnitsRequested(Math.min(Math.max(1, next), Math.max(1, remainingForSelection)))
-          }
-          notes={notes}
-          onChangeNotes={setNotes}
-          priceLabel={price.priceLabel}
-          priceAmount={price.priceAmount}
-          hoursCaption={price.hoursCaption}
-          totalAmount={price.totalAmount}
-          previousAmount={
-            modifying && previousTotal != null && Math.abs(estimatedTotal - previousTotal) > 0.009
-              ? formatRequestAmount(previousTotal, currency, i18n.language)
-              : undefined
-          }
-          legal={
-            modifying
-              ? t('rentals.modify.businessSees', 'The business will see your changes before accepting.')
-              : undefined
-          }
-          blockedReason={blockedReason}
-          message={msg}
-          sendLabel={
-            modifying
-              ? t('rentals.modify.save', 'Save changes')
-              : isAuthenticated || requestBlocked
-                ? t('rentals.requestForm.confirmSend', 'Send request')
-                : t('rentals.searchFirst.signInToRequest', 'Sign in to request a rental')
-          }
-          sendIcon={modifying ? 'check' : isAuthenticated || requestBlocked ? 'send' : 'login'}
-          sendDisabled={
-            submitting ||
-            requestBlocked ||
-            requestBusy ||
-            cardSendDisabled ||
-            (modifying ? !dirty || effectiveSelections.length === 0 : isAuthenticated && effectiveSelections.length === 0)
-          }
-          sending={submitting}
-          onSend={() => {
-            if (modifying) {
-              const err = validateBeforeSubmit();
-              if (err) {
-                setMsg(err);
-                return;
-              }
-              if (modifySaveNeedsConfirm(estimatedTotal, previousTotal ?? estimatedTotal)) {
-                setPriceUpOpen(true);
-                return;
-              }
-              void commitModify();
+  const allDayLabel = t('rentals.requestForm.allDayLabel', 'All day');
+  const modifying = submitMode === 'modify';
+  const dirty = rentalSelectionFingerprint(effectiveSelections, unitsRequested, notes) !== openedFingerprint;
+  const dayCountLabel = (count: number) =>
+    t('rentals.requestForm.dayCount', '{{count}} day', { count });
+  const shownDateLine = modifying && effectiveSelections.length
+    ? formatRequestedPeriod(selectionPeriodWindows(effectiveSelections), i18n.language, dayCountLabel)
+    : dateLine;
+  const savedDateLine = modifying && savedSelections?.length
+    ? formatRequestedPeriod(selectionPeriodWindows(savedSelections), i18n.language, dayCountLabel)
+    : dateLine;
+  const price = requestBlocked
+    ? { totalAmount: '—' }
+    : requestPriceCopy({
+        rows: effectiveSelections,
+        hours: hoursTotal,
+        units: unitsRequested,
+        total: estimatedTotal,
+        dayRate: basePricePerDay,
+        hourRate: basePricePerHour,
+        currency,
+        language: i18n.language,
+        t,
+      });
+  return (
+    <View style={styles.screen}>
+      <RentalRequestScreenForm
+        itemName={itemName ?? ''}
+        itemMeta={itemMeta}
+        imageUrl={imageUrl}
+        dateLine={shownDateLine}
+        onEditDates={onEditDates}
+        datesFilled={datesFilled}
+        unavailableLabel={unavailableLabel}
+        notice={
+          <>
+            {notice}
+            {cardFallback && onEditDates ? (
+              <CardWindowNotice
+                tone="error"
+                title={i18n.language.startsWith('fr') ? 'Impossible de continuer' : 'Can’t continue with these dates'}
+                body={cardFallback}
+                action={i18n.language.startsWith('fr') ? 'Modifier les dates' : 'Change dates'}
+                onAction={onEditDates}
+              />
+            ) : null}
+          </>
+        }
+        onSeeDates={onSeeDates}
+        rows={selections.map((row) => ({
+          id: row.id,
+          label: requestSelectionLabel(row, i18n.language, allDayLabel),
+        }))}
+        units={unitsRequested}
+        unitsMax={remainingForSelection}
+        stock={stock}
+        onChangeUnits={(next) =>
+          setUnitsRequested(Math.min(Math.max(1, next), Math.max(1, remainingForSelection)))
+        }
+        notes={notes}
+        onChangeNotes={setNotes}
+        priceLabel={price.priceLabel}
+        priceAmount={price.priceAmount}
+        hoursCaption={price.hoursCaption}
+        totalAmount={price.totalAmount}
+        previousAmount={
+          modifying && previousTotal != null && Math.abs(estimatedTotal - previousTotal) > 0.009
+            ? formatRequestAmount(previousTotal, currency, i18n.language)
+            : undefined
+        }
+        legal={
+          modifying
+            ? t('rentals.modify.businessSees', 'The business will see your changes before accepting.')
+            : undefined
+        }
+        blockedReason={blockedReason}
+        message={msg}
+        sendLabel={
+          modifying
+            ? t('rentals.modify.save', 'Save changes')
+            : isAuthenticated || requestBlocked
+              ? t('rentals.requestForm.confirmSend', 'Send request')
+              : t('rentals.searchFirst.signInToRequest', 'Sign in to request a rental')
+        }
+        sendIcon={modifying ? 'check' : isAuthenticated || requestBlocked ? 'send' : 'login'}
+        sendDisabled={
+          submitting ||
+          requestBlocked ||
+          requestBusy ||
+          cardSendDisabled ||
+          (modifying ? !dirty || effectiveSelections.length === 0 : isAuthenticated && effectiveSelections.length === 0)
+        }
+        sending={submitting}
+        onSend={() => {
+          if (modifying) {
+            const err = validateBeforeSubmit();
+            if (err) {
+              setMsg(err);
               return;
             }
-            if (!isAuthenticated) {
-              if (onLoginRequired) {
-                onLoginRequired();
-                return;
-              }
-              (
-                navigation as unknown as NativeStackNavigationProp<GuestRootStackParamList>
-              ).navigate('GuestTabs', { screen: 'GuestAuth', params: { screen: 'Login' } });
+            if (modifySaveNeedsConfirm(estimatedTotal, previousTotal ?? estimatedTotal)) {
+              setPriceUpOpen(true);
               return;
             }
-            void submitRequest();
-          }}
-        />
-        <RentalTimeOptionSheet
-          visible={timePicker !== null}
-          title={
-            timePicker === 'end'
-              ? t('rentals.requestForm.slotEnd', 'End time')
-              : t('rentals.requestForm.slotStart', 'Start time')
+            void commitModify();
+            return;
           }
-          options={timePicker === 'end' ? endOptions : startOptions}
-          selectedMs={timePicker === 'end' ? endMs : startMs}
-          onSelect={selectTime}
-          onDismiss={() => setTimePicker(null)}
-        />
-        <RentalModifyPriceSheet
-          visible={priceUpOpen}
-          title={t('rentals.modify.confirmTitle', 'Update your request?')}
-          body={t(
-            'rentals.modify.confirmBody',
-            'The quoted total went up. The business will see these changes before accepting.'
-          )}
-          rows={[
-            {
-              label: t('rentals.modify.dates', 'Dates'),
-              from: savedDateLine ?? '',
-              to: shownDateLine ?? '',
-            },
-            {
-              label: t('rentals.modify.duration', 'Duration'),
-              from: dayCountLabel(openedDayCount(savedSelections ?? initialSelections)),
-              to: dayCountLabel(openedDayCount(effectiveSelections)),
-            },
-            {
-              label: t('rentals.requestForm.total', 'Total'),
-              from: formatRequestAmount(serverQuote?.previousTotal ?? previousTotal ?? 0, serverQuote?.currency ?? currency, i18n.language),
-              to: formatRequestAmount(serverQuote?.total ?? estimatedTotal, serverQuote?.currency ?? currency, i18n.language),
-            },
-          ]}
-          saveLabel={t('rentals.modify.save', 'Save changes')}
-          keepLabel={t('rentals.modify.keep', 'Keep current')}
-          onSave={() =>
-            void commitModify({
-              amount: serverQuote?.total ?? estimatedTotal,
-              currency: serverQuote?.currency ?? currency,
-            })
-          }
-          onKeep={() => {
-            setPriceUpOpen(false);
-            setServerQuote(null);
-          }}
-        />
-      </View>
-    );
-  }
-
-  if (requestBlocked) {
-    return (
-      <View style={cardStyle}>
-        <Button
-          mode="outlined"
-          icon="calendar"
-          onPress={onSeeDates}
-          style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}
-          testID="rental-request-see-dates"
-        >
-          {t('rentals.searchFirst.seeDates', 'See dates')}
-        </Button>
-      </View>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <View style={cardStyle}>
-        {!embedded ? (
-          <Text style={[typography.subtitle1, { color: colors.text.primary }]}>
-            {t('rentals.requestRental', 'Request this rental')}
-          </Text>
-        ) : null}
-        {datesFilled ? null : (
-          <Text
-            testID="rental-request-choose-dates"
-            style={[typography.body2, { color: colors.text.secondary, marginTop: embedded ? 0 : spacing.xs }]}
-          >
-            {t('rentals.detail.requestSubtitle', 'Choose your dates. The business will confirm availability.')}
-          </Text>
-        )}
-        <Pressable
-          testID="rental-request-sign-in"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: requestBusy }}
-          disabled={requestBusy}
-          onPress={() => {
-            if (requestBusy) return;
+          if (!isAuthenticated) {
             if (onLoginRequired) {
               onLoginRequired();
               return;
@@ -937,382 +445,47 @@ export function RentalSlotPicker({
             (
               navigation as unknown as NativeStackNavigationProp<GuestRootStackParamList>
             ).navigate('GuestTabs', { screen: 'GuestAuth', params: { screen: 'Login' } });
-          }}
-          style={{
-            marginTop: spacing.md,
-            backgroundColor: colors.primary.main,
-            opacity: requestBusy ? 0.5 : 1,
-            borderRadius: borderRadius.md,
-            paddingVertical: 12,
-            paddingHorizontal: 16,
-            alignItems: 'center',
-          }}
-        >
-          <Text
-            style={{
-              color: colors.primary.contrast,
-              fontWeight: '700',
-              textAlign: 'center',
-              lineHeight: 20,
-              maxWidth: 150,
-            }}
-          >
-            {t('rentals.searchFirst.signInToRequest', 'Sign in to request a rental')}
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  return (
-    <View style={cardStyle}>
-      {!embedded ? (
-        <>
-          <Text style={[typography.subtitle1, { color: colors.text.primary }]}>
-            {t('rentals.requestRental', 'Request this rental')}
-          </Text>
-          <Text style={[typography.body2, { color: colors.text.secondary, marginTop: 4 }]}>
-            {showAdvancedRanges
-              ? t(
-                  'rentals.requestForm.slotSubtitle',
-                  'Pick a day, choose times within open hours, then add each range to your request.'
-                )
-              : t(
-                  'rentals.requestForm.simpleSubtitle',
-                  'Pick a day and time — we pre-select the next available slot.'
-                )}
-          </Text>
-        </>
-      ) : null}
-
-      <Text style={[typography.caption, { color: colors.text.secondary, marginTop: embedded ? 0 : spacing.md }]}>
-        {t('rentals.requestForm.pickDay', 'Date')}
-      </Text>
-      <Text style={[typography.caption, { color: colors.text.disabled, marginTop: 2 }]}>
-        {t(
-          'rentals.requestForm.leadTimeHint',
-          'Bookings must start at least 2 hours from now.'
-        )}
-      </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: spacing.xs, paddingVertical: spacing.xs }}
-      >
-        {dayKeys.map((key) => {
-          const selected = key === dateStr;
-          const label = parseDateInputLocal(key).toLocaleDateString(undefined, {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
-          });
-          return (
-            <Pressable
-              key={key}
-              onPress={() => setDateStr(key)}
-              style={[
-                styles.dayChip,
-                {
-                  borderColor: colors.divider,
-                  backgroundColor: selected ? colors.primary.main : colors.pageBackground,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: selected ? colors.primary.contrast : colors.text.secondary,
-                  fontWeight: '600',
-                  fontSize: 12,
-                }}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {!dayBounds ? (
-        <Text style={[typography.body2, { color: colors.warning.dark, marginTop: spacing.sm }]}>
-          {t('rentals.requestForm.closedDay', 'The business is closed on this day. Pick another date.')}
-        </Text>
-      ) : (
-        <>
-          <View style={[styles.row, { marginTop: spacing.sm, gap: spacing.sm }]}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Button
-                mode="outlined"
-                onPress={() => setTimePicker('start')}
-                disabled={allDayChecked || slotStarts.length === 0}
-                style={{ borderColor: colors.divider }}
-              >
-                {startMs === ''
-                  ? t('rentals.requestForm.slotStart', 'Start time')
-                  : formatSlotTime(Number(startMs), i18n.language)}
-              </Button>
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Button
-                mode="outlined"
-                onPress={() => setTimePicker('end')}
-                disabled={allDayChecked || startMs === '' || slotEnds.length === 0}
-                style={{ borderColor: colors.divider }}
-              >
-                {endMs === ''
-                  ? t('rentals.requestForm.slotEnd', 'End time')
-                  : formatSlotTime(Number(endMs), i18n.language)}
-              </Button>
-            </View>
-          </View>
-
-          <Pressable
-            onPress={() => canAllDay && setAllDayChecked((v) => !v)}
-            style={[styles.row, { marginTop: spacing.sm, opacity: canAllDay ? 1 : 0.5 }]}
-            disabled={!canAllDay}
-          >
-            <Checkbox
-              status={allDayChecked ? 'checked' : 'unchecked'}
-              onPress={() => canAllDay && setAllDayChecked((v) => !v)}
-              disabled={!canAllDay}
-            />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[typography.body2, { color: colors.text.primary }]}>
-                {t('rentals.requestForm.addFullDayRate', 'Add full day (daily rate)')}
-              </Text>
-              {!canAllDay ? (
-                <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                  {t(
-                    'rentals.requestForm.allDayDisabledHint',
-                    'Add all available hours is disabled when any time that day is already booked.'
-                  )}
-                </Text>
-              ) : null}
-            </View>
-          </Pressable>
-
-          {slotStarts.length === 0 && !allDayChecked ? (
-            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
-              {t(
-                'rentals.requestForm.noBookableSlotsHint',
-                'No bookable hours left on this day. Try another date.'
-              )}
-            </Text>
-          ) : null}
-
-          {!showAdvancedRanges && startMs !== '' && endMs === '' && !allDayChecked ? (
-            <Text style={[typography.caption, { color: colors.warning.dark, marginTop: spacing.xs }]}>
-              {t(
-                'rentals.requestForm.minHoursSlotHint',
-                'No open slot meets the {{h}}h minimum on this day. Try another date or tap Add another time.',
-                { h: minRentalHours }
-              )}
-            </Text>
-          ) : null}
-
-          {showAdvancedRanges ? (
-            <Button mode="contained-tonal" style={{ marginTop: spacing.sm }} onPress={addRange}>
-              {t('rentals.requestForm.addRange', 'Add to request')}
-            </Button>
-          ) : null}
-        </>
-      )}
-
-      {!showAdvancedRanges ? (
-        <Button
-          mode="text"
-          compact
-          style={{ alignSelf: 'flex-start', marginTop: spacing.sm }}
-          onPress={() => setShowAdvancedRanges(true)}
-        >
-          {t('rentals.requestForm.addAnotherTime', 'Add another time')}
-        </Button>
-      ) : null}
-
-      {showAdvancedRanges && selections.length > 0 ? (
-        <View style={{ marginTop: spacing.md }}>
-          <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '700' }]}>
-            {t('rentals.requestForm.yourRanges', 'Your selected times')}
-          </Text>
-          {selections.map((r) => (
-            <View key={r.id} style={[styles.selectionRow, { borderBottomColor: colors.divider }]}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[typography.body2, { color: colors.text.primary }]} numberOfLines={2}>
-                  {r.billing === 'all_day'
-                    ? t('rentals.requestForm.allDayLabel', 'All day') +
-                      (r.calendarDate ? ` · ${r.calendarDate}` : '')
-                    : formatSelectionLabel(r.startMs, r.endMs, i18n.language)}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => setSelections((prev) => prev.filter((x) => x.id !== r.id))}
-                hitSlop={8}
-                accessibilityLabel={t('common.delete', 'Delete')}
-              >
-                <MaterialCommunityIcons name="delete-outline" size={22} color={colors.error.main} />
-              </Pressable>
-            </View>
-          ))}
-          <TextInput
-            mode="outlined"
-            keyboardType="number-pad"
-            value={String(unitsRequested)}
-            onChangeText={(text) => {
-              const n = Math.floor(Number(text));
-              if (!Number.isFinite(n)) return;
-              setUnitsRequested(Math.min(Math.max(1, n), Math.max(1, remainingForSelection)));
-            }}
-            label={t('rentals.requestForm.units', 'Quantity')}
-            style={{ marginTop: spacing.sm, maxWidth: 200 }}
-          />
-          <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
-            {t(
-              'rentals.requestForm.unitsRemaining',
-              '{{remaining}} of {{total}} available for your selected times',
-              { remaining: remainingForSelection, total: stock }
-            )}
-          </Text>
-          <Text style={[typography.body2, { color: colors.text.primary, marginTop: spacing.sm }]}>
-            {t('rentals.requestForm.runningTotal', 'Estimated total')}:{' '}
-            <Text style={{ fontWeight: '700' }}>
-              {formatRentalMoney(estimatedTotal, currency)}
-            </Text>
-          </Text>
-          <Text style={[typography.caption, { color: colors.text.secondary }]}>
-            {t('rentals.requestForm.totalHoursLineShort', '{{h}} billable hours total', {
-              h: hoursTotal,
-            })}
-          </Text>
-        </View>
-      ) : effectiveSelections.length > 0 && !showAdvancedRanges ? (
-        <View style={{ marginTop: spacing.md }}>
-          <Text style={[typography.body2, { color: colors.text.primary }]}>
-            {t('rentals.requestForm.runningTotal', 'Estimated total')}:{' '}
-            <Text style={{ fontWeight: '700' }}>
-              {formatRentalMoney(estimatedTotal, currency)}
-            </Text>
-          </Text>
-          <Text style={[typography.caption, { color: colors.text.secondary }]}>
-            {t('rentals.requestForm.totalHoursLineShort', '{{h}} billable hours total', {
-              h: hoursTotal,
-            })}
-          </Text>
-        </View>
-      ) : null}
-
-      <TextInput
-        mode="outlined"
-        multiline
-        numberOfLines={3}
-        value={notes}
-        onChangeText={setNotes}
-        maxLength={2000}
-        label={t('rentals.requestForm.optionalNotes', 'Optional notes for the business')}
-        placeholder={t(
-          'rentals.requestForm.optionalNotesPlaceholder',
-          'Special requirements, access details, questions…'
-        )}
-        style={{ marginTop: spacing.md }}
+            return;
+          }
+          void submitRequest();
+        }}
       />
-
-      {msg ? (
-        <Text style={[typography.body2, { color: colors.error.main, marginTop: spacing.sm }]}>
-          {msg}
-        </Text>
-      ) : null}
-
-      <Button
-        mode="contained"
-        style={{ marginTop: spacing.md }}
-        onPress={openConfirm}
-        disabled={requestBlocked || requestBusy || effectiveSelections.length === 0}
-      >
-        {t('rentals.submitRequest', 'Submit request')}
-      </Button>
-
-      <AppModal
-        visible={confirmOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setConfirmOpen(false)}
-        statusBarTranslucent
-      >
-        <Pressable style={styles.scrim} onPress={() => setConfirmOpen(false)}>
-          <Pressable
-            style={[
-              styles.confirmSheet,
-              shadows.md,
-              {
-                maxHeight: screenHeight * 0.75,
-                borderRadius: borderRadius.xl,
-                backgroundColor: colors.surface,
-                paddingBottom: insets.bottom + spacing.md,
-              },
-            ]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text variant="titleLarge" style={{ color: colors.text.primary }}>
-              {t('rentals.requestForm.confirmTitle', 'Confirm your request')}
-            </Text>
-            <ScrollView style={{ maxHeight: screenHeight * 0.4, marginTop: spacing.sm }}>
-              <Text style={[typography.body2, { color: colors.text.secondary }]}>
-                {t(
-                  'rentals.requestForm.confirmIntro',
-                  'Review your selected times and estimated price before sending.'
-                )}
-              </Text>
-              {estimateLines.map((line, idx) => (
-                <Text
-                  key={idx}
-                  style={[typography.body2, { color: colors.text.primary, marginTop: spacing.xs }]}
-                >
-                  {line.kind === 'all_day'
-                    ? t('rentals.requestForm.lineAllDay', 'Full day {{date}}', {
-                        date: line.calendarDate,
-                      })
-                    : t('rentals.requestForm.lineHourly', '{{h}} h × {{rate}}', {
-                        h: line.billableHours,
-                        rate: formatRentalMoney(line.ratePerHour, currency),
-                      })}
-                  {': '}
-                  {formatRentalMoney(line.subtotal, currency)}
-                </Text>
-              ))}
-              <Text style={[typography.subtitle2, { color: colors.text.primary, marginTop: spacing.sm }]}>
-                {t('rentals.requestForm.confirmUnits', 'Quantity')}: {unitsRequested}
-              </Text>
-              <Text style={[typography.subtitle2, { color: colors.text.primary, marginTop: spacing.xs }]}>
-                {t('rentals.requestForm.confirmPrice', 'Estimated price')}:{' '}
-                {formatRentalMoney(estimatedTotal, currency)}
-              </Text>
-              <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
-                {t(
-                  'rentals.requestForm.confirmPriceNote',
-                  'Final price is confirmed when the business accepts your request.'
-                )}
-              </Text>
-            </ScrollView>
-            <View style={[styles.confirmActions, { marginTop: spacing.md, gap: spacing.sm }]}>
-              <Button mode="text" onPress={() => setConfirmOpen(false)} style={{ flex: 1 }}>
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <Button loading={submitting} mode="contained" onPress={() => void submitRequest()} style={{ flex: 1 }}>
-                {t('rentals.requestForm.confirmSend', 'Send request')}
-              </Button>
-            </View>
-          </Pressable>
-        </Pressable>
-      </AppModal>
-      <RentalTimeOptionSheet
-        visible={timePicker !== null}
-        title={
-          timePicker === 'end'
-            ? t('rentals.requestForm.slotEnd', 'End time')
-            : t('rentals.requestForm.slotStart', 'Start time')
+      <RentalModifyPriceSheet
+        visible={priceUpOpen}
+        title={t('rentals.modify.confirmTitle', 'Update your request?')}
+        body={t(
+          'rentals.modify.confirmBody',
+          'The quoted total went up. The business will see these changes before accepting.'
+        )}
+        rows={[
+          {
+            label: t('rentals.modify.dates', 'Dates'),
+            from: savedDateLine ?? '',
+            to: shownDateLine ?? '',
+          },
+          {
+            label: t('rentals.modify.duration', 'Duration'),
+            from: dayCountLabel(openedDayCount(savedSelections ?? initialSelections)),
+            to: dayCountLabel(openedDayCount(effectiveSelections)),
+          },
+          {
+            label: t('rentals.requestForm.total', 'Total'),
+            from: formatRequestAmount(serverQuote?.previousTotal ?? previousTotal ?? 0, serverQuote?.currency ?? currency, i18n.language),
+            to: formatRequestAmount(serverQuote?.total ?? estimatedTotal, serverQuote?.currency ?? currency, i18n.language),
+          },
+        ]}
+        saveLabel={t('rentals.modify.save', 'Save changes')}
+        keepLabel={t('rentals.modify.keep', 'Keep current')}
+        onSave={() =>
+          void commitModify({
+            amount: serverQuote?.total ?? estimatedTotal,
+            currency: serverQuote?.currency ?? currency,
+          })
         }
-        options={timePicker === 'end' ? endOptions : startOptions}
-        selectedMs={timePicker === 'end' ? endMs : startMs}
-        onSelect={selectTime}
-        onDismiss={() => setTimePicker(null)}
+        onKeep={() => {
+          setPriceUpOpen(false);
+          setServerQuote(null);
+        }}
       />
     </View>
   );
@@ -1320,32 +493,4 @@ export function RentalSlotPicker({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  card: { borderWidth: 1 },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  dayChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  selectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  scrim: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  confirmSheet: {
-    padding: 20,
-  },
-  confirmActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
 });

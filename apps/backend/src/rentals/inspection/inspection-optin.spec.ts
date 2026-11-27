@@ -428,7 +428,8 @@ describe('inspection opt-in service', () => {
       },
     };
     const { svc } = harness({ OptInBooking: booking, ItemBaseline: { rental_item_baseline_photos: [] } });
-    jest.useFakeTimers().setSystemTime(new Date(START));
+    // START is Toronto wall clock (15:00 EST): the real start instant is 20:00Z.
+    jest.useFakeTimers().setSystemTime(new Date('2026-11-17T20:00:00.000Z'));
     await expect(svc.reuse(booking.rental_bookings_by_pk.id, async () => undefined)).rejects.toMatchObject({
       response: expect.objectContaining({ code: PICKUP_PHOTO_AFTER_START }),
     });

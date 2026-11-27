@@ -380,8 +380,8 @@ function InventoryItemDetailScreen() {
     const foodTab = Boolean(item?.food_availability);
     if (isGuest) {
       nav.navigate('GuestTabs', {
-        screen: foodTab ? 'GuestFoods' : 'GuestBrowse',
-        params: foodTab ? undefined : { segment: 'all' },
+        screen: 'GuestHome',
+        params: { segment: foodTab ? 'food' : 'all' },
       });
       return;
     }

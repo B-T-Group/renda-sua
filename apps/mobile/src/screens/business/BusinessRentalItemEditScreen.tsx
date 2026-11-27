@@ -32,6 +32,8 @@ import {
 } from '../../components/business/item-form/ItemFormOptionDialog';
 import { RentalWeeklyHoursEditor } from '../../components/business/rentals/RentalWeeklyHoursEditor';
 import { InspectionOptInCard } from '../../components/business/rentals/InspectionOptInCard';
+import { RentalModeSwitches } from '../../components/business/rentals/RentalModeSwitches';
+import { ReservationFeeToggle } from '../../components/business/rentals/ReservationFeeToggle';
 import type { RentalWeeklyAvailabilityRow } from '../../types/rentals';
 import { defaultWeeklyAvailability } from '../../utils/rentals';
 import { depositInputError, depositOnSave, showsCardDeposit } from '../../utils/rentals/cardDeposit';
@@ -67,7 +69,10 @@ export default function BusinessRentalItemEditScreen() {
       {
         hourly: string;
         daily: string;
+        offersDaily: boolean;
+        offersHourly: boolean;
         deposit: string;
+        reservationFee: boolean;
         units: string;
         pickup: string;
         dropoff: string;
@@ -96,10 +101,13 @@ export default function BusinessRentalItemEditScreen() {
           edits[l.id] = {
             hourly: String(l.base_price_per_hour ?? ''),
             daily: String(l.base_price_per_day ?? ''),
+            offersDaily: l.offers_daily !== false,
+            offersHourly: l.offers_hourly !== false,
             deposit:
               l.security_deposit_amount != null
                 ? String(l.security_deposit_amount)
                 : '',
+            reservationFee: l.reservation_fee_enabled === true,
             units: String(l.units_available ?? 1),
             pickup: l.pickup_instructions ?? '',
             dropoff: l.dropoff_instructions ?? '',
@@ -123,6 +131,7 @@ export default function BusinessRentalItemEditScreen() {
     }, [load])
   );
 
+
   const save = useCallback(async () => {
     if (!name.trim() || !categoryId) return;
     const invalidDeposit = Object.values(listingEdits).some((edit) =>
@@ -130,6 +139,15 @@ export default function BusinessRentalItemEditScreen() {
     );
     if (invalidDeposit) {
       setSnack(t('business.rentals.wizard.location.depositInvalid', 'Enter a valid security deposit.'));
+      return;
+    }
+    const missing = Object.values(listingEdits).some(
+      (edit) =>
+        (edit.offersDaily && !(parseFloat(edit.daily) > 0)) ||
+        (edit.offersHourly && !(parseFloat(edit.hourly) > 0))
+    );
+    if (missing) {
+      setSnack(t('business.rentals.rentBy.priceNeeded', 'Set a price for each way you rent.'));
       return;
     }
     setBusy(true);
@@ -149,12 +167,20 @@ export default function BusinessRentalItemEditScreen() {
       for (const [listingId, edit] of Object.entries(listingEdits)) {
         const hourly = parseFloat(edit.hourly);
         const daily = parseFloat(edit.daily);
-        const depositToSave = depositOnSave(item?.currency, edit.deposit, hourly);
+        const depositToSave = depositOnSave(item?.currency, edit.deposit, hourly, {
+          daily,
+          offersHourly: edit.offersHourly,
+        });
         const units = Math.floor(Number(edit.units));
         await rentalsApi.updateBusinessListing(listingId, {
-          base_price_per_hour: Number.isFinite(hourly) ? hourly : undefined,
-          base_price_per_day: Number.isFinite(daily) ? daily : undefined,
+          base_price_per_hour:
+            Number.isFinite(hourly) && edit.offersHourly ? hourly : undefined,
+          base_price_per_day:
+            Number.isFinite(daily) && edit.offersDaily ? daily : undefined,
+          offers_daily: edit.offersDaily,
+          offers_hourly: edit.offersHourly,
           ...(depositToSave !== undefined ? { security_deposit_amount: depositToSave } : {}),
+          reservation_fee_enabled: edit.reservationFee,
           units_available: Number.isInteger(units) && units >= 1 ? units : undefined,
           pickup_instructions: edit.pickup.trim() || undefined,
           dropoff_instructions: edit.dropoff.trim() || undefined,
@@ -318,8 +344,19 @@ export default function BusinessRentalItemEditScreen() {
             <Text style={{ color: colors.text.secondary, marginBottom: 8 }}>
               {listing?.business_location?.name ?? listingId}
             </Text>
+            <RentalModeSwitches
+                testID={`rental-mode-switches-${listingId}`}
+                value={{ offersDaily: edit.offersDaily, offersHourly: edit.offersHourly }}
+                onChange={(next) =>
+                  setListingEdits((prev) => ({
+                    ...prev,
+                    [listingId]: { ...prev[listingId], ...next },
+                  }))
+                }
+              />
+            {edit.offersHourly ? (
             <TextInput
-              label={t('business.rentals.wizard.location.hourly', 'Hourly rate')}
+              label={t('business.rentals.rentBy.hourPrice', 'Price per hour')}
               value={edit.hourly}
               onChangeText={(v) =>
                 setListingEdits((prev) => ({
@@ -331,8 +368,10 @@ export default function BusinessRentalItemEditScreen() {
               mode="outlined"
               style={styles.field}
             />
+            ) : null}
+            {edit.offersDaily ? (
             <TextInput
-              label={t('business.rentals.wizard.location.daily', 'Daily rate (optional)')}
+              label={t('business.rentals.rentBy.dayPrice', 'Price per day')}
               value={edit.daily}
               onChangeText={(v) =>
                 setListingEdits((prev) => ({
@@ -344,6 +383,7 @@ export default function BusinessRentalItemEditScreen() {
               mode="outlined"
               style={styles.field}
             />
+            ) : null}
             {showsCardDeposit(item.currency) ? (
               <>
                 <TextInput
@@ -372,10 +412,15 @@ export default function BusinessRentalItemEditScreen() {
                   variant="bodySmall"
                   style={{ color: colors.text.secondary, marginTop: -6, marginBottom: 10 }}
                 >
-                  {t(
-                    'business.rentals.wizard.location.depositHelp',
-                    'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
-                  )}
+                  {!edit.offersHourly
+                    ? t(
+                        'business.rentals.wizard.location.depositHelpDaily',
+                        'Held on card rentals to cover extra time. Default is two-thirds of the day price.'
+                      )
+                    : t(
+                        'business.rentals.wizard.location.depositHelp',
+                        'Held on card rentals to cover extra hours. Default is 8× the hourly rate.'
+                      )}
                 </Text>
               </>
             ) : null}
@@ -415,6 +460,17 @@ export default function BusinessRentalItemEditScreen() {
               }
               mode="outlined"
               style={styles.field}
+            />
+            <ReservationFeeToggle
+              listingId={listingId}
+              currency={item.currency}
+              value={edit.reservationFee}
+              onChange={(v) =>
+                setListingEdits((prev) => ({
+                  ...prev,
+                  [listingId]: { ...prev[listingId], reservationFee: v },
+                }))
+              }
             />
             <View style={styles.switchRow}>
               <Text>{t('business.rentals.listingActive', 'Listing active')}</Text>

@@ -50,9 +50,9 @@ describe('rental request QA sql', () => {
     expect(fn).toContain("p_now + interval '24 hours'");
     expect(fn).toContain('respond_by = v_respond_by');
     const edited = '2026-11-18T12:00:00.000Z';
-    const later = computeRespondBy({ createdAt: edited, startAt: '2026-12-01T00:00:00.000Z' });
+    const later = computeRespondBy({ createdAt: edited, startAt: '2026-12-01T00:00:00.000Z', timeZone: 'UTC' });
     expect(later.respondBy).toBe('2026-11-19T12:00:00.000Z');
-    const sooner = computeRespondBy({ createdAt: edited, startAt: '2026-11-18T18:00:00.000Z' });
+    const sooner = computeRespondBy({ createdAt: edited, startAt: '2026-11-18T18:00:00.000Z', timeZone: 'UTC' });
     expect(sooner.respondBy).toBe('2026-11-18T18:00:00.000Z');
   });
 

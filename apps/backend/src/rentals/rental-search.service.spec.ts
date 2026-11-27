@@ -86,6 +86,16 @@ describe('RentalSearchService', () => {
     });
   });
 
+  it('gives an hourly-only listing no day total for the picked dates', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 10, 10));
+    const row = { ...listing('hourly', 'Drill', 0), offers_daily: false, offers_hourly: true };
+    rentals.collectPublicRentalListings.mockResolvedValue([row]);
+    hasura.executeQuery.mockResolvedValue({ rental_booking_windows: [] });
+    const result = await service.search({ start_date: '2026-11-12', end_date: '2026-11-15', country_code: 'CM' });
+    expect(result.listings[0].available).toBe(true);
+    expect(result.listings[0].totalForDates).toBeNull();
+  });
+
   it('does not mark a card-only Stripe stay available past the cutoff when the guard is on', async () => {
     const routing = { resolveRailForCountry: jest.fn().mockResolvedValue('stripe') };
     const flags = {

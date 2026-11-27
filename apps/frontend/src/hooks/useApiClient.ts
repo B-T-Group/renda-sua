@@ -68,7 +68,6 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/auth/phone-availability',
     '/pdf/shipping-labels',
     '/locations/',
-    '/catalog/market-lanes',
     '/notifications/',
     '/assistant/chat',
     '/item-likes',

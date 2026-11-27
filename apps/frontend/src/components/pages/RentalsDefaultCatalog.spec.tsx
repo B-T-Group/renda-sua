@@ -114,6 +114,21 @@ describe('RentalsDefaultCatalog', () => {
     expect(loadMore).toHaveBeenCalled();
   });
 
+  it('shows an hourly-only listing from its hour rate, never a day price of 0', () => {
+    const drill = { ...listing('drill', 'Bosch drill', 0, 'XAF'), base_price_per_hour: 3000, offers_daily: false, offers_hourly: true };
+    search.mockReturnValue({
+      hits: [{ listing: drill, available: true, nextAvailableDate: null, pricePerDay: 0, totalForDates: null, dayCount: 2 }],
+      total: 1,
+      loading: false,
+      loadingMore: false,
+      loadMore: jest.fn(),
+      ready: true,
+    });
+    renderCatalog();
+    expect(screen.getAllByText((_, node) => (node?.textContent ?? '') === 'from\u00A03\u00A0000\u00A0FCFA\u00A0/\u00A0h').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText((_, node) => /(^|\D)0\u00A0FCFA/.test(node?.textContent ?? '')).length).toBe(0);
+  });
+
   it('shows skeletons, the empty market, and switches when the search is cleared', () => {
     search.mockReturnValue({ hits: [], total: 0, loading: true, loadingMore: false, loadMore: jest.fn(), ready: true });
     const view = renderCatalog();

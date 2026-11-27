@@ -18,6 +18,8 @@ export interface UnansweredRentalRequest {
   businessName: string;
   renterName: string;
   listingId: string;
+  /** Listing zone: request starts are this zone's wall clock stored as UTC components. */
+  timeZone: string;
 }
 
 export type NoResponseRecipient = 'renter' | 'business';
@@ -224,6 +226,7 @@ async function expireOneUnanswered(
     createdAt: row.created_at,
     respondBy: row.respond_by,
     startAt: earliestRequestStartIso(row),
+    timeZone: row.timeZone,
   });
   if (Date.parse(decision.respondBy) > deps.now.getTime()) return false;
   const won = await deps.casDecline(row.id, deps.now.toISOString());

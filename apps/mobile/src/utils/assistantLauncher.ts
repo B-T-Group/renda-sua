@@ -36,7 +36,7 @@ export const LAUNCHER_ALLOWLIST: Record<LauncherPersona, ReadonlySet<string>> = 
     ...SHARED_BROWSE_ROUTES,
     'OrderDetail',
   ]),
-  guest: new Set(['GuestBrowse', 'GuestFoods', 'GuestRentals', ...SHARED_BROWSE_ROUTES]),
+  guest: new Set(['GuestHome', ...SHARED_BROWSE_ROUTES]),
   agent: new Set([
     'Dashboard',
     'OpenOrders',
@@ -54,9 +54,7 @@ export const TAB_ROUTES: ReadonlySet<string> = new Set([
   'ClientRentals',
   'ClientOrders',
   'ClientMenu',
-  'GuestBrowse',
-  'GuestFoods',
-  'GuestRentals',
+  'GuestHome',
   'Dashboard',
   'OpenOrders',
   'Orders',
@@ -67,8 +65,7 @@ export const TAB_ROUTES: ReadonlySet<string> = new Set([
 
 /** Screens that mount BrowseCartFab (shown when the cart has lines). */
 export const CART_FAB_ROUTES: ReadonlySet<string> = new Set([
-  'GuestBrowse',
-  'GuestFoods',
+  'GuestHome',
   'StoreDetail',
   'CollectionDetail',
 ]);
@@ -163,7 +160,7 @@ export function cartFabVisibleOn(route: string, cartLineCount: number): boolean 
 export const NUDGE_STORAGE_KEY = 'assistant.nudge.v1.seen';
 export const NUDGE_DWELL_MS = 3000;
 export const NUDGE_AUTO_HIDE_MS = 8000;
-export const NUDGE_ROUTES: ReadonlySet<string> = new Set(['ClientBrowse', 'GuestBrowse']);
+export const NUDGE_ROUTES: ReadonlySet<string> = new Set(['ClientBrowse', 'GuestHome']);
 
 export type NudgeDismissReason = 'close' | 'outside' | 'timeout' | 'opened';
 

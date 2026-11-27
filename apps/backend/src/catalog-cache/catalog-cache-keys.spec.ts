@@ -2,19 +2,12 @@ import {
   buildCatalogExperienceCacheKey,
   buildEssentialsCacheKey,
   buildInventoryItemsCacheKey,
-  buildMarketLanesCacheKey,
   buildStoresCacheKey,
   inventoryItemsCacheTtlSeconds,
   isCatalogUserAuthenticated,
   isInventoryItemsCacheable,
   storesActiveFilter,
 } from './catalog-cache-keys';
-
-describe('buildMarketLanesCacheKey', () => {
-  it('scopes by country code', () => {
-    expect(buildMarketLanesCacheKey('CM')).toBe('market-lanes-v2:CM');
-  });
-});
 
 describe('isCatalogUserAuthenticated', () => {
   it('treats missing and anonymous ids as public catalog traffic', () => {

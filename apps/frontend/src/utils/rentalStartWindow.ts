@@ -1,3 +1,6 @@
+import { listingNowMs } from './rentalDayHoursPicker';
+import { pickerLang, uses12h } from './rentalDayHoursCopy';
+
 export type PickupPhase = 'before' | 'today' | 'late' | 'closed' | 'started';
 
 export interface PickupWindowInput {
@@ -15,16 +18,27 @@ export function pickupPhase(input: PickupWindowInput): PickupPhase {
   const end = Date.parse(input.endAt);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 'before';
   const opens = opensAt(input);
-  if (input.now < opens) return 'before';
-  if (input.now >= end) return 'closed';
-  if (input.now > start) return 'late';
+  // start/end/opens are listing wall clock stored as UTC components; read now on that clock.
+  const now = listingNowMs(input.now, input.timeZone);
+  if (now < opens) return 'before';
+  if (now >= end) return 'closed';
+  if (now > start) return 'late';
   return 'today';
 }
+
+/** Booking start/end store listing wall clock in the UTC fields. */
+export const BOOKING_CLOCK = 'UTC';
 
 export function opensAt(input: PickupWindowInput): number {
   const given = input.startOpensAt ? Date.parse(input.startOpensAt) : NaN;
   if (Number.isFinite(given)) return given;
-  return zonedStartOfDay(input.startAt, input.timeZone);
+  return utcMidnight(input.startAt);
+}
+
+export function utcMidnight(iso: string): number {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return NaN;
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
 export function zonedStartOfDay(iso: string, timeZone: string): number {
@@ -63,21 +77,74 @@ export function formatZonedWeekday(iso: string, timeZone: string, language: stri
     timeZone,
     weekday: 'short',
   }).format(new Date(iso));
-  return french ? raw.replace(/\.$/, '').toLowerCase() : raw.replace(/\.$/, '');
+  const clean = raw.replace(/\.$/, '');
+  return french ? `${clean.toLowerCase()}.` : clean;
 }
 
-export function formatZonedTime(iso: string, timeZone: string): string {
+/** "Thu 26 Nov" / "jeu. 26 nov." — French keeps the abbreviation dots and joins with non-breaking spaces. */
+export function formatZonedWeekdayDay(iso: string, timeZone: string, language: string): string {
+  const text = `${formatZonedWeekday(iso, timeZone, language)} ${formatZonedDay(iso, timeZone, language)}`;
+  return language.toLowerCase().startsWith('fr') ? text.replace(/ /g, '\u00a0') : text;
+}
+
+/**
+ * "14:00", or "2:00 PM" when `language` and the listing's `listingZone` are given and that
+ * listing uses a 12-hour clock (English in the Americas, same rule as the day-hours picker).
+ */
+export function formatZonedTime(iso: string, timeZone: string, language?: string, listingZone?: string | null): string {
   const parts = zonedParts(new Date(iso), timeZone);
+  if (language && listingZone && uses12h(pickerLang(language), listingZone)) {
+    const suffix = parts.hour < 12 ? 'AM' : 'PM';
+    return `${parts.hour % 12 || 12}:${pad(parts.minute)} ${suffix}`;
+  }
   return `${pad(parts.hour)}:${pad(parts.minute)}`;
 }
 
-export function formatPhotoStamp(iso: string, timeZone: string, language: string): string {
-  return `${formatZonedDay(iso, timeZone, language)} ${formatZonedTime(iso, timeZone)}`;
+/**
+ * Per-tile photo stamp (P&UX R2-4): time only for a photo taken on the listing's current day
+ * ("1:52 PM" / "13:52"); an older photo keeps its date without the time ("28 Nov" / "28 nov.").
+ */
+export function formatPhotoStamp(iso: string, timeZone: string, language: string, nowMs: number = Date.now()): string {
+  const a = zonedParts(new Date(iso), timeZone);
+  const b = zonedParts(new Date(nowMs), timeZone);
+  const sameDay = a.year === b.year && a.month === b.month && a.day === b.day;
+  return sameDay ? formatZonedTime(iso, timeZone, language, timeZone) : formatZonedDay(iso, timeZone, language);
 }
 
-export function formatZonedWhen(iso: string, timeZone: string, language: string): string {
-  const day = `${formatZonedWeekday(iso, timeZone, language)} ${formatZonedDay(iso, timeZone, language)}`;
-  return `${day} · ${formatZonedTime(iso, timeZone)}`;
+/** Grid caption value: the latest photo as "Sat 28 Nov · 1:52 PM" / "sam. 28 nov. · 13:52" (listing clock). */
+export function photosTakenStamp(isos: Array<string | null | undefined>, timeZone: string, language: string): string {
+  const times = isos.map((iso) => Date.parse(iso ?? '')).filter((n) => Number.isFinite(n));
+  if (!times.length) return '';
+  const latest = new Date(Math.max(...times)).toISOString();
+  return `${formatZonedWeekdayDay(latest, timeZone, language)} · ${formatZonedTime(latest, timeZone, language, timeZone)}`;
+}
+
+export function pickupClockLabel(
+  actualStartAt: string | null | undefined,
+  startAt: string,
+  timeZone: string,
+  language: string
+): string {
+  const clock = actualStartAt ? timeZone : BOOKING_CLOCK;
+  const iso = actualStartAt || startAt;
+  return `${formatZonedDay(iso, clock, language)} ${formatZonedTime(iso, clock, language, timeZone)}`;
+}
+
+export function formatZonedWhen(iso: string, timeZone: string, language: string, listingZone?: string | null): string {
+  const time = formatZonedTime(iso, timeZone, language, listingZone);
+  // EN on an Americas listing reads US style, like the 12 h time next to it: "Thu, Nov 26 · 6:00 PM".
+  if (listingZone && uses12h(pickerLang(language), listingZone)) return `${usWeekdayDay(iso, timeZone)} · ${time}`;
+  return `${formatZonedWeekdayDay(iso, timeZone, language)} · ${time}`;
+}
+
+const US_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const US_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Thu, Nov 26" in the given zone. */
+function usWeekdayDay(iso: string, timeZone: string): string {
+  const parts = zonedParts(new Date(iso), timeZone);
+  const weekday = new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+  return `${US_WEEKDAYS[weekday]}, ${US_MONTHS[parts.month - 1]} ${parts.day}`;
 }
 
 function pad(value: number): string {

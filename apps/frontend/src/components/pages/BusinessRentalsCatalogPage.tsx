@@ -34,6 +34,8 @@ import {
 import RentalListingModerationStatusChip from '../rentals/RentalListingModerationStatusChip';
 import LoadingPage from '../common/LoadingPage';
 import { depositInputError, showsListingDeposit } from '../../utils/rentals/cardDeposit';
+import { createListingPrices } from '../../utils/rentals/createListingPrices';
+import { RentalModeSwitches, type RentalModes } from '../rentals/RentalModeSwitches';
 
 const BusinessRentalsCatalogPage: React.FC = () => {
   const { t } = useTranslation();
@@ -59,6 +61,7 @@ const BusinessRentalsCatalogPage: React.FC = () => {
   const [price, setPrice] = useState('');
   const [priceDay, setPriceDay] = useState('');
   const [deposit, setDeposit] = useState('');
+  const [modes, setModes] = useState<RentalModes>({ offersDaily: true, offersHourly: true });
   const [minD, setMinD] = useState('1');
   const [maxD, setMaxD] = useState('');
   const [pickup, setPickup] = useState('');
@@ -95,11 +98,15 @@ const BusinessRentalsCatalogPage: React.FC = () => {
     );
   }, [items, moderationFilter]);
 
+  const prices = createListingPrices({
+    hourlyRaw: price,
+    dailyRaw: priceDay,
+    modes,
+  });
+
   const saveListing = async () => {
     if (!selItem || !selLoc) return;
-    const hourly = Number(price);
-    const daily =
-      priceDay.trim() === '' ? Number((hourly * 12).toFixed(2)) : Number(priceDay);
+    if (!prices.ok) return;
     const unitsNum = Number(units);
     if (!Number.isInteger(unitsNum) || unitsNum < 1) {
       console.error('units_available must be >= 1');
@@ -116,8 +123,10 @@ const BusinessRentalsCatalogPage: React.FC = () => {
           business_location_id: selLoc,
           pickup_instructions: pickup,
           dropoff_instructions: dropoff,
-          base_price_per_hour: hourly,
-          base_price_per_day: daily,
+          base_price_per_hour: prices.base_price_per_hour,
+          base_price_per_day: prices.base_price_per_day,
+          offers_daily: prices.offers_daily,
+          offers_hourly: prices.offers_hourly,
           ...(showsListingDeposit(listingCurrency) && deposit.trim() !== ''
             ? { security_deposit_amount: Number(deposit) }
             : {}),
@@ -393,22 +402,29 @@ const BusinessRentalsCatalogPage: React.FC = () => {
               ))}
             </Select>
           </FormControl>
-          <TextField
-            label={t('business.rentals.pricePerHour', 'Price per hour')}
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            type="number"
-          />
-          <TextField
-            label={t('business.rentals.pricePerDay', 'Full day price (daily rate)')}
-            value={priceDay}
-            onChange={(e) => setPriceDay(e.target.value)}
-            type="number"
-            helperText={t(
-              'business.rentals.pricePerDayHint',
-              'Leave empty to use 12 × hourly rate'
-            )}
-          />
+          <RentalModeSwitches value={modes} onChange={setModes} disabled={savingListing} />
+          {modes.offersHourly ? (
+            <TextField
+              label={t('business.rentals.pricePerHour', 'Price per hour')}
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              type="number"
+              required
+              inputProps={{ 'data-testid': 'add-listing-price-hour' }}
+            />
+          ) : null}
+          {modes.offersDaily ? (
+            <TextField
+              label={
+                t('business.rentals.rentBy.dayPrice', 'Price per day')
+              }
+              value={priceDay}
+              onChange={(e) => setPriceDay(e.target.value)}
+              type="number"
+              required
+              inputProps={{ 'data-testid': 'add-listing-price-day' }}
+            />
+          ) : null}
           {showsListingDeposit(items.find((it) => it.id === selItem)?.currency) ? (
             <TextField
               label={t('business.rentals.securityDeposit', 'Security deposit')}
@@ -419,10 +435,15 @@ const BusinessRentalsCatalogPage: React.FC = () => {
               helperText={
                 depositInputError(items.find((it) => it.id === selItem)?.currency, deposit)
                   ? t('business.rentals.depositInvalid', 'Enter a valid security deposit.')
-                  : t(
-                      'business.rentals.securityDepositCreateHint',
-                      'Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours.'
-                    )
+                  : !modes.offersHourly
+                    ? t(
+                        'business.rentals.securityDepositCreateHintDaily',
+                        'Leave empty to use two-thirds of the day price. Held on card rentals to cover extra time.'
+                      )
+                    : t(
+                        'business.rentals.securityDepositCreateHint',
+                        'Leave empty to use 8 × hourly rate. Held on card rentals to cover extra hours.'
+                      )
               }
             />
           ) : null}
@@ -510,7 +531,8 @@ const BusinessRentalsCatalogPage: React.FC = () => {
           </Button>
           <Button
             variant="contained"
-            disabled={savingListing || !selItem || !selLoc}
+            disabled={savingListing || !selItem || !selLoc || !prices.ok}
+            data-testid="add-listing-publish"
             onClick={() => void saveListing()}
           >
             {t('business.rentals.publishListing', 'Publish listing')}

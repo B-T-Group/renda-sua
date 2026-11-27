@@ -1,4 +1,4 @@
-import { cardHoldLines, depositInputError, depositOnSave, holdPresentation, showsCardDeposit, showsListingDeposit } from './cardDeposit';
+import { cardHoldLines, depositInputError, depositHourRate, depositOnSave, holdPresentation, showsCardDeposit, showsListingDeposit, showsRentalDetailsDeposit } from './cardDeposit';
 
 describe('card deposit field', () => {
   it('hides a deposit that is the whole card hold', () => {
@@ -21,6 +21,15 @@ describe('card deposit field', () => {
     expect(showsCardDeposit('CAD')).toBe(true);
     expect(showsCardDeposit('')).toBe(true);
   });
+
+  it('shows the listing-details deposit line only for card currencies with a positive amount', () => {
+    expect(showsRentalDetailsDeposit('XAF', 20000)).toBe(false);
+    expect(showsRentalDetailsDeposit('xof', 20000)).toBe(false);
+    expect(showsRentalDetailsDeposit('CAD', 80)).toBe(true);
+    expect(showsRentalDetailsDeposit('CAD', 0)).toBe(false);
+    expect(showsRentalDetailsDeposit('CAD', null)).toBe(false);
+  });
+
 
   it('does not invent 8x hourly when an XAF or XOF deposit is empty', () => {
     expect(depositOnSave('XAF', '', 40)).toBeUndefined();
@@ -46,5 +55,28 @@ describe('card deposit field', () => {
     expect(depositInputError('CAD', '0')).toBe(false);
     expect(depositInputError('XOF', '-5')).toBe(false);
     expect(showsListingDeposit(' xaf ')).toBe(false);
+  });
+
+  it('uses one default-deposit rule with the server: 8 × hourly, or ⅔ of the day price without hourly', () => {
+    expect(depositOnSave('CAD', '', 40, { daily: 300 })).toBe(320);
+    expect(depositOnSave('CAD', '', 40, { daily: 300, offersHourly: true })).toBe(320);
+    expect(depositOnSave('CAD', '', 40, { daily: 300, offersHourly: false })).toBe(200);
+    expect(depositOnSave('CAD', '', 0, { daily: 300 })).toBe(200);
+    expect(depositOnSave('CAD', '', Number.NaN, { daily: 300, offersHourly: false })).toBe(200);
+    expect(depositOnSave('XAF', '', 3000, { daily: 27000, offersHourly: false })).toBeUndefined();
+    expect(depositOnSave('CAD', '75', 40, { daily: 300, offersHourly: false })).toBe(75);
+    expect(depositHourRate(0, {})).toBe(0);
+  });
+
+  it('does not default a card deposit from a negative rate or a stale hourly price', () => {
+    expect(depositHourRate(-40, {})).toBe(0);
+    expect(depositHourRate(40, { offersHourly: false })).toBe(0);
+    expect(depositHourRate(-40, { daily: 240 })).toBe(20);
+    expect(depositHourRate(Number.NaN, {})).toBeNaN();
+    expect(depositOnSave('CAD', '', -40)).toBe(0);
+    expect(depositOnSave('CAD', '', 40, { offersHourly: false })).toBe(0);
+    expect(depositOnSave('CAD', '', -40, { daily: 240 })).toBe(160);
+    expect(depositOnSave('CAD', '', Number.NaN)).toBeUndefined();
+    expect(depositOnSave('CAD', '', Number.POSITIVE_INFINITY)).toBeUndefined();
   });
 });

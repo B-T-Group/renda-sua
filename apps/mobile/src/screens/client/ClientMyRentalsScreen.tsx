@@ -62,7 +62,7 @@ function modifyStateFor(row: ClientRentalRequestRow, enabled: boolean): 'hidden'
   if (!enabled || row.status !== 'pending') return 'hidden';
   const windows = parseRentalSelectionWindows(row.rental_selection_windows);
   const start = windows[0]?.start_at;
-  if (start && !rentalEditWindowOpen(start)) return 'closed';
+  if (start && !rentalEditWindowOpen(start, row.listing_timezone)) return 'closed';
   return 'open';
 }
 
@@ -275,6 +275,8 @@ export default function ClientMyRentalsScreen({
         );
       } else if (stripeOutcome === 'failed') {
         setSnack(t('client.rentals.paymentFailed', 'Payment failed. You can retry from the booking.'));
+      } else if (res.reservation_fee && (stripeOutcome === 'success' || stripeOutcome === 'pending')) {
+        setSnack(t('rentals.payAtPickup.feePaidSnack', 'Fee paid. Reserved · pay the rest at pickup.'));
       } else if (stripeOutcome === 'success' || stripeOutcome === 'authorized') {
         setSnack(t('client.rentals.paymentConfirmed', 'Payment confirmed'));
       } else if (stripeOutcome === 'pending') {
@@ -291,6 +293,8 @@ export default function ClientMyRentalsScreen({
             'Complete card payment to confirm your booking.'
           )
         );
+      } else if (res.reservation_fee && res.paymentPending && res.payment_rail === 'mobile_money') {
+        setSnack(t('rentals.payAtPickup.feeMomoSnack', 'Approve the reservation fee on your phone. Your reservation is confirmed once it’s paid.'));
       } else if (res.reserved) {
         setSnack(
           t(
@@ -430,7 +434,7 @@ export default function ClientMyRentalsScreen({
                 ? (() => {
                     const chip = listReturnChip({
                       status: item.status,
-                      endAt: item.end_at,
+                      endAt: item.return_due_at || item.end_at,
                       reportedAt: item.renter_reported_returned_at,
                       escalatedAt: item.renter_return_escalated_at,
                     });

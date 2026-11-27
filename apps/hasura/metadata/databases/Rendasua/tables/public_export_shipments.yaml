@@ -1,0 +1,26 @@
+table:
+  name: export_shipments
+  schema: public
+object_relationships:
+  - name: export_order
+    using:
+      foreign_key_constraint_on: export_order_id
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - carrier
+        - tracking_number
+        - bill_of_lading
+        - certificate_of_origin
+        - dispatched_at
+        - delivered_at
+        - notes
+        - created_at
+        - updated_at
+      filter:
+        export_order:
+          client_user_id:
+            _eq: X-Hasura-User-Id

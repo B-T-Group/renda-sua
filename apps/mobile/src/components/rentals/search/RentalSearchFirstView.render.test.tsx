@@ -22,7 +22,7 @@ const canon: RentalSearchCardModel = {
   totalIsEstimate: false,
   dayCount: 3,
   nextAvailableDate: null,
-  rangeLabel: '12–15 Nov',
+  rangeLabel: '12–14 Nov',
 };
 
 const nikon: RentalSearchCardModel = {
@@ -71,7 +71,7 @@ function props(over: Partial<RentalSearchFirstViewProps> = {}): RentalSearchFirs
     onBrowseAll: jest.fn(),
     onSuggestion: jest.fn(),
     onRecent: jest.fn(),
-    onRent: jest.fn(),
+    onOpenListing: jest.fn(),
     onSeeDates: jest.fn(),
     onToggleTakeHome: jest.fn(),
     onToggleCheapest: jest.fn(),
@@ -132,7 +132,6 @@ describe('search-first rentals', () => {
   it('lands without a feed or a My rentals shortcut', async () => {
     const view = await renderSearch();
     expect(view.getByPlaceholderText('Search cameras, tools, sound...')).toBeTruthy();
-    expect(view.getByText('Douala · Littoral')).toBeTruthy();
     expect(view.getByTestId('rental-search-skip-dates')).toBeTruthy();
     expect(view.getByTestId('rental-search-browse-all')).toBeTruthy();
     expect(view.getByText('Cameras')).toBeTruthy();
@@ -161,33 +160,57 @@ describe('search-first rentals', () => {
     expect(onRecent).toHaveBeenCalledWith('Speaker system');
   });
 
-  it('lists a free camera with Rent and an unavailable body with See dates', async () => {
-    const onRent = jest.fn();
+  it('lists a free camera with no button and an unavailable body with See dates; the whole card opens details', async () => {
+    const onOpenListing = jest.fn();
     const onSeeDates = jest.fn();
     const view = await renderSearch({
       mode: 'results',
       query: 'camera',
       dates: { startDate: '2026-11-12', endDate: '2026-11-15', dayCount: 3 },
       cards: [canon, nikon],
-      onRent,
+      onOpenListing,
       onSeeDates,
     });
     expect(view.getByText('2 matches · available for your dates first')).toBeTruthy();
     expect(view.getByText('Canon EOS R50 kit')).toBeTruthy();
-    expect(view.getByText('Free 12–15 Nov')).toBeTruthy();
+    expect(view.getByText('Available 12–14 Nov')).toBeTruthy();
     expect(view.getByText(/Total ·/)).toBeTruthy();
     expect(view.getByText(/75/)).toBeTruthy();
     expect(view.queryByText(/Est\./)).toBeNull();
+    expect(view.queryByTestId('rental-search-view-canon')).toBeNull();
+    expect(view.queryByText('View details')).toBeNull();
+    expect(view.queryByText('Rent')).toBeNull();
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-rent-canon'));
+      fireEvent.press(view.getByTestId('rental-search-card-canon'));
     });
-    expect(onRent).toHaveBeenCalledWith('canon');
+    expect(onOpenListing).toHaveBeenCalledWith('canon');
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-card-nikon'));
+    });
+    expect(onOpenListing).toHaveBeenCalledWith('nikon');
     expect(view.getByText(/Available from/)).toBeTruthy();
     await act(async () => {
       fireEvent.press(view.getByTestId('rental-search-see-dates-nikon'));
     });
     expect(onSeeDates).toHaveBeenCalledWith('nikon');
-    expect(view.queryByTestId('rental-search-rent-nikon')).toBeNull();
+    // See dates only changes the search dates; it doesn't also open the details page.
+    expect(onOpenListing).toHaveBeenCalledTimes(2);
+    expect(view.queryByTestId('rental-search-view-nikon')).toBeNull();
+  });
+
+  it('shows no card button in French and names the item for screen readers', async () => {
+    await i18n.changeLanguage('fr');
+    const view = await renderSearch({
+      mode: 'results',
+      query: 'camera',
+      dates: { startDate: '2026-11-12', endDate: '2026-11-15', dayCount: 3 },
+      cards: [canon],
+    });
+    expect(view.queryByText('Voir les détails')).toBeNull();
+    expect(view.queryByText('Louer')).toBeNull();
+    expect(view.getByTestId('rental-search-card-canon').props.accessibilityLabel).toBe(
+      'Voir les détails de Canon EOS R50 kit'
+    );
   });
 
   it('offers nearby dates and a one-time notify when nothing matches', async () => {
@@ -202,9 +225,9 @@ describe('search-first rentals', () => {
       onNotify,
       onNearby,
     });
-    expect(view.getByText('Nothing free for those dates')).toBeTruthy();
+    expect(view.getByText('Nothing available for those dates')).toBeTruthy();
     await act(async () => {
-      fireEvent.press(view.getByText(/16–19/));
+      fireEvent.press(view.getByText(/16–18/));
     });
     expect(onNearby).toHaveBeenCalledWith(nearby[0]);
     await act(async () => {
@@ -221,7 +244,8 @@ describe('search-first rentals', () => {
     expect(view.getByText('DATES (OPTIONAL)')).toBeTruthy();
     expect(view.getByText('Take-home')).toBeTruthy();
     expect(view.getByText('Totals appear once you add dates')).toBeTruthy();
-    expect(view.getByTestId('rental-search-rent-canon')).toBeTruthy();
+    expect(view.getByTestId('rental-search-card-canon')).toBeTruthy();
+    expect(view.queryByTestId('rental-search-view-canon')).toBeNull();
   });
 
   it('opens the date picker blank, then fills a quick pick', async () => {
@@ -378,7 +402,7 @@ describe('search-first rentals', () => {
       mode: 'results',
       query: 'scaffold',
       dates: { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 },
-      cards: [{ ...canon, totalForDates: 760, dayCount: 2, totalIsEstimate: true, rangeLabel: '14–16 Nov' }],
+      cards: [{ ...canon, totalForDates: 760, dayCount: 2, totalIsEstimate: true, rangeLabel: '14–15 Nov' }],
     });
     expect(view.getByText(/Est\./)).toBeTruthy();
   });
@@ -440,12 +464,6 @@ describe('search-first rentals', () => {
     expect(view.getByTestId('rental-search-more')).toBeTruthy();
   });
 
-  it('names Cameroon in French on the landing', async () => {
-    await i18n.changeLanguage('fr');
-    const view = await renderSearch({ marketLabel: 'Cameroon' });
-    expect(view.getByText('Cameroun')).toBeTruthy();
-  });
-
   it('translates seeded categories and the empty-search row in French', async () => {
     await i18n.changeLanguage('fr');
     const view = await renderSearch({
@@ -482,7 +500,7 @@ describe('search-first rentals', () => {
       dates: { startDate: '2026-11-10', endDate: '2026-11-17', dayCount: 7 },
       cards: [canon, nikon],
     });
-    expect(view.getByText("2 résultats · les dates libres d'abord")).toBeTruthy();
+    expect(view.getByText("2 résultats · disponibles d’abord")).toBeTruthy();
   });
 
   it('shows the My rentals caption, badge, and next card', async () => {
@@ -682,7 +700,21 @@ describe('default rental list', () => {
 
   it('formats XAF with a non-breaking space', async () => {
     const xaf = await renderSearch({ defaultList: true, cards: [sony] });
-    expect(moneyText(xaf.getByText(/FCFA/))).toBe('45\u00A0000\u00A0FCFA');
+    expect(moneyText(xaf.getByText(/FCFA/))).toBe('45\u00A0000\u00A0FCFA\u00A0/\u00A0day');
+  });
+
+  it('formats dated search XAF as amount then FCFA in English', async () => {
+    const view = await renderSearch({
+      mode: 'results',
+      dates: { startDate: '2026-11-12', endDate: '2026-11-15', dayCount: 3 },
+      cards: [canon],
+    });
+    expect(moneyText(view.getByTestId('rental-search-price-canon'))).toBe('25\u00A0000\u00A0FCFA\u00A0/\u00A0day');
+    expect(view.getByTestId('rental-search-total-canon').props.children).toEqual(
+      expect.stringMatching(/75\u00A0000\u00A0FCFA/)
+    );
+    expect(view.queryByText(/FCFA 25/)).toBeNull();
+    expect(view.queryByText(/FCFA 75/)).toBeNull();
   });
 
   it('formats French CAD with a non-breaking space', async () => {
@@ -691,6 +723,6 @@ describe('default rental list', () => {
       defaultList: true,
       cards: [{ ...sony, id: 'jbl', name: 'JBL', pricePerDay: 45, currency: 'CAD', inspection: false, business: 'Parkdale', city: 'Toronto' }],
     });
-    expect(moneyText(cad.getByText(/45,00/))).toBe('45,00\u00A0$');
+    expect(moneyText(cad.getByText(/45,00/))).toBe('45,00\u00A0$\u00A0/\u00A0jour');
   });
 });

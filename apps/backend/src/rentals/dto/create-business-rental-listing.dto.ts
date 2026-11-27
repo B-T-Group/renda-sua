@@ -58,25 +58,49 @@ export class CreateBusinessRentalListingDto {
   @IsOptional()
   dropoff_instructions?: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Required unless offers_hourly is false' })
+  @ValidateIf((o) => o.offers_hourly !== false || o.base_price_per_hour !== undefined)
   @IsNumber()
   @Min(0)
   base_price_per_hour!: number;
 
-  @ApiProperty({ description: 'Flat price for one full-day (all-day) rental window' })
+  @ApiProperty({
+    description: 'Flat price for one full-day (all-day) rental window. Required unless offers_daily is false',
+  })
+  @ValidateIf((o) => o.offers_daily !== false || o.base_price_per_day !== undefined)
   @IsNumber()
   @Min(0)
   base_price_per_day!: number;
 
+  @ApiProperty({ required: false, default: true, description: 'Rent by the hour' })
+  @IsOptional()
+  @IsBoolean()
+  offers_hourly?: boolean;
+
+  @ApiProperty({ required: false, default: true, description: 'Rent by the day' })
+  @IsOptional()
+  @IsBoolean()
+  offers_daily?: boolean;
+
   @ApiProperty({
     required: false,
     description:
-      'Security deposit authorized/charged on top of the rental total; defaults to 8x base_price_per_hour when omitted',
+      'Security deposit authorized/charged on top of the rental total; defaults to 8x base_price_per_hour when omitted, or 8x (base_price_per_day / 12) when the listing does not rent by the hour',
   })
   @IsOptional()
   @IsNumber()
   @Min(0)
   security_deposit_amount?: number;
+
+  @ApiProperty({
+    required: false,
+    default: false,
+    description:
+      'Charge a reservation fee at Reserve (flat 1.00 on the Stripe rail or 150 FCFA on Mobile Money, capped at the rental, counts toward the total). Off by default.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  reservation_fee_enabled?: boolean;
 
   @ApiProperty({ required: false, default: 1 })
   @IsOptional()

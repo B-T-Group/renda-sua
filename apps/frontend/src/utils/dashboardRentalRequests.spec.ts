@@ -47,7 +47,7 @@ describe('dashboard rental request display', () => {
       'All day',
       (count) => `${count} days`
     );
-    expect(allDay).toBe('14 Nov · All day');
+    expect(allDay).toBe('14 Nov · All day · Return 15\u00A0Nov');
     const stay = dashboardPeriodLabel(
       [
         { billing: 'all_day', calendar_date: '2026-11-17', start_at: 'a', end_at: 'b' },
@@ -57,7 +57,7 @@ describe('dashboard rental request display', () => {
       'All day',
       (count) => `${count} days`
     );
-    expect(stay).toBe('17 Nov – 19 Nov · 2 days');
+    expect(stay).toBe('17 Nov – 18 Nov · 2 days · Return 19\u00A0Nov');
   });
 
   it('formats CAD for English and French', () => {
@@ -69,5 +69,19 @@ describe('dashboard rental request display', () => {
     const later = { created_at: '2026-11-14T01:00:00.000Z', requested_start_at: '2026-11-21T00:00:00.000Z' };
     const sooner = { created_at: '2026-11-14T09:00:00.000Z', requested_start_at: '2026-11-14T16:00:00.000Z' };
     expect([later, sooner].sort(compareSoonestRequestStart)[0]).toBe(sooner);
+  });
+});
+
+describe('contractHoursOffer on the listing clock', () => {
+  // Samuel's case: 14:00 Toronto start stored as 14:00Z; at 11:10 AM Toronto there are ~2h50 left.
+  it('offers whole hours until a Toronto start, not "expired"', () => {
+    const offer = contractHoursOffer('2026-11-26T14:00:00.000Z', new Date('2026-11-26T16:10:00.000Z'), 'America/Toronto');
+    expect(offer.hidden).toBe(false);
+    expect(offer.maxHours).toBe(2);
+  });
+
+  it('hides the hours picker in the last hour before a Douala start', () => {
+    const offer = contractHoursOffer('2026-11-26T14:00:00.000Z', new Date('2026-11-26T12:30:00.000Z'), 'Africa/Douala');
+    expect(offer.hidden).toBe(true);
   });
 });

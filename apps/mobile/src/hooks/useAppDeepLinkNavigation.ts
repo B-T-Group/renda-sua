@@ -91,7 +91,7 @@ function navigateFoodBrowse(persona: PersonaSlug): boolean {
     rootNavigationRef.dispatch(
       CommonActions.navigate({
         name: 'GuestTabs',
-        params: { screen: 'GuestFoods' },
+        params: { screen: 'GuestHome', params: { segment: 'food' } },
       })
     );
     return true;

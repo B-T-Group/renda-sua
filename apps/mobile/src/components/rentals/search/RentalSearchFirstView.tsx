@@ -4,7 +4,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { rentalCategoryIcon, rentalCategoryLabel } from '../../../utils/rentals/rentalCategoryIcon';
-import { formatRangeDates, formatSearchStay, type RentalDateRange } from '../../../utils/rentals/rentalSearchDates';
+import { formatSearchStay, formatSearchStayRange, type RentalDateRange } from '../../../utils/rentals/rentalSearchDates';
 import { MyRentalsHeaderButton } from './MyRentalsHeaderButton';
 import { NextRentalCard } from './NextRentalCard';
 import { RentalSearchDateSheet } from './RentalSearchDateSheet';
@@ -58,7 +58,8 @@ export interface RentalSearchFirstViewProps {
   onBrowseAll: () => void;
   onSuggestion: (row: RentalSearchSuggestionRow) => void;
   onRecent: (term: string) => void;
-  onRent: (id: string) => void;
+  /** Card tap: the listing's details page (renting starts there). */
+  onOpenListing: (id: string) => void;
   onSeeDates: (id: string) => void;
   onToggleTakeHome: () => void;
   onToggleCheapest: () => void;
@@ -110,10 +111,6 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
         t('rentals.searchFirst.dayCount', '{{count}} days', { count })
       )
     : null;
-  const marketLabel = props.marketLabel.replace(
-    /\bCameroon\b/g,
-    t('rentals.searchFirst.marketCameroon', 'Cameroon')
-  );
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }} testID={`rental-search-${props.mode}`}>
       <View
@@ -146,9 +143,6 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
             ) : null}
           </View>
         </View>
-        {props.mode === 'landing' || listChrome ? (
-          <Text style={{ color: colors.text.secondary, marginBottom: spacing.sm }}>{marketLabel}</Text>
-        ) : null}
         {props.myRentals?.next ? <NextRentalCard {...props.myRentals.next} /> : null}
         <View style={[styles.search, { borderColor: props.mode === 'typing' ? colors.primary.main : colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.lg }]}>
           <MaterialCommunityIcons name="magnify" size={22} color={colors.text.secondary} />
@@ -224,7 +218,7 @@ function DateRow({ dates, mode, datesSkipped, onOpenDates, onSkipDates, label, d
         </Text>
         <Text style={{ color: colors.text.primary, fontWeight: '700' }}>
           {label ?? (optional
-            ? t('rentals.searchFirst.addToSee', "Add to see what's free")
+            ? t('rentals.searchFirst.addToSee', "Add to see what's available")
             : t('rentals.searchFirst.addDates', 'Add start & end dates'))}
         </Text>
       </View>
@@ -263,7 +257,7 @@ function Landing(props: RentalSearchFirstViewProps) {
         <Text style={{ color: colors.text.primary }}>
           {t(
             'rentals.searchFirst.tip',
-            "Tip: add dates to see what's free for your trip. You can skip and filter later."
+            "Tip: add dates to see what's available for your trip. You can skip and filter later."
           )}
         </Text>
       </View>
@@ -386,18 +380,18 @@ function ResultList(props: RentalSearchFirstViewProps) {
     return (
       <View testID="rental-search-empty">
         <Text variant="titleMedium" style={{ color: colors.text.primary, marginTop: spacing.lg, textAlign: 'center' }}>
-          {t('rentals.searchFirst.nothingFree', 'Nothing free for those dates')}
+          {t('rentals.searchFirst.nothingFree', 'Nothing available for those dates')}
         </Text>
         <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: 4 }}>
           {t('rentals.searchFirst.nothingFreeBody', 'No “{{query}}” listings are available {{range}}.', {
             query: props.query,
-            range: props.dates ? formatRangeDates(props.dates, i18n.language) : '',
+            range: props.dates ? formatSearchStayRange(props.dates, i18n.language) : '',
           })}
         </Text>
         <Text style={[styles.section, { color: colors.text.secondary }]}>{t('rentals.searchFirst.tryDates', 'TRY NEARBY DATES')}</Text>
         <View style={styles.chips}>
           {props.nearby.map((range) => (
-            <Chip key={`${range.startDate}-${range.endDate}`} label={formatRangeDates(range, i18n.language)} active={false} onPress={() => props.onNearby(range)} />
+            <Chip key={`${range.startDate}-${range.endDate}`} label={formatSearchStayRange(range, i18n.language)} active={false} onPress={() => props.onNearby(range)} />
           ))}
         </View>
         <Text style={[styles.section, { color: colors.text.secondary }]}>{t('rentals.searchFirst.similar', 'SIMILAR CATEGORIES')}</Text>
@@ -409,7 +403,7 @@ function ResultList(props: RentalSearchFirstViewProps) {
             </Text>
             <Text style={{ color: colors.text.secondary, marginVertical: 6 }}>
               {t('rentals.searchFirst.notifyBody', "We'll notify you if a matching rental opens for {{range}}.", {
-                range: formatRangeDates(props.dates, i18n.language),
+                range: formatSearchStayRange(props.dates, i18n.language),
               })}
             </Text>
             <Button mode="contained" buttonColor={colors.primary.main} onPress={props.onNotify} loading={props.notifyState === 'saving'} testID="rental-search-notify">
@@ -432,7 +426,7 @@ function ResultList(props: RentalSearchFirstViewProps) {
           : t('rentals.searchFirst.countOnly', '{{count}} rentals · add dates to sort by availability', { count: props.cards.length })}
       </Text>
       {props.cards.map((card) => (
-        <RentalSearchResultCard key={card.id} card={card} onRent={props.onRent} onSeeDates={props.onSeeDates} />
+        <RentalSearchResultCard key={card.id} card={card} onOpen={props.onOpenListing} onSeeDates={props.onSeeDates} />
       ))}
       {props.dates && available === 0 && props.cards.length > 0 ? (
         <Button mode="contained" buttonColor={colors.primary.main} onPress={props.onNotify} testID="rental-search-notify" style={{ borderRadius: borderRadius.md }}>
@@ -498,7 +492,7 @@ function CatalogRows(props: RentalSearchFirstViewProps) {
         </Pressable>
       </View>
       {props.cards.map((card) => (
-        <RentalSearchResultCard key={card.id} card={card} onRent={props.onRent} onSeeDates={props.onSeeDates} />
+        <RentalSearchResultCard key={card.id} card={card} onOpen={props.onOpenListing} onSeeDates={props.onSeeDates} />
       ))}
       {props.loadingMore ? (
         <Text testID="rental-search-loading-more" style={{ color: colors.text.secondary, textAlign: 'center', marginVertical: 12 }}>
@@ -547,7 +541,7 @@ function NoCatalogMatches() {
   const { colors, spacing } = useTheme();
   return (
     <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: spacing.lg }}>
-      {t('rentals.searchFirst.nothingFree', 'Nothing free for those dates')}
+      {t('rentals.searchFirst.nothingFree', 'Nothing available for those dates')}
     </Text>
   );
 }
@@ -589,7 +583,7 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, textAlign: 'center', fontWeight: '700' },
   backHit: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
   search: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, paddingHorizontal: 12, minHeight: 48, gap: 8 },
-  input: { flex: 1, fontSize: 16, paddingVertical: 10 },
+  input: { flex: 1, fontSize: 16, paddingVertical: 10, textAlignVertical: 'center', includeFontPadding: false },
   dateRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, padding: 12, gap: 10 },
   section: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4, marginTop: 16, marginBottom: 8 },
   iconRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 4, rowGap: 8, paddingVertical: 4 },

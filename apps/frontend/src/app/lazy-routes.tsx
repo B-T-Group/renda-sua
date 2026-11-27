@@ -241,6 +241,24 @@ export const ClientProductInterestPage = lazy(() =>
 export const BusinessProductInterestPage = lazy(() =>
   import('../components/pages/BusinessProductInterestPage')
 );
+export const ClientExportOrdersPage = lazy(() =>
+  import('../components/pages/ClientExportOrdersPage')
+);
+export const ClientExportOrderDetailPage = lazy(() =>
+  import('../components/pages/ClientExportOrderDetailPage')
+);
+export const AdminExportOrdersPage = lazy(() =>
+  import('../components/pages/admin/AdminExportOrdersPage')
+);
+export const AdminExportOrderDetailPage = lazy(() =>
+  import('../components/pages/admin/AdminExportOrderDetailPage')
+);
+export const AgentExportOrdersPage = lazy(() =>
+  import('../components/pages/AgentExportOrdersPage')
+);
+export const BusinessExportOrdersPage = lazy(() =>
+  import('../components/pages/BusinessExportOrdersPage')
+);
 export const RentalRequestSubmittedPage = lazy(() =>
   import('../components/pages/RentalRequestSubmittedPage')
 );

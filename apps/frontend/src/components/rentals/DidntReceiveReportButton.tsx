@@ -57,7 +57,7 @@ export function useDidntReceiveWindow(
 function missingLabel(startedAt: string | null | undefined, t: ReturnType<typeof useTranslation>['t']): string {
   const minutes = didntReceiveMinutesLeft(startedAt);
   if (!minutes) return t('rentalInspection.didntReceive', "Didn't receive the item? Tell us");
-  return t('rentals.start.didntReceiveLeft', "Didn't receive the item? · {{minutes}} min", {
+  return t('rentals.start.didntReceiveLeft', "Didn't receive the item? · {{minutes}}\u00a0min", {
     minutes: String(minutes),
   });
 }

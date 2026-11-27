@@ -22,8 +22,12 @@ export default observer(function GuestRentalsScreen() {
   );
 
   if (flags.rentals_search_first_enabled) {
-    return <RentalSearchFirstScreen withAuth={false} />;
+    return <RentalSearchFirstScreen withAuth={false} applyTopSafeArea={false} />;
   }
 
-  return <RentalsBrowseScreen withAuth={false} onOpenListing={onOpenListing} />;
+  return <RentalsBrowseScreen
+      withAuth={false}
+      applyTopSafeArea={false}
+      onOpenListing={onOpenListing}
+    />;
 });

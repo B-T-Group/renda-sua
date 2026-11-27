@@ -1,0 +1,61 @@
+table:
+  name: export_documents
+  schema: public
+object_relationships:
+  - name: export_order
+    using:
+      foreign_key_constraint_on: export_order_id
+  - name: upload
+    using:
+      foreign_key_constraint_on: upload_id
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - doc_type
+        - document_number
+        - version_number
+        - upload_id
+        - issued_at
+        - locked
+        - created_at
+      filter:
+        export_order:
+          client_user_id:
+            _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - doc_type
+        - document_number
+        - version_number
+        - upload_id
+        - issued_at
+        - locked
+        - created_at
+      filter:
+        export_order:
+          agent_user_id:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - doc_type
+        - document_number
+        - version_number
+        - upload_id
+        - issued_at
+        - locked
+        - created_at
+      filter:
+        export_order:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

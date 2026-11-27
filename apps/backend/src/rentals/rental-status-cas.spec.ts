@@ -18,7 +18,7 @@ function booking(overrides: Record<string, unknown> = {}) {
     security_deposit_amount: 0,
     units_booked: 1,
     currency: 'XAF',
-    end_at: '2026-07-17T12:00:00.000Z',
+    end_at: '2026-07-17T13:00:00.000Z', // 13:00 on the Douala clock (no country) = 12:00Z
     client: { user_id: 'client-user' },
     rental_pricing_snapshot: {
       total: 160,
@@ -206,7 +206,9 @@ describe('rental cron compare-and-set', () => {
       }),
     };
     cron.notifyReservationExpired = jest.fn();
+    cron.rentalsService = { unpaidReservationDue: jest.fn().mockReturnValue(true) };
     await cron.expireOneReservedBooking('b1');
+    expect(cron.hasuraSystemService.executeMutation).toHaveBeenCalled();
     expect(cron.logHistory).not.toHaveBeenCalled();
     expect(cron.notifyReservationExpired).not.toHaveBeenCalled();
   });

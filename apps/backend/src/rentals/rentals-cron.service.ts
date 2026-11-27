@@ -23,7 +23,9 @@ import {
 import { earliestRequestStartIso, effectiveRespondBy, type RentalRespondWindow } from './rental-respond-by';
 import { RentalsService } from './rentals.service';
 import * as Q from './rentals-queries';
-import { isStartDay, listingZoneFor, startOpensAt } from './simple-start/simple-start.policy';
+import { isStartDay, listingZoneFor, startOpensAt, wallClockReached } from './simple-start/simple-start.policy';
+import { WALL_CLOCK_MAX_SKEW_MS } from './wall-clock';
+import { bookingReturnDueAt } from './return-due';
 
 function listedRecipients(value: unknown): NoResponseRecipient[] | undefined {
   if (!Array.isArray(value)) return undefined;
@@ -137,20 +139,25 @@ export class RentalsCronService {
     }
   }
 
+  /**
+   * Return due (return_due_at, else end_at) is listing wall clock: widen the query,
+   * then check each booking on its own clock.
+   */
   async processEndedActiveBookings(): Promise<number> {
-    const now = new Date().toISOString();
+    const clock = new Date();
+    const now = clock.toISOString();
     const res = await this.hasuraSystemService.executeQuery<{
       rental_bookings: Array<{ id: string }>;
-    }>(Q.LIST_ACTIVE_BOOKINGS_PAST_END, { now });
-    const rows = res.rental_bookings || [];
-    for (const b of rows) {
+    }>(Q.LIST_ACTIVE_BOOKINGS_PAST_END, { now: wallClockHorizon(clock) });
+    let moved = 0;
+    for (const b of res.rental_bookings || []) {
       try {
-        await this.transitionActiveToAwaitingReturn(b.id, now);
+        if (await this.transitionActiveToAwaitingReturn(b.id, now)) moved += 1;
       } catch (error: any) {
         this.logger.error(`processEndedActiveBookings ${b.id}: ${error.message}`);
       }
     }
-    return rows.length;
+    return moved;
   }
 
   /** T−30m reminders to client + business; end_reminder_sent_at is the idempotency guard. */
@@ -159,28 +166,29 @@ export class RentalsCronService {
     const res = await this.hasuraSystemService.executeQuery<{
       rental_bookings: Array<{ id: string }>;
     }>(Q.LIST_ACTIVE_BOOKINGS_ENDING_SOON, {
-      now: now.toISOString(),
-      until: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
+      now: new Date(now.getTime() - WALL_CLOCK_MAX_SKEW_MS).toISOString(),
+      until: new Date(now.getTime() + WALL_CLOCK_MAX_SKEW_MS + ENDING_SOON_MS).toISOString(),
     });
-    const rows = res.rental_bookings || [];
-    for (const b of rows) {
+    let sent = 0;
+    for (const b of res.rental_bookings || []) {
       try {
-        await this.remindOneEndingSoonBooking(b.id);
+        if (await this.remindOneEndingSoonBooking(b.id, now)) sent += 1;
       } catch (error: any) {
         this.logger.error(`sendEndingSoonReminders ${b.id}: ${error.message}`);
       }
     }
-    return rows.length;
+    return sent;
   }
 
-  private async remindOneEndingSoonBooking(bookingId: string): Promise<void> {
+  private async remindOneEndingSoonBooking(bookingId: string, now: Date): Promise<boolean> {
     const booking = await this.fetchBooking(bookingId);
     if (
       !booking ||
       booking.status !== 'active' ||
-      booking.end_reminder_sent_at
+      booking.end_reminder_sent_at ||
+      !endsWithinOnListingClock(booking, now, ENDING_SOON_MS)
     ) {
-      return;
+      return false;
     }
     // Mark first so a notification failure cannot cause repeated sends.
     await this.patchBooking(bookingId, {
@@ -190,10 +198,11 @@ export class RentalsCronService {
       bookingId,
       rentalItemName:
         booking.rental_location_listing?.rental_item?.name ?? 'Rental',
-      endAt: booking.end_at,
+      endAt: bookingReturnDueAt(booking) ?? booking.end_at,
       clientUserId: booking.client.user_id,
       businessUserId: booking.business.user_id,
     });
+    return true;
   }
 
   async expireProposedRentalContracts(): Promise<number> {
@@ -238,20 +247,22 @@ export class RentalsCronService {
   /**
    * Release reserved (pay-at-pickup) bookings that were never paid within the
    * grace window after their scheduled start, so the capacity frees up.
-   * An open pickup inspection pauses that clock until the client accepts.
+   * An open pickup inspection pauses that clock until the client accepts, except a
+   * flagged check (correction requested) left unfixed: cancelled and refunded at 23:59.
    */
   async expireReservedRentalBookings(): Promise<number> {
-    const now = new Date().toISOString();
+    // start_at is listing wall clock: widen, then unpaidReservationDue rechecks per listing.
+    const now = wallClockHorizon(new Date());
     const res = await this.listExpiredReserved(now);
-    const rows = res.rental_bookings ?? [];
-    for (const b of rows) {
+    let released = 0;
+    for (const b of res.rental_bookings ?? []) {
       try {
-        await this.expireOneReservedBooking(b.id);
+        if (await this.expireOneReservedBooking(b.id)) released += 1;
       } catch (error: any) {
         this.logger.error(`expireReservedRentalBookings ${b.id}: ${error.message}`);
       }
     }
-    return rows.length;
+    return released;
   }
 
   private async listExpiredReserved(now: string) {
@@ -267,10 +278,13 @@ export class RentalsCronService {
     }
   }
 
-  private async expireOneReservedBooking(bookingId: string): Promise<void> {
+  private async expireOneReservedBooking(bookingId: string): Promise<boolean> {
     const booking = await this.fetchBooking(bookingId);
-    if (!booking || booking.status !== 'reserved' || booking.actual_start_at) return;
-    if (this.rentalsService && !this.rentalsService.unpaidReservationDue(booking)) return;
+    if (!booking || booking.status !== 'reserved' || booking.actual_start_at) return false;
+    if (!this.rentalsService) return false;
+    // A flagged check left unfixed at 23:59 on the start day cancels and refunds (mockup 07).
+    const flagged = booking.pickup_inspection_pending ? await this.rentalsService.pickupCheckFlagged(bookingId) : false;
+    if (!this.rentalsService.unpaidReservationDue(booking, new Date(), flagged)) return false;
     const won = await casUpdateRentalBooking(
       this.hasuraSystemService,
       bookingId,
@@ -281,16 +295,36 @@ export class RentalsCronService {
         contract_expires_at: null,
       }
     );
-    if (!won) return;
+    if (!won) return false;
+    const fee = await this.settleExpiredFee(booking);
     await this.logHistory(
       bookingId,
       'cancelled',
       'reserved',
       null,
       'system',
-      'Reservation expired unpaid after scheduled start'
+      fee === 'forfeit'
+        ? 'Reservation expired unpaid after scheduled start (reservation fee kept by the business)'
+        : flagged
+          ? 'Reservation cancelled: pickup check flag not fixed by the end of the start day (reservation fee refunded)'
+          : 'Reservation expired unpaid after scheduled start'
     );
     await this.notifyReservationExpired(booking);
+    return true;
+  }
+
+  /** Unpaid by the end of the start day: the fee is kept, unless a flag was left unresolved. */
+  private async settleExpiredFee(booking: any): Promise<'refund' | 'forfeit' | 'none'> {
+    if (!this.rentalsService?.settleReservationFeeAfterExpiry) return 'none';
+    try {
+      return await this.rentalsService.settleReservationFeeAfterExpiry(booking);
+    } catch (error) {
+      await casUpdateRentalBooking(this.hasuraSystemService, booking.id, ['cancelled'], {
+        status: 'reserved',
+        payment_status: booking.payment_status ?? 'pending',
+      });
+      throw error;
+    }
   }
 
   private async notifyReservationExpired(booking: any): Promise<void> {
@@ -343,16 +377,18 @@ export class RentalsCronService {
   private async transitionActiveToAwaitingReturn(
     bookingId: string,
     nowIso: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     const booking = await this.fetchBooking(bookingId);
-    if (!booking || booking.status !== 'active') return;
+    if (!booking || booking.status !== 'active') return false;
+    const due = new Date(bookingReturnDueAt(booking) ?? NaN);
+    if (!wallClockReached(due, new Date(nowIso), bookingZone(booking))) return false;
     const won = await casUpdateRentalBooking(
       this.hasuraSystemService,
       bookingId,
       ['active'],
       { status: 'awaiting_return', period_ended_notified_at: nowIso }
     );
-    if (!won) return;
+    if (!won) return false;
     await this.logHistory(
       bookingId,
       'awaiting_return',
@@ -365,14 +401,19 @@ export class RentalsCronService {
       bookingId,
       rentalItemName:
         booking.rental_location_listing?.rental_item?.name ?? 'Rental',
-      endAt: booking.end_at,
+      endAt: bookingReturnDueAt(booking) ?? booking.end_at,
       clientUserId: booking.client.user_id,
       businessUserId: booking.business.user_id,
     });
+    return true;
   }
 
+  /**
+   * end_at is listing wall clock, so the query widens by the largest UTC offset and
+   * cancelNoShowBooking rechecks each row on its own listing clock.
+   */
   async cancelNoShowBookings(): Promise<number> {
-    const now = new Date().toISOString();
+    const now = wallClockHorizon(new Date());
     const res = await this.hasuraSystemService.executeQuery<{
       rental_bookings: Array<{ id: string }>;
     }>(Q.LIST_RENTAL_NO_SHOWS, { now });
@@ -417,10 +458,10 @@ export class RentalsCronService {
   }
 
   private bookingIsStartDay(booking: any, now: Date): boolean {
-    const zone = listingZoneFor(booking?.rental_location_listing?.business_location?.address?.country);
+    const zone = bookingZone(booking);
     const startAt = new Date(booking.start_at);
     if (!isStartDay(startAt, now, zone)) return false;
-    return now.getTime() >= startOpensAt(startAt, zone).getTime();
+    return wallClockReached(startOpensAt(startAt, zone), now, zone);
   }
 
   private async pushStartDay(
@@ -554,6 +595,7 @@ export class RentalsCronService {
       createdAt: row.created_at,
       respondBy: row.respond_by,
       startAt: earliestRequestStartIso(row),
+      timeZone: listingZoneFor(raw),
     });
     return Date.parse(decision.respondBy) >= Date.parse(cutoff);
   }
@@ -603,6 +645,7 @@ export class RentalsCronService {
       businessName: item?.business?.name?.trim() || 'The business',
       renterName: [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim(),
       listingId: row.rental_location_listing?.id ?? '',
+      timeZone: listingZoneFor(row.rental_location_listing?.business_location?.address?.country),
     };
   }
 
@@ -645,4 +688,29 @@ export class RentalsCronService {
       },
     });
   }
+}
+
+const ENDING_SOON_MS = 30 * 60 * 1000;
+
+/**
+ * Upper bound for queries that filter wall-clock start_at / end_at with the real
+ * clock: the latest wall-clock "now" any market can show. Rows are rechecked per listing.
+ */
+export function wallClockHorizon(now: Date): string {
+  return new Date(now.getTime() + WALL_CLOCK_MAX_SKEW_MS).toISOString();
+}
+
+function bookingZone(booking: any): string {
+  return listingZoneFor(booking?.rental_location_listing?.business_location?.address?.country);
+}
+
+/**
+ * The return due (return_due_at after an hourly early start, else end_at; listing
+ * wall clock) is after the listing's now and within `windowMs` of it.
+ */
+export function endsWithinOnListingClock(booking: any, now: Date, windowMs: number): boolean {
+  const end = new Date(bookingReturnDueAt(booking) ?? NaN);
+  const zone = bookingZone(booking);
+  if (wallClockReached(end, now, zone)) return false;
+  return wallClockReached(end, new Date(now.getTime() + windowMs), zone);
 }

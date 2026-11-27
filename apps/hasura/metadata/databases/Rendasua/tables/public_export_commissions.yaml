@@ -1,0 +1,26 @@
+table:
+  name: export_commissions
+  schema: public
+object_relationships:
+  - name: export_order
+    using:
+      foreign_key_constraint_on: export_order_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - export_order_id
+        - agent_user_id
+        - payment_id
+        - base_amount
+        - rate
+        - amount
+        - status
+        - statement_key
+        - created_at
+        - updated_at
+      filter:
+        agent_user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true

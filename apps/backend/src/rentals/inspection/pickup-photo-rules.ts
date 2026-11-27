@@ -1,5 +1,7 @@
-import { marketTimeZone } from '../../common/market-timezones';
-import { isoCountryCode } from '../../orders/delivery-pricing.util';
+import { isStartDay } from '../simple-start/simple-start.policy';
+import { listingTimeZone } from './listing-time-zone';
+
+export { listingTimeZone };
 
 export const PICKUP_PHOTO_RULES_FLAG = 'rentals_pickup_photo_rules_enabled';
 export const PICKUP_PHOTO_NOT_PICKUP_DAY = 'PICKUP_PHOTO_NOT_PICKUP_DAY';
@@ -11,8 +13,6 @@ export const PICKUP_GUIDE_SKIP_REASON = 'PICKUP_GUIDE_SKIP_REASON';
 
 const REQUIRED_SLOTS = ['overview', 'other_side', 'accessories'] as const;
 const SLOT_KEY = /^(overview|other_side|accessories|extra:[1-9]\d{0,2})$/;
-const FALLBACK_ZONE = 'Africa/Douala';
-
 export type GuideRole = 'overview' | 'other_side' | 'accessories' | 'wear';
 
 export interface GuideSlot {
@@ -34,11 +34,6 @@ export interface SlotGap {
   required: boolean;
 }
 
-/** Listing market zone. An unknown country uses Africa/Douala, matching rental search. */
-export function listingTimeZone(country: string | null | undefined): string {
-  return marketTimeZone(isoCountryCode(country)) ?? FALLBACK_ZONE;
-}
-
 export function calendarDay(instant: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -50,10 +45,13 @@ export function calendarDay(instant: Date, timeZone: string): string {
   return `${pick('year')}-${pick('month')}-${pick('day')}`;
 }
 
-/** Pickup day is the calendar day of start_at in the listing timezone. */
+/**
+ * Pickup day is the stored UTC calendar date of start_at, same as isStartDay.
+ * start_at is listing wall clock written as UTC components; `now` (or a photo's
+ * capture instant) is a real instant, read on the listing clock before comparing.
+ */
 export function isPickupPhotoDay(startAt: Date, now: Date, timeZone: string): boolean {
-  if (Number.isNaN(startAt.getTime()) || Number.isNaN(now.getTime())) return false;
-  return calendarDay(startAt, timeZone) === calendarDay(now, timeZone);
+  return isStartDay(startAt, now, timeZone);
 }
 
 export function parseSlotKey(value: string | null | undefined): string | null {
@@ -185,14 +183,7 @@ export function captureOutsidePickupDay(
   startAt: Date,
   timeZone: string
 ): boolean {
-  const day = calendarDay(startAt, timeZone);
-  return photos.some((photo) => outsideDay(photo.capturedAt, day, timeZone));
-}
-
-function outsideDay(capturedAt: string | null, day: string, timeZone: string): boolean {
-  if (!capturedAt) return true;
-  const at = new Date(capturedAt);
-  return Number.isNaN(at.getTime()) || calendarDay(at, timeZone) !== day;
+  return photos.some((photo) => !isPickupPhotoDay(startAt, new Date(photo.capturedAt ?? ''), timeZone));
 }
 
 /** Drop ASCII control characters, then trim. Length is capped by skipDecision. */

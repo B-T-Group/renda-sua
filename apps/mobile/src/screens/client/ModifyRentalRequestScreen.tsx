@@ -5,7 +5,8 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RentalSlotPicker } from '../../components/rentals/RentalSlotPicker';
 import { RentalModifyBlockedSheet } from '../../components/rentals/RentalModifySheets';
-import { RentalSearchDateSheet } from '../../components/rentals/search/RentalSearchDateSheet';
+import { RentalDayHoursSheet } from '../../components/rentals/dayHours/RentalDayHoursSheet';
+import { useDayHoursPicker } from '../../components/rentals/dayHours/useDayHoursPicker';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
 import { useRentalRequestDates } from '../../hooks/useRentalRequestDates';
@@ -15,6 +16,8 @@ import type { ClientRentalRequestRow, RentalListingRow, RentalSelectionWindow, R
 import type { SelectionRange } from '../../utils/rentals';
 import { allDaySelectionsForRange } from '../../utils/rentals/rentalSearchPreset';
 import type { RentalDateRange } from '../../utils/rentals/rentalSearchDates';
+import { fromHourlyPrice, pickerLang } from '../../utils/rentals/dayHoursCopy';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 import { RequestAppBar } from '../shared/RentalRequestScreen';
 
 type Route = { ModifyRentalRequest: { requestId: string } };
@@ -144,6 +147,14 @@ function ModifyRequestForm({
   const previousTotal = Number.isFinite(previous) ? previous : dayRate * Math.max(savedSelections.length, 1);
   const draft = draftSelections(dates.stay, openedRange, listing, dayRate, savedSelections);
   const image = listing?.rental_item?.rental_item_images?.[0];
+  const picker = useDayHoursPicker({
+    listing,
+    booked: bookedWindows,
+    seed: savedSelections,
+    language: i18n.language,
+  });
+  const picked = picker.rows;
+  const openDates = () => picker.setOpen(true);
 
   return (
     <>
@@ -154,52 +165,55 @@ function ModifyRequestForm({
       />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <RentalSlotPicker
-          key={`${request.id}:${dates.stay?.startDate ?? ''}:${dates.stay?.endDate ?? ''}`}
-          layout="screen"
+          key={`${request.id}:${dates.stay?.startDate ?? ''}:${dates.stay?.endDate ?? ''}:${picker.selectionKey}`}
           submitMode="modify"
           listingId={listing?.id ?? request.rental_location_listing?.id ?? ''}
           isAuthenticated
           bookedWindows={bookedWindows}
-          weeklyAvailability={listing?.weekly_availability}
           unitsAvailable={Number(listing?.units_available) || 1}
           basePricePerDay={dayRate}
           basePricePerHour={Number(listing?.base_price_per_hour) || 0}
           currency={item?.currency || 'XAF'}
-          initialSelections={draft}
+          initialSelections={picked ?? draft}
+          minRentalHours={listing?.min_rental_hours}
+          maxRentalHours={listing?.max_rental_hours}
           savedSelections={savedSelections}
           initialUnits={request.units_requested ?? 1}
           initialNotes={request.client_request_note ?? ''}
           previousTotal={previousTotal}
           datesFilled
-          dateLine={dates.dateLine}
+          dateLine={picked ? picker.dateLine : dates.dateLine}
           itemName={item?.name}
-          itemMeta={itemMeta(request, dayRate, i18n.language, t)}
+          itemMeta={itemMeta(request, dayRate, i18n.language, t, listing ?? request.rental_location_listing)}
           imageUrl={image?.display_url || image?.image_url || null}
-          requestBlocked={Boolean(blocked) || dates.requestBlocked}
-          requestBusy={dates.checkingStay}
-          unavailableLabel={blocked ?? dates.unavailableLabel}
+          requestBlocked={Boolean(blocked)}
+          unavailableLabel={blocked ?? undefined}
           onSeeDates={() => {
             onClearBlocked();
-            dates.openDateEditor();
+            openDates();
           }}
-          onEditDates={dates.openDateEditor}
+          onEditDates={openDates}
+          onServerRuleError={picker.reopenWithError}
           onModifySave={onSave}
         />
       </KeyboardAvoidingView>
-      <RentalSearchDateSheet
-        visible={dates.editOpen}
-        value={dates.draftStay}
-        timeZone={dates.timeZone}
-        onChange={dates.setDraftStay}
-        onApply={() => {
-          const next = dates.draftStay;
-          if (!next || next.dayCount < 1 || next.dayCount > 30) return;
-          dates.setEditOpen(false);
-          onClearBlocked();
-          void dates.commitStay(next);
-        }}
-        onClose={() => dates.setEditOpen(false)}
-      />
+      {picker.model ? (
+        <RentalDayHoursSheet
+          visible={picker.open}
+          listing={picker.model}
+          currency={item?.currency || 'XAF'}
+          language={i18n.language}
+          timeZone={listing?.timezone}
+          city={listing?.business_location?.address?.city}
+          initialDays={picker.initialDays}
+          onClose={picker.close}
+          serverError={picker.serverError}
+          onContinue={(rows, days) => {
+            onClearBlocked();
+            picker.onContinue(rows, days);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -235,13 +249,17 @@ function itemMeta(
   request: ClientRentalRequestRow,
   dayRate: number,
   language: string,
-  t: (key: string, fallback: string, options?: Record<string, unknown>) => string
+  t: (key: string, fallback: string, options?: Record<string, unknown>) => string,
+  rates?: { offers_daily?: boolean | null; base_price_per_hour?: number | string | null; rental_item?: { currency?: string | null } | null } | null
 ): string {
   const place = request.rental_location_listing?.business_location?.name ?? '';
-  const rate = t('rentals.modify.perDay', '{{amount}} / day', {
-    amount: `${dayRate} FCFA`,
-  });
-  return [place, language.toLowerCase().startsWith('fr') ? rate.replace('/ day', '/ jour') : rate]
+  if (rates?.offers_daily === false) {
+    const currency = rates.rental_item?.currency || 'XAF';
+    return [place, fromHourlyPrice(Number(rates.base_price_per_hour) || 0, currency, pickerLang(language))].filter(Boolean).join(' · ');
+  }
+  const unit = language.toLowerCase().startsWith('fr') ? 'jour' : 'day';
+  const rate = withRateUnit(`${dayRate} FCFA`, unit);
+  return [place, rate]
     .filter(Boolean)
     .join(' · ');
 }

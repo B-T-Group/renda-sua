@@ -52,6 +52,9 @@ export type AddRentalLocationForm = {
   locationName?: string;
   base_price_per_hour: number;
   base_price_per_day: number;
+  /** The listing switches "Rent by the day" / "Rent by the hour". */
+  offers_daily?: boolean;
+  offers_hourly?: boolean;
   security_deposit_amount?: number;
   units_available: number;
   pickup_instructions?: string;
@@ -325,15 +328,19 @@ export function useBusinessAddRentalFromImage() {
       if (!createdItem) return;
       setBusy(true);
       try {
+        const modes = form.offers_daily !== undefined || form.offers_hourly !== undefined;
         const day =
-          form.base_price_per_day > 0
+          form.base_price_per_day > 0 || (modes && form.offers_hourly === false)
             ? form.base_price_per_day
-            : form.base_price_per_hour * 12;
+            : modes && form.offers_daily === false
+              ? 0
+              : form.base_price_per_hour * 12;
         const created = await rentalsApi.createBusinessListing({
           rental_item_id: createdItem.id,
           business_location_id: form.locationId,
           base_price_per_hour: form.base_price_per_hour,
           base_price_per_day: day,
+          ...(modes ? { offers_daily: form.offers_daily !== false, offers_hourly: form.offers_hourly !== false } : {}),
           ...(form.security_deposit_amount != null &&
           Number.isFinite(form.security_deposit_amount)
             ? { security_deposit_amount: form.security_deposit_amount }

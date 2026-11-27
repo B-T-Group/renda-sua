@@ -84,7 +84,6 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
   const [dates, setDates] = useState<RentalDateRange | null>(initialDates);
   const [draftDates, setDraftDates] = useState<RentalDateRange | null>(null);
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
-  const [pendingRentId, setPendingRentId] = useState<string | null>(null);
   const [categories, setCategories] = useState<RentalTopCategory[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<RentalSuggestion[]>([]);
@@ -196,9 +195,7 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
       const parent = navigation.getParent() ?? navigation;
       (parent as { navigate: (name: string, params: object) => void }).navigate('RentalListingDetail', {
         listingId,
-        ...(range
-          ? { startDate: range.startDate, endDate: range.endDate, openRequest: true }
-          : {}),
+        ...(range ? { startDate: range.startDate, endDate: range.endDate } : {}),
       });
     },
     [navigation]
@@ -226,12 +223,7 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
     setDates(draftDates);
     setDateSheetOpen(false);
     setDatesSkipped(true);
-    if (pendingRentId) {
-      const listingId = pendingRentId;
-      setPendingRentId(null);
-      openListing(listingId, draftDates);
-    }
-  }, [draftDates, openListing, pendingRentId]);
+  }, [draftDates]);
 
   const visibleHits = defaultList ? catalog.hits : hits;
   const cards: RentalSearchCardModel[] = useMemo(
@@ -297,7 +289,6 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
         onApplyDates={onApplyDates}
         onCloseDates={() => {
           setDateSheetOpen(false);
-          setPendingRentId(null);
         }}
         onCategory={(id) => {
           setCategoryId(categoryId === id ? null : id);
@@ -326,13 +317,8 @@ export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen
           setQuery(term);
           commitQuery(term);
         }}
-        onRent={(id) => {
-          if (!dates) {
-            setPendingRentId(id);
-            setDraftDates(null);
-            setDateSheetOpen(true);
-            return;
-          }
+        onOpenListing={(id) => {
+          // Details first (photos, prices, deposit); its Rent button opens the request screen with these dates.
           openListing(id, dates);
         }}
         onSeeDates={(id) => {
@@ -382,7 +368,8 @@ function toCard(
   const image = hit.listing?.rental_item?.rental_item_images?.[0];
   const pricePerDay = Number(hit.pricePerDay) || Number(hit.listing.base_price_per_day) || 0;
   const pricePerHour = Number(hit.listing.base_price_per_hour) || 0;
-  const windows = range
+  const hourlyOnly = hit.listing.offers_daily === false;
+  const windows = range && !hourlyOnly
     ? allDaySelectionsForRange(range, hit.listing.weekly_availability ?? [], pricePerDay)
     : [];
   const quote = windows.length ? quoteRentalSelections(windows, pricePerHour, pricePerDay) : null;
@@ -391,9 +378,11 @@ function toCard(
     name: hit.listing.rental_item?.name ?? '',
     imageUrl: image?.display_url ?? image?.image_url,
     pricePerDay,
+    hourlyOnly,
+    pricePerHour,
     currency: hit.listing.rental_item?.currency || 'XAF',
     available: hit.available,
-    totalForDates: quote == null ? hit.totalForDates : quote,
+    totalForDates: hourlyOnly ? null : quote == null ? hit.totalForDates : quote,
     totalIsEstimate: dailyTotalDiffersFromQuote(hit.totalForDates, quote),
     dayCount: hit.dayCount,
     nextAvailableDate: hit.nextAvailableDate,

@@ -27,9 +27,25 @@ import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
 import { formatRentalMoney } from '../../utils/rentals';
-import { showsCardDeposit } from '../../utils/rentals/cardDeposit';
+import { showsRentalDetailsDeposit } from '../../utils/rentals/cardDeposit';
+import { withRateUnit } from '../../utils/rentals/moneyRateUnit';
 import { confirmationTimeZone } from '../../utils/rentals/confirmationFormat';
 import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
+import { listingRentModes } from '../../utils/rentals/listingRentModes';
+
+function fromRateLabel(
+  t: (key: string, fallback: string, vars?: Record<string, string>) => string,
+  kind: 'hourly' | 'daily',
+  amount: number,
+  currency: string,
+  language: string
+): string {
+  const unit = kind === 'hourly' ? 'h' : language.toLowerCase().startsWith('fr') ? 'jour' : 'day';
+  const price = withRateUnit(formatRentalMoney(amount, currency), unit);
+  return kind === 'hourly'
+    ? t('rentals.detail.fromHourly', 'From {{price}}', { price })
+    : t('rentals.detail.fromDaily', 'From {{price}}', { price });
+}
 
 type DetailParams = {
   RentalListingDetail: { listingId: string; startDate?: string; endDate?: string; openRequest?: boolean };
@@ -92,7 +108,7 @@ function todayCloseLabel(
 const BOTTOM_BAR_HEIGHT = 120;
 
 export default function RentalListingDetailScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -195,18 +211,19 @@ export default function RentalListingDetailScreen() {
   const acceptsOrders = merchantCanAcceptOrders(item.business);
   const hourlyPrice = toNumber(listing.base_price_per_hour);
   const dailyPrice = toNumber(listing.base_price_per_day);
-  const depositAmount = showsCardDeposit(currency)
+  const modes = listingRentModes(listing);
+  const depositAmount = showsRentalDetailsDeposit(currency, listing.security_deposit_amount)
     ? toNumber(listing.security_deposit_amount ?? 0)
     : 0;
   const closeToday = todayCloseLabel(weeklySorted);
   const priceSnapshotParts = [
-    t('rentals.detail.fromHourly', 'From {{price}}/h', {
-      price: formatRentalMoney(hourlyPrice, currency),
-    }),
+    modes.hourly
+      ? fromRateLabel(t, 'hourly', hourlyPrice, currency, i18n.language)
+      : fromRateLabel(t, 'daily', dailyPrice, currency, i18n.language),
     closeToday
       ? t('rentals.detail.openTodayUntil', 'Open today until {{time}}', { time: closeToday })
       : null,
-    t('rentals.detail.minHoursSnapshot', '{{h}}h minimum', { h: listing.min_rental_hours }),
+    modes.hourly ? t('rentals.detail.minHoursSnapshot', '{{h}}\u00A0h\u00A0minimum', { h: listing.min_rental_hours }) : null,
   ].filter(Boolean);
 
   return (
@@ -401,25 +418,29 @@ export default function RentalListingDetailScreen() {
           <Text style={[typography.subtitle2, { color: colors.text.primary }]}>
             {t('rentals.detail.pricing', 'Pricing')}
           </Text>
-          <Text style={[typography.body2, { color: colors.text.primary, marginTop: spacing.xs }]}>
-            {t('rentals.detail.hourlyRate', 'Hourly rate')}:{' '}
-            <Text style={{ fontWeight: '700' }}>
-              {formatRentalMoney(toNumber(listing.base_price_per_hour), currency)}
+          {modes.hourly ? (
+            <Text style={[typography.body2, { color: colors.text.primary, marginTop: spacing.xs }]}>
+              {t('rentals.detail.hourlyRate', 'Hourly rate')}:{' '}
+              <Text style={{ fontWeight: '700' }}>
+                {formatRentalMoney(toNumber(listing.base_price_per_hour), currency)}
+              </Text>
             </Text>
-          </Text>
-          <Text style={[typography.body2, { color: colors.text.primary, marginTop: 4 }]}>
-            {t('rentals.detail.fullDayRate', 'Full day (daily rate)')}:{' '}
-            <Text style={{ fontWeight: '700' }}>
-              {formatRentalMoney(toNumber(listing.base_price_per_day), currency)}
+          ) : null}
+          {modes.daily ? (
+            <Text style={[typography.body2, { color: colors.text.primary, marginTop: 4 }]}>
+              {t('rentals.detail.fullDayRate', 'Full day (daily rate)')}:{' '}
+              <Text style={{ fontWeight: '700' }}>
+                {formatRentalMoney(toNumber(listing.base_price_per_day), currency)}
+              </Text>
             </Text>
-          </Text>
-          {toNumber(listing.security_deposit_amount ?? 0) > 0 ? (
+          ) : null}
+          {depositAmount > 0 ? (
             <>
               <Text style={[typography.body2, { color: colors.text.primary, marginTop: 4 }]}>
                 {t('rentals.detail.securityDeposit', 'Security deposit (card rentals)')}:{' '}
                 <Text style={{ fontWeight: '700' }}>
                   {formatRentalMoney(
-                    toNumber(listing.security_deposit_amount ?? 0),
+                    depositAmount,
                     currency
                   )}
                 </Text>
@@ -465,39 +486,32 @@ export default function RentalListingDetailScreen() {
               'Rentals on Rendasua are coordinated with the business in a few steps:'
             )}
           </Text>
-          {[1, 2, 3, 4].map((n) => {
-            const step4Default =
-              item.operation_mode === 'take_home'
-                ? 'Pick up the item, use it off-site, and return it by the booked end time. Follow pickup and return instructions on this page.'
-                : 'The rental is operated by the business at their location. Follow the pickup and return instructions on this page when you arrive.';
-            const step4Key =
-              item.operation_mode === 'take_home'
-                ? 'rentals.detail.howItWorksStep4TakeHome'
-                : 'rentals.detail.howItWorksStep4';
-            return (
-              <Text
-                key={n}
-                style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}
-              >
-                {`${n}. `}
-                {n === 4
-                  ? t(step4Key, step4Default)
-                  : n === 3 && listing.inspection_policy_version != null
-                    ? t(
-                        'rentals.detail.howItWorksStep3Inspected',
-                        'At pickup, check the item, then tap Start rental. Return by the booked end time.'
-                      )
-                  : t(
-                      `rentals.detail.howItWorksStep${n}`,
-                      n === 1
-                        ? 'Send a request with your preferred start and end date and time.'
-                        : n === 2
-                          ? 'The business checks availability and responds.'
-                          : 'If they confirm availability, you can complete a booking.'
-                    )}
-              </Text>
-            );
-          })}
+          {(item.operation_mode === 'take_home' ? [1, 2, 3] : [1, 2, 3, 4]).map((n) => (
+            <Text
+              key={n}
+              style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}
+            >
+              {`${n}. `}
+              {n === 4
+                ? t(
+                    'rentals.detail.howItWorksStep4',
+                    'The rental is operated by the business at their location. Follow the pickup and return instructions on this page when you arrive.'
+                  )
+                : n === 3 && listing.inspection_policy_version != null
+                  ? t(
+                      'rentals.detail.howItWorksStep3Inspected',
+                      'At pickup, check the item, then tap Start rental. Return by the booked end time.'
+                    )
+                : t(
+                    `rentals.detail.howItWorksStep${n}`,
+                    n === 1
+                      ? 'Send a request with your preferred start and end date and time.'
+                      : n === 2
+                        ? 'The business checks availability and responds.'
+                        : 'If they confirm availability, you can complete a booking.'
+                  )}
+            </Text>
+          ))}
         </View>
 
         {weeklySorted.length > 0 ? (
@@ -569,44 +583,6 @@ export default function RentalListingDetailScreen() {
               t('rentals.detail.noInstructionsYet', 'No instructions provided yet.')}
           </Text>
         </View>
-
-        <View
-          style={[
-            styles.sectionCard,
-            shadows.sm,
-            {
-              borderColor: colors.divider,
-              backgroundColor: colors.surface,
-              borderRadius: borderRadius.md,
-              padding: spacing.md,
-            },
-          ]}
-        >
-          <Text style={[typography.subtitle2, { color: colors.text.primary }]}>
-            {t('rentals.detail.requestCtaTitle', 'Ready to book?')}
-          </Text>
-          <Text style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xxs }]}>
-            {acceptsOrders
-              ? t(
-                  'rentals.detail.requestCtaBody',
-                  'Tap Request rental below to pick your dates. Nothing is charged until the business accepts.'
-                )
-              : t(
-                  'checkout.merchantNotAcceptingOrders',
-                  'This merchant is currently completing account setup and is not yet accepting orders.'
-                )}
-          </Text>
-          <Button
-            mode="contained"
-            style={{ marginTop: spacing.sm }}
-            onPress={openRequestScreen}
-            disabled={!acceptsOrders}
-          >
-            {acceptsOrders
-              ? t('rentals.requestRental', 'Request this rental')
-              : t('business.lifecycle.openingSoonBadge', 'Opening Soon')}
-          </Button>
-        </View>
       </View>
     </ScrollView>
 
@@ -622,13 +598,12 @@ export default function RentalListingDetailScreen() {
     >
       <View style={{ alignItems: 'center', marginBottom: spacing.sm }}>
         <Text style={[typography.subtitle1, { color: colors.text.primary, fontWeight: '700' }]}>
-          {t('rentals.detail.fromHourly', 'From {{price}}/h', {
-            price: formatRentalMoney(hourlyPrice, currency),
-          })}
-          {' · '}
-          {t('rentals.detail.fromDaily', 'From {{price}}/day', {
-            price: formatRentalMoney(dailyPrice, currency),
-          })}
+          {[
+            modes.hourly ? fromRateLabel(t, 'hourly', hourlyPrice, currency, i18n.language) : null,
+            modes.daily ? fromRateLabel(t, 'daily', dailyPrice, currency, i18n.language) : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </Text>
         <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, textAlign: 'center' }]}>
           {!acceptsOrders

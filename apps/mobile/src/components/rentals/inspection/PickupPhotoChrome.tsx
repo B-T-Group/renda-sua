@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { getPickupPhotoRules } from '../../../services/rentalInspectionApi';
 import { groupBlockedRows, otherReasonReady } from '../../../utils/rentals/blockedGuideRows';
-import { formatListingDay, listingCity } from '../../../utils/rentals/pickupPhotoTime';
+import { formatListingDay, formatPickupDay, listingCity } from '../../../utils/rentals/pickupPhotoTime';
 import type { PickupPhotoRules } from '../../../utils/rentals/rentalInspection';
 
 export function CalendarArt() {
@@ -252,7 +252,7 @@ export function PickupDayCallout({ bookingId, onOpen }: { bookingId: string; onO
       </Button>
     );
   }
-  const day = rules.startAt ? formatListingDay(rules.startAt, rules.timezone, i18n.language) : '';
+  const day = rules.startAt ? formatPickupDay(rules.startAt, i18n.language) : '';
   const city = listingCity(rules.timezone);
   const early = !rules.pickupDay;
   return (

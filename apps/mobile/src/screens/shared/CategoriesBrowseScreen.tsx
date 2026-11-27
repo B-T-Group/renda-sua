@@ -84,7 +84,7 @@ function openFilteredBrowse(navigation: CategoryNav, name: string) {
     navigation.navigate('ClientMainTabs', { screen: 'ClientBrowse', params });
     return;
   }
-  navigation.navigate('GuestTabs', { screen: 'GuestBrowse', params });
+  navigation.navigate('GuestTabs', { screen: 'GuestHome', params });
 }
 
 function filterCategories(categories: CatalogCategoryTile[], search: string) {
