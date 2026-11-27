@@ -1,6 +1,7 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
+> **Last verified:** 2026-11-27 (`212b5ad6f`). Sticky rental primary action: web and mobile rental booking screens pin the main action (Pay & start, Complete payment, Collect at pickup, Confirm return, request send, pickup match/start) on a bottom `StickyActionCard`. No money, flag, or API change.
 > **Last verified:** 2026-11-27. After a pay-at-pickup reservation succeeds (free, or reservation fee already paid), the client sees a "You're reserved" screen (mobile `RentalReserved`, web `/rentals/bookings/:id/reserved`) instead of a snackbar plus the booking detail. It lists what's next (collect the item at the rental time, check it, pay the amount due at pickup plus any card deposit hold, cancellation terms) with View rental and Go to dashboard (My rentals hub) buttons. Card checkout redirects, pending MoMo fees and legacy card-upfront bookings keep their previous flows.
 > **Last verified:** 2026-11-27. The client "Review and confirm your reservation" screen (mobile `RentalBookConfirmSheet`, web `ClientRentalRequestsPage` dialog) is full screen (web: full screen on phones). The pickup address sits under its label. With no reservation fee, the "free cancellation until" banner is replaced by a Cancellation: Free row; with a fee it keeps the until line. The footer now shows two labelled lines, Pay today and Pay at pickup (plus the card deposit hold), instead of one ambiguous amount.
 > **Last verified:** 2026-11-27. Confirm availability (web and mobile) offers **Apply rebate** instead of a free-form new total. The amount entered is subtracted from the quoted total, and that lower total is sent as `totalOverride`. A rebate of the whole quote or more is refused. The API still accepts a higher total within the ceiling; this dialog does not collect one.
@@ -30,6 +31,7 @@
 
 | PR | Issue | Change | Sections of this doc now stale |
 |---|---|---|---|
+| sticky rental action card | – | **The main rental action is pinned to the bottom of the screen on web and mobile.** Web: renter Pay & start, Complete payment, Collect payment at pickup, and Confirm return use a fixed card (summary + button; it clears the bottom nav). Mobile: renter Pay & start, Complete payment, review-and-pay, request send, pickup match/start, and business Confirm return use an in-flow card with safe-area padding. Amounts, flags, and API calls are unchanged. | §2.1 Client rentals, §2.2 Business rentals, §2.7, §4.1 G-33, Appendix D |
 | export order detail IDOR | – | **Client, agent, and manufacturer export-order detail routes reject another tenant's UUID.** `getByIdForActor` matches list scoping (`client_user_id` / `agent_user_id` / `business_id`). Admin detail is unchanged. | §2.1 Client exports |
 | rental start wall clock | – | **Pickup day is the stored UTC date on `start_at`.** Booking times are listing wall clock with a Z suffix. `rental_start_opens_at` and the start screens no longer convert that instant into the listing time zone. Unpaid Mobile Money reservations still cancel at the end of that stored day. | §2 rentals, simple rental start |
 | rental pickup photo day | – | **Pickup condition photos, when `rentals_pickup_photo_rules_enabled` is on, use the stored UTC date on `start_at`, same as simple start.** Web and mobile pickup-day labels format that UTC date. Capture stamps still reject photos outside that stored day. | §2.1, §2.2, Appendix C |
@@ -441,6 +443,7 @@ Permission keys (30): `moderate.items`, `moderate.rentals`, `ops.user_documents`
 | Admin tools | ~35 admin pages | ~20 admin screens under `screens/business/Admin*` (subset: no refunds, configurations, payment programs, pending-mobile-payments, country onboarding, site events, map) |
 | Delegate | Full order pages | Dedicated navigator |
 | Agent | Web dashboard exists (`AgentDashboard.tsx`) | Primary experience (tracking, offers, claim top-up) |
+| Rental primary action (pay & start, complete payment, collect at pickup, confirm return) | Fixed `StickyActionCard` above the bottom nav (card shows the pickup place or total plus the button; page padding keeps content clear). The confirm dialog is unchanged. | In-flow `StickyActionCard` under the scroll (safe-area aware) on the booking detail, pickup start flow, request screen, and business return. Confirm sheet is unchanged. |
 
 ---
 
@@ -826,6 +829,7 @@ Priority: **P0** = can lose/strand money or break a core flow now; **P1** = mate
 | G-30 | P2 | Roadmap (issues) | #343 favourites alerts; #342 discovery/search; #341 trust rails (escrow, pickup hubs, FX); #340 WhatsApp first-class channel; #339 merchant coupons/campaigns; **#237 store-feed stop rails (shipped: store-only deals / popular / collections on web + mobile store pages)**; #193 PDP delivery card; #178 transparent FX on Stripe; #177 broader Africa rails; #176 pickup stations/QR hubs; #175 escrow/release-on-confirm | [GH] | Partially shipped (#237 store feed); rest planned |
 | G-31 | P2 | Quality | #351 AuthGuard logs expired JWT as error. #352 cleanup over 10 MB is fixed in code (downscale to ≤10 MB, reject above 25 MB) | [GH] | Noise / UX |
 | G-32 | P2 | Observability | Many money paths log-and-continue (auto-withdraw, commission failure, cancellation financials) with no metric/alert hook found (Slack alerts exist in the lambda for order events only) | [I] | Detection relies on user complaints |
+| G-33 | P3 | Rentals / UX | Design rule: every main action sits on a sticky bottom card (`StickyActionCard`, web + mobile). Done for pay & start, complete payment, collect at pickup, confirm return, mobile request send, pickup match/start, review-and-pay. Still inline: web request submit (`RentalListingRequestSection`), web `ClientRentalRequestsPage` book confirm, `BusinessRentalRespondDialog`, `RenterReturnPanel`, early return, mobile `RentalBookConfirmSheet`, `RentalListingDetailScreen` request, `BusinessRentalRequestDetailScreen` footer, client/business inspection footers, pickup/return condition buttons, decline-pickup accept, rate banner | [V] code read | Consistency: one pinned, always-visible primary action per screen |
 
 ### 4.2 Gaps by persona (index)
 - **Client:** G-5, G-7, G-8, G-16, G-22, G-23 (no web reels), G-29, G-34.
@@ -833,7 +837,7 @@ Priority: **P0** = can lose/strand money or break a core flow now; **P1** = mate
 - **Agent:** G-1, G-4, G-10, G-11, G-12.
 - **Delegate:** G-24.
 - **Admin/ops:** G-14, G-15, G-18, G-20.
-- **Cross-cutting:** G-2, G-13, G-17, G-19, G-21, G-26, G-27, G-28, G-32.
+- **Cross-cutting:** G-2, G-13, G-17, G-19, G-21, G-26, G-27, G-28, G-32, G-33.
 
 ### 4.3 Open GitHub work (as of 2026-10-01)
 Open PRs: **#390** "fix(orders): keep a lost claim top-up available in the wallet" (draft, `cursor/critical-bug-investigation-a6de`) and **#391** "fix(orders): fail closed when claim top-up cannot assign" (draft, `cursor/critical-bug-management-0f4d`). Both address G-1; they overlap in `orders.service.ts`, so merge one then rebase the other.
@@ -961,6 +965,7 @@ Notes: client cancellation via `POST /orders/cancel` (`pending_payment…ready_f
 ## Appendix D — Key file index
 | Topic | Files |
 |---|---|
+| Sticky primary action card (rentals) | `apps/frontend/src/components/common/StickyActionCard.tsx`, `apps/mobile/src/components/common/StickyActionCard.tsx`, `apps/frontend/src/components/rentals/RentalStartPanel.tsx`, `apps/frontend/src/components/pages/RentalBookingDetailPage.tsx`, `apps/mobile/src/components/rentals/RentalStartCard.tsx` (`RentalStartAction`), `apps/mobile/src/components/rentals/request/RentalRequestStickyBar.tsx`, `apps/mobile/src/components/rentals/inspection/PickupStartFlow.tsx`, `apps/mobile/src/screens/client/RentalBookingDetailScreen.tsx`, `apps/mobile/src/screens/business/BusinessRentalBookingDetailScreen.tsx` |
 | Business rental request deadline | `apps/backend/src/rentals/rental-respond-by.ts`, `apps/backend/src/rentals/rental-request-expiry.ts`, `apps/backend/src/rentals/rentals-cron.service.ts`, migrations `20261125180000_rentals_dashboard_requests`, `20261125180500_rental_request_fair_window`, `20261125180600_rental_request_response_clock`, and `20261125180700_rental_country_key_fold` |
 | Web session refresh / rotation | `apps/backend/src/auth/login.service.ts`, `apps/backend/src/auth/session-store.service.ts`, `POST /auth/login/refresh` |
 | Supported countries / market states | `locations/locations.controller.ts` `GET /locations/supported-countries`, `GET /locations/countries`, `GET /locations/market-states` |

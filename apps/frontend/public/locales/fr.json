@@ -7287,6 +7287,7 @@
       "notYet": "Pas encore",
       "startedBanner": "Location démarrée à {{time}}. L’entreprise a été prévenue pour remettre l’article.",
       "pickupOpens": "Retrait dès le {{day}}",
+      "stickyPickupAt": "Retrait chez",
       "bookedDay": "Réservé le {{day}} · {{range}}"
     },
     "business": {
@@ -7427,6 +7428,7 @@
     },
     "bookingDetail": {
       "paymentPendingTitle": "En attente de paiement",
+      "stickyTotal": "Total",
       "paymentPendingStripe": "Finalisez le paiement par carte sur Stripe Checkout pour confirmer cette réservation. Utilisez Réessayer le paiement si vous avez fermé la page de paiement.",
       "paymentPendingMomo": "Approuvez la demande de paiement mobile money sur votre téléphone pour confirmer cette réservation. Utilisez Réessayer le paiement si vous ne l’avez pas reçue.",
       "retryPayment": "Réessayer le paiement",

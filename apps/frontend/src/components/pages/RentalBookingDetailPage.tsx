@@ -40,6 +40,7 @@ import { RentalInspectionPanel } from '../rentals/RentalInspectionPanel';
 import { BusinessDeclineBanner, DeclineOutcomeCard, declineCardView } from '../rentals/DeclinePickupScreens';
 import { RentalJourneyList } from '../rentals/RentalJourneyList';
 import { RentalStartPanel } from '../rentals/RentalStartPanel';
+import { STICKY_ACTION_CLEARANCE, StickyActionCard } from '../common/StickyActionCard';
 import { PayAtPickupPanel } from '../rentals/PayAtPickupPanel';
 import { CancelBookingDialog } from '../rentals/CancelBookingDialog';
 import { cancelFeeResult, dueAtPickup, reservationFee, showsPayAtPickupCard } from '../../utils/rentals/reservationFee';
@@ -406,6 +407,7 @@ const RentalBookingDetailPage: React.FC = () => {
   const isStripePending =
     paymentRail === 'stripe' || (paymentRail == null && isStripeRail);
   const showPaymentPending = isClient && booking?.status === 'proposed';
+  const hasStickyAction = showPaymentPending || showCollect || showReturnPicker || (isClient && showStartPanel);
 
   if (!isAuthenticated) {
     return (
@@ -694,7 +696,7 @@ const RentalBookingDetailPage: React.FC = () => {
           onConfirm={(actualEndAt) => void submitEarlyReturn(actualEndAt)}
         />
       ) : null}
-      <Box sx={{ minHeight: '100%', pb: { xs: 10, md: 5 }, bgcolor: alpha(theme.palette.divider, 0.04) }}>
+      <Box sx={{ minHeight: '100%', pb: hasStickyAction ? { xs: `${STICKY_ACTION_CLEARANCE + 72}px`, md: `${STICKY_ACTION_CLEARANCE}px` } : { xs: 10, md: 5 }, bgcolor: alpha(theme.palette.divider, 0.04) }}>
         <Container maxWidth="md" sx={{ py: { xs: 2, md: 3 } }}>
           <Button
             onClick={() => navigate(-1)}
@@ -775,54 +777,23 @@ const RentalBookingDetailPage: React.FC = () => {
               }
               action={
                 showPaymentPending ? (
-                  <Stack spacing={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      {isStripePending
-                        ? t(
-                            'rentals.bookingDetail.paymentPendingStripe',
-                            'Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.'
-                          )
-                        : t(
-                            'rentals.bookingDetail.paymentPendingMomo',
-                            'Approve the mobile money payment request on your phone to confirm this reservation. Use Retry payment if you did not receive it.'
-                          )}
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      color="cta"
-                      disabled={retryingPayment}
-                      onClick={() => void handleRetryPayment()}
-                    >
-                      {t('rentals.actions.completePayment', 'Complete payment')}
-                    </Button>
-                  </Stack>
-                ) : showCollect ? (
-                  <Stack spacing={1}>
-                    {inspection.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (
-                      <Alert severity="warning">
-                        {t('rentalInspection.autoCancel', 'Auto-cancel if unpaid: {{minutes}} min left. The clock started when Collect payment opened. Inspection time is not included.', {
-                          minutes: unpaidCancelMinutesLeft(booking.reserved_cancel_after),
-                        })}
-                      </Alert>
-                    ) : null}
-                    <Button
-                      variant="contained"
-                      onClick={() => void handlePickupPayment()}
-                    >
-                      {t('rentals.actions.collectPayment', 'Collect payment')}
-                    </Button>
-                  </Stack>
-                ) : showReturnPicker ? (
-                  <Button
-                    variant="contained"
-                    color="success"
-                    onClick={() => {
-                      setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
-                      setReturnDialogOpen(true);
-                    }}
-                  >
-                    {t('rentals.actions.confirmReturn', 'Confirm return')}
-                  </Button>
+                  <Typography variant="body2" color="text.secondary">
+                    {isStripePending
+                      ? t(
+                          'rentals.bookingDetail.paymentPendingStripe',
+                          'Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.'
+                        )
+                      : t(
+                          'rentals.bookingDetail.paymentPendingMomo',
+                          'Approve the mobile money payment request on your phone to confirm this reservation. Use Retry payment if you did not receive it.'
+                        )}
+                  </Typography>
+                ) : showCollect && inspection.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (
+                  <Alert severity="warning">
+                    {t('rentalInspection.autoCancel', 'Auto-cancel if unpaid: {{minutes}} min left. The clock started when Collect payment opened. Inspection time is not included.', {
+                      minutes: unpaidCancelMinutesLeft(booking.reserved_cancel_after),
+                    })}
+                  </Alert>
                 ) : null
               }
             />
@@ -1324,56 +1295,35 @@ const RentalBookingDetailPage: React.FC = () => {
         </Container>
       </Box>
 
-      {(showPaymentPending || showCollect || showReturnPicker) && (
-        <Box
-          sx={{
-            display: { xs: 'block', md: 'none' },
-            position: 'fixed',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 10,
-            p: 1.5,
-            bgcolor: 'background.paper',
-            borderTop: 1,
-            borderColor: 'divider',
-            boxShadow: 3,
+      {showPaymentPending ? (
+        <StickyActionCard
+          testId="rental-booking-sticky"
+          actionColor="cta"
+          summaryLabel={t('rentals.bookingDetail.stickyTotal', 'Total')}
+          summaryValue={formatConfirmationMoney(Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+          actionLabel={t('rentals.actions.completePayment', 'Complete payment')}
+          disabled={retryingPayment}
+          onAction={() => void handleRetryPayment()}
+        />
+      ) : showCollect ? (
+        <StickyActionCard
+          testId="rental-booking-sticky"
+          summaryLabel={t('rentals.payAtPickup.dueAfterCheck', 'Due at pickup, after the item check')}
+          summaryValue={formatConfirmationMoney(dueAtPickup(booking) || Number(booking.total_amount) || 0, booking.currency, i18n.language)}
+          actionLabel={t('rentals.actions.collectPayment', 'Collect payment')}
+          onAction={() => void handlePickupPayment()}
+        />
+      ) : showReturnPicker ? (
+        <StickyActionCard
+          testId="rental-booking-sticky"
+          actionColor="success"
+          actionLabel={t('rentals.actions.confirmReturn', 'Confirm return')}
+          onAction={() => {
+            setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
+            setReturnDialogOpen(true);
           }}
-        >
-          {showPaymentPending ? (
-            <Button
-              fullWidth
-              variant="contained"
-              color="cta"
-              disabled={retryingPayment}
-              onClick={() => void handleRetryPayment()}
-            >
-              {t('rentals.actions.completePayment', 'Complete payment')}
-            </Button>
-          ) : showCollect ? (
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={() => void handlePickupPayment()}
-            >
-              {t('rentals.actions.collectPayment', 'Collect payment')}
-            </Button>
-          ) : showReturnPicker ? (
-            <Button
-              fullWidth
-              variant="contained"
-              color="success"
-              onClick={() => {
-                setReturnAtLocal(listingDateTimeLocal(Date.now(), listingZone));
-                setReturnDialogOpen(true);
-              }}
-            >
-              {t('rentals.actions.confirmReturn', 'Confirm return')}
-            </Button>
-          ) : null}
-        </Box>
-      )}
-
+        />
+      ) : null}
 
       <Dialog
         open={returnDialogOpen}
