@@ -761,20 +761,40 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
               );
             }}
           />
-          <Button
-            type="submit"
-            variant="contained"
-            size="large"
-            sx={{
-              minHeight: 52,
-              px: 3,
-              borderRadius: 2.5,
-              flexShrink: 0,
-              alignSelf: { xs: 'stretch', sm: 'center' },
-            }}
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+            sx={{ flexShrink: 0 }}
           >
-            {t('public.items.searchButton', 'Search')}
-          </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              sx={{
+                minHeight: 52,
+                px: 3,
+                borderRadius: 2.5,
+                flex: { xs: 1, sm: 'none' },
+              }}
+            >
+              {t('public.items.searchButton', 'Search')}
+            </Button>
+            {isMobile && (
+              <Badge badgeContent={activeFiltersCount} color="primary">
+                <Button
+                  type="button"
+                  variant="outlined"
+                  size="large"
+                  startIcon={<FilterListIcon />}
+                  onClick={() => setDrawerOpen(true)}
+                  sx={{ minHeight: 52, px: 2, borderRadius: 2.5 }}
+                >
+                  {t('common.filters', 'Filters')}
+                </Button>
+              </Badge>
+            )}
+          </Stack>
         </Stack>
       </Box>
 
@@ -901,31 +921,12 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
           )}
         </Box>
       ) : (
-        /* Mobile: filter button + drawer */
+        /* Mobile: filters drawer (opened from the button beside search) */
         <>
           <Stack spacing={2}>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <Badge badgeContent={activeFiltersCount} color="primary">
-                <Button
-                  variant="outlined"
-                  startIcon={<FilterListIcon />}
-                  onClick={() => setDrawerOpen(true)}
-                  size="medium"
-                  fullWidth
-                  sx={{ minHeight: 44 }}
-                >
-                  {t('common.filters', 'Filters')}
-                </Button>
-              </Badge>
-
-              <Typography variant="body2" color="text.secondary">
-                {filteredItems.length} {t('common.of', 'of')} {items.length}
-              </Typography>
-            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              {filteredItems.length} {t('common.of', 'of')} {items.length}
+            </Typography>
 
             {activeFiltersCount > 0 && (
               <Stack direction="row" flexWrap="wrap" sx={{ gap: 1 }}>
