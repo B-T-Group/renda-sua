@@ -35,6 +35,7 @@ describe('my rentals tab badge', () => {
     expect(hubSegmentFromSearchParam('upcoming')).toBe('upcoming');
     expect(hubSegmentFromSearchParam('action_needed')).toBe('action_needed');
     expect(hubSegmentFromSearchParam('past')).toBe('past');
+    expect(hubSegmentFromSearchParam('active')).toBe('active');
     expect(hubSegmentFromSearchParam(null)).toBe('action_needed');
     expect(hubSegmentFromSearchParam('nope')).toBe('action_needed');
   });

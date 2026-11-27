@@ -328,7 +328,19 @@ export interface ClientRentalRequestRow {
     base_price_per_hour: number | string;
     base_price_per_day?: number | string;
     business_location?: { name: string } | null;
-    rental_item: { name: string; currency: string; business?: { name?: string | null } | null };
+    rental_item: {
+      name: string;
+      currency: string;
+      business?: { name?: string | null } | null;
+      rental_category?: { name?: string | null } | null;
+      rental_item_images?: Array<{
+        id: string;
+        image_url: string;
+        display_url?: string | null;
+        thumbnail?: string | null;
+        alt_text?: string | null;
+      }>;
+    };
   } | null;
   rental_booking?: {
     id: string;
