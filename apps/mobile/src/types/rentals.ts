@@ -202,6 +202,7 @@ export interface ClientRentalRequestRow {
     reservation_fee_status?: ReservationFeeStatus | string | null;
     reservation_fee_rail?: 'card' | 'wallet' | 'mobile_money' | string | null;
     reservation_fee_settled_at?: string | null;
+    renter_reported_returned_at?: string | null;
   } | null;
 }
 

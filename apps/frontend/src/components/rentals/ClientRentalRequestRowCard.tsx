@@ -120,6 +120,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
     {
       requestStatus: row.status,
       bookingStatus: row.rental_booking?.status ?? null,
+      returnReportedAt: row.rental_booking?.renter_reported_returned_at,
     },
     'client'
   );

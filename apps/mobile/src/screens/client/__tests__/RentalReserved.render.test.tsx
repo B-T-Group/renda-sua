@@ -54,11 +54,11 @@ describe('RentalReservedScreen', () => {
     ).toBeTruthy();
   });
 
-  it('opens the rental or the My rentals hub', async () => {
+  it('opens the rental or the home screen', async () => {
     await render(<RentalReservedScreen />);
     await fireEvent.press(screen.getByTestId('reserved-view-rental'));
     expect(mockReplace).toHaveBeenCalledWith('RentalBookingDetail', { bookingId: 'b1' });
     await fireEvent.press(screen.getByTestId('reserved-go-dashboard'));
-    expect(mockNavigate).toHaveBeenCalledWith('ClientMyRentals', { segment: 'upcoming' });
+    expect(mockNavigate).toHaveBeenCalledWith('ClientMainTabs', { screen: 'ClientBrowse' });
   });
 });

@@ -141,6 +141,7 @@ const DETAIL_STATUS_DEFAULTS: Record<string, string> = {
   'rentals.phases.reserved': 'Reserved',
   'rentals.phases.readyForPickup': 'Ready for pickup',
   'rentals.phases.inProgress': 'In progress',
+  'rentals.phases.awaitingConfirmation': 'Awaiting confirmation',
   'rentals.phases.done': 'Done',
   'rentals.bookingStatus.awaiting_return': 'Return due',
   'rentalInspection.phase.reportReady': 'Report ready to review',
@@ -515,7 +516,9 @@ const RentalBookingDetailPage: React.FC = () => {
     reportReadyToReview({ status, pickup: inspection.pickup });
   const detailStatusKey = reviewReady
     ? bookingDetailStepLabelKey(REPORT_REVIEW_STEP, isBusiness ? 'business' : 'client')
-    : bookingDetailStatusLabelKey(status);
+    : bookingDetailStatusLabelKey(status, {
+        returnReportedAt: isBusiness ? null : booking.renter_reported_returned_at,
+      });
   const detailStatusLabel = t(
     detailStatusKey,
     DETAIL_STATUS_DEFAULTS[detailStatusKey] ?? status

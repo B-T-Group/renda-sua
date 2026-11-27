@@ -491,7 +491,7 @@ function CatalogNotice() {
       <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
         {t(
           'rentals.businessOperatedNotice',
-          'All rentals are operated by the business (you do not take equipment home unattended).'
+          'Business-operated rental: you rent the item and an operator who runs it for you, like a car with a driver.'
         )}
       </Typography>
     </Paper>

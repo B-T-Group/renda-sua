@@ -7217,7 +7217,7 @@
     "loading": "Loading rentals",
     "loadingSubtitle": "Please wait",
     "metaDescription": "Browse business-operated rentals on Rendasua",
-    "businessOperatedNotice": "All rentals are operated by the business (you do not take equipment home unattended).",
+    "businessOperatedNotice": "Business-operated rental: you rent the item and an operator who runs it for you, like a car with a driver.",
     "noImage": "No image",
     "routeFromYou": "{{distance}} • {{duration}} from you",
     "perDay": "/ day",
@@ -7532,6 +7532,7 @@
       "reservedShort": "Reserved",
       "readyForPickup": "Ready for pickup",
       "inProgress": "In progress",
+      "awaitingConfirmation": "Awaiting confirmation",
       "done": "Done"
     },
     "start": {

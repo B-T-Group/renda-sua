@@ -57,9 +57,11 @@ function dayLabel(count: number, t: TFunction): string {
   return t('rentals.searchFirst.dayCount', '{{count}} days', { count });
 }
 
-function statusLabel(status: string, t: TFunction): string {
-  if (status === 'active' || status === 'awaiting_return') {
-    return t('rentals.phases.inProgress', 'In progress');
+function statusLabel(row: ClientRentalBookingRow, t: TFunction): string {
+  if (row.status === 'active' || row.status === 'awaiting_return') {
+    return row.renter_reported_returned_at
+      ? t('rentals.phases.awaitingConfirmation', 'Awaiting confirmation')
+      : t('rentals.phases.inProgress', 'In progress');
   }
   return t('rentals.modify.accepted', 'Accepted');
 }
@@ -165,7 +167,7 @@ export function useSearchFirstMyRentals(enabled: boolean, signedIn: boolean) {
           period: formatNextRentalPeriod(next.start_at, next.end_at, i18n.language, (count) =>
             dayLabel(count, t)
           ),
-          statusLabel: statusLabel(next.status, t),
+          statusLabel: statusLabel(next, t),
           imageUrl: bookingThumb(next),
           onOpen: entry.onOpenNext,
           onDismiss: entry.onDismissNext,

@@ -6184,7 +6184,7 @@
     "loading": "Loading rentals",
     "loadingSubtitle": "Please wait",
     "metaDescription": "Browse business-operated rentals on Rendasua",
-    "businessOperatedNotice": "Business-operated rental: the business runs this with you at their location (not unattended take-home).",
+    "businessOperatedNotice": "Business-operated rental: you rent the item and an operator who runs it for you, like a car with a driver.",
     "takeHomeNotice": "Take-home rental: pick up this item, use it off-site, and return it by the booked end time.",
     "modes": {
       "operatedShort": "Operated",
@@ -6585,6 +6585,7 @@
       "reservedShort": "Reserved",
       "readyForPickup": "Ready for pickup",
       "inProgress": "In progress",
+      "awaitingConfirmation": "Awaiting confirmation",
       "done": "Done"
     },
     "hub": {
