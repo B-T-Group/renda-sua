@@ -25,6 +25,7 @@ import LoadingPage from '../common/LoadingPage';
 import { RentalBookConfirmSummary } from '../rentals/RentalBookConfirmSummary';
 import { ReserveSummaryPanel } from '../rentals/ReserveSummaryPanel';
 import { buildReserveSummary } from '../../utils/rentals/reserveSummary';
+import { isReservedWithNothingDue } from '../../utils/rentals/reserveSuccess';
 import {
   ClientRentalRequestRowCard,
   isProposedContractOpen,
@@ -153,6 +154,10 @@ const ClientRentalRequestsPage: React.FC = () => {
       setBookConfirmRequestId(null);
       if (res.checkout_url) {
         window.location.href = res.checkout_url;
+        return;
+      }
+      if (isReservedWithNothingDue(res)) {
+        navigate(`/rentals/bookings/${res.bookingId}/reserved`);
         return;
       }
       if (res.reservation_fee && res.paymentPending && res.payment_rail === 'mobile_money') {
@@ -401,6 +406,7 @@ const ClientRentalRequestsPage: React.FC = () => {
       <ConfirmationModal
         open={Boolean(bookConfirmRequestId)}
         maxWidth="md"
+        fullScreenOnMobile
         title={t(
           'rentals.clientRequests.bookConfirmTitle',
           'Review and confirm your reservation'

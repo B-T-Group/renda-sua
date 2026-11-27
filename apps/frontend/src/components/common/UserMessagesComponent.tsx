@@ -46,6 +46,10 @@ interface UserMessagesComponentProps {
   emptyPrompt?: string;
   /** Optional draft text to prefill the composer once. */
   initialDraft?: string | null;
+  /** Increment to expand the embedded thread (e.g. from a header shortcut). */
+  expandSignal?: number;
+  /** Called after the thread has been marked read for the current user. */
+  onMessagesRead?: () => void;
 }
 
 export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
@@ -60,6 +64,8 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
   highlightMessageId = null,
   emptyPrompt,
   initialDraft = null,
+  expandSignal = 0,
+  onMessagesRead,
 }) => {
   const { t } = useTranslation();
   const isPage = variant === 'page';
@@ -144,10 +150,16 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
     if (isOrder) {
       orderMessagesHook.markMessagesRead(entityId, lastMessage.id);
     } else if (isRentalBooking) {
-      rentalMessagesHook.markMessagesRead(entityId, lastMessage.id);
+      void rentalMessagesHook
+        .markMessagesRead(entityId, lastMessage.id)
+        .then(() => onMessagesRead?.());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded, isPage, usesRestThread, isOrder, isRentalBooking, entityMessages.length]);
+
+  useEffect(() => {
+    if (expandSignal > 0) setExpanded(true);
+  }, [expandSignal]);
 
   useEffect(() => {
     if (!isPage || !highlightMessageId || !highlightRef.current) return;

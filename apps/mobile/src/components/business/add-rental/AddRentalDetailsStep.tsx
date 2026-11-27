@@ -11,6 +11,8 @@ import { useSupportedCurrencies } from '../../../hooks/business/useSupportedCurr
 import { rentalItemImagesApi } from '../../../services/rentalItemImagesApi';
 import type { RentalOperationMode } from '../../../types/rentals';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { addTags } from '../../../utils/rentals/rentalTags';
+import { RentalTagsInput } from '../rentals/RentalTagsInput';
 import {
   ItemFormOptionDialog,
   type FormOption,
@@ -20,13 +22,13 @@ import type { AddRentalDetailsForm } from '../../../hooks/business/useBusinessAd
 function rentalFormHasValues(
   name: string,
   description: string,
-  tagsText: string,
+  tags: string[],
   categoryIsDefaultOther: boolean
 ): boolean {
   return (
     name.trim() !== '' ||
     description.trim() !== '' ||
-    tagsText.trim() !== '' ||
+    tags.length > 0 ||
     !categoryIsDefaultOther
   );
 }
@@ -53,7 +55,7 @@ export function AddRentalDetailsStep({
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');
   const [currency, setCurrency] = useState('');
-  const [tagsText, setTagsText] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [operationMode, setOperationMode] =
     useState<RentalOperationMode>('business_operated');
   const [picker, setPicker] = useState<PickerKind>(null);
@@ -65,12 +67,12 @@ export function AddRentalDetailsStep({
   const fieldsRef = useRef({
     name: '',
     description: '',
-    tagsText: '',
+    tags: [] as string[],
     categoryId: '',
   });
   const otherCategoryId = getOtherRentalCategoryId(categories);
 
-  fieldsRef.current = { name, description, tagsText, categoryId };
+  fieldsRef.current = { name, description, tags, categoryId };
 
   useEffect(() => {
     if (defaultCurrency) setCurrency(defaultCurrency);
@@ -112,8 +114,8 @@ export function AddRentalDetailsStep({
           setCategoryId(data.rental_category_id);
           applied = true;
         }
-        if (data.suggested_tags?.length && (overwrite || !current.tagsText.trim())) {
-          setTagsText(data.suggested_tags.join(', '));
+        if (data.suggested_tags?.length && (overwrite || current.tags.length === 0)) {
+          setTags(addTags([], data.suggested_tags.join(',')));
           applied = true;
         }
         if (applied) setAiFilled(true);
@@ -142,12 +144,12 @@ export function AddRentalDetailsStep({
 
   const onAiPress = useCallback(() => {
     const isDefaultOther = !categoryId || categoryId === otherCategoryId;
-    if (rentalFormHasValues(name, description, tagsText, isDefaultOther)) {
+    if (rentalFormHasValues(name, description, tags, isDefaultOther)) {
       setOverwriteOpen(true);
       return;
     }
     void applyAi(false);
-  }, [applyAi, categoryId, description, name, otherCategoryId, tagsText]);
+  }, [applyAi, categoryId, description, name, otherCategoryId, tags]);
 
   const handleCreateCategory = useCallback(
     async (nameValue: string) => {
@@ -354,17 +356,7 @@ export function AddRentalDetailsStep({
         )}
       </Text>
 
-      <TextInput
-        label={t(
-          'business.rentals.wizard.details.tags',
-          'Tags (comma-separated)'
-        )}
-        value={tagsText}
-        onChangeText={setTagsText}
-        mode="outlined"
-        disabled={busy}
-        style={styles.field}
-      />
+      <RentalTagsInput value={tags} onChange={setTags} disabled={busy} />
 
       <Button
         mode="contained"
@@ -376,10 +368,7 @@ export function AddRentalDetailsStep({
             rental_category_id: categoryId,
             description: description.trim() || undefined,
             currency: currency || defaultCurrency || undefined,
-            tags: tagsText
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean),
+            tags,
             operation_mode: operationMode,
           })
         }

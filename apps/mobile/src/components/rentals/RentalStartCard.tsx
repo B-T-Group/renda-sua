@@ -4,8 +4,8 @@ import { Button, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { StickyActionCard } from '../common/StickyActionCard';
 import {
-  formatZonedDay,
   BOOKING_CLOCK,
   formatZonedTime,
   formatZonedWeekdayDay,
@@ -21,6 +21,7 @@ import { waitingForRenterTitle } from '../../utils/rentals/frenchElision';
 import { payBreakdown } from '../../utils/rentals/payBreakdown';
 import { PayBreakdownView, PayFooter } from './PayBreakdownView';
 import { payLabelStyle } from '../../utils/rentals/payButtonLabel';
+import { pickupAddressLink } from '../../utils/rentals/openPickupDirections';
 
 export interface StartCardBooking {
   status: string;
@@ -42,12 +43,13 @@ export interface StartCardBooking {
   rental_pricing_snapshot?: unknown;
 }
 
-interface Props {
+export interface RentalStartCardProps {
   booking: StartCardBooking;
   timeZone: string;
   role: 'client' | 'business';
   renterName?: string;
   place: string;
+  address?: string | null;
   money: string;
   returnLabel: string;
   starting?: boolean;
@@ -62,7 +64,7 @@ interface Props {
   actions?: React.ReactNode;
 }
 
-export function RentalStartCard(props: Props) {
+export function RentalStartCard(props: RentalStartCardProps) {
   const phase = cardPhase(props);
   if (phase === 'closed' && props.role === 'client') return null;
   return (
@@ -73,7 +75,7 @@ export function RentalStartCard(props: Props) {
   );
 }
 
-function cardPhase(props: Props): PickupPhase {
+function cardPhase(props: RentalStartCardProps): PickupPhase {
   const started = props.booking.status === 'active' || Boolean(props.booking.actual_start_at);
   return pickupPhase({
     now: props.now ?? Date.now(),
@@ -85,7 +87,7 @@ function cardPhase(props: Props): PickupPhase {
   });
 }
 
-function StartBody(props: Props & { phase: PickupPhase }) {
+function StartBody(props: RentalStartCardProps & { phase: PickupPhase }) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const when = formatZonedWeekdayDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
@@ -113,7 +115,6 @@ function StartBody(props: Props & { phase: PickupPhase }) {
           {t('rentals.earlyReturn.booked', 'Booked')} {bookedRange(props.booking, i18n.language, props.timeZone)}
         </Text>
       ) : null}
-      <StartButton {...props} day={when} momo={momo} card={card} />
       <NotCollected {...props} />
       {props.phase === 'started' ? props.actions : null}
       {props.phase === 'started' && props.role === 'client' ? props.missing : null}
@@ -121,7 +122,7 @@ function StartBody(props: Props & { phase: PickupPhase }) {
   );
 }
 
-function MoneyLine({ booking, role }: Props & { momo: boolean }) {
+function MoneyLine({ booking, role }: RentalStartCardProps & { momo: boolean }) {
   const { colors, typography } = useTheme();
   const lines = useStartMoneyLines(booking);
   if (role === 'business' || booking.status === 'active' || booking.actual_start_at) return null;
@@ -156,32 +157,42 @@ function SheetMoney({ booking }: { booking: StartCardBooking }) {
   );
 }
 
-function StartButton(props: Props & { phase: PickupPhase; day: string; momo: boolean; card: boolean }) {
-  const { t } = useTranslation();
-  const { colors } = useTheme();
-  if (props.role === 'business' || props.phase === 'started') return null;
-  const locked = props.phase === 'before' || props.phase === 'closed';
+/**
+ * The renter's primary pickup action (Pay & start / Start rental), for a bottom StickyActionCard
+ * rendered outside the scroll area. Null when there is nothing to start.
+ */
+export function RentalStartAction(props: RentalStartCardProps) {
+  const { t, i18n } = useTranslation();
+  const phase = cardPhase(props);
+  if (props.role === 'business' || phase === 'started' || phase === 'closed') return null;
+  const day = formatZonedWeekdayDay(props.booking.start_at, BOOKING_CLOCK, i18n.language);
+  const locked = phase === 'before';
+  const momo = isMomoDue(props.booking);
+  const card = isCardDue(props.booking);
   const label = locked
-    ? t('rentals.start.pickupOpens', 'Pickup opens {{day}}', { day: props.day })
-    : props.card || props.momo
+    ? t('rentals.start.pickupOpens', 'Pickup opens {{day}}', { day })
+    : card || momo
       ? t('rentals.payAtPickup.payAndStart', 'Pay & start · {{amount}}', { amount: props.money })
       : t('rentals.start.button', 'Start rental{{amount}}', { amount: '' });
   return (
-    <Button
-      mode="contained"
-      icon={locked ? 'lock' : props.card ? 'credit-card-outline' : props.momo ? 'cellphone' : 'play'}
+    <StickyActionCard
+      testID="rental-start-sticky"
+      summaryLabel={t('rentals.start.stickyPickupAt', 'Pickup at')}
+      summaryValue={props.place}
+      summaryVariant="place"
+      {...pickupAddressLink(props.address, t)}
+      actionTestID="rental-start-button"
+      actionLabel={label}
+      actionLabelStyle={payLabelStyle(label)}
+      actionIcon={locked ? 'lock' : card ? 'credit-card-outline' : momo ? 'cellphone' : 'play'}
       disabled={locked || props.starting}
       loading={props.starting}
-      buttonColor={locked ? colors.text.disabled : colors.primary.main}
-      onPress={props.onOpen}
-      style={{ minHeight: 48 }}
-    >
-      {label}
-    </Button>
+      onAction={props.onOpen}
+    />
   );
 }
 
-function NotCollected(props: Props & { phase: PickupPhase }) {
+function NotCollected(props: RentalStartCardProps & { phase: PickupPhase }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   if (props.role !== 'business' || props.phase !== 'started' || !props.onNotCollected) return null;
@@ -204,14 +215,14 @@ function SheetRow({ icon, label }: { icon: React.ComponentProps<typeof MaterialC
 }
 
 /** The sheet's one pay label (the card uses "Pay & start · …"). */
-function confirmLabel(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
+function confirmLabel(props: RentalStartCardProps, t: (key: string, fallback: string, vars?: Record<string, string>) => string): string {
   if (isCardDue(props.booking)) return t('rentals.payAtPickup.payButton', 'Pay {{amount}} · start rental', { amount: props.money });
   // MoMo: the short label fits one line in FR too (P&UX R2-2).
   if (isMomoDue(props.booking)) return t('rentals.payAtPickup.payButtonMomo', 'Pay {{amount}} & start', { amount: props.money });
   return t('rentals.actions.startRental', 'Start rental');
 }
 
-function LateLine(props: Props & { phase: PickupPhase }) {
+function LateLine(props: RentalStartCardProps & { phase: PickupPhase }) {
   const { t, i18n } = useTranslation();
   const { colors, typography } = useTheme();
   if (props.phase !== 'late') return null;
@@ -228,14 +239,14 @@ function LateLine(props: Props & { phase: PickupPhase }) {
  * Card return line. Business: only "Booked 2:00 PM – 4:00 PM" before the start, then
  * "Return by …" / "Retour prévu le …" (the due time). Renter: "Return by …" / "Retournez avant le …".
  */
-function cardReturnLine(props: Props & { phase: PickupPhase }, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
+function cardReturnLine(props: RentalStartCardProps & { phase: PickupPhase }, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
   if (props.role === 'business' && props.phase !== 'started') return bookedWindow(props, t, language);
   if (props.role === 'business') return t('rentals.start.returnDueBusiness', 'Return by {{when}}', { when: props.returnLabel });
   return t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel });
 }
 
 /** Business before the start: the booked window ("Booked 2:00 PM – 4:00 PM"), no early preview. */
-function bookedWindow(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
+function bookedWindow(props: RentalStartCardProps, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
   return t('rentals.start.bookedWindow', 'Booked {{start}} – {{end}}', {
     start: formatZonedTime(props.booking.start_at, BOOKING_CLOCK, language, props.timeZone),
     end: formatZonedTime(props.booking.end_at, BOOKING_CLOCK, language, props.timeZone),
@@ -243,13 +254,13 @@ function bookedWindow(props: Props, t: (key: string, fallback: string, vars?: Re
 }
 
 /** Renter Start sheet, hourly early start: the due time if the renter starts now. Otherwise the booked return. */
-function returnLine(props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
+function returnLine(props: RentalStartCardProps, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
   const preview = earlyReturnPreview(props.booking, props.now ?? Date.now(), props.timeZone);
   if (preview) return earlyReturnLine(preview, language, t);
   return t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel });
 }
 
-function ConfirmSheet(props: Props) {
+function ConfirmSheet(props: RentalStartCardProps) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, typography, borderRadius } = useTheme();
   const card = isCardDue(props.booking);
@@ -293,7 +304,7 @@ function pillText(phase: PickupPhase, day: string, t: (key: string, fallback: st
   return t('rentals.start.pickupToday', 'Pickup today');
 }
 
-function titleFor(phase: PickupPhase, when: string, time: string, props: Props, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
+function titleFor(phase: PickupPhase, when: string, time: string, props: RentalStartCardProps, t: (key: string, fallback: string, vars?: Record<string, string>) => string, language: string): string {
   if (props.role === 'business' && phase !== 'started') {
     return waitingForRenterTitle(props.renterName || t('rentals.renter', 'the renter'), language, t);
   }
@@ -310,7 +321,7 @@ function titleFor(phase: PickupPhase, when: string, time: string, props: Props, 
   return t('rentals.start.todayTitle', 'Pick up your item · {{time}}', { time });
 }
 
-function bodyFor(props: Props & { phase: PickupPhase }, momo: boolean, t: (key: string, fallback: string) => string, card = false): string {
+function bodyFor(props: RentalStartCardProps & { phase: PickupPhase }, momo: boolean, t: (key: string, fallback: string) => string, card = false): string {
   if (props.role === 'business' && props.phase !== 'started' && props.booking.payment_timing === 'pay_at_pickup') {
     return t('rentals.payAtPickup.businessWaitingBody', 'The renter checks the item and pays here. Don’t hand over the item until you see “Paid”.');
   }

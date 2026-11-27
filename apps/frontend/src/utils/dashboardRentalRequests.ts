@@ -9,6 +9,16 @@ const HOUR_MS = 60 * 60 * 1000;
 const CONTRACT_HOUR_CAP = 48;
 export const TOTAL_OVERRIDE_RATIO = 10;
 
+/** Rebate taken off the quote. Empty means no rebate. Returns the new total, or 'invalid'. */
+export function rebateToTotal(raw: string, quote: number): number | null | 'invalid' {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const rebate = Number(trimmed);
+  if (!Number.isFinite(rebate) || rebate <= 0) return 'invalid';
+  const next = Number((quote - rebate).toFixed(2));
+  return next > 0 ? next : 'invalid';
+}
+
 export function totalOverrideTooHigh(quote: number, value: number, ceiling: number | null = null): boolean {
   if (!(value > quote)) return false;
   if (ceiling != null && value > ceiling) return true;

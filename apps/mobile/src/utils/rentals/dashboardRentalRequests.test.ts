@@ -4,6 +4,7 @@ import {
   dashboardPeriodLabel,
   respondWithinAmber,
   respondWithinHours,
+  rebateToTotal,
   totalOverrideTooHigh,
 } from './dashboardRentalRequests';
 
@@ -29,6 +30,13 @@ describe('dashboard rental requests', () => {
     expect(totalOverrideTooHigh(0, 1_000_000)).toBe(false);
     expect(totalOverrideTooHigh(0, 40_000, 50_000)).toBe(false);
     expect(totalOverrideTooHigh(0, 60_000, 50_000)).toBe(true);
+  });
+
+  it('subtracts a rebate from the quote and rejects one that wipes it out', () => {
+    expect(rebateToTotal('', 40)).toBeNull();
+    expect(rebateToTotal('5', 40)).toBe(35);
+    expect(rebateToTotal('40', 40)).toBe('invalid');
+    expect(rebateToTotal('0', 40)).toBe('invalid');
   });
 
   it('shows booked days and the return morning for a multi-day stay', () => {

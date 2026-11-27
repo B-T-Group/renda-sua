@@ -11,6 +11,7 @@ const ROW_ICONS: Record<ReserveIcon, keyof typeof MaterialCommunityIcons.glyphMa
   pin: 'map-marker-outline',
   camera: 'camera-outline',
   timer: 'timer-sand',
+  refund: 'restore',
 };
 
 const LINE_ICONS = {
@@ -35,14 +36,21 @@ export function ReserveSummaryView({ summary, itemName, business }: { summary: R
           <View
             key={row.key}
             testID={`reserve-row-${row.key}`}
-            style={[styles.row, { paddingHorizontal: spacing.sm, paddingVertical: 10, borderTopColor: colors.divider, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
+            style={{ paddingHorizontal: spacing.sm, paddingVertical: 10, borderTopColor: colors.divider, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }}
           >
-            <MaterialCommunityIcons name={ROW_ICONS[row.icon]} size={18} color={colors.text.secondary} />
-            <Text style={{ color: colors.text.secondary, marginLeft: 8, flexShrink: 0, maxWidth: '40%' }}>{row.label}</Text>
-            <View style={{ flex: 1, alignItems: 'flex-end', marginLeft: 8 }}>
-              <Text style={{ color: colors.text.primary, fontWeight: '700', textAlign: 'right' }}>{row.value}</Text>
-              {row.sub ? <Text style={{ color: colors.text.secondary, fontSize: 12, textAlign: 'right' }}>{row.sub}</Text> : null}
+            <View style={styles.row}>
+              <MaterialCommunityIcons name={ROW_ICONS[row.icon]} size={18} color={colors.text.secondary} />
+              <Text style={{ color: colors.text.secondary, marginLeft: 8, flexShrink: 0, maxWidth: '40%' }}>{row.label}</Text>
+              {row.stacked ? null : (
+                <View style={{ flex: 1, alignItems: 'flex-end', marginLeft: 8 }}>
+                  <Text style={{ color: colors.text.primary, fontWeight: '700', textAlign: 'right' }}>{row.value}</Text>
+                  {row.sub ? <Text style={{ color: colors.text.secondary, fontSize: 12, textAlign: 'right' }}>{row.sub}</Text> : null}
+                </View>
+              )}
             </View>
+            {row.stacked ? (
+              <Text style={{ color: colors.text.primary, fontWeight: '700', marginTop: 4, marginLeft: 26 }}>{row.value}</Text>
+            ) : null}
           </View>
         ))}
       </View>
@@ -87,16 +95,24 @@ export function ReserveSummaryView({ summary, itemName, business }: { summary: R
   );
 }
 
-/** "Pay today" footer above the actions. */
+/** "Pay today" and "Pay at pickup" amounts, one labelled line each, above the actions. */
 export function ReserveFooter({ summary }: { summary: ReserveSummary }) {
   const { colors } = useTheme();
+  const lines = [
+    { key: 'today', line: summary.footer.today },
+    { key: 'pickup', line: summary.footer.pickup },
+  ];
   return (
-    <View style={styles.row} testID="reserve-footer">
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text.primary, fontWeight: '700' }}>{summary.footer.title}</Text>
-        <Text style={{ color: colors.text.secondary, fontSize: 12 }}>{summary.footer.sub}</Text>
-      </View>
-      <Text style={{ color: colors.text.primary, fontWeight: '800', fontSize: 18 }}>{summary.footer.amount}</Text>
+    <View testID="reserve-footer" style={{ gap: 8 }}>
+      {lines.map(({ key, line }) => (
+        <View key={key} style={styles.row} testID={`reserve-footer-${key}`}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text.primary, fontWeight: '700' }}>{line.title}</Text>
+            <Text style={{ color: colors.text.secondary, fontSize: 12 }}>{line.sub}</Text>
+          </View>
+          <Text style={{ color: colors.text.primary, fontWeight: '800', fontSize: 18, marginLeft: 12 }}>{line.amount}</Text>
+        </View>
+      ))}
     </View>
   );
 }

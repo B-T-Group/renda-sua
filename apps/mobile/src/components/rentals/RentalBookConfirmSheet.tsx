@@ -1,6 +1,8 @@
-import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useContext } from 'react';
+import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Button, Modal, Portal, Text } from 'react-native-paper';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { Button, IconButton, Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ClientRentalRequestRow } from '../../types/rentals';
@@ -35,8 +37,8 @@ export function RentalBookConfirmSheet({
   onConfirm,
 }: RentalBookConfirmSheetProps) {
   const { t, i18n } = useTranslation();
-  const { colors, typography, spacing, borderRadius, shadows } = useTheme();
-  const { width, height } = useWindowDimensions();
+  const { colors, typography, spacing } = useTheme();
+  const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0 };
 
   if (!row) return null;
 
@@ -93,52 +95,30 @@ export function RentalBookConfirmSheet({
     isStripeRail,
   });
 
-  const cardWidth = Math.min(width - spacing.lg * 2, 420);
+  const confirmLabel = summary
+    ? summary.button
+    : isStripeRail
+      ? t('rentals.clientRequests.bookConfirmButtonStripe', 'Continue to payment')
+      : t('rentals.clientRequests.bookConfirmButtonReserve', 'Reserve now');
 
   return (
-    <Portal>
-      {/*
-        Paper Dialog uses Surface (extra elevation layer on iOS → double bottom
-        edge). Style the Modal content container itself as the only card.
-      */}
-      <Modal
-        visible={visible}
-        onDismiss={onDismiss}
-        contentContainerStyle={[
-          styles.card,
-          shadows.md,
-          {
-            width: cardWidth,
-            maxHeight: height * 0.85,
-            alignSelf: 'center',
-            backgroundColor: colors.surface,
-            borderRadius: borderRadius.lg,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            typography.subtitle1,
-            {
-              color: colors.text.primary,
-              fontWeight: '700',
-              paddingHorizontal: spacing.md,
-              paddingTop: spacing.md,
-              paddingBottom: spacing.sm,
-            },
-          ]}
-        >
-          {t(
-            'rentals.clientRequests.bookConfirmTitle',
-            'Review and confirm your reservation'
-          )}
-        </Text>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onDismiss}>
+      <View style={[styles.screen, { backgroundColor: colors.surface, paddingTop: insets.top }]}>
+        <View style={[styles.header, { paddingHorizontal: spacing.xs, borderBottomColor: colors.divider }]}>
+          <IconButton
+            testID="book-confirm-close"
+            icon="close"
+            onPress={onDismiss}
+            disabled={loading}
+            accessibilityLabel={t('common.close', 'Close')}
+          />
+          <Text style={[typography.subtitle1, { color: colors.text.primary, fontWeight: '700', flex: 1 }]}>
+            {t('rentals.clientRequests.bookConfirmTitle', 'Review and confirm your reservation')}
+          </Text>
+        </View>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={{
-            paddingHorizontal: spacing.md,
-            paddingBottom: spacing.sm,
-          }}
+          contentContainerStyle={{ padding: spacing.md }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -211,47 +191,35 @@ export function RentalBookConfirmSheet({
             </>
           )}
         </ScrollView>
-        {summary ? (
-          <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, borderTopColor: colors.divider, borderTopWidth: StyleSheet.hairlineWidth }}>
-            <ReserveFooter summary={summary} />
-          </View>
-        ) : null}
         <View
           style={[
-            styles.actions,
+            styles.bottomBar,
             {
               borderTopColor: colors.divider,
-              paddingHorizontal: spacing.sm,
-              paddingVertical: spacing.xs,
+              paddingHorizontal: spacing.md,
+              paddingTop: spacing.sm,
+              paddingBottom: Math.max(insets.bottom, spacing.sm),
             },
           ]}
         >
-          <Button onPress={onDismiss} disabled={loading}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
+          {summary ? <ReserveFooter summary={summary} /> : null}
           <Button
             testID="book-confirm-button"
-            mode={mode === 'card_upfront' ? 'text' : 'contained'}
-            buttonColor={mode === 'card_upfront' ? undefined : colors.primary.main}
+            mode="contained"
+            buttonColor={colors.primary.main}
             icon={mode === 'fee' ? 'lock-outline' : mode === 'free' ? 'calendar-blank-outline' : undefined}
             loading={loading}
             onPress={onConfirm}
+            contentStyle={styles.confirmContent}
           >
-            {summary
-              ? summary.button
-              : isStripeRail
-              ? t(
-                  'rentals.clientRequests.bookConfirmButtonStripe',
-                  'Continue to payment'
-                )
-              : t(
-                  'rentals.clientRequests.bookConfirmButtonReserve',
-                  'Reserve now'
-                )}
+            {confirmLabel}
+          </Button>
+          <Button onPress={onDismiss} disabled={loading}>
+            {t('common.cancel', 'Cancel')}
           </Button>
         </View>
-      </Modal>
-    </Portal>
+      </View>
+    </Modal>
   );
 }
 
@@ -417,16 +385,22 @@ function DetailRow({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    overflow: 'hidden',
+  screen: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   scroll: {
-    flexGrow: 0,
+    flex: 1,
   },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+  bottomBar: {
+    gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  confirmContent: {
+    paddingVertical: 6,
   },
 });

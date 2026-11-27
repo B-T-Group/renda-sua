@@ -11,6 +11,8 @@ import { waitingForRenterTitle } from '../../utils/rentals/frenchElision';
 import { payBreakdown } from '../../utils/rentals/payBreakdown';
 import { PayBreakdownBox, PayFooter } from './PayBreakdownBox';
 import { clockRange } from '../../utils/rentals/reserveSummary';
+import { StickyActionCard } from '../common/StickyActionCard';
+import { pickupAddressLink } from '../../utils/pickupAddressLink';
 
 export interface StartPanelBooking {
   status: string;
@@ -38,6 +40,7 @@ interface Props {
   role: 'client' | 'business';
   renterName?: string;
   place: string;
+  address?: string | null;
   money: string;
   returnLabel: string;
   starting?: boolean;
@@ -119,20 +122,26 @@ export function RentalStartPanel(props: Props) {
             : t('rentals.start.returnBy', 'Return by {{when}}', { when: props.returnLabel })}
       </Typography>
       {props.role === 'client' && phase !== 'started' ? (
-        <Button
-          variant="contained"
+        <StickyActionCard
+          testId="rental-start-sticky"
+          actionTestId="rental-start-button"
+          actionColor={pays ? 'cta' : 'primary'}
+          summaryLabel={t('rentals.start.stickyPickupAt', 'Pickup at')}
+          summaryValue={props.place}
+          summaryVariant="place"
+          {...pickupAddressLink(props.address, t)}
+          actionIcon={locked ? <Lock /> : card ? <CreditCard /> : momo ? <PhoneIphone /> : <PlayArrow />}
           disabled={locked || props.starting}
-          startIcon={locked ? <Lock /> : card ? <CreditCard /> : momo ? <PhoneIphone /> : <PlayArrow />}
-          onClick={() => setOpen(true)}
-          sx={{ mt: 1.5 }}
-          data-testid="rental-start-button"
-        >
-          {locked
-            ? t('rentals.start.pickupOpens', 'Pickup opens {{day}}', { day: when })
-            : pays
-              ? t('rentals.payAtPickup.payAndStart', 'Pay & start · {{amount}}', { amount: props.money })
-              : t('rentals.start.button', 'Start rental{{amount}}', { amount: '' })}
-        </Button>
+          loading={props.starting}
+          onAction={() => setOpen(true)}
+          actionLabel={
+            locked
+              ? t('rentals.start.pickupOpens', 'Pickup opens {{day}}', { day: when })
+              : pays
+                ? t('rentals.payAtPickup.payAndStart', 'Pay & start · {{amount}}', { amount: props.money })
+                : t('rentals.start.button', 'Start rental{{amount}}', { amount: '' })
+          }
+        />
       ) : null}
       {props.role === 'business' && phase === 'started' && props.onNotCollected ? (
         <Button color="error" startIcon={<HelpOutline />} onClick={props.onNotCollected} sx={{ mt: 1 }}>

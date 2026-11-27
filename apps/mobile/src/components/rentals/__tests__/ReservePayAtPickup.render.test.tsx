@@ -1,6 +1,7 @@
 /** Reserve now, pay at pickup: reserve sheet (fee on/off), booking payment card, card Pay & start. */
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { Linking } from 'react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { I18nextProvider } from 'react-i18next';
 import { PaperProvider } from 'react-native-paper';
 import { paperTheme } from '../../../theme/paperTheme';
@@ -9,7 +10,7 @@ import i18n from '../../../i18n';
 import type { ClientRentalRequestRow } from '../../../types/rentals';
 import { PayAtPickupCard } from '../PayAtPickupCard';
 import { RentalBookConfirmSheet } from '../RentalBookConfirmSheet';
-import { RentalStartCard, type StartCardBooking } from '../RentalStartCard';
+import { RentalStartAction, RentalStartCard, type RentalStartCardProps, type StartCardBooking } from '../RentalStartCard';
 
 const NOW = Date.parse('2026-11-28T15:00:00Z');
 
@@ -57,6 +58,11 @@ describe('Reserve now, pay at pickup', () => {
     await renderSheet(offer('XAF', 12000, { id: 'b1', status: 'proposed', reservation_fee_amount: 0 }), false);
     expect(screen.getByText('Reserve · pay at pickup')).toBeTruthy();
     expect(screen.getByText(/Nothing to pay today/)).toBeTruthy();
+    expect(screen.queryByText(/Free cancellation until/)).toBeNull();
+    expect(screen.getByTestId('reserve-row-cancel')).toBeTruthy();
+    expect(screen.getByTestId('reserve-footer-today')).toBeTruthy();
+    expect(screen.getByTestId('reserve-footer-pickup')).toBeTruthy();
+    expect(screen.getByText('Pay at pickup')).toBeTruthy();
     expect(screen.queryByTestId('book-confirm-fee-rules')).toBeNull();
   });
 
@@ -114,21 +120,24 @@ describe('Reserve now, pay at pickup', () => {
       reservation_fee_status: 'paid',
       security_deposit_amount: 180,
     };
+    const startProps: RentalStartCardProps = {
+      booking,
+      timeZone: 'America/Toronto',
+      role: 'client',
+      place: 'Sono',
+      address: '12 Rue Principale, Montreal, QC, Canada',
+      money: '$59.00',
+      returnLabel: 'Sat 28 Nov · 6:00 PM',
+      open: true,
+      onOpen: () => undefined,
+      onClose: () => undefined,
+      onConfirm: () => undefined,
+      now: NOW,
+    };
     await renderWithProviders(
       <ThemeProvider>
-        <RentalStartCard
-          booking={booking}
-          timeZone="America/Toronto"
-          role="client"
-          place="Sono"
-          money="$59.00"
-          returnLabel="Sat 28 Nov · 6:00 PM"
-          open
-          onOpen={() => undefined}
-          onClose={() => undefined}
-          onConfirm={() => undefined}
-          now={NOW}
-        />
+        <RentalStartCard {...startProps} />
+        <RentalStartAction {...startProps} />
       </ThemeProvider>
     );
     expect(screen.getAllByText('Pay & start · $59.00').length).toBeGreaterThanOrEqual(1);
@@ -140,5 +149,11 @@ describe('Reserve now, pay at pickup', () => {
     expect(screen.getByText('$239.00 on your card today · $180.00 of it is a hold')).toBeTruthy();
     expect(screen.getByText('Pick up your item · 2:00 PM')).toBeTruthy();
     expect(screen.queryByText(/held on your card/)).toBeNull();
+    expect(screen.getByTestId('sticky-summary-address').props.children).toBe('12 Rue Principale, Montreal, QC, Canada');
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    fireEvent.press(screen.getByLabelText('Get directions to 12 Rue Principale, Montreal, QC, Canada'));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(String(open.mock.calls[0][0])).toMatch(/(daddr|destination|q)=12%20Rue%20Principale/);
+    open.mockRestore();
   });
 });
