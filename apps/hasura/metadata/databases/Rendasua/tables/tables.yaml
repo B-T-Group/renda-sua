@@ -182,6 +182,7 @@
 - "!include public_rental_booking_windows.yaml"
 - "!include public_rental_booking_units.yaml"
 - "!include public_rental_bookings.yaml"
+- "!include public_rental_commission_rules.yaml"
 - "!include public_rental_custody_events.yaml"
 - "!include public_rental_inspection_acks.yaml"
 - "!include public_rental_inspection_disputes.yaml"

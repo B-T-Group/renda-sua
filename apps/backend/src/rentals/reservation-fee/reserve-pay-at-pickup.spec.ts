@@ -5,6 +5,7 @@
  */
 import { HttpException } from '@nestjs/common';
 import { RentalsService } from '../rentals.service';
+import { commissionOffStub } from '../../rental-commission/rental-commission.test-util';
 import { RentalsCronService } from '../rentals-cron.service';
 import * as Q from '../rentals-queries';
 import {
@@ -78,6 +79,7 @@ function momoBooking(over: Row = {}): Row {
 
 function harness(initial: Row, opts: { inspection?: Row; walletBalance?: number; flaggedPickup?: boolean } = {}) {
   const svc: any = Object.create(RentalsService.prototype);
+  svc.commission = commissionOffStub();
   const row: Row = { ...initial };
   const ledger: Array<{ type: string; amount: number; key?: string }> = [];
   const gate = {

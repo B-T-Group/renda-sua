@@ -284,6 +284,7 @@ export const GET_RENTAL_REQUEST_FULL = `
           rental_item {
           id
           business_id
+          rental_category_id
           currency
           is_active
           name
@@ -610,6 +611,11 @@ export const GET_RENTAL_BOOKING_FULL = `
       rental_start_overwrite_code_hash
       rental_start_overwrite_code_used_at
       period_ended_notified_at
+      commission_status
+      commission_rate_bps
+      commission_base_amount
+      commission_amount
+      merchant_payout_amount
       client { id user_id user { first_name } }
       business { id user_id name }
       rental_location_listing {
