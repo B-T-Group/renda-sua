@@ -151,7 +151,8 @@ describe('Reserve now, pay at pickup', () => {
     expect(screen.queryByText(/held on your card/)).toBeNull();
     expect(screen.getByTestId('sticky-summary-address').props.children).toBe('12 Rue Principale, Montreal, QC, Canada');
     const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
-    fireEvent.press(screen.getByLabelText('Get directions to 12 Rue Principale, Montreal, QC, Canada'));
+    expect(screen.getByTestId('sticky-summary-address').props.onPress).toBeUndefined();
+    fireEvent.press(screen.getByLabelText(/^Get directions to /));
     expect(open).toHaveBeenCalledTimes(1);
     expect(String(open.mock.calls[0][0])).toMatch(/(daddr|destination|q)=12%20Rue%20Principale/);
     open.mockRestore();

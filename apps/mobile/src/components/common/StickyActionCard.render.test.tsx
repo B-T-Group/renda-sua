@@ -32,19 +32,21 @@ describe('StickyActionCard', () => {
     expect(screen.getByTestId('sticky-summary-address').props.children).toBe('12 Rue Principale, Montreal, QC, Canada');
   });
 
-  it('turns the address into a link that fires its handler', async () => {
-    const onSummaryDetailPress = jest.fn();
+  it('turns the place name into a link and keeps the address plain', async () => {
+    const onSummaryValuePress = jest.fn();
     await renderCard({
       summaryVariant: 'place',
       summaryLabel: 'Pickup at',
       summaryValue: 'Stripe Rail',
       summaryDetail: '12 Rue Principale',
-      onSummaryDetailPress,
-      summaryDetailAccessibilityLabel: 'Get directions to 12 Rue Principale',
+      onSummaryValuePress,
+      summaryValueAccessibilityLabel: 'Get directions to Stripe Rail',
     });
-    expect(screen.getByLabelText('Get directions to 12 Rue Principale').props.accessibilityRole).toBe('link');
-    fireEvent.press(screen.getByTestId('sticky-summary-address'));
-    expect(onSummaryDetailPress).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Get directions to Stripe Rail').props.accessibilityRole).toBe('link');
+    expect(screen.getByTestId('sticky-summary-address').props.accessibilityRole).toBeUndefined();
+    expect(screen.getByTestId('sticky-summary-address').props.onPress).toBeUndefined();
+    fireEvent.press(screen.getByText('Stripe Rail'));
+    expect(onSummaryValuePress).toHaveBeenCalledTimes(1);
   });
 
   it('omits the address line when none is given', async () => {

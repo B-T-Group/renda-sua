@@ -17,9 +17,9 @@ export interface StickyActionCardProps {
   /** `place` shows the label and value at one size with `summaryDetail` (an address) underneath. */
   summaryVariant?: 'amount' | 'place';
   summaryDetail?: string | null;
-  /** Makes `summaryDetail` a tappable link (for example opening directions). */
-  onSummaryDetailPress?: () => void;
-  summaryDetailAccessibilityLabel?: string;
+  /** Makes `summaryValue` (the place name) a tappable link, for example opening directions. */
+  onSummaryValuePress?: () => void;
+  summaryValueAccessibilityLabel?: string;
   /** Struck-through previous amount shown before the value. */
   summaryPrevious?: string;
   /** One line of context under the summary (legal copy, blocked reason). */
@@ -69,32 +69,37 @@ function PlaceSummary(props: StickyActionCardProps) {
     <View style={styles.place}>
       <Text style={styles.placeLine} numberOfLines={2}>
         <Text style={[styles.placeText, { color: colors.text.secondary }]}>{props.summaryLabel} </Text>
-        <Text testID={props.summaryValueTestID} style={[styles.placeText, styles.placeName, { color: colors.text.primary }]}>
-          {props.summaryValue}
-        </Text>
+        <PlaceName {...props} />
       </Text>
-      {props.summaryDetail ? <PlaceAddress {...props} /> : null}
+      {props.summaryDetail ? (
+        <Text
+          testID="sticky-summary-address"
+          style={[styles.placeText, styles.placeAddress, { color: colors.text.primary }]}
+          numberOfLines={3}
+        >
+          {props.summaryDetail}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
-function PlaceAddress(props: StickyActionCardProps) {
+function PlaceName(props: StickyActionCardProps) {
   const { colors } = useTheme();
-  const link = Boolean(props.onSummaryDetailPress);
+  const link = Boolean(props.onSummaryValuePress);
   return (
     <Text
-      testID="sticky-summary-address"
+      testID={props.summaryValueTestID}
       accessibilityRole={link ? 'link' : undefined}
-      accessibilityLabel={link ? props.summaryDetailAccessibilityLabel : undefined}
-      onPress={props.onSummaryDetailPress}
+      accessibilityLabel={link ? props.summaryValueAccessibilityLabel : undefined}
+      onPress={props.onSummaryValuePress}
       style={[
         styles.placeText,
-        styles.placeAddress,
-        { color: link ? colors.primary.main : colors.text.primary, textDecorationLine: link ? 'underline' : 'none', paddingVertical: link ? 4 : 0 },
+        styles.placeName,
+        { color: link ? colors.primary.main : colors.text.primary, textDecorationLine: link ? 'underline' : 'none' },
       ]}
-      numberOfLines={3}
     >
-      {props.summaryDetail}
+      {props.summaryValue}
     </Text>
   );
 }

@@ -14,7 +14,7 @@ import { earlyReturnLine, earlyReturnPreview } from '../../../utils/rentals/retu
 import type { PayBreakdown } from '../../../utils/rentals/payBreakdown';
 import { PayBreakdownView, PayFooter } from '../PayBreakdownView';
 import { payLabelStyle } from '../../../utils/rentals/payButtonLabel';
-import { pickupAddressLink } from '../../../utils/rentals/openPickupDirections';
+import { pickupPlaceLink } from '../../../utils/rentals/openPickupDirections';
 
 const REASON_ORDER = ['photo_mismatch', 'wear_hidden', 'missing_accessory', 'wrong_unit'] as const;
 
@@ -348,7 +348,7 @@ function StartFooter(props: Props) {
       summaryLabel={t('rentals.start.stickyPickupAt', 'Pickup at')}
       summaryValue={props.place}
       summaryVariant="place"
-      {...pickupAddressLink(props.address, t)}
+      {...pickupPlaceLink(props.place, props.address, t)}
       actionTestID="pickup-start-button"
       actionLabel={payLabel}
       actionLabelStyle={payLabelStyle(payLabel)}

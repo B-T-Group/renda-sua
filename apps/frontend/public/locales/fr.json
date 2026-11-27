@@ -7288,7 +7288,7 @@
       "startedBanner": "Location démarrée à {{time}}. L’entreprise a été prévenue pour remettre l’article.",
       "pickupOpens": "Retrait dès le {{day}}",
       "stickyPickupAt": "Retrait chez",
-      "directionsTo": "Obtenir l’itinéraire vers {{address}}",
+      "directionsTo": "Obtenir l’itinéraire vers {{name}}",
       "bookedDay": "Réservé le {{day}} · {{range}}"
     },
     "business": {
