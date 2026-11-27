@@ -8,6 +8,9 @@ object_relationships:
   - name: order
     using:
       foreign_key_constraint_on: order_id
+  - name: rental_booking
+    using:
+      foreign_key_constraint_on: rental_booking_id
   - name: recipient_user
     using:
       foreign_key_constraint_on: recipient_user_id

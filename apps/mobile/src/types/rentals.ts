@@ -238,6 +238,7 @@ export interface ClientRentalBookingRow {
 
 export interface RentalBookingDetail {
   id: string;
+  merchant_earnings?: RentalMerchantEarnings | null;
   booking_number?: string | null;
   status: RentalBookingStatus | string;
   start_at: string;
@@ -512,6 +513,31 @@ export interface RespondRentalRequestBody {
   unavailableReasonCode?: UnavailableRentalReasonCode;
   businessResponseNote?: string;
   expectedVersion?: number;
+  /** Rate (basis points) the business saw in the commission preview; the server rejects a stale one. */
+  acknowledgedCommissionRateBps?: number;
+}
+
+export interface RentalCommissionPreview {
+  enabled: boolean;
+  currency: string;
+  base_amount: number;
+  rate_bps: number;
+  commission_amount: number;
+  merchant_payout_amount: number;
+  source?: string;
+  campaign_code?: string | null;
+  promo_ends_at?: string | null;
+}
+
+/** Business-only booking earnings. Never present for the renter. */
+export interface RentalMerchantEarnings {
+  status: 'quoted' | 'earned' | 'reversed' | 'waived';
+  currency: string;
+  rate_bps: number | null;
+  base_amount: number | null;
+  commission_amount: number | null;
+  merchant_payout_amount: number | null;
+  commission_campaign_code: string | null;
 }
 
 export interface BusinessRentalRequestRow {

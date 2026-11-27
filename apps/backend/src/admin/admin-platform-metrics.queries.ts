@@ -37,7 +37,11 @@ function orderWindow(hasCountry: boolean, extra = ''): string {
 
 function payoutCountry(hasCountry: boolean): string {
   if (!hasCountry) return '';
-  return `order: { business_location: { address: { country: { _eq: $country } } } }`;
+  const inCountry = '{ business_location: { address: { country: { _eq: $country } } } }';
+  return `_or: [
+    { order: ${inCountry} }
+    { rental_booking: { rental_location_listing: ${inCountry} } }
+  ]`;
 }
 
 function businessCountry(hasCountry: boolean): string {

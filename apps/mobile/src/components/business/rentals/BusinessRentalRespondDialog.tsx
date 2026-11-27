@@ -24,9 +24,14 @@ import { buildRequestCardModel } from '../../../utils/rentals/rentalRequestCardM
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useClientFlags } from '../../../contexts/ClientFlagsContext';
 import { rentalsApi } from '../../../services/rentalsApi';
+import { RentalCommissionBreakdown } from '../../rentals/RentalCommissionBreakdown';
 
 function isStaleVersion(error: unknown): boolean {
   return (error as { code?: string }).code === 'RENTAL_REQUEST_STALE_VERSION';
+}
+
+function isCommissionRateChanged(error: unknown): boolean {
+  return (error as { code?: string }).code === 'COMMISSION_RATE_CHANGED';
 }
 
 const REASON_CODES: UnavailableRentalReasonCode[] = [
@@ -84,6 +89,8 @@ export function BusinessRentalRespondDialog({
   const [reasonMenu, setReasonMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [commissionBps, setCommissionBps] = useState<number | null>(null);
+  const [commissionRefresh, setCommissionRefresh] = useState(0);
 
   const startIso = request ? requestStartIso(request) : null;
   const hourOffer = contractHoursOffer(startIso, new Date(), request?.listing_timezone);
@@ -146,6 +153,7 @@ export function BusinessRentalRespondDialog({
         contractExpiryHours: h,
         businessResponseNote: availableNote.trim() || undefined,
         expectedVersion: request.edit_version ?? 1,
+        acknowledgedCommissionRateBps: commissionBps ?? undefined,
       });
       onSuccess();
       resetAndClose();
@@ -155,11 +163,16 @@ export function BusinessRentalRespondDialog({
         resetAndClose();
         return;
       }
+      if (isCommissionRateChanged(e)) {
+        setCommissionRefresh((n) => n + 1);
+        setError(t('rentals.commission.rateChanged', 'The commission changed. Review the new numbers, then accept again.'));
+        return;
+      }
       setError(respondErrorText(e, i18n.language, t));
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, canChangeTotal, contractHours, i18n.language, onStale, onSuccess, rebate, request, resetAndClose, t]);
+  }, [availableNote, canChangeTotal, commissionBps, contractHours, i18n.language, onStale, onSuccess, rebate, request, resetAndClose, t]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -258,6 +271,14 @@ export function BusinessRentalRespondDialog({
                       </Text>
                     </Pressable>
                   </View>
+                ) : null}
+                {request ? (
+                  <RentalCommissionBreakdown
+                    requestId={request.id}
+                    totalOverride={canChangeTotal && newTotal != null ? newTotal : undefined}
+                    refreshKey={commissionRefresh}
+                    onRateChange={setCommissionBps}
+                  />
                 ) : null}
                 {hourOffer.hidden ? null : (
                   <TextInput

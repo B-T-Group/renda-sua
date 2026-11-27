@@ -30,6 +30,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useRentalBookingUnreadCount } from '../../hooks/useRentalBookingUnreadCount';
 import { useRentalInspection } from '../../hooks/useRentalInspection';
 import { RentalMessagesButton } from '../rentals/RentalMessagesButton';
+import { MerchantEarningsCard } from '../rentals/MerchantEarningsCard';
 import LoadingPage from '../common/LoadingPage';
 import { UserMessagesComponent } from '../common/UserMessagesComponent';
 import {
@@ -1238,6 +1239,10 @@ const RentalBookingDetailPage: React.FC = () => {
                 </Box>
               </Stack>
             </Paper>
+
+            {isBusiness && booking.merchant_earnings ? (
+              <MerchantEarningsCard earnings={booking.merchant_earnings} />
+            ) : null}
 
             {isBusiness && booking.client?.user ? (
               <Paper

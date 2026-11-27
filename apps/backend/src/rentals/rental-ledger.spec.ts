@@ -1,6 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { RentalsService } from './rentals.service';
+import { commissionOffStub } from '../rental-commission/rental-commission.test-util';
 import { assertLedgerResult, rentalLedgerKey, rentalProceedsLeg } from './rental-ledger';
 import {
   decideRentalMomoRetry,
@@ -80,6 +81,7 @@ describe('rental ledger keys', () => {
 
 describe('rental ledger moves', () => {
   const svc: any = Object.create(RentalsService.prototype);
+  svc.commission = commissionOffStub();
 
   it('does not mark the hold released when the release ledger fails', async () => {
     svc.getHold = jest.fn().mockResolvedValue({
@@ -324,6 +326,7 @@ describe('rental hold attempts against the ledger', () => {
   it('places a new hold after a revert and leaves the winner funded when a duplicate insert loses', async () => {
     const mem = memoryLedger();
     const svc: any = Object.create(RentalsService.prototype);
+    svc.commission = commissionOffStub();
     svc.logger = { error: jest.fn() };
     svc.hasuraSystemService = mem.hasura;
     svc.accountsService = new AccountsService(mem.hasura as any);
@@ -359,6 +362,7 @@ describe('rental hold attempts against the ledger', () => {
   it('releases a hold that lands after cancel already looked, and a second release does not move money', async () => {
     const mem = memoryLedger();
     const svc: any = Object.create(RentalsService.prototype);
+    svc.commission = commissionOffStub();
     svc.logger = { error: jest.fn() };
     svc.hasuraSystemService = mem.hasura;
     svc.accountsService = new AccountsService(mem.hasura as any);
@@ -393,6 +397,7 @@ describe('rental hold attempts against the ledger', () => {
   it('keeps the hold and the withheld balance when the paid stamp wins', async () => {
     const mem = memoryLedger();
     const svc: any = Object.create(RentalsService.prototype);
+    svc.commission = commissionOffStub();
     svc.logger = { error: jest.fn() };
     svc.hasuraSystemService = mem.hasura;
     svc.accountsService = new AccountsService(mem.hasura as any);

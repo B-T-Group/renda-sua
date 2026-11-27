@@ -1,6 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import * as Q from './rentals-queries';
 import { RentalsService } from './rentals.service';
+import { commissionOffStub } from '../rental-commission/rental-commission.test-util';
 import {
   RespondRentalRequestStatusDto,
   UnavailableRentalReasonCode,
@@ -57,6 +58,7 @@ describe('RentalsService rental request edits', () => {
       deleteBooking: jest.Mock;
       emailClientRentalRequestAccepted: jest.Mock;
     };
+    (service as any).commission = commissionOffStub();
     service.hasuraUserService = {
       getUser: jest.fn().mockResolvedValue({
         id: 'client-user',
@@ -420,6 +422,7 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
     });
     let fetches = 0;
     const service = Object.create(RentalsService.prototype) as any;
+    service.commission = commissionOffStub();
     service.hasuraUserService = {
       getUser: jest.fn().mockResolvedValue({
         id: 'biz-user',
@@ -497,6 +500,42 @@ describe('RentalsService.respondToRentalRequest version gate', () => {
       expect(codeOf(error)).toBe('RENTAL_REQUEST_STALE_VERSION');
     }
     expect(service.deleteBooking).toHaveBeenCalledWith('booking-1');
+  });
+
+  describe('commission at accept', () => {
+    const quote = {
+      rate: { rateBps: 1500, source: 'default', ruleId: 'r1', campaignCode: null },
+      commissionAmount: 114,
+      merchantPayoutAmount: 646,
+    };
+
+    it('freezes the quote on the new booking after it is inserted', async () => {
+      const { service } = responder(pendingRequest());
+      service.commission.quote = jest.fn().mockResolvedValue(quote);
+      await service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1, acknowledgedCommissionRateBps: 1500 });
+      expect(service.commission.freeze).toHaveBeenCalledWith('booking-1', quote);
+    });
+
+    it('stops with COMMISSION_RATE_CHANGED before inserting anything', async () => {
+      const { service } = responder(pendingRequest());
+      service.commission.quote = jest.fn().mockResolvedValue(quote);
+      service.commission.assertAcknowledged = jest.fn(() => {
+        throw new HttpException({ code: 'COMMISSION_RATE_CHANGED' }, 409);
+      });
+      await expect(
+        service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1, acknowledgedCommissionRateBps: 1000 })
+      ).rejects.toMatchObject({ status: 409 });
+      expect(service.insertProposedBookingRow).not.toHaveBeenCalled();
+      expect(service.commission.freeze).not.toHaveBeenCalled();
+    });
+
+    it('removes the booking when the freeze fails', async () => {
+      const { service } = responder(pendingRequest());
+      service.commission.quote = jest.fn().mockResolvedValue(quote);
+      service.commission.freeze = jest.fn().mockRejectedValue(new Error('hasura down'));
+      await expect(service.respondToRentalRequest('request-1', { ...accept, expectedVersion: 1 })).rejects.toBeDefined();
+      expect(service.deleteBooking).toHaveBeenCalledWith('booking-1');
+    });
   });
 
   it('requires a version while the flag is on', async () => {

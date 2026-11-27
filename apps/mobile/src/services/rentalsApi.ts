@@ -22,6 +22,7 @@ import type {
   RentalListingRow,
   RentalListingsPage,
   RentalTakenWindow,
+  RentalCommissionPreview,
   RespondRentalRequestBody,
   TopRentalLocationRow,
   UpdateBusinessRentalItemBody,
@@ -596,6 +597,18 @@ export async function respondToRequest(
   );
 }
 
+export async function getCommissionPreview(
+  requestId: string,
+  totalOverride?: number
+): Promise<RentalCommissionPreview> {
+  const query = totalOverride != null ? `?totalOverride=${encodeURIComponent(String(totalOverride))}` : '';
+  const res = await apiRequest<{ success: boolean; data: RentalCommissionPreview }>(
+    `/rentals/business/requests/${encodeURIComponent(requestId)}/commission-preview${query}`,
+    { method: 'GET' }
+  );
+  return res.data;
+}
+
 export async function dismissExpiryNotice(requestId: string): Promise<RentalApiSuccess> {
   return apiRequest(
     `/rentals/requests/${encodeURIComponent(requestId)}/dismiss-expiry-notice`,
@@ -762,6 +775,7 @@ export const rentalsApi = {
   getDashboardRequests,
   getReturnConfirmations,
   respondToRequest,
+  getCommissionPreview,
   dismissExpiryNotice,
   getBusinessSchedule,
   confirmReturn,
