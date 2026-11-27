@@ -4739,7 +4739,8 @@
       "lane": {
         "shop": "Boutique",
         "food": "Repas",
-        "rentals": "Locations"
+        "rentals": "Locations",
+        "exports": "Export"
       },
       "forYou": "Pour vous",
       "buyAgain": "Racheter"

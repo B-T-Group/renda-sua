@@ -5017,7 +5017,8 @@
       "lane": {
         "shop": "Shop",
         "food": "Food",
-        "rentals": "Rentals"
+        "rentals": "Rentals",
+        "exports": "Exports"
       },
       "forYou": "For you",
       "buyAgain": "Buy again"
