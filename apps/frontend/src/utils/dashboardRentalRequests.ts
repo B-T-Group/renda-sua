@@ -140,10 +140,3 @@ export function startInDays(calendarDate: string | undefined, timeZone: string, 
   if (!Number.isFinite(start) || !Number.isFinite(todayMs)) return null;
   return Math.round((start - todayMs) / DAY_MS);
 }
-
-export function requestPhotoUrl(row: BusinessRentalRequestRow): string | null {
-  const image = row.rental_location_listing.rental_item.rental_item_images?.[0] as
-    | { display_url?: string | null; image_url?: string | null; thumbnail?: string | null }
-    | undefined;
-  return image?.display_url || image?.thumbnail || image?.image_url || null;
-}

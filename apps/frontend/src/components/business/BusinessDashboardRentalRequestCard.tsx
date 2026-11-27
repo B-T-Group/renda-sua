@@ -1,16 +1,13 @@
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
-import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import HandymanOutlinedIcon from '@mui/icons-material/HandymanOutlined';
-import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import { Box, Chip, IconButton, Stack, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BusinessRentalRequestRow } from '../../hooks/useRentalApi';
-import { requestPhotoUrl, respondWithinAmber, respondWithinHours } from '../../utils/dashboardRentalRequests';
+import { respondWithinAmber, respondWithinHours } from '../../utils/dashboardRentalRequests';
 import { buildRequestCardModel, type RequestCardModel } from '../../utils/rentalRequestCardModel';
+import { RentalItemThumb } from './RentalItemThumb';
 
 export function BusinessDashboardRentalRequestCard({
   request,
@@ -45,7 +42,7 @@ export function BusinessDashboardRentalRequestCard({
       }}
     >
       <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', minWidth: 0, flex: 1 }}>
-        <ItemThumb request={request} />
+        <RentalItemThumb item={request.rental_location_listing.rental_item} />
         <CardCopy model={model} hours={hours} amber={amber} open={open} onToggle={() => setOpen((value) => !value)} />
       </Box>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0, alignSelf: { xs: 'flex-end', sm: 'flex-start' } }}>
@@ -84,35 +81,6 @@ function CardCopy({
       {model.sentClock ? <Typography variant="caption" color="text.secondary" display="block">{t('rentals.requestCard.sent', 'Sent {{time}}', { time: model.sentClock })}</Typography> : null}
     </Box>
   );
-}
-
-function ItemThumb({ request }: { request: Parameters<typeof requestPhotoUrl>[0] }) {
-  const url = requestPhotoUrl(request);
-  const [failed, setFailed] = useState(false);
-  if (url && !failed) {
-    return (
-      <Box
-        component="img"
-        src={url}
-        alt=""
-        onError={() => setFailed(true)}
-        sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: 'cover', flexShrink: 0, bgcolor: 'action.hover' }}
-      />
-    );
-  }
-  const Icon = categoryIcon(request.rental_location_listing.rental_item.rental_category?.name || request.rental_location_listing.rental_item.name);
-  return (
-    <Box sx={{ width: 56, height: 56, borderRadius: 1.5, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <Icon color="action" />
-    </Box>
-  );
-}
-
-function categoryIcon(name: string) {
-  if (/camera|photo|caméra|appareil/i.test(name)) return PhotoCameraOutlinedIcon;
-  if (/equipment|équipement|equipement|tool|outil|light/i.test(name)) return HandymanOutlinedIcon;
-  if (/power|électr|electr|éclair/i.test(name)) return BoltOutlinedIcon;
-  return CategoryOutlinedIcon;
 }
 
 function CardChips({ model }: { model: RequestCardModel }) {

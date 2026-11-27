@@ -183,6 +183,36 @@ export interface RentalSelectionWindow {
   calendar_date?: string;
 }
 
+/** A booking the renter reported returned that the business still has to confirm. */
+export interface BusinessReturnConfirmationRow {
+  id: string;
+  booking_number?: string | null;
+  status: string;
+  currency?: string | null;
+  renter_reported_returned_at: string;
+  inspection_policy_version?: number | null;
+  client?: {
+    user?: { first_name?: string | null; last_name?: string | null } | null;
+  } | null;
+  rental_location_listing: {
+    business_location?: {
+      name?: string | null;
+      address?: { country?: string | null } | null;
+    } | null;
+    rental_item: {
+      name: string;
+      currency?: string | null;
+      rental_category?: { name?: string | null } | null;
+      rental_item_images?: Array<{
+        id: string;
+        image_url: string;
+        display_url?: string | null;
+        thumbnail?: string | null;
+      }>;
+    };
+  };
+}
+
 export interface BusinessRentalRequestRow {
   id: string;
   created_at: string;
@@ -564,6 +594,15 @@ export function useRentalApi() {
     }>('/rentals/business/requests');
     if (!data.success) return [];
     return data.data.requests ?? [];
+  }, [api]);
+
+  const fetchBusinessReturnConfirmations = useCallback(async () => {
+    const { data } = await api.get<{
+      success: boolean;
+      data: { bookings: BusinessReturnConfirmationRow[] };
+    }>('/rentals/business/return-confirmations');
+    if (!data.success) return [];
+    return data.data.bookings ?? [];
   }, [api]);
 
   const fetchDashboardRentalRequests = useCallback(async () => {
@@ -975,6 +1014,7 @@ export function useRentalApi() {
     fetchPublicRentalListing,
     fetchBusinessRentalRequests,
     fetchDashboardRentalRequests,
+    fetchBusinessReturnConfirmations,
     fetchClientRentalRequests,
     fetchBusinessRentalSchedule,
     fetchBusinessRentalItemActivity,

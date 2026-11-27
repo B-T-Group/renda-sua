@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,13 +10,19 @@ import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import { rentalsApi } from '../../services/rentalsApi';
 import { brandFaceStyle } from '../../theme/fonts';
-import type { BusinessRentalRequestRow } from '../../types/rentals';
+import { useBusinessReturnConfirmations } from '../../hooks/useBusinessReturnConfirmations';
+import type { BusinessRentalRequestRow, BusinessReturnConfirmationRow } from '../../types/rentals';
 import { compareSoonestRequestStart } from '../../utils/rentals/dashboardRentalRequests';
 import { PagedCarousel } from '../common/PagedCarousel';
 import { BusinessRentalRespondDialog } from './rentals/BusinessRentalRespondDialog';
+import { isInspectionEnrolled } from '../../utils/rentals/rentalInspection';
 import { DashboardRentalRequestCard } from './DashboardRentalRequestCard';
+import { DashboardReturnConfirmationCard } from './DashboardReturnConfirmationCard';
 
 type Notice = { id: string; itemName: string; renterName: string; window: 'sla' | 'start' };
+type ActionItem =
+  | { kind: 'return'; key: string; row: BusinessReturnConfirmationRow }
+  | { kind: 'request'; key: string; request: BusinessRentalRequestRow };
 
 /** Approved 26 Nov 2026 notice accent — softer than warning.light (the old solid amber fill). */
 const AMBER_EDGE = '#E8A23A';
@@ -32,6 +38,8 @@ export function DashboardRentalRequests() {
   const [target, setTarget] = useState<{ req: BusinessRentalRequestRow; mode: 'available' | 'unavailable' } | null>(null);
   const [snack, setSnack] = useState<string | null>(null);
   const enabled = !loading && flags.rentals_dashboard_requests_enabled;
+  const returnsEnabled = !loading && flags.rentals_renter_return_report_enabled === true;
+  const returns = useBusinessReturnConfirmations(returnsEnabled);
 
   const load = useCallback(async () => {
     const data = await rentalsApi.getDashboardRequests();
@@ -53,21 +61,73 @@ export function DashboardRentalRequests() {
     setSnack(t(key, fallback, { item }));
   }, [t, target]);
 
+  const openReturnInspection = useCallback(
+    (row: BusinessReturnConfirmationRow) =>
+      navigation.navigate('BusinessInspection', { bookingId: row.id, stage: 'return' }),
+    [navigation]
+  );
+
+  const settleReturn = useCallback(
+    async (row: BusinessReturnConfirmationRow) => {
+      const item = row.rental_location_listing.rental_item.name;
+      try {
+        const overtime = await returns.confirm(row);
+        setSnack(
+          overtime
+            ? t('business.dashboard.rentalReturns.overtimeToast', 'Return confirmed for {{item}}. The renter was asked to pay for the extra time.', { item })
+            : t('business.dashboard.rentalReturns.confirmedToast', 'Return confirmed for {{item}}', { item })
+        );
+      } catch (e: unknown) {
+        setSnack(e instanceof Error ? e.message : t('business.dashboard.rentalReturns.failed', 'Could not confirm the return'));
+      }
+    },
+    [returns, t]
+  );
+
+  const onConfirmReturn = useCallback(
+    (row: BusinessReturnConfirmationRow) => {
+      if (isInspectionEnrolled(row)) {
+        openReturnInspection(row);
+        return;
+      }
+      const item = row.rental_location_listing.rental_item.name;
+      Alert.alert(
+        t('business.dashboard.rentalReturns.confirmTitle', 'Confirm this return?'),
+        t('business.dashboard.rentalReturns.confirmBody', 'Check the item first. Confirming completes the rental for {{item}}.', { item }),
+        [
+          { text: t('business.dashboard.rentalReturns.cancel', 'Cancel'), style: 'cancel' },
+          { text: t('business.dashboard.rentalReturns.confirm', 'Confirm return'), onPress: () => void settleReturn(row) },
+        ]
+      );
+    },
+    [openReturnInspection, settleReturn, t]
+  );
+
   const renderCard = useCallback(
-    (request: BusinessRentalRequestRow, width: number) => (
-      <DashboardRentalRequestCard
-        request={request}
-        width={width}
-        onAccept={(req) => setTarget({ req, mode: 'available' })}
-        onDecline={(req) => setTarget({ req, mode: 'unavailable' })}
-      />
-    ),
-    []
+    (item: ActionItem, width: number) =>
+      item.kind === 'return' ? (
+        <DashboardReturnConfirmationCard
+          row={item.row}
+          width={width}
+          busy={returns.busyId === item.row.id}
+          onOpen={(row) => navigation.navigate('BusinessRentalBookingDetail', { bookingId: row.id })}
+          onConfirm={onConfirmReturn}
+          onProblem={openReturnInspection}
+        />
+      ) : (
+        <DashboardRentalRequestCard
+          request={item.request}
+          width={width}
+          onAccept={(req) => setTarget({ req, mode: 'available' })}
+          onDecline={(req) => setTarget({ req, mode: 'unavailable' })}
+        />
+      ),
+    [navigation, onConfirmReturn, openReturnInspection, returns.busyId]
   );
 
   const openStudio = useCallback(() => {
-    navigation.navigate('BusinessRentalsStudio', { tab: 'requests' });
-  }, [navigation]);
+    navigation.navigate('BusinessRentalsStudio', { tab: requests.length > 0 ? 'requests' : 'schedule' });
+  }, [navigation, requests.length]);
 
   const currentNotice = notices[0];
 
@@ -76,7 +136,17 @@ export function DashboardRentalRequests() {
     void rentalsApi.dismissExpiryNotice(id).catch(() => undefined);
   }, []);
 
-  if (!enabled || (requests.length === 0 && notices.length === 0)) return null;
+  const items: ActionItem[] = [
+    ...returns.rows.map((row): ActionItem => ({ kind: 'return', key: `return-${row.id}`, row })),
+    ...requests.map((request): ActionItem => ({ kind: 'request', key: `request-${request.id}`, request })),
+  ];
+  const hasReturns = returns.rows.length > 0;
+  const snackbar = (
+    <Snackbar visible={snack != null} onDismiss={() => setSnack(null)} duration={4000}>
+      {snack ?? ''}
+    </Snackbar>
+  );
+  if (items.length === 0 && notices.length === 0) return snack != null ? snackbar : null;
 
   return (
     <View
@@ -85,12 +155,18 @@ export function DashboardRentalRequests() {
         const next = event.nativeEvent.layout.width;
         if (next > 0 && Math.abs(next - pageWidth) > 1) setPageWidth(next);
       }}
-      accessibilityLabel={t('business.dashboard.rentalRequests.sectionA11y', 'Rental requests, {{count}}', { count: requests.length })}
+      accessibilityLabel={
+        hasReturns
+          ? t('business.dashboard.rentalReturns.sectionA11y', 'Rental actions, {{count}}', { count: items.length })
+          : t('business.dashboard.rentalRequests.sectionA11y', 'Rental requests, {{count}}', { count: requests.length })
+      }
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
         <Text variant="labelLarge">
-          {t('business.dashboard.rentalRequests.sectionTitle', 'Rental requests')}
-          {requests.length > 0 ? ` ${requests.length}` : ''}
+          {hasReturns
+            ? t('business.dashboard.rentalReturns.sectionTitle', 'Rental actions')
+            : t('business.dashboard.rentalRequests.sectionTitle', 'Rental requests')}
+          {items.length > 0 ? ` ${items.length}` : ''}
         </Text>
         <Text onPress={openStudio} style={{ color: colors.primary.main }}>
           {t('business.dashboard.rentalRequests.seeAll', 'See all')}
@@ -103,22 +179,21 @@ export function DashboardRentalRequests() {
           onView={() => navigation.navigate('BusinessRentalRequestDetail', { requestId: currentNotice.id })}
         />
       ) : null}
-      {requests.length > 0 ? (
+      {items.length > 0 ? (
         pageWidth > 0 ? (
-          requests.length === 1 ? (
-            renderCard(requests[0], pageWidth)
+          items.length === 1 ? (
+            renderCard(items[0], pageWidth)
           ) : (
             <PagedCarousel
-              data={requests}
-              keyExtractor={(item) => item.id}
+              data={items}
+              keyExtractor={(item) => item.key}
               pageWidth={pageWidth}
               autoAdvanceMs={null}
               showDots
               accessibilityLabelForIndex={(current, total) =>
-                t('business.dashboard.rentalRequests.pageA11y', 'Request {{current}} of {{total}}', {
-                  current: current + 1,
-                  total,
-                })
+                hasReturns
+                  ? t('business.dashboard.rentalReturns.pageA11y', 'Item {{current}} of {{total}}', { current: current + 1, total })
+                  : t('business.dashboard.rentalRequests.pageA11y', 'Request {{current}} of {{total}}', { current: current + 1, total })
               }
               renderItem={({ item, width }) => renderCard(item, width)}
             />
@@ -134,9 +209,7 @@ export function DashboardRentalRequests() {
         onDismiss={() => setTarget(null)}
         onSuccess={onSuccess}
       />
-      <Snackbar visible={snack != null} onDismiss={() => setSnack(null)} duration={4000}>
-        {snack ?? ''}
-      </Snackbar>
+      {snackbar}
     </View>
   );
 }
