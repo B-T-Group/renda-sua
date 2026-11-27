@@ -498,7 +498,8 @@ const RentalBookingDetailPage: React.FC = () => {
     Boolean(isBusiness) &&
     flagsLoaded &&
     flags.rentals_renter_return_report_enabled &&
-    Boolean(booking.renter_reported_returned_at);
+    Boolean(booking.renter_reported_returned_at) &&
+    (status === 'active' || status === 'awaiting_return');
   const returnLocation = booking.return_place?.name || locationName;
   const returnByLabel = returnDueAt
     ? formatRentalPeriod(

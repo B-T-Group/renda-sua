@@ -241,6 +241,14 @@ export function showLegacyReturnPicker(enrolled: boolean, status: string): boole
   return !enrolled && (status === 'active' || status === 'awaiting_return');
 }
 
+/**
+ * Business "Renter says item returned" card: only while the return is still open. After the
+ * business confirms, the booking completes but `renter_reported_returned_at` stays set.
+ */
+export function showBusinessReturnReport(flagOn: boolean, status: string, reportedAt?: string | null): boolean {
+  return flagOn && Boolean(reportedAt) && (status === 'active' || status === 'awaiting_return');
+}
+
 export function showEnrolledReturn(enrolled: boolean, status: string): boolean {
   return enrolled && (status === 'active' || status === 'awaiting_return');
 }

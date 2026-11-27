@@ -74,6 +74,7 @@ import {
   pickupGate,
   showEnrolledReturn,
   didntReceiveWindowOpen,
+  showBusinessReturnReport,
   showLegacyReturnPicker,
 } from '../../utils/rentals/rentalInspection';
 import { RentalHandoverNotice } from '../../components/rentals/RentalHandoverNotice';
@@ -336,10 +337,11 @@ export default function BusinessRentalBookingDetailScreen() {
   });
   const canReturn = showLegacyReturnPicker(snapshot.enrolled, booking.status);
   const showReturnInspection = showEnrolledReturn(snapshot.enrolled, booking.status);
-  const showRenterReport =
-    !flagsLoading &&
-    flags.rentals_renter_return_report_enabled &&
-    Boolean(booking.renter_reported_returned_at);
+  const showRenterReport = showBusinessReturnReport(
+    !flagsLoading && flags.rentals_renter_return_report_enabled === true,
+    booking.status,
+    booking.renter_reported_returned_at
+  );
   const showPhaseBanner = !(showRenterReport || booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active');
   const showReturnAction = showPhaseBanner && canReturn;
   const earlyPending = showRenterReport && earlyReportPending(booking, listingZone);
@@ -877,10 +879,6 @@ export default function BusinessRentalBookingDetailScreen() {
             </Dialog.Actions>
           </Dialog>
         </Portal>
-
-        <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>
-          {snack}
-        </Snackbar>
       </ScrollView>
       {showReturnAction ? (
         <StickyActionCard
@@ -891,6 +889,9 @@ export default function BusinessRentalBookingDetailScreen() {
           onAction={openReturnDialog}
         />
       ) : null}
+      <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>
+        {snack}
+      </Snackbar>
     </View>
   );
 }
