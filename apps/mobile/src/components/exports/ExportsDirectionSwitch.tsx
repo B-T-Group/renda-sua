@@ -10,8 +10,13 @@ import type { ExportOriginSummary } from '../../services/inventoryItemsApi';
 import { exportCountryName, exportCountryOfPlace, exportCountryPlace } from '../../utils/exportCountries';
 import { exportsShareUrl } from '../../utils/exportsPublicLink';
 import { EXPORT_BRAND_BLUE } from './ExportOnlyBadge';
+import { exportsSummaryLine } from '../../utils/exportSellers';
+
+export { exportsSummaryLine };
 
 export type ExportsDirection = 'into' | 'from';
+
+
 
 export interface ExportsDirectionSwitchProps {
   direction: ExportsDirection;
@@ -23,6 +28,8 @@ export interface ExportsDirectionSwitchProps {
   originsLoading?: boolean;
   /** Items listed for the current origin (From view summary line). */
   total?: number;
+  /** Sellers in the current context (one-line counts, both directions). */
+  sellerTotal?: number;
   onChangeDirection: (next: ExportsDirection) => void;
   onPickOrigin: (code: string) => void;
 }
@@ -39,6 +46,7 @@ export function ExportsDirectionSwitch({
   origins,
   originsLoading,
   total,
+  sellerTotal,
   onChangeDirection,
   onPickOrigin,
 }: ExportsDirectionSwitchProps) {
@@ -161,14 +169,20 @@ export function ExportsDirectionSwitch({
             />
           </View>
           {origin && activeOrigin ? (
-            <Text style={[typography.caption, { color: colors.text.secondary }]}>
-              {t('exportsOrigin.summary', '{{count}} products · ships to {{markets}} markets', {
-                count,
-                markets: destinationCount,
-              })}
+            <Text testID="exports-summary-line" style={[typography.caption, { color: colors.text.secondary }]}>
+              {typeof sellerTotal === 'number'
+                ? exportsSummaryLine(t, count, sellerTotal, destinationCount)
+                : t('exportsOrigin.summary', '{{count}} products · ships to {{markets}} markets', {
+                    count,
+                    markets: destinationCount,
+                  })}
             </Text>
           ) : null}
         </View>
+      ) : typeof total === 'number' && typeof sellerTotal === 'number' && total > 0 ? (
+        <Text testID="exports-summary-line" style={[typography.caption, { color: colors.text.secondary }]}>
+          {exportsSummaryLine(t, total, sellerTotal)}
+        </Text>
       ) : null}
 
       <Modal

@@ -9457,5 +9457,34 @@
   "catalogShortcut": {
     "myOrders": "My orders",
     "myExports": "My exports"
+  },
+  "exportSellers": {
+    "title": "Sellers",
+    "seeAll": "See all",
+    "more": "More",
+    "allTitle": "All sellers",
+    "searchPlaceholder": "Search sellers",
+    "sellerSearchPlaceholder": "Search this seller",
+    "itemsCount": "{{count}} item",
+    "itemsCount_plural": "{{count}} items",
+    "exportItemsCount": "{{count}} export item",
+    "exportItemsCount_plural": "{{count}} export items",
+    "sellersCount": "{{count}} seller",
+    "sellersCount_plural": "{{count}} sellers",
+    "productsCount": "{{count}} product",
+    "productsCount_plural": "{{count}} products",
+    "shipsTo": "ships to {{count}} market",
+    "shipsTo_plural": "ships to {{count}} markets",
+    "shipsToOneProduct": "ships to {{count}} market",
+    "shipsToOneProduct_plural": "ships to {{count}} markets",
+    "noMatchTitle": "No sellers match your search",
+    "noMatchHint": "Try another seller name.",
+    "noSellers": "No sellers in this view yet.",
+    "sellerEmpty": "No export items at this seller in this view.",
+    "itemsNoMatchTitle": "No items match your search",
+    "itemsNoMatchHint": "Try another word.",
+    "openSeller": "Open {{name}}",
+    "loadError": "We couldn’t load sellers. Try again.",
+    "backToExports": "Back to exports"
   }
 }

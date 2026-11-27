@@ -78,6 +78,10 @@ import {
   type ExportsDirection,
 } from '../../components/exports/ExportsDirectionSwitch';
 import { useExportOrigins } from '../../hooks/useExportOrigins';
+import { useExportSellers } from '../../hooks/useExportSellers';
+import { ExportSellersCarousel } from '../../components/exports/ExportSellersCarousel';
+import { EXPORT_SELLERS_CAROUSEL_MAX, type ExportSellersContext } from '../../utils/exportSellers';
+import { trackExportSellerEvent } from '../../utils/exportSellersAnalytics';
 import { CatalogFeedStop } from '../../components/browse/CatalogFeedStop';
 import { CATALOG_SORT_OPTIONS } from '../../constants/catalogSortOptions';
 import { FOOD_CATEGORY_NAME } from '../../utils/foodAvailability';
@@ -232,6 +236,12 @@ export interface BrowseCatalogScreenProps {
     | ((ctx: { foodOnly: boolean; exportOnly: boolean }) => React.ReactNode);
   /** Shop and Food open the full search screen. Omitted on the in-place catalog search. */
   onSearchBarPress?: () => void;
+  /** Exports lane: open the all-sellers list in the current Into / From context. */
+  onOpenExportSellers?: (ctx: ExportSellersContext) => void;
+  /** Exports lane: open the export-only seller page. */
+  onOpenExportSeller?: (
+    ctx: ExportSellersContext & { businessLocationId: string; name: string }
+  ) => void;
 }
 
 function BrowseCatalogScreenInner({
@@ -261,6 +271,8 @@ function BrowseCatalogScreenInner({
   categoryRequestId,
   discoveryExtra,
   onSearchBarPress,
+  onOpenExportSellers,
+  onOpenExportSeller,
 }: BrowseCatalogScreenProps) {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -401,6 +413,24 @@ function BrowseCatalogScreenInner({
     origins: exportOrigins,
     loading: exportOriginsLoading,
   } = useExportOrigins(forcedExportOnly && catalogReady);
+  // Sellers carousel: same Into / From context as the grid, at most 10 cards.
+  const exportSellersCtx = useMemo<ExportSellersContext>(
+    () => ({
+      direction: exportsFrom ? 'from' : 'into',
+      marketCode: catalogCountryCode?.trim().toUpperCase() || null,
+      originCode: exportOriginCountry ?? null,
+    }),
+    [exportsFrom, catalogCountryCode, exportOriginCountry]
+  );
+  const {
+    sellers: exportSellers,
+    total: exportSellersTotal,
+    loading: exportSellersLoading,
+  } = useExportSellers({
+    ...exportSellersCtx,
+    limit: EXPORT_SELLERS_CAROUSEL_MAX,
+    enabled: forcedExportOnly && catalogReady,
+  });
 
   const { facetItems, facetLoading, refetchFacets } = useInventoryCatalogFacets({
     withAuth: inventoryRequestsWithAuth,
@@ -1045,7 +1075,8 @@ function BrowseCatalogScreenInner({
             originCode={exportOriginCountry ?? pickedExportOrigin ?? catalogCountryCode ?? null}
             origins={exportOrigins}
             originsLoading={exportOriginsLoading}
-            total={exportsFrom && !loading ? total : undefined}
+            total={!loading && debouncedSearch.length === 0 ? total : undefined}
+            sellerTotal={exportSellersLoading ? undefined : exportSellersTotal}
             onChangeDirection={setExportsDirection}
             onPickOrigin={(code) => {
               setPickedExportOrigin(code);
@@ -1067,7 +1098,38 @@ function BrowseCatalogScreenInner({
           onSeeAllHomeOrders={onSeeAllHomeOrders}
           nearbyAgentsCount={nearbyAgentsCount}
           onHeroSlidePress={onHeroSlidePress}
-          nudgeSlot={foodOnly ? undefined : <BrowseFtueNudge />}
+          nudgeSlot={foodOnly || forcedExportOnly ? undefined : <BrowseFtueNudge />}
+          exportsLane={forcedExportOnly}
+          exportsSlot={
+            forcedExportOnly ? (
+              <ExportSellersCarousel
+                sellers={exportSellers}
+                total={exportSellersTotal}
+                loading={exportSellersLoading}
+                onViewed={(shown, all) =>
+                  trackExportSellerEvent('exports_sellers_carousel_viewed', exportSellersCtx, {
+                    seller_count: shown,
+                    total: all,
+                  })
+                }
+                onPressSeller={(seller, position) => {
+                  trackExportSellerEvent('exports_seller_card_tapped', exportSellersCtx, {
+                    position,
+                    location_id: seller.business_location_id,
+                  });
+                  onOpenExportSeller?.({
+                    ...exportSellersCtx,
+                    businessLocationId: seller.business_location_id,
+                    name: seller.name,
+                  });
+                }}
+                onSeeAll={(source) => {
+                  trackExportSellerEvent('exports_sellers_more_tapped', exportSellersCtx, { source });
+                  onOpenExportSellers?.(exportSellersCtx);
+                }}
+              />
+            ) : null
+          }
           discoverySlot={
             categoryRail.items.length > 0 ? (
               <CatalogCategoryRail
@@ -1212,6 +1274,12 @@ function BrowseCatalogScreenInner({
       exportOriginsLoading,
       exportsFrom,
       loading,
+      exportSellers,
+      exportSellersTotal,
+      exportSellersLoading,
+      exportSellersCtx,
+      onOpenExportSeller,
+      onOpenExportSellers,
     ]
   );
 
@@ -1223,8 +1291,9 @@ function BrowseCatalogScreenInner({
         .join('|'),
       homeOrdersTotalActive,
       homeOrderCtaBusyId,
+      exportSellersSig: `${exportSellersTotal}:${exportSellers.map((x) => x.business_location_id).join(',')}`,
     }),
-    [homeOrderCtaBusyId, homeOrders, homeOrdersTotalActive]
+    [homeOrderCtaBusyId, homeOrders, homeOrdersTotalActive, exportSellers, exportSellersTotal]
   );
 
   const feedRowCount = showAllRestaurants ? 0 : feedRows.length;

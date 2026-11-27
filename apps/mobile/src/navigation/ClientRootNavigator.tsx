@@ -53,6 +53,8 @@ import CollectionDetailScreen from '../screens/shared/CollectionDetailScreen';
 import CategoriesBrowseScreen from '../screens/shared/CategoriesBrowseScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
+import ExportSellersScreen from '../screens/shared/ExportSellersScreen';
+import ExportSellerScreen from '../screens/shared/ExportSellerScreen';
 import PlaceOrderScreen from '../screens/client/PlaceOrderScreen';
 import OrderPlacedSuccessScreen from '../screens/client/OrderPlacedSuccessScreen';
 import MobileMoneyAwaitingPaymentScreen from '../screens/client/MobileMoneyAwaitingPaymentScreen';
@@ -407,6 +409,20 @@ export function ClientRootNavigator() {
           options={{
             title: t('stores.listTitle', 'Store locations'),
             headerBackTitle: t('public.items.detail.browseMore', 'Browse more items'),
+          }}
+        />
+        <ClientRootStack.Screen
+          name="ExportSellers"
+          component={ExportSellersScreen as never}
+          options={{
+            title: t('exportSellers.allTitle', 'All sellers'),
+          }}
+        />
+        <ClientRootStack.Screen
+          name="ExportSeller"
+          component={ExportSellerScreen as never}
+          options={{
+            title: t('exportSellers.title', 'Sellers'),
           }}
         />
         <ClientRootStack.Screen

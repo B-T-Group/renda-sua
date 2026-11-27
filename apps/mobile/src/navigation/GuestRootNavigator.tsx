@@ -20,6 +20,8 @@ import CollectionDetailScreen from '../screens/shared/CollectionDetailScreen';
 import CategoriesBrowseScreen from '../screens/shared/CategoriesBrowseScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
+import ExportSellersScreen from '../screens/shared/ExportSellersScreen';
+import ExportSellerScreen from '../screens/shared/ExportSellerScreen';
 import CartScreen from '../screens/shared/CartScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
 import RentalRequestScreen from '../screens/shared/RentalRequestScreen';
@@ -279,6 +281,22 @@ export function GuestRootNavigator({
           options={{
             headerShown: true,
             title: t('stores.listTitle', 'Store locations'),
+          }}
+        />
+        <GuestRootStack.Screen
+          name="ExportSellers"
+          component={ExportSellersScreen as never}
+          options={{
+            headerShown: true,
+            title: t('exportSellers.allTitle', 'All sellers'),
+          }}
+        />
+        <GuestRootStack.Screen
+          name="ExportSeller"
+          component={ExportSellerScreen as never}
+          options={{
+            headerShown: true,
+            title: t('exportSellers.title', 'Sellers'),
           }}
         />
         <GuestRootStack.Screen

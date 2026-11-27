@@ -62,6 +62,12 @@ export interface BrowseCatalogListHeaderProps {
   exportOnly?: boolean;
   onToggleExportOnly?: () => void;
   onClearExportOnly?: () => void;
+  /**
+   * Exports lane: no marketplace hero (logo, kicker, promo carousel, trust strip, agents
+   * pill, results chip). Only the active-orders strip and this slot (Sellers carousel) stay.
+   */
+  exportsLane?: boolean;
+  exportsSlot?: React.ReactNode;
 }
 
 export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
@@ -99,12 +105,14 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
   exportOnly = false,
   onToggleExportOnly,
   onClearExportOnly,
+  exportsLane = false,
+  exportsSlot,
 }: BrowseCatalogListHeaderProps) {
   const { t } = useTranslation();
   const { colors, typography, spacing } = theme;
 
   return (
-    <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+    <View style={{ paddingHorizontal: spacing.md, paddingTop: exportsLane ? 0 : spacing.md }}>
       {foodOnly ? (
         <View style={{ marginBottom: spacing.sm }}>
           <FoodsMenuHero />
@@ -125,6 +133,20 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
           ) : null}
           {restaurantsCarousel}
         </View>
+      ) : exportsLane ? (
+        <View testID="exports-compact-header">
+          {homeOrders && homeOrders.length > 0 && onOpenHomeOrder ? (
+            <ClientHomeOrdersStrip
+              orders={homeOrders}
+              totalActive={homeOrdersTotalActive}
+              onOpenOrder={onOpenHomeOrder}
+              onPressCta={onHomeOrderCta}
+              ctaBusyOrderId={homeOrderCtaBusyId}
+              onSeeAll={onSeeAllHomeOrders}
+            />
+          ) : null}
+          {exportsSlot}
+        </View>
       ) : (
         <CatalogBrowseHero
           scrollY={scrollY}
@@ -143,7 +165,7 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
         />
       )}
 
-      {nudgeSlot ? (
+      {nudgeSlot && !exportsLane ? (
         <View style={{ marginTop: spacing.md }}>{nudgeSlot}</View>
       ) : null}
 

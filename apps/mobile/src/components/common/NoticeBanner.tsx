@@ -19,6 +19,8 @@ export interface NoticeBannerProps {
   onSecondaryAction?: () => void;
   secondaryActionLoading?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Overrides the tone accent (stripe, icon, primary action), e.g. export brand blue. */
+  accentColor?: string;
   /** Optional extra content rendered below the message (e.g. step lists) */
   children?: React.ReactNode;
 }
@@ -48,12 +50,13 @@ export function NoticeBanner({
   onSecondaryAction,
   secondaryActionLoading,
   style,
+  accentColor,
   children,
 }: NoticeBannerProps) {
   const { colors, borderRadius, spacing, shadows } = useTheme();
   const palette = colors[tone];
-  const accent = palette.main;
-  const accentDark = palette.dark;
+  const accent = accentColor ?? palette.main;
+  const accentDark = accentColor ?? palette.dark;
 
   return (
     <View

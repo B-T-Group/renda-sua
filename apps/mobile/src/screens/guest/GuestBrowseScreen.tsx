@@ -12,6 +12,7 @@ import { BrowseCartFab } from '../../components/browse/BrowseCartFab';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
 import { catalogItemToCheckoutSummary } from '../../utils/catalogInventoryDisplay';
 import { BrowseCatalogScreen } from '../shared/BrowseCatalogScreen';
+import type { ExportSellersContext } from '../../utils/exportSellers';
 import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import { useResolvedCheckout } from '../../hooks/useResolvedCheckout';
 import { toOrderItemVariantId } from '../../utils/shopperVariantSelection';
@@ -108,6 +109,26 @@ export default observer(function GuestBrowseScreen({
     [navigation]
   );
 
+  const onOpenExportSellers = useCallback(
+    (ctx: ExportSellersContext) => {
+      (navigation.getParent() as { navigate?: (name: string, params: object) => void } | undefined)?.navigate?.(
+        'ExportSellers',
+        ctx
+      );
+    },
+    [navigation]
+  );
+
+  const onOpenExportSeller = useCallback(
+    (ctx: ExportSellersContext & { businessLocationId: string; name: string }) => {
+      (navigation.getParent() as { navigate?: (name: string, params: object) => void } | undefined)?.navigate?.(
+        'ExportSeller',
+        ctx
+      );
+    },
+    [navigation]
+  );
+
   const onSeeAllStores = useCallback(() => {
     (navigation.getParent() as { navigate?: (name: string) => void } | undefined)?.navigate?.(
       'StoresList'
@@ -150,6 +171,8 @@ export default observer(function GuestBrowseScreen({
         onCollectionPress={onCollectionPress}
         onStorePress={onStorePress}
         onSeeAllStores={onSeeAllStores}
+        onOpenExportSellers={onOpenExportSellers}
+        onOpenExportSeller={onOpenExportSeller}
         onLoginRequired={() => {
           (navigation as { navigate?: (name: string, params?: object) => void }).navigate?.(
             'GuestAuth',
