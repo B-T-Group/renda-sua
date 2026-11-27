@@ -1,0 +1,13 @@
+table:
+  name: rental_commission_rules
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: rental_category
+    using:
+      foreign_key_constraint_on: rental_category_id
+  - name: created_by_user
+    using:
+      foreign_key_constraint_on: created_by

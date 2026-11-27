@@ -6156,6 +6156,23 @@
     "loadMoreReviews": "Load more reviews"
   },
   "rentals": {
+    "commission": {
+      "breakdownTitle": "What you earn on this rental",
+      "subtotal": "Rental subtotal",
+      "fee": "Rendasua commission ({{rate}}%)",
+      "youReceive": "You receive",
+      "noRenterFee": "The renter pays no extra fee. The commission comes out of your payout, only when the rental is completed.",
+      "promo": "Early-adopter rate until {{date}}",
+      "rateChanged": "The commission changed. Review the new numbers, then accept again.",
+      "loadFailed": "Could not load the commission. Try again.",
+      "illustrationLabel": "Rental total split between you and Rendasua",
+      "earningsTitle": "Your earnings",
+      "statusQuoted": "Paid to you when the rental is completed",
+      "statusEarned": "Paid to your account",
+      "statusReversed": "Commission refunded",
+      "statusWaived": "No commission: this booking did not go ahead",
+      "clientNoFees": "No Rendasua service fee for renters. The price you see is the price you pay."
+    },
     "earlyReturn": {
       "addMeridiem": "Add AM or PM",
       "returnBy": "Return by {{time}}",

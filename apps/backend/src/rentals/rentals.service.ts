@@ -126,6 +126,7 @@ import { StripePaymentsDatabaseService } from '../stripe-payments/stripe-payment
 import { StripeService } from '../stripe-payments/stripe.service';
 import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment.dto';
 import { isActivePersona } from '../users/persona.util';
+import { RentalCommissionService } from '../rental-commission/rental-commission.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
 import { ReservationFeeLedger } from './reservation-fee/reservation-fee.ledger';
 import {
@@ -532,7 +533,8 @@ export class RentalsService {
     private readonly rentalListingAiReviewService: RentalListingAiReviewService,
     private readonly inspectionFlags: RentalInspectionFlags,
     private readonly inspectionOptIn: InspectionOptInService,
-    private readonly cardWindow: RentalCardWindowService
+    private readonly cardWindow: RentalCardWindowService,
+    private readonly commission: RentalCommissionService
   ) {}
 
   async listPublicRentalListings(
@@ -1569,10 +1571,13 @@ export class RentalsService {
     const snap = await this.acceptedSnapshot(req, dto, computedSnapshot);
     const total = Number(snap.total);
     const clientId = req.client_id;
+    const quote = await this.commission.quote(this.commission.quoteInputFromRequest(req, total, snap.currency));
+    this.commission.assertAcknowledged(quote, dto.acknowledgedCommissionRateBps);
     let bookingId: string | null = null;
     try {
       const ins = await this.insertProposedBookingRow(req, clientId, snap, total, contractExpiresAt);
       bookingId = ins.insert_rental_bookings_one.id;
+      await this.commission.freeze(bookingId, quote);
       await this.persistRentalResponse({
         id: requestId,
         version: dto.expectedVersion,
@@ -4571,7 +4576,14 @@ export class RentalsService {
       await this.attachAcceptStartPreview(booking);
     }
     this.attachStartOpens(booking);
+    await this.attachMerchantEarnings(booking, user);
     return booking;
+  }
+
+  /** Only the owning business sees commission. The renter payload never carries it. */
+  private async attachMerchantEarnings(booking: any, user: any): Promise<void> {
+    if (!isActivePersona(user, 'business') || user.business?.id !== booking.business_id) return;
+    booking.merchant_earnings = await this.commission.merchantEarningsForBooking(booking.id);
   }
 
   /** Renter start for every booking. Pays Mobile Money first, then marks started. */
@@ -5342,7 +5354,7 @@ export class RentalsService {
       );
     }
     await this.creditClientWalletForStripeCapture(booking, charge);
-    await this.registerRentalProceedsLedger(booking, charge, 'Stripe capture');
+    await this.registerRentalProceedsLedger(booking, charge, 'Stripe capture', this.commission.commissionFor(booking, charge));
     await this.feeLedger.apply(booking, true);
     await this.patchBooking(booking.id, {
       captured_amount: charge,
@@ -5394,7 +5406,8 @@ export class RentalsService {
   private async registerRentalProceedsLedger(
     booking: any,
     amount: number,
-    label: string
+    label: string,
+    commission = 0
   ): Promise<void> {
     if (amount <= 0) return;
     const clientAccount = await this.hasuraSystemService.getAccount(
@@ -5420,15 +5433,19 @@ export class RentalsService {
       idempotencyKey: rentalLedgerKey(booking.id, `${leg}:payment`),
     });
     assertLedgerResult(paid, `${leg} payment`);
-    const credited = await this.accountsService.registerTransaction({
-      accountId: businessAccount.id,
-      amount,
-      transactionType: 'deposit',
-      memo: `Rental ${label} proceeds ${booking.id}`,
-      referenceId: booking.id,
-      idempotencyKey: rentalLedgerKey(booking.id, `${leg}:proceeds`),
-    });
-    assertLedgerResult(credited, `${leg} proceeds`);
+    const merchantAmount = this.commission.netOfCommission(amount, commission, booking.currency);
+    if (merchantAmount > 0) {
+      const credited = await this.accountsService.registerTransaction({
+        accountId: businessAccount.id,
+        amount: merchantAmount,
+        transactionType: 'deposit',
+        memo: `Rental ${label} proceeds ${booking.id}`,
+        referenceId: booking.id,
+        idempotencyKey: rentalLedgerKey(booking.id, `${leg}:proceeds`),
+      });
+      assertLedgerResult(credited, `${leg} proceeds`);
+    }
+    await this.commission.settle(booking, commission, merchantAmount, leg);
   }
 
   /** Stripe capture credits the client wallet first so payment + proceeds net to zero. */
@@ -7220,15 +7237,20 @@ export class RentalsService {
       idempotencyKey: rentalLedgerKey(booking.id, 'contract:payment'),
     });
     assertLedgerResult(paid, 'contract payment');
-    const credited = await this.accountsService.registerTransaction({
-      accountId: accounts.businessAccountId,
-      amount,
-      transactionType: 'deposit',
-      memo: `Rental proceeds ${booking.id}`,
-      referenceId: booking.id,
-      idempotencyKey: rentalLedgerKey(booking.id, 'contract:proceeds'),
-    });
-    assertLedgerResult(credited, 'contract proceeds');
+    const commission = this.commission.commissionFor(booking, amount);
+    const merchantAmount = this.commission.netOfCommission(amount, commission, booking.currency);
+    if (merchantAmount > 0) {
+      const credited = await this.accountsService.registerTransaction({
+        accountId: accounts.businessAccountId,
+        amount: merchantAmount,
+        transactionType: 'deposit',
+        memo: `Rental proceeds ${booking.id}`,
+        referenceId: booking.id,
+        idempotencyKey: rentalLedgerKey(booking.id, 'contract:proceeds'),
+      });
+      assertLedgerResult(credited, 'contract proceeds');
+    }
+    await this.commission.settle(booking, commission, merchantAmount, 'contract');
   }
 
   private async patchBooking(id: string, _set: Record<string, unknown>) {

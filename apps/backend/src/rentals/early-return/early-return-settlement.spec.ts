@@ -1,4 +1,5 @@
 import { RentalsService } from '../rentals.service';
+import { commissionOffStub } from '../../rental-commission/rental-commission.test-util';
 
 /**
  * Money flow for an early return (Samuel, 26 Nov): the renter pays the full
@@ -94,6 +95,7 @@ function momoBooking(m: Market, overrides: Record<string, unknown> = {}) {
 
 function service(booking: Record<string, unknown>) {
   const svc: any = Object.create(RentalsService.prototype);
+  svc.commission = commissionOffStub();
   svc.logger = { warn: jest.fn(), debug: jest.fn(), error: jest.fn(), log: jest.fn() };
   svc.hasuraUserService = {
     getUser: jest.fn().mockResolvedValue({ id: 'business-user', active_persona: 'business', business: { id: 'biz' } }),
@@ -144,7 +146,7 @@ describe('early return · card (Toronto, UTC−5)', () => {
       overtime_amount: 0,
       payment_status: 'paid',
     });
-    expect(svc.registerRentalProceedsLedger).toHaveBeenCalledWith(expect.anything(), 60, 'Stripe capture');
+    expect(svc.registerRentalProceedsLedger).toHaveBeenCalledWith(expect.anything(), 60, 'Stripe capture', 0);
   });
 
   it('uses the business-corrected time (listing clock → instant) and still charges only the price', async () => {
@@ -210,18 +212,21 @@ describe('early return · card in Douala and MoMo-style wallet in Toronto', () =
 describe('returnSettlement', () => {
   it('Toronto: a 3:40 PM return on a 2–6 PM booking owes no overtime', () => {
     const svc: any = Object.create(RentalsService.prototype);
+    svc.commission = commissionOffStub();
     const s = svc.returnSettlement(cardBooking(TORONTO), TORONTO.reportedAt);
     expect(s).toEqual(expect.objectContaining({ contract: 60, overtimeHours: 0, overtimeAmount: 0, stripeCharge: 60 }));
   });
 
   it('Douala: a 3:40 PM return owes no overtime', () => {
     const svc: any = Object.create(RentalsService.prototype);
+    svc.commission = commissionOffStub();
     const s = svc.returnSettlement(momoBooking(DOUALA), DOUALA.reportedAt);
     expect(s).toEqual(expect.objectContaining({ contract: 45000, overtimeAmount: 0 }));
   });
 
   it('keeps overtime for a return after the due (Douala 7:30 PM = 18:30Z)', () => {
     const svc: any = Object.create(RentalsService.prototype);
+    svc.commission = commissionOffStub();
     const s = svc.returnSettlement(momoBooking(DOUALA), '2026-11-26T18:30:00.000Z');
     expect(s.overtimeAmount).toBeGreaterThan(0);
   });

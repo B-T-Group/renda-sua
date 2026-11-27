@@ -1,6 +1,7 @@
 import { AccessTime, AccountBalanceWallet, Check, CreditCard, PhoneIphone, ShieldOutlined } from '@mui/icons-material';
 import { Box, Stack, Typography } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import type { PayBreakdown, PayBreakdownRow } from '../../utils/rentals/payBreakdown';
 
 const ICONS: Record<PayBreakdownRow['icon'], React.ReactElement> = {
@@ -14,6 +15,7 @@ const ICONS: Record<PayBreakdownRow['icon'], React.ReactElement> = {
 
 /** Approved 05a/05b rows: rental, reservation fee paid, charged / to pay now, deposit hold. */
 export function PayBreakdownBox({ breakdown }: { breakdown: PayBreakdown }) {
+  const { t } = useTranslation();
   return (
     <Box data-testid="pay-breakdown" sx={{ border: 1, borderColor: 'divider', borderRadius: 2, mt: 1.5 }}>
       {breakdown.rows.map((row, i) => (
@@ -33,6 +35,9 @@ export function PayBreakdownBox({ breakdown }: { breakdown: PayBreakdown }) {
           </Box>
         </Stack>
       ))}
+      <Typography variant="caption" color="text.secondary" sx={{ px: 1.5, py: 1, display: 'block', borderTop: 1, borderColor: 'divider' }}>
+        {t('rentals.commission.clientNoFees', 'No Rendasua service fee for renters. The price you see is the price you pay.')}
+      </Typography>
     </Box>
   );
 }

@@ -6890,6 +6890,23 @@
     }
   },
   "rentals": {
+    "commission": {
+      "breakdownTitle": "Ce que vous gagnez sur cette location",
+      "subtotal": "Sous-total de la location",
+      "fee": "Commission Rendasua ({{rate}} %)",
+      "youReceive": "Vous recevez",
+      "noRenterFee": "Le locataire ne paie aucun frais supplémentaire. La commission est prélevée sur votre paiement, uniquement à la fin de la location.",
+      "promo": "Tarif pionnier jusqu'au {{date}}",
+      "rateChanged": "La commission a changé. Vérifiez les nouveaux montants, puis acceptez à nouveau.",
+      "loadFailed": "Impossible de charger la commission. Réessayez.",
+      "illustrationLabel": "Total de la location réparti entre vous et Rendasua",
+      "earningsTitle": "Vos gains",
+      "statusQuoted": "Versé sur votre compte à la fin de la location",
+      "statusEarned": "Versé sur votre compte",
+      "statusReversed": "Commission remboursée",
+      "statusWaived": "Aucune commission : cette réservation n'a pas eu lieu",
+      "clientNoFees": "Aucun frais de service Rendasua pour les locataires. Le prix affiché est le prix que vous payez."
+    },
     "earlyReturn": {
       "addMeridiem": "Ajoutez AM ou PM",
       "returnBy": "À rendre avant {{time}}",

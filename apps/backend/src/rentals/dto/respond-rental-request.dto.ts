@@ -79,6 +79,20 @@ export class RespondRentalRequestDto {
 
   @ApiProperty({
     required: false,
+    minimum: 0,
+    maximum: 10000,
+    description:
+      'Commission rate in basis points the merchant saw in the preview. When it differs from the current rate the server answers 409 COMMISSION_RATE_CHANGED and nothing is accepted.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  acknowledgedCommissionRateBps?: number;
+
+  @ApiProperty({
+    required: false,
     description:
       'edit_version the business loaded. Required while modify-request is enabled. A mismatch is rejected.',
     minimum: 1,
