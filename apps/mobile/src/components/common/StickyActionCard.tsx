@@ -14,6 +14,9 @@ export interface StickyActionCardProps {
   /** Small caption on the left of the summary row ("Total", "Due at pickup"). */
   summaryLabel?: string;
   summaryValue?: string;
+  /** `place` shows the label and value at one size with `summaryDetail` (an address) underneath. */
+  summaryVariant?: 'amount' | 'place';
+  summaryDetail?: string | null;
   /** Struck-through previous amount shown before the value. */
   summaryPrevious?: string;
   /** One line of context under the summary (legal copy, blocked reason). */
@@ -57,8 +60,28 @@ export function StickyActionCard(props: StickyActionCardProps) {
   );
 }
 
+function PlaceSummary(props: StickyActionCardProps) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.place}>
+      <Text style={styles.placeLine} numberOfLines={2}>
+        <Text style={[styles.placeText, { color: colors.text.secondary }]}>{props.summaryLabel} </Text>
+        <Text testID={props.summaryValueTestID} style={[styles.placeText, styles.placeName, { color: colors.text.primary }]}>
+          {props.summaryValue}
+        </Text>
+      </Text>
+      {props.summaryDetail ? (
+        <Text testID="sticky-summary-address" style={[styles.placeText, styles.placeAddress, { color: colors.text.primary }]} numberOfLines={3}>
+          {props.summaryDetail}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function SummaryRow(props: StickyActionCardProps) {
   const { colors } = useTheme();
+  if (props.summaryVariant === 'place') return <PlaceSummary {...props} />;
   return (
     <View style={styles.summaryRow}>
       <Text style={[styles.summaryLabel, { color: colors.text.secondary }]} numberOfLines={1}>
@@ -121,6 +144,11 @@ const styles = StyleSheet.create({
   amounts: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   previous: { fontSize: 14, textDecorationLine: 'line-through' },
   summaryValue: { fontSize: 20, fontWeight: '800' },
+  place: { gap: 2 },
+  placeLine: { flexShrink: 1 },
+  placeText: { fontSize: 14, lineHeight: 20 },
+  placeName: { fontWeight: '700' },
+  placeAddress: { fontWeight: '600' },
   note: { fontSize: 12, lineHeight: 16 },
   action: { borderRadius: 12 },
   actionContent: { height: 48 },

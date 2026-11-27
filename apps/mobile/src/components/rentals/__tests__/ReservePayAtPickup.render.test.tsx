@@ -124,6 +124,7 @@ describe('Reserve now, pay at pickup', () => {
       timeZone: 'America/Toronto',
       role: 'client',
       place: 'Sono',
+      address: '12 Rue Principale, Montreal, QC, Canada',
       money: '$59.00',
       returnLabel: 'Sat 28 Nov · 6:00 PM',
       open: true,
@@ -147,5 +148,6 @@ describe('Reserve now, pay at pickup', () => {
     expect(screen.getByText('$239.00 on your card today · $180.00 of it is a hold')).toBeTruthy();
     expect(screen.getByText('Pick up your item · 2:00 PM')).toBeTruthy();
     expect(screen.queryByText(/held on your card/)).toBeNull();
+    expect(screen.getByTestId('sticky-summary-address').props.children).toBe('12 Rue Principale, Montreal, QC, Canada');
   });
 });

@@ -524,6 +524,7 @@ export default function RentalBookingDetailScreen() {
     timeZone: confirmationTimeZone(booking.rental_location_listing?.business_location?.address?.country, booking.currency),
     role: 'client',
     place: booking.rental_location_listing?.business_location?.name ?? '',
+    address: booking.return_place?.address,
     money: formatConfirmationMoney(
       Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0,
       booking.currency,

@@ -48,6 +48,7 @@ export interface RentalStartCardProps {
   role: 'client' | 'business';
   renterName?: string;
   place: string;
+  address?: string | null;
   money: string;
   returnLabel: string;
   starting?: boolean;
@@ -177,6 +178,8 @@ export function RentalStartAction(props: RentalStartCardProps) {
       testID="rental-start-sticky"
       summaryLabel={t('rentals.start.stickyPickupAt', 'Pickup at')}
       summaryValue={props.place}
+      summaryVariant="place"
+      summaryDetail={props.address}
       actionTestID="rental-start-button"
       actionLabel={label}
       actionLabelStyle={payLabelStyle(label)}

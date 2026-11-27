@@ -20,6 +20,23 @@ describe('StickyActionCard', () => {
     expect(screen.getByText('Pay & start')).toBeTruthy();
   });
 
+  it('shows the place name and its address below in the place variant', async () => {
+    await renderCard({
+      summaryVariant: 'place',
+      summaryLabel: 'Pickup at',
+      summaryValue: 'Stripe Rail',
+      summaryDetail: '12 Rue Principale, Montreal, QC, Canada',
+    });
+    expect(screen.getByText(/Pickup at/)).toBeTruthy();
+    expect(screen.getByText('Stripe Rail')).toBeTruthy();
+    expect(screen.getByTestId('sticky-summary-address').props.children).toBe('12 Rue Principale, Montreal, QC, Canada');
+  });
+
+  it('omits the address line when none is given', async () => {
+    await renderCard({ summaryVariant: 'place', summaryLabel: 'Pickup at', summaryValue: 'Stripe Rail' });
+    expect(screen.queryByTestId('sticky-summary-address')).toBeNull();
+  });
+
   it('fires the action when enabled', async () => {
     const onAction = jest.fn();
     await renderCard({ onAction });

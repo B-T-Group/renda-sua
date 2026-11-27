@@ -22,6 +22,7 @@ interface Props {
   photos: InspectionPhoto[];
   timeZone: string;
   place: string;
+  address?: string | null;
   returnLabel: string;
   money: string;
   /** Held/paid lines from startMoneyLines; falls back to the card hold sentence. */
@@ -345,6 +346,8 @@ function StartFooter(props: Props) {
       testID="pickup-start-sticky"
       summaryLabel={t('rentals.start.stickyPickupAt', 'Pickup at')}
       summaryValue={props.place}
+      summaryVariant="place"
+      summaryDetail={props.address}
       actionTestID="pickup-start-button"
       actionLabel={payLabel}
       actionLabelStyle={payLabelStyle(payLabel)}
