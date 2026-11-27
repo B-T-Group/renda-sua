@@ -30,6 +30,7 @@ import {
 } from '../../hooks/useRentalApi';
 import RentalCategoryAutocomplete from '../business/RentalCategoryAutocomplete';
 import ConfirmationModal from '../common/ConfirmationModal';
+import { TagsInput } from '../common/TagsInput';
 import LoadingPage from '../common/LoadingPage';
 import RentalListingModerationStatusChip from '../rentals/RentalListingModerationStatusChip';
 import { RichTextEditor } from '../common/RichTextEditor';
@@ -96,7 +97,7 @@ function buildItemUpdateBody(
   name: string,
   desc: string,
   cat: string,
-  tagsCsv: string,
+  tags: string[],
   currency: string,
   itemActive: boolean
 ): UpdateBusinessRentalItemBody {
@@ -104,10 +105,7 @@ function buildItemUpdateBody(
     name: name.trim(),
     description: desc.trim(),
     rental_category_id: cat,
-    tags: tagsCsv
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean),
+    tags,
     currency: currency.trim() || 'XAF',
     is_active: itemActive,
   };
@@ -191,7 +189,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [cat, setCat] = useState('');
-  const [tags, setTags] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [itemActive, setItemActive] = useState(true);
   const [listingForms, setListingForms] = useState<Record<string, ListingFormState>>(
     {}
@@ -213,7 +211,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
       setName(next.name);
       setDesc(next.description ?? '');
       setCat(next.rental_category_id);
-      setTags((next.tags ?? []).join(', '));
+      setTags(next.tags ?? []);
       setItemActive(next.is_active);
       setListingForms(listingFormsFromDetail(next));
     }
@@ -528,11 +526,14 @@ const BusinessRentalItemEditPage: React.FC = () => {
               onChange={setCat}
               required
             />
-            <TextField
-              label={t('business.rentals.tagsHint', 'Tags (comma-separated)')}
+            <TagsInput
               value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              fullWidth
+              onChange={setTags}
+              label={t('business.rentals.tagsHint', 'Tags')}
+              placeholder={t(
+                'business.rentals.tagsPlaceholder',
+                'Type a tag and press enter'
+              )}
             />
             <TextField
               label={t('business.rentals.currency', 'Currency')}

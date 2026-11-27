@@ -2735,7 +2735,10 @@
           "description": "Description",
           "currency": "Currency",
           "selectCurrency": "Currency",
-          "tags": "Tags (comma-separated)",
+          "tags": "Tags",
+          "tagsPlaceholder": "Type a tag and press enter",
+          "tagsAdd": "Add tag",
+          "tagsRemove": "Remove {{tag}}",
           "continue": "Continue"
         },
         "location": {
@@ -2755,7 +2758,11 @@
           "depositHelpDaily": "Held on card rentals to cover extra time. Default is two-thirds of the day price.",
           "depositInvalid": "Enter a valid security deposit.",
           "weeklyHours": "Weekly hours",
-          "weeklyHoursDefaultHint": "Default hours — customers can book in these windows. You can customize later in the listing editor."
+          "weeklyHoursDefaultHint": "Default hours — customers can book in these windows. You can customize later in the listing editor.",
+          "weeklyHoursEditorHint": "Set when customers can pick up and return this item.",
+          "weeklyHoursStart": "Start",
+          "weeklyHoursEnd": "End",
+          "weeklyHoursCopyAll": "Use {{hours}} for all open days"
         },
         "success": {
           "title": "Submitted for approval",

@@ -2664,7 +2664,10 @@
           "description": "Description",
           "currency": "Devise",
           "selectCurrency": "Devise",
-          "tags": "Tags (séparés par des virgules)",
+          "tags": "Tags",
+          "tagsPlaceholder": "Saisissez un tag puis appuyez sur Entrée",
+          "tagsAdd": "Ajouter le tag",
+          "tagsRemove": "Retirer {{tag}}",
           "continue": "Continuer"
         },
         "location": {
@@ -2684,7 +2687,11 @@
           "depositHelpDaily": "Retenue sur les locations par carte pour couvrir le temps supplémentaire. Par défaut : deux tiers du prix par jour.",
           "depositInvalid": "Saisissez une caution valide.",
           "weeklyHours": "Horaires hebdomadaires",
-          "weeklyHoursDefaultHint": "Horaires par défaut — les clients peuvent réserver dans ces créneaux. Vous pourrez les personnaliser plus tard dans l’éditeur d’annonce."
+          "weeklyHoursDefaultHint": "Horaires par défaut — les clients peuvent réserver dans ces créneaux. Vous pourrez les personnaliser plus tard dans l’éditeur d’annonce.",
+          "weeklyHoursEditorHint": "Indiquez quand les clients peuvent récupérer et rendre cet article.",
+          "weeklyHoursStart": "Début",
+          "weeklyHoursEnd": "Fin",
+          "weeklyHoursCopyAll": "Appliquer {{hours}} à tous les jours ouverts"
         },
         "success": {
           "title": "Soumis pour approbation",
