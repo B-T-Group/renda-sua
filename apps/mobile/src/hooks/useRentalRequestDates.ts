@@ -10,6 +10,7 @@ import {
   rangeFromSearchParams,
   type RentalDateRange,
 } from '../utils/rentals/rentalSearchDates';
+import { formatSearchWindow, isTimedRange } from '../utils/rentals/rentalSearchWindow';
 import type { SelectionRange } from '../utils/rentals/rentalRequestScheduleUtils';
 
 export { rangeFromSearchParams };
@@ -21,11 +22,13 @@ export { rangeFromSearchParams };
 export function useRentalRequestDates(
   listing: RentalListingRow | null,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  startTime?: string,
+  endTime?: string
 ) {
   const { t, i18n } = useTranslation();
   const geo = useRentalCatalogGeoParams();
-  const stay = useMemo(() => rangeFromSearchParams(startDate, endDate), [endDate, startDate]);
+  const stay = useMemo(() => rangeFromSearchParams(startDate, endDate, startTime, endTime), [endDate, endTime, startDate, startTime]);
   const presetSelections = useMemo(() => selectionsForStay(stay, listing), [listing, stay]);
   return {
     stay,
@@ -40,7 +43,8 @@ function selectionsForStay(stay: RentalDateRange | null, listing: RentalListingR
   return allDaySelectionsForRange(
     stay,
     listing.weekly_availability ?? [],
-    Number(listing.base_price_per_day) || 0
+    Number(listing.base_price_per_day) || 0,
+    Number(listing.base_price_per_hour) || 0
   );
 }
 
@@ -50,6 +54,7 @@ function dateLineFor(
   language: string
 ): string | undefined {
   if (!stay) return undefined;
+  if (isTimedRange(stay)) return formatSearchWindow(stay, language);
   const days = t('rentals.requestForm.dayCount', '{{count}} days', { count: stay.dayCount });
   return appendReturnDay(
     t('rentals.searchFirst.sheetDateLine', '{{range}} · {{days}}', {

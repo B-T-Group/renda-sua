@@ -75,7 +75,7 @@ export function weekdaysOpen(
   endMs: number
 ): boolean {
   if (!weekly?.length) return true;
-  let cursor = startMs;
+  let cursor = startOfUtcDay(startMs);
   while (cursor < endMs) {
     const day = new Date(cursor).getUTCDay();
     const row = weekly.find((w) => w.weekday === day);
@@ -96,7 +96,7 @@ export function nextFreeStartMs(input: {
   const duration = input.endMs - input.startMs;
   if (duration <= 0) return null;
   const day = 86_400_000;
-  const origin = Math.max(input.startMs, startOfUtcDay(input.nowMs));
+  const origin = firstSearchOrigin(input.startMs, input.nowMs);
   for (let i = 0; i <= RENTAL_AVAILABILITY_HORIZON_DAYS; i += 1) {
     const start = origin + i * day;
     const end = start + duration;
@@ -106,6 +106,14 @@ export function nextFreeStartMs(input: {
     }
   }
   return null;
+}
+
+/** First candidate start: the asked start, or the same clock time on the first day not in the past. */
+function firstSearchOrigin(startMs: number, nowMs: number): number {
+  const today = startOfUtcDay(nowMs);
+  if (startMs >= today) return startMs;
+  const day = 86_400_000;
+  return startMs + Math.ceil((today - startMs) / day) * day;
 }
 
 function capacityEvents(

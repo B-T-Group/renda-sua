@@ -28,8 +28,10 @@ export function useRentalSearchCatalog(options: {
   categoryId?: string;
   startDate?: string;
   endDate?: string;
+  startTime?: string;
+  endTime?: string;
 }) {
-  const { sort = 'recommended', q, categoryId, startDate, endDate } = options;
+  const { sort = 'recommended', q, categoryId, startDate, endDate, startTime, endTime } = options;
   const api = useApiClient();
   const geo = useRentalCatalogGeoParams();
   const [hits, setHits] = useState<RentalSearchCatalogHit[]>([]);
@@ -54,7 +56,7 @@ export function useRentalSearchCatalog(options: {
           data: { listings: RentalSearchCatalogHit[]; total: number; hasMore?: boolean };
         }>('/rentals/search', {
           signal: controller.signal,
-          params: catalogParams(geo, nextPage, sort, q, categoryId, startDate, endDate),
+          params: catalogParams(geo, nextPage, sort, q, categoryId, { startDate, endDate, startTime, endTime }),
         });
         if (controller.signal.aborted) return;
         if (!data.success) {
@@ -86,7 +88,7 @@ export function useRentalSearchCatalog(options: {
         setLoadingMore(false);
       }
     },
-    [api, categoryId, endDate, geo, q, sort, startDate]
+    [api, categoryId, endDate, endTime, geo, q, sort, startDate, startTime]
   );
 
   useEffect(() => {
@@ -134,8 +136,7 @@ function catalogParams(
   sort: RentalCatalogSort,
   q: string | undefined,
   categoryId: string | undefined,
-  startDate: string | undefined,
-  endDate: string | undefined
+  stay: { startDate?: string; endDate?: string; startTime?: string; endTime?: string }
 ) {
   return {
     page,
@@ -145,8 +146,10 @@ function catalogParams(
     category_id: categoryId || undefined,
     country_code: geo.country_code,
     state: geo.state,
-    start_date: startDate || undefined,
-    end_date: endDate || undefined,
+    start_date: stay.startDate || undefined,
+    end_date: stay.endDate || undefined,
+    start_time: stay.startTime || undefined,
+    end_time: stay.endTime || undefined,
   };
 }
 

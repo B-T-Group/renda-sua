@@ -30,6 +30,8 @@ export interface RentalSearchOrderKeyInput {
   maxPrice?: number | null;
   startDate?: string | null;
   endDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
   operationMode?: string | null;
   rankingEnabled: boolean;
   cardGuardEnabled: boolean;
@@ -176,7 +178,7 @@ function keyParts(
   filterMode: string
 ): Array<string | number> {
   return [
-    'v2',
+    'v3',
     country,
     state,
     filterMode,
@@ -187,6 +189,8 @@ function keyParts(
     bound(input.maxPrice),
     text(input.startDate),
     text(input.endDate),
+    text(input.startTime),
+    text(input.endTime),
     text(input.operationMode),
     input.rankingEnabled ? 1 : 0,
     input.cardGuardEnabled ? 1 : 0,

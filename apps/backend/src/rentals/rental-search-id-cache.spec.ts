@@ -28,10 +28,12 @@ describe('rentalSearchOrderKey', () => {
     expect(key).toBe(rentalSearchOrderKey({ ...base, q: ' camera ' }));
     expect(key).not.toBe(rentalSearchOrderKey({ ...base, rankingEnabled: true }));
     expect(key).not.toBe(rentalSearchOrderKey({ ...base, minPrice: 2000 }));
+    expect(key).not.toBe(rentalSearchOrderKey({ ...base, startTime: '09:00' }));
+    expect(key).not.toBe(rentalSearchOrderKey({ ...base, endTime: '18:00' }));
     expect(key).not.toContain('Bearer');
     expect(key).not.toContain('secret');
     expect(JSON.parse(key)).toEqual([
-      'v2',
+      'v3',
       'CM',
       'LT',
       'specific',
@@ -42,6 +44,8 @@ describe('rentalSearchOrderKey', () => {
       '5000',
       '2026-11-22',
       '2026-11-25',
+      '',
+      '',
       'take_home',
       0,
       0,

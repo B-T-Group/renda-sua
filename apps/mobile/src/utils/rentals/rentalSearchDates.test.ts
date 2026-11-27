@@ -1,29 +1,24 @@
 import {
-  calendarDateInTimeZone,
   describeRentalDateRange,
   formatRangeDates,
   formatSearchStay,
   formatSearchStayRange,
-  formatSheetDateLine,
   marketTimeZone,
   nearbyRanges,
   publishRentalSearchStay,
   rangeFromNextStart,
   rangeFromSearchParams,
   rentalDateRange,
+  timesOf,
   subscribeRentalSearchStay,
-  todayRange,
   weekendRange,
-  weekRange,
 } from './rentalSearchDates';
 
 describe('rental search dates', () => {
   const tuesday = new Date(2026, 10, 10);
 
-  it('builds Today, this weekend, and one week from a Tuesday', () => {
-    expect(todayRange(tuesday)).toMatchObject({ startDate: '2026-11-10', endDate: '2026-11-11', dayCount: 1 });
+  it('builds this weekend from a Tuesday', () => {
     expect(weekendRange(tuesday)).toMatchObject({ startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 });
-    expect(weekRange(tuesday)).toMatchObject({ startDate: '2026-11-10', endDate: '2026-11-17', dayCount: 7 });
   });
 
   it('keeps Sunday as the remaining weekend day', () => {
@@ -48,7 +43,6 @@ describe('rental search dates', () => {
     expect(formatSearchStayRange(range, 'en')).toBe('27\u201328 Nov');
     expect(formatSearchStayRange(range, 'fr')).toBe('27\u201328 nov.');
     expect(formatSearchStay(range, 'en', days)).toBe('27\u201328 Nov · 2 days');
-    expect(formatSheetDateLine(range, 'en', '2 days')).toBe('27\u201328 Nov · 2 days');
   });
 
   it('labels 12–15 Nov as three days and suggests later windows', () => {
@@ -64,12 +58,6 @@ describe('rental search dates', () => {
     });
   });
 
-  it('writes the request-sheet date line in English and French', () => {
-    const range = { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 };
-    expect(formatSheetDateLine(range, 'en', '2 days')).toBe('14\u201315 Nov · 2 days');
-    expect(formatSheetDateLine(range, 'fr', '2 jours')).toBe('14\u201315 nov. · 2 jours');
-  });
-
   it('tells the results list when the request sheet changes dates', () => {
     const seen: string[] = [];
     const stop = subscribeRentalSearchStay((range) => seen.push(range.startDate));
@@ -79,14 +67,8 @@ describe('rental search dates', () => {
     expect(seen).toEqual(['2026-11-16']);
   });
 
-  it('uses the Cameroon clock for today, including just before UTC midnight', () => {
+  it('uses the Cameroon clock for the market', () => {
     expect(marketTimeZone('cm')).toBe('Africa/Douala');
-    expect(calendarDateInTimeZone(new Date('2026-11-09T23:30:00Z'), 'Africa/Douala')).toMatchObject({
-      year: 2026,
-      month: 11,
-      day: 10,
-      iso: '2026-11-10',
-    });
   });
 
   it('reports a span over 30 days instead of dropping it', () => {
@@ -120,5 +102,34 @@ describe('rental search dates', () => {
     expect(rangeFromSearchParams('', '2026-11-16')).toBeNull();
     expect(rangeFromSearchParams('2026-13-01', '2026-13-05')).toBeNull();
     expect(rangeFromSearchParams(' 2026-11-14', '2026-11-16')).toBeNull();
+  });
+
+  it('keeps valid clock times from a search link and rejects malformed ones', () => {
+    expect(rangeFromSearchParams('2026-11-14', '2026-11-16', '09:30', '17:00')).toEqual({
+      startDate: '2026-11-14',
+      endDate: '2026-11-16',
+      dayCount: 2,
+      startTime: '09:30',
+      endTime: '17:00',
+    });
+    expect(rangeFromSearchParams('2026-11-14', '2026-11-16', '9am', '17:00')).toBeNull();
+    expect(rangeFromSearchParams('2026-11-14', '2026-11-16', '09:00', '25:00')).toBeNull();
+  });
+
+  it('rejects a one-day window that ends before it starts', () => {
+    expect(rangeFromSearchParams('2026-11-14', '2026-11-15', '17:00', '09:00')).toBeNull();
+    expect(rangeFromSearchParams('2026-11-14', '2026-11-15', '09:00', '17:00')).not.toBeNull();
+  });
+
+  it('carries times through a shift and a next-free-start range', () => {
+    const range = rangeFromSearchParams('2026-11-14', '2026-11-16', '09:00', '17:00')!;
+    expect(timesOf(range)).toEqual({ startTime: '09:00', endTime: '17:00' });
+    expect(timesOf({})).toEqual({});
+    expect(rangeFromNextStart('2026-11-18', 2, timesOf(range))).toMatchObject({
+      startDate: '2026-11-18',
+      endDate: '2026-11-20',
+      startTime: '09:00',
+      endTime: '17:00',
+    });
   });
 });

@@ -21,6 +21,8 @@ export function defaultCatalogParams(input: {
     sort: input.sort as RentalSearchParams['sort'],
     start_date: input.dates?.startDate,
     end_date: input.dates?.endDate,
+    start_time: input.dates?.startTime,
+    end_time: input.dates?.endTime,
     page: input.page,
     limit: DEFAULT_RENTAL_PAGE_SIZE,
   };

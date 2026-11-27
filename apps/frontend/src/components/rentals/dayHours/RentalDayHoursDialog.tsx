@@ -97,6 +97,11 @@ export interface RentalDayHoursDialogProps {
 
 type Notes = Record<string, BlockNote | null>;
 
+/** The browse search opens the picker without a listing, so there are no rates to show. */
+function isPriced(listing: DayHoursListing): boolean {
+  return listing.dayRate > 0 || listing.hourRate > 0;
+}
+
 /** Web day-and-hours picker. Calendar left, days right. */
 export const RentalDayHoursDialog: React.FC<RentalDayHoursDialogProps> = (props) => {
   const theme = useTheme();
@@ -248,7 +253,7 @@ function DialogBody({
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: 22, fontWeight: 800, lineHeight: 1.25 }}>{pickerText(lang, 'title')}</Typography>
           <Typography sx={{ fontSize: 13, color: MUTED, mt: 0.5 }}>{pickerText(lang, 'subtitle', { city: zoneCity })}</Typography>
-          <PriceChips listing={listing} currency={currency} lang={lang} />
+          {isPriced(listing) ? <PriceChips listing={listing} currency={currency} lang={lang} /> : null}
         </Box>
         <IconButton data-testid="day-hours-close" aria-label={pickerText(lang, 'close')} onClick={onClose} sx={{ bgcolor: '#F1F3F6' }}>
           <CloseIcon />
@@ -342,7 +347,7 @@ function DialogBody({
                 : footerDetail(days, infos, lang, timeZone, { shared: sharedOn, todayKey, cityLabel: lang === 'fr' ? `heure de ${zoneCity}` : `${zoneCity} time` })}
           </Typography>
         </Box>
-        {days.length ? (
+        {days.length && isPriced(listing) ? (
           <Typography data-testid="day-hours-total" sx={{ fontSize: 20, fontWeight: 800, whiteSpace: 'nowrap' }}>
             {pickerMoney(total, currency, lang)}
           </Typography>
@@ -678,7 +683,9 @@ function DayRow({
           <Typography sx={{ fontSize: 13, color: MUTED }}>{hoursText}</Typography>
         )}
         <Box sx={{ flex: 1 }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{pickerMoney(dayPrice(day, listing), currency, lang)}</Typography>
+        {isPriced(listing) ? (
+          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{pickerMoney(dayPrice(day, listing), currency, lang)}</Typography>
+        ) : null}
       </Stack>
       {open && note ? (
         <Note testId={`${prefix}-note`} icon="alert" color={RED} text={noteText(note, lang, timeZone, listing.minHours, listing.maxHours)} />
@@ -738,7 +745,9 @@ function SharedCard({
           <Typography sx={{ fontSize: 13, color: MUTED }}>{pickerText(lang, 'fullDays')}</Typography>
         )}
         <Box sx={{ flex: 1 }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{pickerMoney(total, currency, lang)}</Typography>
+        {isPriced(listing) ? (
+          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{pickerMoney(total, currency, lang)}</Typography>
+        ) : null}
       </Stack>
       {note ? (
         <Note icon="alert" color={RED} text={noteText(note, lang, timeZone, listing.minHours, listing.maxHours)} />
