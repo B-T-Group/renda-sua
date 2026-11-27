@@ -71,6 +71,10 @@ import { LOW_STOCK_THRESHOLD } from '../../constants/stock';
 import { requestStockAvailabilityCheck } from '../../services/inventoryItemsApi';
 import { scheduleMetaAddToCart } from '../../services/metaConversionsApi';
 import { ProductInterestSheet } from '../../components/product-interest/ProductInterestSheet';
+import { ExportOnlyBadge, EXPORT_BRAND_BLUE } from '../../components/exports/ExportOnlyBadge';
+import { ExportedToBox } from '../../components/exports/ExportedToBox';
+import { ExportViewerNote } from '../../components/exports/ExportViewerNote';
+import { resolveExportViewer } from '../../utils/exportViewer';
 import { useProductInterest } from '../../hooks/useProductInterest';
 import { useExportOrderMode } from '../../hooks/useExportOrderMode';
 import { useMarket } from '../../hooks/useMarket';
@@ -131,7 +135,11 @@ function InventoryItemDetailScreen() {
         nav.navigate('ProductInterestSuccess');
       }
     } catch (e: any) {
-      setSnack(e?.message || t('productInterest.error', 'Could not send interest'));
+      setSnack(
+        e?.code === 'NOT_EXPORTED_TO_MARKET'
+          ? t('exportItem.notExportedError', 'This item isn’t exported to your market.')
+          : e?.message || t('productInterest.error', 'Could not send interest')
+      );
     } finally {
       setInterestSubmitting(false);
     }
@@ -278,7 +286,8 @@ function InventoryItemDetailScreen() {
   }, [inventoryItemId, item, navigation, sharePriceLine, t, setLikedOverride]);
 
   const onAddToCart = useCallback(() => {
-    if (!item || !selectionHasStock(item, effectiveVariantId)) return;
+    if (!item || item.item.export_available === true) return;
+    if (!selectionHasStock(item, effectiveVariantId)) return;
     if (isFoodOrderBlocked(item.food_availability)) return;
     if (dbVariants.length >= 1 && !effectiveVariantId) return;
     trackView(inventoryItemId);
@@ -321,7 +330,8 @@ function InventoryItemDetailScreen() {
   ]);
 
   const onBuy = useCallback(() => {
-    if (!item || !selectionHasStock(item, effectiveVariantId)) return;
+    if (!item || item.item.export_available === true) return;
+    if (!selectionHasStock(item, effectiveVariantId)) return;
     if (isFoodOrderBlocked(item.food_availability)) return;
     if (dbVariants.length >= 1 && !effectiveVariantId) return;
     trackView(inventoryItemId);
@@ -426,17 +436,13 @@ function InventoryItemDetailScreen() {
     ? t('cart.addMore', 'Add more')
     : t('cart.addToCart', 'Add to cart');
   const exportAvailable = item?.item?.export_available === true;
-  const viewerCountry =
-    selectedMarket?.countryCode?.trim().toUpperCase() ?? '';
-  const listingCountry = itemCountryCode ?? '';
-  // Buy/cart only when shopper is clearly in the listing's home market.
-  const isExportInterestOnly =
-    exportAvailable &&
-    !(
-      !!listingCountry &&
-      !!viewerCountry &&
-      listingCountry === viewerCountry
-    );
+  // Export-only items are never bought in the app, in any market (origin included).
+  // I’m interested only when the browsing market is one of the item's destinations.
+  const isExportInterestOnly = exportAvailable;
+  const exportViewer = useMemo(
+    () => resolveExportViewer(item, selectedMarket?.countryCode ?? null),
+    [item, selectedMarket?.countryCode]
+  );
 
   const breadcrumb = useMemo(() => {
     if (!item) return '';
@@ -664,6 +670,9 @@ function InventoryItemDetailScreen() {
           >
             {item.item.name}
           </Text>
+          {exportAvailable ? (
+            <ExportOnlyBadge variant="inline" style={{ marginTop: spacing.xs }} />
+          ) : null}
           {item.food_availability ? (
             <View style={{ marginTop: spacing.sm, gap: spacing.xs }}>
               <FoodAvailabilityChip availability={item.food_availability} />
@@ -800,7 +809,16 @@ function InventoryItemDetailScreen() {
             )}
           </View>
 
-          {showInStock ? (
+          {exportAvailable ? (
+            <View style={{ marginTop: spacing.md }}>
+              <ExportedToBox
+                destinations={exportViewer.destinations}
+                marketCode={exportViewer.marketCode}
+              />
+            </View>
+          ) : null}
+
+          {showInStock && !exportAvailable ? (
             <Text
               style={[
                 typography.body2,
@@ -816,7 +834,7 @@ function InventoryItemDetailScreen() {
               })}
             </Text>
           ) : null}
-          {showLowStock ? (
+          {showLowStock && !exportAvailable ? (
             <View
               style={{
                 flexDirection: 'row',
@@ -1083,8 +1101,13 @@ function InventoryItemDetailScreen() {
               >
                 {t('productInterest.priceNotApplicable', 'Price on request')}
               </Text>
+              {exportViewer.canSendInterest ? (
               <Button
+                testID="export-interest-cta"
                 mode="contained"
+                icon="hand-back-right-outline"
+                buttonColor={EXPORT_BRAND_BLUE}
+                textColor="#ffffff"
                 onPress={() => {
                   if (!auth.isAuthenticated) {
                     void auth.setPostAuthResumeForInventoryDetail(inventoryItemId);
@@ -1100,8 +1123,11 @@ function InventoryItemDetailScreen() {
                 contentStyle={styles.ctaBtnContent}
                 labelStyle={styles.ctaBtnLabel}
               >
-                {t('productInterest.cta', "I'm interested")}
+                {t('productInterest.cta', 'I’m interested')}
               </Button>
+              ) : (
+                <ExportViewerNote role={exportViewer.role} marketCode={exportViewer.marketCode} />
+              )}
             </View>
           ) : (
             <View style={{ alignItems: 'center', marginBottom: canPurchase ? spacing.sm : 0 }}>

@@ -1,6 +1,7 @@
 import {
   Business,
   Category,
+  PanToolOutlined,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +38,10 @@ import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { catalogStorePath, isFoodCatalogItem } from '../../constants/food';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
+import type { ProductInterestSource } from '../../hooks/useProductInterest';
+import { useExportViewer } from '../../hooks/useExportViewer';
+import ExportOnlyBadge from '../exports/ExportOnlyBadge';
+import ExportViewerNote from '../exports/ExportViewerNote';
 import {
   SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
   SITE_EVENT_INVENTORY_CARD_VIEW_DETAILS_CLICK,
@@ -101,6 +106,11 @@ interface DashboardItemCardProps {
   showCartButtons?: boolean;
   viewsCount?: number;
   onLikedChange?: (itemId: string, liked: boolean) => void;
+  /**
+   * Public /exports/{cc} page: partner inquiries are open to every market and are sent
+   * with this source. Absent = in-app rule (destination markets only).
+   */
+  exportInterestSource?: ProductInterestSource;
 }
 
 const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
@@ -121,6 +131,7 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
   showCartButtons = false,
   viewsCount,
   onLikedChange,
+  exportInterestSource,
 }) => {
   const navigate = useNavigate();
   const [anonBuyNowOpen, setAnonBuyNowOpen] = useState(false);
@@ -133,6 +144,10 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
   const { trackSiteEvent } = useTrackSiteEvent();
   const { getListingQuantityInCart } = useCart();
   const exportAvailable = inventory.item?.export_available === true;
+  const exportViewer = useExportViewer(inventory);
+  const publicPartnerInterest = exportInterestSource === 'public_export_catalog';
+  const canSendExportInterest =
+    exportAvailable && (publicPartnerInterest || exportViewer.canSendInterest);
   const distanceKm = formatDistanceKm(inventory.distance_value);
   const inCartQuantity = getListingQuantityInCart(inventory.id);
   const inCart = inCartQuantity > 0;
@@ -419,22 +434,9 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
               overflow: 'hidden',
             }}
           >
+            {exportAvailable ? <ExportOnlyBadge variant="overlay" /> : null}
             {displayImageUrl ? (
               <>
-                {exportAvailable ? (
-                  <Chip
-                    label={t('exportCatalog.badge', 'Export')}
-                    size="small"
-                    color="secondary"
-                    sx={{
-                      position: 'absolute',
-                      top: 8,
-                      left: 8,
-                      zIndex: 1,
-                      fontWeight: 700,
-                    }}
-                  />
-                ) : null}
                 {hasMultipleImages && (
                   <Chip
                     label={t(
@@ -659,6 +661,16 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
             foodOpen={inventory.food_availability?.is_available_now}
             hasDeal={Boolean(inventory.hasActiveDeal)}
           />
+          {exportAvailable ? (
+            <Box sx={{ mb: 0.75 }}>
+              <ExportViewerNote
+                variant="card"
+                role={exportViewer.role}
+                marketCode={exportViewer.marketCode}
+                destinations={exportViewer.destinations}
+              />
+            </Box>
+          ) : null}
           {packSavings && !exportAvailable ? (
             <Typography variant="caption" color="success.dark" fontWeight={700} sx={{ display: 'block', mb: 0.5 }}>
               {t('orders.variant.saveOnPack', 'Save {{pct}}% by buying a pack of {{count}} units', packSavings)}
@@ -1248,11 +1260,18 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
           >
             {viewDetailsLabel}
           </Button>
-          {exportAvailable ? (
+          {exportAvailable && !canSendExportInterest ? null : exportAvailable ? (
             <Button
               variant="contained"
               size="small"
-              sx={{ width: '75%', alignSelf: 'center' }}
+              startIcon={<PanToolOutlined />}
+              data-testid="export-interest-cta"
+              sx={{
+                width: '75%',
+                alignSelf: 'center',
+                bgcolor: '#0A4FB5',
+                '&:hover': { bgcolor: '#083F91' },
+              }}
               onClick={() => {
                 if (!isAuthenticated) {
                   if (flagOn) {
@@ -1432,6 +1451,8 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
         businessInventoryId={inventory.id}
         itemName={inventory.item.name}
         onClose={() => setInterestOpen(false)}
+        source={exportInterestSource}
+        fallbackCountryCode={exportViewer.originCode}
       />
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}

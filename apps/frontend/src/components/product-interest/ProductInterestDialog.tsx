@@ -9,6 +9,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import type { ProductInterestSource } from '../../hooks/useProductInterest';
 import { useProductInterestSubmit } from '../../hooks/useProductInterestSubmit';
 import { ExportOrderSubmitted } from './ExportOrderSubmitted';
 
@@ -17,6 +18,8 @@ interface ProductInterestDialogProps {
   businessInventoryId: string;
   itemName: string;
   onClose: () => void;
+  source?: ProductInterestSource;
+  fallbackCountryCode?: string | null;
 }
 
 export const ProductInterestDialog: React.FC<ProductInterestDialogProps> = ({
@@ -24,6 +27,8 @@ export const ProductInterestDialog: React.FC<ProductInterestDialogProps> = ({
   businessInventoryId,
   itemName,
   onClose,
+  source,
+  fallbackCountryCode,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -32,13 +37,21 @@ export const ProductInterestDialog: React.FC<ProductInterestDialogProps> = ({
     open,
     businessInventoryId,
     onLeadSent: onClose,
+    source,
+    fallbackCountryCode,
   });
 
   useEffect(() => {
     if (open) setNote('');
   }, [open]);
 
-  const helper = orderMode
+  const helper = source === 'public_export_catalog'
+    ? t(
+        'exportItem.partnerHelp',
+        'You’re sending a partner inquiry about {{name}} to the business. They’ll contact you outside the app.',
+        { name: itemName }
+      )
+    : orderMode
     ? t(
         'productInterest.order.noteHelp',
         'Your request for {{name}} goes to our export team. We issue a purchase order and prepare a proforma for your approval.',

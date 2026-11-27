@@ -2,6 +2,7 @@ import {
   Add,
   ArrowBack,
   Delete,
+  FlightTakeoff,
   LocalShipping,
   Remove,
   ShoppingCart,
@@ -25,6 +26,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { cartLineKey } from '../../contexts/cartLineKey';
 import { useCart } from '../../contexts/CartContext';
 import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
+import { useExportCartPurge } from '../../hooks/useExportCartPurge';
 import { toOrderItemVariantId } from '../../utils/shopperVariantSelection';
 import {
   CheckoutTaxSummaryLines,
@@ -47,6 +49,23 @@ const CartPage: React.FC = () => {
     getCartByBusiness,
     getCartTotal,
   } = useCart();
+
+  const exportPurge = useExportCartPurge();
+  const exportRemovedNote =
+    exportPurge.removedCount > 0 ? (
+      <Alert
+        severity="info"
+        icon={<FlightTakeoff fontSize="inherit" />}
+        onClose={exportPurge.dismiss}
+        sx={{ mb: 2, textAlign: 'left' }}
+        data-testid="cart-export-removed-note"
+      >
+        {t('exportItem.cartRemoved', {
+          count: exportPurge.removedCount,
+          defaultValue: '{{count}} item was removed: it’s export only.',
+        })}
+      </Alert>
+    ) : null;
 
   const cartByBusiness = getCartByBusiness();
   const cartTotal = getCartTotal();
@@ -96,6 +115,7 @@ const CartPage: React.FC = () => {
         sx={{ py: 4, px: { xs: 0, sm: 2 } }}
       >
         <Box sx={{ textAlign: 'center', py: 8 }}>
+          {exportRemovedNote}
           <ShoppingCart sx={{ fontSize: 80, color: 'grey.400', mb: 2 }} />
           <Typography variant="h4" gutterBottom>
             {t('cart.empty', 'Your cart is empty')}
@@ -132,6 +152,8 @@ const CartPage: React.FC = () => {
 
       {/* Progress Stepper */}
       <CheckoutProgressStepper activeStep={0} />
+
+      {exportRemovedNote}
 
       {reorderBanner === 'business_closed' ? (
         <Alert severity="warning" sx={{ mb: 2 }}>

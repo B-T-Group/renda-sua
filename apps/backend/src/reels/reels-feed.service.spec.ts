@@ -88,6 +88,35 @@ describe('ReelsFeedService', () => {
       );
     });
 
+    it('never marks an export-only item purchasable, even in its origin market', async () => {
+      mockAnonymousCountryFeed(
+        [itemReel({ market_country: 'CA' })],
+        [{ ...inventoryRow('inv-exp'), item: { export_available: true } }]
+      );
+
+      const page = await service.getFeed({ country: 'CA' });
+
+      expect(page.items[0].inventoryItemId).toBe('inv-exp');
+      expect(page.items[0].export_only).toBe(true);
+      expect(page.items[0].purchasable).toBe(false);
+      expect(hasura.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('item{export_available}'),
+        expect.anything()
+      );
+    });
+
+    it('leaves non-export items purchasable with no export_only key', async () => {
+      mockAnonymousCountryFeed(
+        [itemReel()],
+        [{ ...inventoryRow('inv-1'), item: { export_available: false } }]
+      );
+
+      const page = await service.getFeed({ country: 'CM' });
+
+      expect(page.items[0].purchasable).toBe(true);
+      expect(page.items[0]).not.toHaveProperty('export_only');
+    });
+
     it('keeps Buy off when the market matches but no inventory exists', async () => {
       mockAnonymousCountryFeed([itemReel()], []);
 

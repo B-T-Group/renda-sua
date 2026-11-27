@@ -97,7 +97,7 @@ export function useCatalogVariantFlow(params: {
       }
       const before = cart.quantityForLine(item.id, toCartVariantId(selectionId));
       const result = cart.addFromCatalog(item, Math.max(1, quantity), selectionId, baseLabel);
-      if (result === 'needs_variant') return 'unchanged';
+      if (result === 'needs_variant' || result === 'export_only') return 'unchanged';
       const after = cart.quantityForLine(item.id, toCartVariantId(selectionId));
       const added = after - before;
       if (added <= 0) return 'unchanged';
@@ -139,6 +139,7 @@ export function useCatalogVariantFlow(params: {
       }
       const before = cart.quantityForLine(item.id, null);
       const result = cart.addFromCatalog(item, 1, null, baseLabel);
+      if (result === 'export_only') return;
       if (result === 'needs_variant') {
         setPendingAction('cart');
         setPickerItem(item);

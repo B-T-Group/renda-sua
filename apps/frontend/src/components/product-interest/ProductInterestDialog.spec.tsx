@@ -39,7 +39,10 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-function renderDialog(onClose = jest.fn()) {
+function renderDialog(
+  onClose = jest.fn(),
+  extra: Partial<React.ComponentProps<typeof ProductInterestDialog>> = {}
+) {
   render(
     <ThemeProvider theme={theme}>
       <MemoryRouter>
@@ -48,6 +51,7 @@ function renderDialog(onClose = jest.fn()) {
           businessInventoryId="inv-1"
           itemName="Widget"
           onClose={onClose}
+          {...extra}
         />
       </MemoryRouter>
     </ThemeProvider>
@@ -69,7 +73,7 @@ describe('ProductInterestDialog', () => {
     fireEvent.click(screen.getByText('Send interest'));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(mockSubmitInterest).toHaveBeenCalledWith('inv-1', '', 'CM');
+    expect(mockSubmitInterest).toHaveBeenCalledWith('inv-1', '', 'CM', 'in_app');
     expect(mockEnqueue).toHaveBeenCalledWith(
       'Interest sent. The seller will contact you.',
       { variant: 'success' }
@@ -111,5 +115,21 @@ describe('ProductInterestDialog', () => {
 
     fireEvent.click(screen.getByTestId('export-order-view'));
     expect(mockNavigate).toHaveBeenCalledWith('/export-orders/order-9');
+  });
+
+  it('sends a public-page partner inquiry as a lead, never an export order', async () => {
+    mockGetEnabled.mockResolvedValue(true);
+    mockSubmitInterest.mockResolvedValue({ id: 'lead-2', source: 'public_export_catalog' });
+    const onClose = renderDialog(jest.fn(), { source: 'public_export_catalog' });
+
+    expect(
+      screen.getByText(
+        'You’re sending a partner inquiry about Widget to the business. They’ll contact you outside the app.'
+      )
+    ).toBeTruthy();
+    expect(mockGetEnabled).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Send interest'));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(mockSubmitInterest).toHaveBeenCalledWith('inv-1', '', 'CM', 'public_export_catalog');
   });
 });

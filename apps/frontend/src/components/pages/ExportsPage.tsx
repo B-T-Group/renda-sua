@@ -32,6 +32,8 @@ import ItemCardSkeleton from '../common/ItemCardSkeleton';
 import { RecentlyViewedRail } from '../catalog-experience/RecentlyViewedRail';
 import ExportCatalogIllustration from '../illustrations/ExportCatalogIllustration';
 import SEOHead from '../seo/SEOHead';
+import ExportsDirectionBar from '../exports/ExportsDirectionBar';
+import { useExportOrigins } from '../../hooks/useExportOrigins';
 
 const ITEMS_PER_PAGE = 24;
 const EXPORT_SKELETON_COUNT = 8;
@@ -83,6 +85,7 @@ const ExportsPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const browserGeo = usePublicBrowserGeo(true);
   const isClientUser = profile?.user_type_id === 'client';
+  const { origins } = useExportOrigins();
 
   useEffect(() => {
     setCurrentPage(1);
@@ -179,6 +182,7 @@ const ExportsPage: React.FC = () => {
             </Typography>
           </Box>
         </Box>
+        <ExportsDirectionBar direction="into" origins={origins} />
       </Box>
 
       <RecentlyViewedRail

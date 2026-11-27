@@ -3615,7 +3615,15 @@ export class NotificationsService {
     const contact =
       [payload.clientPhone, payload.clientEmail].filter(Boolean).join(' · ') ||
       'see app';
-    const note = (payload.clientNote || '').trim() || '—';
+    const partner = payload.source === 'public_export_catalog';
+    const partnerLabel = partner
+      ? productInterestPartnerLabel(
+          normalizeLanguage(u?.preferred_language) === 'fr',
+          payload.viewerCountryCode
+        )
+      : '';
+    const rawNote = (payload.clientNote || '').trim() || '—';
+    const note = partner ? `${partnerLabel} ${rawNote}` : rawNote;
     if (u?.email) {
       const locale = normalizeLanguage(u.preferred_language);
       const links = this.deepLinkService.productInterest();
@@ -3652,9 +3660,13 @@ export class NotificationsService {
         ...(pushEnabled
           ? {
               push: {
-                title: fr
-                  ? 'Nouveau manifeste d’intérêt'
-                  : 'New product interest',
+                title: partner
+                  ? fr
+                    ? 'Nouvelle demande partenaire'
+                    : 'New partner inquiry'
+                  : fr
+                    ? 'Nouveau manifeste d’intérêt'
+                    : 'New product interest',
                 body: fr
                   ? `${payload.clientName} s’intéresse à ${payload.itemName}.`
                   : `${payload.clientName} is interested in ${payload.itemName}.`,
@@ -7795,4 +7807,20 @@ export class NotificationsService {
       // Don't throw - this runs in background
     }
   }
+}
+
+/** Prefix for partner inquiries sent from the public /exports/{cc} page. */
+export function productInterestPartnerLabel(
+  fr: boolean,
+  viewerCountryCode?: string | null
+): string {
+  const market = viewerCountryCode?.trim().toUpperCase();
+  if (fr) {
+    return market
+      ? `[Demande partenaire depuis la page publique des exports · marché\u00a0: ${market}]`
+      : '[Demande partenaire depuis la page publique des exports]';
+  }
+  return market
+    ? `[Partner inquiry from the public exports page · market: ${market}]`
+    : '[Partner inquiry from the public exports page]';
 }

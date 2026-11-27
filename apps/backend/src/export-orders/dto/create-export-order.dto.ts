@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Length,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -39,9 +40,12 @@ export class CreateExportOrderDto {
   @MaxLength(2000)
   note?: string;
 
-  @ApiPropertyOptional({ description: 'Destination country ISO code' })
-  @IsOptional()
+  @ApiProperty({
+    description:
+      'Browsing market ISO-2 code. Required (no default). Must be one of the item export markets, otherwise 400 NOT_EXPORTED_TO_MARKET.',
+    example: 'CM',
+  })
   @IsString()
-  @MaxLength(2)
-  countryCode?: string;
+  @Length(2, 2)
+  countryCode!: string;
 }

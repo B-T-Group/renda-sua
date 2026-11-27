@@ -145,7 +145,7 @@ function ReelsFeedScreen() {
       const inventoryItemId = item.inventoryItemId;
       if (!inventoryItemId) return;
       const nav = navigation as { navigate: (n: string, p: object) => void };
-      if (persona.activePersona === 'client') {
+      if (persona.activePersona === 'client' && item.export_only !== true) {
         nav.navigate('PlaceOrder', { inventoryItemId });
         return;
       }
@@ -176,7 +176,7 @@ function ReelsFeedScreen() {
     async (item: FeedReel) => {
       if (addingRef.current || item.subject_type !== 'item') return;
       const inventoryItemId = item.inventoryItemId;
-      if (!inventoryItemId || item.purchasable === false) return;
+      if (!inventoryItemId || item.purchasable === false || item.export_only === true) return;
       addingRef.current = true;
       try {
         const fetchItem = auth.isAuthenticated
@@ -222,8 +222,10 @@ function ReelsFeedScreen() {
         ) : null}
         <ReelOverlay
           reel={item}
-          onBuy={showCtas ? () => onBuy(item) : undefined}
-          onAddToCart={showCtas ? () => void onAddToCart(item) : undefined}
+          onBuy={showCtas && item.export_only !== true ? () => onBuy(item) : undefined}
+          onAddToCart={
+            showCtas && item.export_only !== true ? () => void onAddToCart(item) : undefined
+          }
           inCart={
             !!item.inventoryItemId && cart.isListingInCart(item.inventoryItemId)
           }

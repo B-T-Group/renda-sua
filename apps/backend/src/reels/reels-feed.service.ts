@@ -44,7 +44,7 @@ const INVENTORY_FOR_ITEMS_QUERY = `query($itemIds:[uuid!]!, $country:String!){
       }
     }
     order_by:[{quantity:desc},{updated_at:desc}]
-  ){id item_id business_location{business_id}}
+  ){id item_id business_location{business_id} item{export_available}}
 }`;
 
 export type FeedReel = {
@@ -66,6 +66,8 @@ export type FeedReel = {
   purchasable?: boolean;
   /** Resolved `business_inventory.id` for checkout when subject is a catalog item. */
   inventoryItemId?: string | null;
+  /** Export-only item: never purchasable (no Buy / cart), in any market. */
+  export_only?: boolean;
 };
 
 type RecordViewParams = {
@@ -87,7 +89,10 @@ type InventoryRow = {
   id: string;
   item_id: string;
   business_location: { business_id: string };
+  item?: { export_available?: boolean | null } | null;
 };
+
+type InventoryRef = { id: string; exportOnly: boolean };
 
 type FeedPageParams = {
   userId: string | null;
@@ -447,7 +452,7 @@ export class ReelsFeedService {
     const withInventory = await this.attachInventoryIds(matched, country);
     return withInventory.map((r) => ({
       ...r,
-      purchasable: Boolean(r.inventoryItemId),
+      purchasable: Boolean(r.inventoryItemId) && r.export_only !== true,
     }));
   }
 
@@ -492,16 +497,20 @@ export class ReelsFeedService {
       reels,
       country
     );
-    return reels.map((r) => ({
-      ...r,
-      inventoryItemId: this.inventoryIdFor(r, inventoryByKey),
-    }));
+    return reels.map((r) => {
+      const ref = this.inventoryRefFor(r, inventoryByKey);
+      return {
+        ...r,
+        inventoryItemId: ref?.id ?? null,
+        ...(ref?.exportOnly ? { export_only: true } : {}),
+      };
+    });
   }
 
-  private inventoryIdFor(
+  private inventoryRefFor(
     reel: ItemSubject,
-    inventoryByKey: Map<string, string>
-  ): string | null {
+    inventoryByKey: Map<string, InventoryRef>
+  ): InventoryRef | null {
     if (reel.subject_type !== 'item') return null;
     return inventoryByKey.get(`${reel.business_id}:${reel.subject_id}`) ?? null;
   }
@@ -509,7 +518,7 @@ export class ReelsFeedService {
   private async loadInventoryIdsForItemSubjects(
     reels: ItemSubject[],
     country: string
-  ): Promise<Map<string, string>> {
+  ): Promise<Map<string, InventoryRef>> {
     const itemIds = this.itemSubjectIds(reels);
     if (!itemIds.length) return new Map();
     const rows = await this.queryInventoryForItems(itemIds, country);
@@ -537,11 +546,13 @@ export class ReelsFeedService {
     return result.business_inventory ?? [];
   }
 
-  private indexInventoryByBusinessItem(rows: InventoryRow[]): Map<string, string> {
-    const map = new Map<string, string>();
+  private indexInventoryByBusinessItem(rows: InventoryRow[]): Map<string, InventoryRef> {
+    const map = new Map<string, InventoryRef>();
     for (const row of rows) {
       const key = `${row.business_location.business_id}:${row.item_id}`;
-      if (!map.has(key)) map.set(key, row.id);
+      if (!map.has(key)) {
+        map.set(key, { id: row.id, exportOnly: row.item?.export_available === true });
+      }
     }
     return map;
   }

@@ -6,6 +6,7 @@ import {
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
   Inventory2 as SpecsIcon,
+  PanToolOutlined,
   ShoppingCart,
   Verified,
 } from '@mui/icons-material';
@@ -49,6 +50,10 @@ import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import { useExportViewer } from '../../hooks/useExportViewer';
+import ExportOnlyBadge from '../exports/ExportOnlyBadge';
+import ExportedToBox from '../exports/ExportedToBox';
+import ExportViewerNote from '../exports/ExportViewerNote';
 import { catalogStorePath } from '../../constants/food';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
@@ -480,6 +485,7 @@ export default function ItemDetailPage() {
   const { selectedMarket, markets, setMarket } = useMarket();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
+  const exportViewer = useExportViewer(inventoryItem);
   const { isStripeRail } = useIsStripeRail();
   const defaultVariantLabel = t('orders.variant.defaultOption', 'Default');
   const variantSel = useListingVariantSelection(
@@ -1316,12 +1322,9 @@ export default function ItemDetailPage() {
               {item.name}
             </Typography>
             {exportAvailable ? (
-              <Chip
-                size="small"
-                color="secondary"
-                label={t('exportCatalog.badge', 'Export')}
-                sx={{ fontWeight: 700, alignSelf: 'flex-start', mb: 1 }}
-              />
+              <Box sx={{ alignSelf: 'flex-start', mb: 1 }}>
+                <ExportOnlyBadge />
+              </Box>
             ) : null}
 
             <ItemDetailRatingSummary
@@ -1608,13 +1611,30 @@ export default function ItemDetailPage() {
               </Box>
             )}
 
+            {exportAvailable ? (
+              <ExportedToBox
+                destinations={exportViewer.destinations}
+                marketCode={exportViewer.marketCode}
+              />
+            ) : null}
+
             {showOrderCtaStack ? (
               <Stack direction="column" spacing={1} sx={{ pt: 1, width: '100%', minWidth: 0 }}>
-                {exportAvailable ? (
+                {exportAvailable && !exportViewer.canSendInterest ? (
+                  <ExportViewerNote
+                    variant="pdp"
+                    role={exportViewer.role}
+                    marketCode={exportViewer.marketCode}
+                    destinations={exportViewer.destinations}
+                  />
+                ) : exportAvailable ? (
                   <Button
                     variant="contained"
                     size="medium"
                     fullWidth
+                    startIcon={<PanToolOutlined />}
+                    data-testid="export-interest-cta"
+                    sx={{ bgcolor: '#0A4FB5', '&:hover': { bgcolor: '#083F91' } }}
                     onClick={() => {
                       if (!isAuthenticated) {
                         if (flagOn) {

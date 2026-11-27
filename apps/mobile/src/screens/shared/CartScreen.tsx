@@ -16,6 +16,7 @@ import { CartOrderSummary } from '../../components/cart/CartOrderSummary';
 import { CartSaveAccountNudge } from '../../components/cart/CartSaveAccountNudge';
 import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgressStepper';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
+import { useExportCartPurge } from '../../hooks/useExportCartPurge';
 
 type CartNav = NativeStackNavigationProp<ClientRootStackParamList | GuestRootStackParamList>;
 
@@ -57,6 +58,20 @@ export default observer(function CartScreen() {
   const [signInPromptVisible, setSignInPromptVisible] = useState(false);
   const [removed, setRemoved] = useState<CartLine | null>(null);
   const [footerHeight, setFooterHeight] = useState(220);
+  const exportPurge = useExportCartPurge();
+  const exportPurgeNote =
+    exportPurge.removedCount > 0 ? (
+      <NoticeBanner
+        tone="info"
+        icon="airplane-takeoff"
+        message={t('exportItem.cartRemoved', '{{count}} items were removed: they’re export only.', {
+          count: exportPurge.removedCount,
+        })}
+        actionLabel={t('common.gotIt', 'Got it')}
+        onAction={exportPurge.dismiss}
+        style={{ marginBottom: spacing.sm }}
+      />
+    ) : null;
 
   const countryInfo = cart.countryInfo;
   const itemCount = useMemo(
@@ -117,6 +132,7 @@ export default observer(function CartScreen() {
   if (cart.items.length === 0) {
     return (
       <View style={[styles.empty, { backgroundColor: colors.pageBackground, padding: spacing.lg }]}>
+        {exportPurgeNote ? <View style={{ alignSelf: 'stretch' }}>{exportPurgeNote}</View> : null}
         <View
           style={[
             styles.emptyIcon,
@@ -165,6 +181,7 @@ export default observer(function CartScreen() {
               ]}
               currentStep="cart"
             />
+            {exportPurgeNote}
             {reorderBanner === 'business_closed' ? (
               <NoticeBanner
                 tone="warning"

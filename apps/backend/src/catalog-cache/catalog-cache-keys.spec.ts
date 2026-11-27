@@ -190,6 +190,41 @@ describe('buildInventoryItemsCacheKey', () => {
     expect(exported.endsWith(':export')).toBe(true);
     expect(local).not.toEqual(exported);
   });
+
+  it('keys the From-country export view separately and leaves existing keys unchanged', () => {
+    const into = buildInventoryItemsCacheKey({
+      generation: 1,
+      limit: 20,
+      countryCode: 'CA',
+      exportOnly: true,
+    });
+    const intoUndefinedOrigin = buildInventoryItemsCacheKey({
+      generation: 1,
+      limit: 20,
+      countryCode: 'CA',
+      exportOnly: true,
+      originCountry: undefined,
+    });
+    const fromCa = buildInventoryItemsCacheKey({
+      generation: 1,
+      limit: 20,
+      countryCode: 'CA',
+      exportOnly: true,
+      originCountry: 'CA',
+    });
+    const fromCm = buildInventoryItemsCacheKey({
+      generation: 1,
+      limit: 20,
+      countryCode: 'CA',
+      exportOnly: true,
+      originCountry: 'CM',
+    });
+    expect(intoUndefinedOrigin).toEqual(into);
+    expect(into.endsWith(':export')).toBe(true);
+    expect(fromCa.endsWith(':export:from_CA')).toBe(true);
+    expect(fromCa).not.toEqual(fromCm);
+    expect(fromCa).not.toEqual(into);
+  });
 });
 
 describe('buildCatalogExperienceCacheKey', () => {

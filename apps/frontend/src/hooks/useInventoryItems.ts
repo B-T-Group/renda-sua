@@ -59,6 +59,8 @@ export interface InventoryItem {
     name: string;
     description: string;
     export_available?: boolean;
+    /** Export destination markets (ISO-2). Present on export items. */
+    export_markets?: Array<{ country_code: string }> | null;
     price: number;
     currency: string;
     weight: number;
@@ -184,6 +186,11 @@ export interface GetInventoryItemsQuery {
   /** Only export_available items for the viewer market. */
   export_only?: boolean;
   /**
+   * With export_only: export items whose home location is in this ISO-2 country
+   * ("From {country}" view, /exports/{cc}). The viewer market is not a filter then.
+   */
+  origin_country?: string;
+  /**
    * How page > 1 updates the list. Default `append` (infinite scroll).
    * Use `replace` for numbered pagination (e.g. /exports).
    */
@@ -275,6 +282,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.is_active ?? '',
     query.food_only ?? '',
     query.export_only ?? '',
+    query.origin_country ?? '',
     locationScoped ? '' : `${catalogGeo.country_code ?? ''}:${catalogGeo.state ?? ''}`,
   ].join('|');
   const pageMode = query.pageMode ?? 'append';
@@ -372,6 +380,10 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           }),
           ...(query.food_only === true && { food_only: true }),
           ...(query.export_only === true && { export_only: true }),
+          ...(query.export_only === true &&
+            query.origin_country?.trim() && {
+              origin_country: query.origin_country.trim().toUpperCase(),
+            }),
           ...(query.anonymousOrigin && {
             origin_lat: query.anonymousOrigin.lat,
             origin_lng: query.anonymousOrigin.lng,

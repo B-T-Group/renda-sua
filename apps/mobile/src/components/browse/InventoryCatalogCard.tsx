@@ -37,6 +37,9 @@ import { FoodAvailabilityChip } from '../food/FoodAvailabilityChip';
 import { LOW_STOCK_THRESHOLD } from '../../constants/stock';
 import { isFoodOrderBlocked, isFoodCatalogItem } from '../../utils/foodAvailability';
 import { formatDistanceKm } from '../../utils/formatDistanceKm';
+import { useExportViewer } from '../../hooks/useExportViewer';
+import { ExportOnlyBadge } from '../exports/ExportOnlyBadge';
+import { ExportDestinationsLine } from '../exports/ExportViewerNote';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -83,6 +86,8 @@ function InventoryCatalogCardInner({
   const { t } = useTranslation();
   const { colors, typography, borderRadius, spacing } = useTheme();
   const exportAvailable = item.item.export_available === true;
+  // I’m interested only for a destination-market viewer; origin / third markets get like + share.
+  const exportViewer = useExportViewer(item);
   const distanceKm = exportAvailable ? null : formatDistanceKm(item.distance_value);
   const defaultLabel = t('orders.variant.defaultOption', 'Default');
   const variantOptionCount = useMemo(
@@ -266,6 +271,7 @@ function InventoryCatalogCardInner({
               </Text>
             </View>
           )}
+          {exportAvailable ? <ExportOnlyBadge variant="overlay" /> : null}
           {hasMultiple ? (
             <View
               style={[
@@ -389,9 +395,10 @@ function InventoryCatalogCardInner({
               <View style={styles.priceRow}>
                 {exportAvailable ? (
                   <Text
+                    testID="export-price-on-request"
                     style={[
                       typography.subtitle2,
-                      { color: colors.text.secondary, fontWeight: '600' },
+                      { color: colors.text.primary, fontWeight: '700' },
                     ]}
                   >
                     {t(
@@ -619,15 +626,19 @@ function InventoryCatalogCardInner({
             </Text>
           </View>
         ) : null}
-        {exportAvailable || !buyDisabled ? (
+        {exportAvailable ? (
+          <ExportDestinationsLine destinations={exportViewer.destinations} max={5} />
+        ) : null}
+        {exportViewer.canSendInterest || (!exportAvailable && !buyDisabled) ? (
         <>
         <Divider style={{ marginTop: spacing.sm }} />
 
         <View style={[styles.ctaRow, { marginTop: spacing.xs }]}>
           {exportAvailable ? (
             <Button
+              testID="export-interest-cta"
               mode="contained"
-              icon="hand-wave-outline"
+              icon="hand-back-right-outline"
               onPress={() => {
                 if (onItemPress) {
                   onItemPress(item.id);
@@ -635,14 +646,14 @@ function InventoryCatalogCardInner({
                 }
                 onPrimaryPress(selectionId);
               }}
-              accessibilityLabel={t('productInterest.cta', "I'm interested")}
+              accessibilityLabel={t('productInterest.cta', 'I’m interested')}
               buttonColor={colors.primary.main}
               textColor={colors.primary.contrast}
               style={{ flex: 1, minWidth: 0 }}
               contentStyle={styles.ctaContent}
               labelStyle={styles.ctaLabel}
             >
-              {t('productInterest.cta', "I'm interested")}
+              {t('productInterest.cta', 'I’m interested')}
             </Button>
           ) : (
             <>
