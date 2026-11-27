@@ -7565,6 +7565,7 @@
       "notYet": "Not yet",
       "startedBanner": "Rental started at {{time}}. The business has been notified to hand over the item.",
       "pickupOpens": "Pickup opens {{day}}",
+      "stickyPickupAt": "Pickup at",
       "bookedDay": "Booked {{day}} · {{range}}"
     },
     "business": {
@@ -7705,6 +7706,7 @@
     },
     "bookingDetail": {
       "paymentPendingTitle": "Waiting for payment",
+      "stickyTotal": "Total",
       "paymentPendingStripe": "Complete card payment in Stripe Checkout to confirm this reservation. Use Retry payment if you closed the checkout page.",
       "paymentPendingMomo": "Approve the mobile money payment request on your phone to confirm this reservation. Use Retry payment if you did not receive it.",
       "retryPayment": "Retry payment",

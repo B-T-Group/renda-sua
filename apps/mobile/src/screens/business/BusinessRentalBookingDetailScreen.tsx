@@ -33,6 +33,7 @@ import { PickupDayCallout } from '../../components/rentals/inspection/PickupPhot
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
 import { RentalStartCard } from '../../components/rentals/RentalStartCard';
+import { StickyActionCard } from '../../components/common/StickyActionCard';
 import { RentalJourneyList } from '../../components/rentals/RentalJourneyList';
 import { BusinessPhotoRequest } from '../../components/rentals/inspection/BusinessPhotoRequest';
 import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
@@ -327,6 +328,8 @@ export default function BusinessRentalBookingDetailScreen() {
     !flagsLoading &&
     flags.rentals_renter_return_report_enabled &&
     Boolean(booking.renter_reported_returned_at);
+  const showPhaseBanner = !(showRenterReport || booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active');
+  const showReturnAction = showPhaseBanner && canReturn;
   const earlyPending = showRenterReport && earlyReportPending(booking, listingZone);
   // ↶ Item returned: the business ends an active rental itself (no flag; the endpoint is ungated).
   const canItemReturned =
@@ -373,370 +376,134 @@ export default function BusinessRentalBookingDetailScreen() {
   });
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={{ flex: 1, backgroundColor: colors.pageBackground }}
-      contentContainerStyle={{
-        padding: spacing.md,
-        paddingBottom: insets.bottom + 32,
-      }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => void onRefresh()}
-          colors={[colors.primary.main]}
-          tintColor={colors.primary.main}
-        />
-      }
-    >
-      {booking.condition_declined_at && booking.condition_decline ? (
-        <BusinessDeclineBanner
-          reason={booking.condition_decline.reason}
-          note={booking.condition_decline.reasonText}
-          photos={booking.condition_decline.photos}
-          timeZone={booking.currency === 'XAF' || booking.currency === 'XOF' ? 'Africa/Douala' : 'America/Toronto'}
-          onViewBooking={() => navigation.navigate('BusinessRentalBookingDetail', { bookingId: booking.id })}
-        />
-      ) : null}
-      <View
-        style={[
-          styles.card,
-          shadows.sm,
-          {
-            borderColor: colors.divider,
-            backgroundColor: colors.surface,
-            borderRadius: borderRadius.md,
-            padding: spacing.md,
-          },
-        ]}
-      >
-        <View style={styles.row}>
-          <Text style={[typography.subtitle1, { color: colors.text.primary, flex: 1 }]}>
-            {booking.rental_location_listing?.rental_item?.name ??
-              t('business.rentals.booking', 'Booking')}
-          </Text>
-          <StatusPill
-            compact
-            label={handoverPill(booking.status, photosAsked, startPhase, pickupDay, reviewReady, phaseInfo.labelKey, t)}
-            backgroundColor={reviewReady ? '#B4530918' : phaseTone(startPhase, colors)?.backgroundColor ?? sc.backgroundColor}
-            textColor={reviewReady ? '#B45309' : phaseTone(startPhase, colors)?.textColor ?? sc.textColor}
-            borderColor={reviewReady ? '#B4530944' : phaseTone(startPhase, colors)?.borderColor ?? sc.borderColor}
+    <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1, backgroundColor: colors.pageBackground }}
+        contentContainerStyle={{
+          padding: spacing.md,
+          paddingBottom: showReturnAction ? spacing.lg : insets.bottom + 32,
+        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void onRefresh()}
+            colors={[colors.primary.main]}
+            tintColor={colors.primary.main}
           />
-        </View>
-        {booking.booking_number ? (
-          <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
-            {booking.booking_number}
-          </Text>
+        }
+      >
+        {booking.condition_declined_at && booking.condition_decline ? (
+          <BusinessDeclineBanner
+            reason={booking.condition_decline.reason}
+            note={booking.condition_decline.reasonText}
+            photos={booking.condition_decline.photos}
+            timeZone={booking.currency === 'XAF' || booking.currency === 'XOF' ? 'Africa/Douala' : 'America/Toronto'}
+            onViewBooking={() => navigation.navigate('BusinessRentalBookingDetail', { bookingId: booking.id })}
+          />
         ) : null}
-        <View style={{ marginTop: 8 }}>
-          {(periodLines.length ? periodLines : ['—']).map((line, index) => (
-            <Text
-              key={`${index}-${line}`}
-              style={{ color: colors.text.secondary, marginTop: index === 0 ? 0 : 2 }}
-            >
-              {line}
-            </Text>
-          ))}
-        </View>
-        <BookingMoney
-          presentation={presentation}
-          total={detailMoney(Number(booking.total_amount) || 0)}
-          deposit={detailMoney(depositAmount)}
-          held={detailMoney(presentation.mode === 'sentence' ? presentation.amount : authorizedAmount)}
-        />
-      </View>
-
-      {reviewReady ? (
-        <View style={{ marginTop: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider }}>
-          <Text style={[typography.subtitle2, { color: colors.text.primary }]}>{t('rentals.status', 'Status')}</Text>
-          {waitingSteps.map((step, idx) => (
-            <WaitingStep key={step} step={step} idx={idx} current={waitingIndex} />
-          ))}
-        </View>
-      ) : null}
-
-      {showRenterReport || booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active' ? null : (
-      <View style={{ marginTop: spacing.md }}>
-        <RentalPhaseBanner
-          bookingStatus={booking.status}
-          chipLabel={reviewReady ? t('rentalInspection.phase.waitingRenter', 'Waiting for renter') : undefined}
-          role="business"
-          nextStepKey={
-            snapshot.enrolled &&
-            (booking.status === 'reserved' || booking.status === 'confirmed')
-              ? 'rentalInspection.bannerWaiting'
-              : undefined
-          }
-          action={
-            canReturn && !showRenterReport ? (
-              <Button
-                mode="contained"
-                disabled={busy}
-                onPress={openReturnDialog}
-                style={{ marginTop: 4 }}
-              >
-                {t('rentals.actions.confirmReturn', 'Confirm return')}
-              </Button>
-            ) : null
-          }
-        />
-      </View>
-      )}
-
-      {isReserved && !snapshot.enrolled ? (
         <View
           style={[
             styles.card,
+            shadows.sm,
             {
-              borderColor: colors.info.main + '55',
-              backgroundColor: colors.info.main + '14',
+              borderColor: colors.divider,
+              backgroundColor: colors.surface,
               borderRadius: borderRadius.md,
               padding: spacing.md,
-              marginTop: spacing.md,
             },
           ]}
         >
-          <Text style={{ color: colors.text.primary }}>
-            {booking.currency === 'XAF' || booking.currency === 'XOF'
-              ? t(
-                  'rentals.bookingDetail.reservedBusinessMomo',
-                  '{{name}} pays {{amount}} by Mobile Money when they tap Start. You don\'t collect anything.',
-                  { name: clientName || t('rentals.renter', 'The renter'), amount: detailMoney(Number(booking.total_amount) || 0) }
-                )
-              : t(
-                  'rentals.bookingDetail.reservedBusinessHint',
-                  'Reserved without payment. The renter starts this rental on the pickup day and pays then if it is still due.'
-                )}
-          </Text>
-        </View>
-      ) : null}
-
-      <View
-        style={[
-          styles.card,
-          shadows.sm,
-          {
-            borderColor: colors.divider,
-            backgroundColor: colors.surface,
-            borderRadius: borderRadius.md,
-            padding: spacing.md,
-            marginTop: spacing.md,
-          },
-        ]}
-      >
-        <Text style={[typography.subtitle2, { color: colors.text.primary }]}>
-          {t('business.rentals.clientDetails', 'Client details')}
-        </Text>
-        <Text style={{ color: colors.text.secondary, marginTop: 6 }}>
-          {clientName || '—'}
-        </Text>
-        {client?.phone_number ? (
-          <Text style={{ color: colors.text.secondary }}>{formatStoredPhone(client.phone_number)}</Text>
-        ) : null}
-        {client?.email ? (
-          <Text style={{ color: colors.text.secondary }}>{client.email}</Text>
-        ) : null}
-      </View>
-
-      {earlyPending && booking.renter_reported_returned_at ? (
-        <View>
-          <BusinessReturnedBanner
-            title={t('rentals.earlyReturn.returnedEarly', 'Returned early · {{time}}', {
-              time: instantClock(booking.renter_reported_returned_at, i18n.language, listingZone),
-            })}
-            body={
-              cardDeposit
-                ? t('rentals.earlyReturn.businessBody', 'Booked until {{end}}. Check the item, then confirm the return. The {{amount}} deposit is released only after you confirm.', {
-                    end: bookedUntil(booking, i18n.language, listingZone),
-                    amount: cardDeposit,
-                  })
-                : t('rentals.earlyReturn.businessBodyNoDeposit', 'Booked until {{end}}. Check the item, then confirm the return.', {
-                    end: bookedUntil(booking, i18n.language, listingZone),
-                  })
-            }
-            early={{
-              frees: t('rentals.earlyReturn.frees', '{{from}} – {{to}} opens for new bookings once you confirm.', {
-                from: instantClock(booking.renter_reported_returned_at, i18n.language, listingZone),
-                to: bookedUntil(booking, i18n.language, listingZone),
-              }),
-              freesWindow: freedWindow(booking, booking.renter_reported_returned_at, i18n.language, listingZone),
-              onMessage: () => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true }),
-            }}
-            onConfirm={openEarlyConfirm}
-            onProblem={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'return' })}
-          />
-          <View
-            style={[
-              styles.card,
-              { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.md, marginTop: spacing.md },
-            ]}
-          >
-            <Text style={[typography.subtitle2, { color: colors.text.primary, marginBottom: 8 }]}>
-              {t('rentals.status', 'Status')}
+          <View style={styles.row}>
+            <Text style={[typography.subtitle1, { color: colors.text.primary, flex: 1 }]}>
+              {booking.rental_location_listing?.rental_item?.name ??
+                t('business.rentals.booking', 'Booking')}
             </Text>
-            <RentalJourneyList
-              hideTitle
-              status={booking.status}
-              payAtPickup={booking.payment_timing === 'pay_at_pickup'}
-              paidAside={
-                (booking.payment_status === 'paid' || booking.payment_status === 'authorized') && (booking.paid_at || booking.created_at)
-                  ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
-                  : undefined
-              }
-              pickupAside={pickupClockLabel(booking.actual_start_at, booking.start_at, listingZone, i18n.language)}
-              paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
-              early={{
-                aside: instantClock(booking.renter_reported_returned_at, i18n.language, listingZone),
-                sub: t('rentals.earlyReturn.waitingStepBusiness', 'Waiting for you to confirm'),
-              }}
+            <StatusPill
+              compact
+              label={handoverPill(booking.status, photosAsked, startPhase, pickupDay, reviewReady, phaseInfo.labelKey, t)}
+              backgroundColor={reviewReady ? '#B4530918' : phaseTone(startPhase, colors)?.backgroundColor ?? sc.backgroundColor}
+              textColor={reviewReady ? '#B45309' : phaseTone(startPhase, colors)?.textColor ?? sc.textColor}
+              borderColor={reviewReady ? '#B4530944' : phaseTone(startPhase, colors)?.borderColor ?? sc.borderColor}
             />
           </View>
-        </View>
-      ) : null}
-      {showRenterReport && booking.renter_reported_returned_at && !earlyPending ? (
-        <BusinessReturnedBanner
-          title={t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
-            time: formatReturnStamp(booking.renter_reported_returned_at, i18n.language, listingZone),
-          })}
-          body={t(
-            'rentals.returnReport.businessBody',
-            'Please check the item, then confirm the return. The {{amount}} deposit is released only after you confirm.',
-            { amount: formatRequestAmount(Number(booking.security_deposit_amount) || 0, booking.currency || 'XAF', i18n.language) }
-          )}
-          onConfirm={() => {
-            if (showReturnInspection) {
-              navigation.navigate('BusinessInspection', { bookingId, stage: 'return' });
-              return;
-            }
-            openReturnDialog();
-          }}
-          onProblem={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'return' })}
-        />
-      ) : null}
-
-      {snapshot.enrolled && !photosAsked ? (
-        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-          <BusinessAcceptStartHero
-            booking={booking}
-            submittedUnits={snapshot.pickup?.units.length ?? 0}
-            canUpdate={businessCanReplaceReport(snapshot.pickup)}
-            onUpdate={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
-          />
-          {gate.mode === 'capture' && (booking.status === 'reserved' || booking.status === 'confirmed') ? (
-            flags.rentals_pickup_photo_rules_enabled ? (
-              <PickupDayCallout
-                bookingId={bookingId}
-                onOpen={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
-              />
-            ) : (
-              <Button
-                mode="contained"
-                buttonColor={colors.cta.main}
-                style={{ minHeight: 48 }}
-                onPress={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
+          {booking.booking_number ? (
+            <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
+              {booking.booking_number}
+            </Text>
+          ) : null}
+          <View style={{ marginTop: 8 }}>
+            {(periodLines.length ? periodLines : ['—']).map((line, index) => (
+              <Text
+                key={`${index}-${line}`}
+                style={{ color: colors.text.secondary, marginTop: index === 0 ? 0 : 2 }}
               >
-                {t('rentalInspection.pickupTitle', 'Pickup condition')}
-              </Button>
-            )
-          ) : null}
-          {showReturnInspection && !showRenterReport ? (
-            <Button
-              mode="contained"
-              buttonColor={colors.cta.main}
-              style={{ minHeight: 48 }}
-              onPress={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'return' })}
-            >
-              {t('rentalInspection.returnTitle', 'Return condition')}
-            </Button>
-          ) : null}
-          <InspectionTimeline role="business" booking={booking} pickup={snapshot.pickup} returnView={snapshot.returnView} />
-        </View>
-      ) : null}
-
-      {photosAsked && !showRenterReport ? (
-        <BusinessPhotoRequest
-          bookingId={bookingId}
-          renterName={clientName || t('rentals.renter', 'The renter')}
-          reason={snapshot.pickup?.correctionReason}
-          photos={(snapshot.pickup?.units[0]?.photos ?? []).map((photo) => ({
-            ...photo,
-            unitId: snapshot.pickup?.units[0]?.unitId ?? '',
-          }))}
-          timeZone={listingZone}
-          askedAt={snapshot.pickup?.askedAt || snapshot.pickup?.submittedAt}
-          fixDay={formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
-          fee={feeLabel}
-          onSent={() => void load({ soft: true })}
-        />
-      ) : null}
-
-      {(booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active') && !showRenterReport && !photosAsked ? (
-        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-          {booking.status === 'active' && didntReceiveWindowOpen(booking.actual_start_at) ? (
-            <RentalHandoverNotice
-              mode="banner"
-              renterName={clientName || t('rentals.renter', 'The renter')}
-              itemName={booking.rental_location_listing?.rental_item?.name ?? ''}
-            />
-          ) : null}
-          <RentalStartCard
-            booking={booking}
-            timeZone={confirmationTimeZone(listingCountry, booking.currency)}
-            role="business"
-            renterName={clientName || undefined}
-            place={booking.rental_location_listing?.business_location?.name ?? ''}
-            money={detailMoney(Number(booking.total_amount) || 0)}
-            returnLabel={returnWhen}
-            starting={busy}
-            open={false}
-            onOpen={() => undefined}
-            onClose={() => undefined}
-            onConfirm={() => undefined}
-            onNotCollected={booking.status === 'active' ? () => void reportNotCollected() : undefined}
-            actions={canItemReturned ? <IconActionRow actions={itemReturnedActions} /> : undefined}
+                {line}
+              </Text>
+            ))}
+          </View>
+          <BookingMoney
+            presentation={presentation}
+            total={detailMoney(Number(booking.total_amount) || 0)}
+            deposit={detailMoney(depositAmount)}
+            held={detailMoney(presentation.mode === 'sentence' ? presentation.amount : authorizedAmount)}
           />
+        </View>
+
+        {reviewReady ? (
+          <View style={{ marginTop: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider }}>
+            <Text style={[typography.subtitle2, { color: colors.text.primary }]}>{t('rentals.status', 'Status')}</Text>
+            {waitingSteps.map((step, idx) => (
+              <WaitingStep key={step} step={step} idx={idx} current={waitingIndex} />
+            ))}
+          </View>
+        ) : null}
+
+        {showPhaseBanner ? (
+        <View style={{ marginTop: spacing.md }}>
+          <RentalPhaseBanner
+            bookingStatus={booking.status}
+            chipLabel={reviewReady ? t('rentalInspection.phase.waitingRenter', 'Waiting for renter') : undefined}
+            role="business"
+            nextStepKey={
+              snapshot.enrolled &&
+              (booking.status === 'reserved' || booking.status === 'confirmed')
+                ? 'rentalInspection.bannerWaiting'
+                : undefined
+            }
+          />
+        </View>
+        ) : null}
+
+        {isReserved && !snapshot.enrolled ? (
           <View
             style={[
               styles.card,
-              { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.md },
+              {
+                borderColor: colors.info.main + '55',
+                backgroundColor: colors.info.main + '14',
+                borderRadius: borderRadius.md,
+                padding: spacing.md,
+                marginTop: spacing.md,
+              },
             ]}
           >
-            <Text style={[typography.subtitle2, { color: colors.text.primary, marginBottom: 8 }]}>
-              {t('rentals.status', 'Status')}
+            <Text style={{ color: colors.text.primary }}>
+              {booking.currency === 'XAF' || booking.currency === 'XOF'
+                ? t(
+                    'rentals.bookingDetail.reservedBusinessMomo',
+                    '{{name}} pays {{amount}} by Mobile Money when they tap Start. You don\'t collect anything.',
+                    { name: clientName || t('rentals.renter', 'The renter'), amount: detailMoney(Number(booking.total_amount) || 0) }
+                  )
+                : t(
+                    'rentals.bookingDetail.reservedBusinessHint',
+                    'Reserved without payment. The renter starts this rental on the pickup day and pays then if it is still due.'
+                  )}
             </Text>
-            <RentalJourneyList
-              hideTitle
-              status={booking.status}
-              payAtPickup={booking.payment_timing === 'pay_at_pickup'}
-              paidAside={
-                (booking.payment_status === 'paid' || booking.payment_status === 'authorized') && (booking.paid_at || booking.created_at)
-                  ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
-                  : undefined
-              }
-              pickupAside={pickupClockLabel(booking.actual_start_at, booking.start_at, listingZone, i18n.language)}
-              paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
-              accent={colors.success.main}
-            />
           </View>
-        </View>
-      ) : null}
+        ) : null}
 
-      {canCancel ? (
-        <Button
-          mode="outlined"
-          icon="close-circle-outline"
-          textColor={colors.error.main}
-          style={{ marginTop: spacing.md }}
-          disabled={busy}
-          onPress={() => setCancelDialog(true)}
-        >
-          {t('rentals.cancelBooking', 'Cancel booking')}
-        </Button>
-      ) : null}
-
-      {booking.status !== 'cancelled' ? (
         <View
-          onLayout={(event) => { messagesY.current = event.nativeEvent.layout.y; }}
           style={[
             styles.card,
             shadows.sm,
@@ -749,135 +516,370 @@ export default function BusinessRentalBookingDetailScreen() {
             },
           ]}
         >
-          <Text style={[typography.subtitle2, { color: colors.text.primary, marginBottom: 8 }]}>
-            {t('rentals.messages.title', 'Messages')}
+          <Text style={[typography.subtitle2, { color: colors.text.primary }]}>
+            {t('business.rentals.clientDetails', 'Client details')}
           </Text>
-          <OrderMessageComposer
-            messages={messages}
-            loading={messagesLoading}
-            error={messagesError}
-            mentionableParticipants={mentionableParticipants}
-            onSend={sendMessage}
-            formatDate={formatMessageDate}
-            onRefresh={() => void refetchMessages()}
-            emptyHint={t(
-              'rentals.messages.emptyHint',
-              'Message the other party about pickup, return, or the rental.'
-            )}
-          />
+          <Text style={{ color: colors.text.secondary, marginTop: 6 }}>
+            {clientName || '—'}
+          </Text>
+          {client?.phone_number ? (
+            <Text style={{ color: colors.text.secondary }}>{formatStoredPhone(client.phone_number)}</Text>
+          ) : null}
+          {client?.email ? (
+            <Text style={{ color: colors.text.secondary }}>{client.email}</Text>
+          ) : null}
         </View>
-      ) : null}
 
-      <BusinessReturnConfirmSheet
-        open={earlySheet}
-        booking={booking}
-        timeZone={listingZone}
-        zoneLabel={confirmationZoneDefault(listingCountry, booking.currency, i18n.language)}
-        price={detailMoney(Number(booking.total_amount) || 0)}
-        deposit={cardDeposit}
-        busy={busy}
-        onClose={() => setEarlySheet(false)}
-        onConfirm={(iso) => void submitEarlyReturn(iso)}
-      />
-
-      <Portal>
-
-        <Dialog visible={cancelDialog} onDismiss={() => setCancelDialog(false)}>
-          <Dialog.Title>{t('rentals.cancelBooking', 'Cancel booking')}</Dialog.Title>
-          <Dialog.Content>
-            <Text>
-              {t(
-                'rentals.bookingDetail.cancelBeforeStartMessage',
-                'This booking has not started, so cancellation is free. Any card hold or wallet hold is released.'
-              )}
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setCancelDialog(false)}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button
-              loading={busy}
-              textColor={colors.error.main}
-              onPress={() => void cancelBooking()}
+        {earlyPending && booking.renter_reported_returned_at ? (
+          <View>
+            <BusinessReturnedBanner
+              title={t('rentals.earlyReturn.returnedEarly', 'Returned early · {{time}}', {
+                time: instantClock(booking.renter_reported_returned_at, i18n.language, listingZone),
+              })}
+              body={
+                cardDeposit
+                  ? t('rentals.earlyReturn.businessBody', 'Booked until {{end}}. Check the item, then confirm the return. The {{amount}} deposit is released only after you confirm.', {
+                      end: bookedUntil(booking, i18n.language, listingZone),
+                      amount: cardDeposit,
+                    })
+                  : t('rentals.earlyReturn.businessBodyNoDeposit', 'Booked until {{end}}. Check the item, then confirm the return.', {
+                      end: bookedUntil(booking, i18n.language, listingZone),
+                    })
+              }
+              early={{
+                frees: t('rentals.earlyReturn.frees', '{{from}} – {{to}} opens for new bookings once you confirm.', {
+                  from: instantClock(booking.renter_reported_returned_at, i18n.language, listingZone),
+                  to: bookedUntil(booking, i18n.language, listingZone),
+                }),
+                freesWindow: freedWindow(booking, booking.renter_reported_returned_at, i18n.language, listingZone),
+                onMessage: () => scrollRef.current?.scrollTo({ y: messagesY.current, animated: true }),
+              }}
+              onConfirm={openEarlyConfirm}
+              onProblem={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'return' })}
+            />
+            <View
+              style={[
+                styles.card,
+                { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.md, marginTop: spacing.md },
+              ]}
             >
-              {t('rentals.cancelBooking', 'Cancel booking')}
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
+              <Text style={[typography.subtitle2, { color: colors.text.primary, marginBottom: 8 }]}>
+                {t('rentals.status', 'Status')}
+              </Text>
+              <RentalJourneyList
+                hideTitle
+                status={booking.status}
+                payAtPickup={booking.payment_timing === 'pay_at_pickup'}
+                paidAside={
+                  (booking.payment_status === 'paid' || booking.payment_status === 'authorized') && (booking.paid_at || booking.created_at)
+                    ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
+                    : undefined
+                }
+                pickupAside={pickupClockLabel(booking.actual_start_at, booking.start_at, listingZone, i18n.language)}
+                paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
+                early={{
+                  aside: instantClock(booking.renter_reported_returned_at, i18n.language, listingZone),
+                  sub: t('rentals.earlyReturn.waitingStepBusiness', 'Waiting for you to confirm'),
+                }}
+              />
+            </View>
+          </View>
+        ) : null}
+        {showRenterReport && booking.renter_reported_returned_at && !earlyPending ? (
+          <BusinessReturnedBanner
+            title={t('rentals.returnReport.businessBanner', 'Renter says item returned · {{time}}', {
+              time: formatReturnStamp(booking.renter_reported_returned_at, i18n.language, listingZone),
+            })}
+            body={t(
+              'rentals.returnReport.businessBody',
+              'Please check the item, then confirm the return. The {{amount}} deposit is released only after you confirm.',
+              { amount: formatRequestAmount(Number(booking.security_deposit_amount) || 0, booking.currency || 'XAF', i18n.language) }
+            )}
+            onConfirm={() => {
+              if (showReturnInspection) {
+                navigation.navigate('BusinessInspection', { bookingId, stage: 'return' });
+                return;
+              }
+              openReturnDialog();
+            }}
+            onProblem={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'return' })}
+          />
+        ) : null}
 
-        <Dialog
-          visible={returnDialog}
-          onDismiss={() => !busy && setReturnDialog(false)}
-        >
-          <ReturnDialogTitle />
-          <Dialog.Content>
-            <ReturnTimeOptions
-              dueAt={booking.end_at ? bookingReturnDue(booking) ?? booking.end_at : null}
-              timeZone={listingZone}
-              busy={busy}
-              onUseNow={() => {
-                const parts = listingClockInput(Date.now(), returnZone);
-                setReturnDate(parts.date);
-                setReturnTime(parts.time);
-              }}
-              onUseDue={(dueAt) => {
-                const parts = wallIsoInput(dueAt);
-                if (!parts) return;
-                setReturnDate(parts.date);
-                setReturnTime(parts.time);
-              }}
+        {snapshot.enrolled && !photosAsked ? (
+          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+            <BusinessAcceptStartHero
+              booking={booking}
+              submittedUnits={snapshot.pickup?.units.length ?? 0}
+              canUpdate={businessCanReplaceReport(snapshot.pickup)}
+              onUpdate={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
             />
-            <Text style={{ marginBottom: 6, color: colors.text.secondary, fontSize: 12 }}>
-              {t(
-                'rentals.returnSelectedAt',
-                'Selected return: {{date}} {{time}}',
-                { date: returnDate || '—', time: returnTime || '—' }
-              )}
+            {gate.mode === 'capture' && (booking.status === 'reserved' || booking.status === 'confirmed') ? (
+              flags.rentals_pickup_photo_rules_enabled ? (
+                <PickupDayCallout
+                  bookingId={bookingId}
+                  onOpen={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
+                />
+              ) : (
+                <Button
+                  mode="contained"
+                  buttonColor={colors.cta.main}
+                  style={{ minHeight: 48 }}
+                  onPress={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
+                >
+                  {t('rentalInspection.pickupTitle', 'Pickup condition')}
+                </Button>
+              )
+            ) : null}
+            {showReturnInspection && !showRenterReport ? (
+              <Button
+                mode="contained"
+                buttonColor={colors.cta.main}
+                style={{ minHeight: 48 }}
+                onPress={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'return' })}
+              >
+                {t('rentalInspection.returnTitle', 'Return condition')}
+              </Button>
+            ) : null}
+            <InspectionTimeline role="business" booking={booking} pickup={snapshot.pickup} returnView={snapshot.returnView} />
+          </View>
+        ) : null}
+
+        {photosAsked && !showRenterReport ? (
+          <BusinessPhotoRequest
+            bookingId={bookingId}
+            renterName={clientName || t('rentals.renter', 'The renter')}
+            reason={snapshot.pickup?.correctionReason}
+            photos={(snapshot.pickup?.units[0]?.photos ?? []).map((photo) => ({
+              ...photo,
+              unitId: snapshot.pickup?.units[0]?.unitId ?? '',
+            }))}
+            timeZone={listingZone}
+            askedAt={snapshot.pickup?.askedAt || snapshot.pickup?.submittedAt}
+            fixDay={formatZonedWeekdayDay(booking.start_at, BOOKING_CLOCK, i18n.language)}
+            fee={feeLabel}
+            onSent={() => void load({ soft: true })}
+          />
+        ) : null}
+
+        {(booking.status === 'reserved' || booking.status === 'confirmed' || booking.status === 'active') && !showRenterReport && !photosAsked ? (
+          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+            {booking.status === 'active' && didntReceiveWindowOpen(booking.actual_start_at) ? (
+              <RentalHandoverNotice
+                mode="banner"
+                renterName={clientName || t('rentals.renter', 'The renter')}
+                itemName={booking.rental_location_listing?.rental_item?.name ?? ''}
+              />
+            ) : null}
+            <RentalStartCard
+              booking={booking}
+              timeZone={confirmationTimeZone(listingCountry, booking.currency)}
+              role="business"
+              renterName={clientName || undefined}
+              place={booking.rental_location_listing?.business_location?.name ?? ''}
+              money={detailMoney(Number(booking.total_amount) || 0)}
+              returnLabel={returnWhen}
+              starting={busy}
+              open={false}
+              onOpen={() => undefined}
+              onClose={() => undefined}
+              onConfirm={() => undefined}
+              onNotCollected={booking.status === 'active' ? () => void reportNotCollected() : undefined}
+              actions={canItemReturned ? <IconActionRow actions={itemReturnedActions} /> : undefined}
+            />
+            <View
+              style={[
+                styles.card,
+                { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.md },
+              ]}
+            >
+              <Text style={[typography.subtitle2, { color: colors.text.primary, marginBottom: 8 }]}>
+                {t('rentals.status', 'Status')}
+              </Text>
+              <RentalJourneyList
+                hideTitle
+                status={booking.status}
+                payAtPickup={booking.payment_timing === 'pay_at_pickup'}
+                paidAside={
+                  (booking.payment_status === 'paid' || booking.payment_status === 'authorized') && (booking.paid_at || booking.created_at)
+                    ? formatZonedDay(booking.paid_at || booking.created_at || '', listingZone, i18n.language)
+                    : undefined
+                }
+                pickupAside={pickupClockLabel(booking.actual_start_at, booking.start_at, listingZone, i18n.language)}
+                paid={booking.payment_status === 'paid' || booking.payment_status === 'authorized'}
+                accent={colors.success.main}
+              />
+            </View>
+          </View>
+        ) : null}
+
+        {canCancel ? (
+          <Button
+            mode="outlined"
+            icon="close-circle-outline"
+            textColor={colors.error.main}
+            style={{ marginTop: spacing.md }}
+            disabled={busy}
+            onPress={() => setCancelDialog(true)}
+          >
+            {t('rentals.cancelBooking', 'Cancel booking')}
+          </Button>
+        ) : null}
+
+        {booking.status !== 'cancelled' ? (
+          <View
+            onLayout={(event) => { messagesY.current = event.nativeEvent.layout.y; }}
+            style={[
+              styles.card,
+              shadows.sm,
+              {
+                borderColor: colors.divider,
+                backgroundColor: colors.surface,
+                borderRadius: borderRadius.md,
+                padding: spacing.md,
+                marginTop: spacing.md,
+              },
+            ]}
+          >
+            <Text style={[typography.subtitle2, { color: colors.text.primary, marginBottom: 8 }]}>
+              {t('rentals.messages.title', 'Messages')}
             </Text>
-            <TextInput
-              label={t('rentals.returnDate', 'Return date')}
-              value={returnDate}
-              onChangeText={setReturnDate}
-              placeholder="YYYY-MM-DD"
-              mode="outlined"
-              style={{ marginBottom: 10 }}
-              disabled={busy}
-              keyboardType="numbers-and-punctuation"
+            <OrderMessageComposer
+              messages={messages}
+              loading={messagesLoading}
+              error={messagesError}
+              mentionableParticipants={mentionableParticipants}
+              onSend={sendMessage}
+              formatDate={formatMessageDate}
+              onRefresh={() => void refetchMessages()}
+              emptyHint={t(
+                'rentals.messages.emptyHint',
+                'Message the other party about pickup, return, or the rental.'
+              )}
             />
-            <TextInput
-              label={t('rentals.returnTime', 'Return time')}
-              value={returnTime}
-              onChangeText={setReturnTime}
-              placeholder="HH:mm"
-              mode="outlined"
-              disabled={busy}
-              keyboardType="numbers-and-punctuation"
-            />
-            {returnIsOvertime ? (
-              <Text style={{ marginTop: 10, color: colors.warning.dark ?? colors.warning.main }}>
+          </View>
+        ) : null}
+
+        <BusinessReturnConfirmSheet
+          open={earlySheet}
+          booking={booking}
+          timeZone={listingZone}
+          zoneLabel={confirmationZoneDefault(listingCountry, booking.currency, i18n.language)}
+          price={detailMoney(Number(booking.total_amount) || 0)}
+          deposit={cardDeposit}
+          busy={busy}
+          onClose={() => setEarlySheet(false)}
+          onConfirm={(iso) => void submitEarlyReturn(iso)}
+        />
+
+        <Portal>
+
+          <Dialog visible={cancelDialog} onDismiss={() => setCancelDialog(false)}>
+            <Dialog.Title>{t('rentals.cancelBooking', 'Cancel booking')}</Dialog.Title>
+            <Dialog.Content>
+              <Text>
                 {t(
-                  'rentals.returnOvertimeHint',
-                  'This return time is after the booked end — overtime may be charged.'
+                  'rentals.bookingDetail.cancelBeforeStartMessage',
+                  'This booking has not started, so cancellation is free. Any card hold or wallet hold is released.'
                 )}
               </Text>
-            ) : null}
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setReturnDialog(false)} disabled={busy}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button loading={busy} onPress={() => void submitReturn()}>
-              {t('rentals.confirmReturn', 'Confirm return')}
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setCancelDialog(false)}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button
+                loading={busy}
+                textColor={colors.error.main}
+                onPress={() => void cancelBooking()}
+              >
+                {t('rentals.cancelBooking', 'Cancel booking')}
+              </Button>
+            </Dialog.Actions>
+          </Dialog>
 
-      <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>
-        {snack}
-      </Snackbar>
-    </ScrollView>
+          <Dialog
+            visible={returnDialog}
+            onDismiss={() => !busy && setReturnDialog(false)}
+          >
+            <ReturnDialogTitle />
+            <Dialog.Content>
+              <ReturnTimeOptions
+                dueAt={booking.end_at ? bookingReturnDue(booking) ?? booking.end_at : null}
+                timeZone={listingZone}
+                busy={busy}
+                onUseNow={() => {
+                  const parts = listingClockInput(Date.now(), returnZone);
+                  setReturnDate(parts.date);
+                  setReturnTime(parts.time);
+                }}
+                onUseDue={(dueAt) => {
+                  const parts = wallIsoInput(dueAt);
+                  if (!parts) return;
+                  setReturnDate(parts.date);
+                  setReturnTime(parts.time);
+                }}
+              />
+              <Text style={{ marginBottom: 6, color: colors.text.secondary, fontSize: 12 }}>
+                {t(
+                  'rentals.returnSelectedAt',
+                  'Selected return: {{date}} {{time}}',
+                  { date: returnDate || '—', time: returnTime || '—' }
+                )}
+              </Text>
+              <TextInput
+                label={t('rentals.returnDate', 'Return date')}
+                value={returnDate}
+                onChangeText={setReturnDate}
+                placeholder="YYYY-MM-DD"
+                mode="outlined"
+                style={{ marginBottom: 10 }}
+                disabled={busy}
+                keyboardType="numbers-and-punctuation"
+              />
+              <TextInput
+                label={t('rentals.returnTime', 'Return time')}
+                value={returnTime}
+                onChangeText={setReturnTime}
+                placeholder="HH:mm"
+                mode="outlined"
+                disabled={busy}
+                keyboardType="numbers-and-punctuation"
+              />
+              {returnIsOvertime ? (
+                <Text style={{ marginTop: 10, color: colors.warning.dark ?? colors.warning.main }}>
+                  {t(
+                    'rentals.returnOvertimeHint',
+                    'This return time is after the booked end — overtime may be charged.'
+                  )}
+                </Text>
+              ) : null}
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setReturnDialog(false)} disabled={busy}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button loading={busy} onPress={() => void submitReturn()}>
+                {t('rentals.confirmReturn', 'Confirm return')}
+              </Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+
+        <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>
+          {snack}
+        </Snackbar>
+      </ScrollView>
+      {showReturnAction ? (
+        <StickyActionCard
+          testID="business-rental-return-sticky"
+          tone="success"
+          actionLabel={t('rentals.actions.confirmReturn', 'Confirm return')}
+          disabled={busy}
+          onAction={openReturnDialog}
+        />
+      ) : null}
+    </View>
   );
 }
 
