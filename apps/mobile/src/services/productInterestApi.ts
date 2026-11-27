@@ -46,7 +46,7 @@ export async function submitProductInterest(
       body: JSON.stringify({
         businessInventoryId,
         note: note?.trim() || undefined,
-        countryCode: countryCode || undefined,
+        countryCode: countryCode?.trim().toUpperCase() || undefined,
       }),
     }
   );

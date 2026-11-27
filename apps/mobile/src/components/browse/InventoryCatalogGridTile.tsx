@@ -20,6 +20,9 @@ import { ItemLikeButton } from './ItemLikeButton';
 import { formatDistanceKm } from '../../utils/formatDistanceKm';
 import { trackDiscoveryEvent } from '../../utils/discoveryAnalytics';
 import { resolveProductCardHint } from '../../utils/resolveProductCardHint';
+import { exportDestinationCodes } from '../../utils/exportItemRules';
+import { ExportOnlyBadge } from '../exports/ExportOnlyBadge';
+import { ExportDestinationsLine } from '../exports/ExportViewerNote';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -46,7 +49,11 @@ function InventoryCatalogGridTileInner({
   const { t } = useTranslation();
   const { colors, typography, borderRadius, spacing, shadows } = useTheme();
   const exportAvailable = item.item.export_available === true;
-  
+  const exportDestinations = useMemo(
+    () => (exportAvailable ? exportDestinationCodes(item) : []),
+    [exportAvailable, item]
+  );
+
   // Discovery: rating display (≥3 reviews) or "New" chip (replaces rating)
   const ratingDisplay = item.rating_display;
   const isNew = item.is_new === true;
@@ -150,6 +157,7 @@ function InventoryCatalogGridTileInner({
           style={styles.image}
           accessibilityLabel={item.item.name}
         />
+        {exportAvailable ? <ExportOnlyBadge variant="overlay" compact /> : null}
         {/* Discovery: "New" chip overlaid on image (top-right, below like button) */}
         {isNew && !hasDeal && !exportAvailable ? (
           <View style={styles.newChipOverlay}>
@@ -190,9 +198,10 @@ function InventoryCatalogGridTileInner({
 
         {exportAvailable ? (
           <Text
+            testID="export-price-on-request"
             style={[
-              typography.caption,
-              { color: colors.text.secondary, fontWeight: '600', marginTop: 2 },
+              typography.body2,
+              { color: colors.text.primary, fontWeight: '700', marginTop: 2 },
             ]}
           >
             {t('productInterest.priceNotApplicable', 'Price on request')}
@@ -224,7 +233,11 @@ function InventoryCatalogGridTileInner({
           </Text>
         ) : null}
 
-        <ProductHint item={item} hasDeal={Boolean(hasDeal)} />
+        {exportAvailable ? (
+          <ExportDestinationsLine destinations={exportDestinations} />
+        ) : (
+          <ProductHint item={item} hasDeal={Boolean(hasDeal)} />
+        )}
 
         {packSavings && !exportAvailable ? (
           <Text

@@ -36,6 +36,15 @@ jest.mock('../../hooks/useMarket', () => ({
   useMarket: () => ({ selectedMarket: { id: 'cm', countryCode: 'CM' } }),
 }));
 
+jest.mock('../../hooks/useExportOrigins', () => ({
+  useExportOrigins: () => ({ origins: [], loading: false, error: false }),
+}));
+
+jest.mock('../exports/ExportsDirectionBar', () => ({
+  __esModule: true,
+  default: ({ direction }: { direction: string }) => <div>direction:{direction}</div>,
+}));
+
 jest.mock('../../hooks/usePublicBrowserGeo', () => ({
   usePublicBrowserGeo: () => null,
 }));

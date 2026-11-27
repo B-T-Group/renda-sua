@@ -64,6 +64,8 @@ export interface CatalogInventoryItem {
     preparation_minutes?: number | null;
     pay_on_delivery_enabled?: boolean;
     export_available?: boolean;
+    /** Destination markets (ISO-2) of an export-only item. */
+    export_markets?: Array<{ country_code: string }> | null;
     dimensions?: string | null;
     is_fragile?: boolean;
     is_perishable?: boolean;

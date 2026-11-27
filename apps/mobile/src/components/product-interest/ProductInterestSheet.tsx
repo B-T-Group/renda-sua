@@ -65,7 +65,7 @@ export function ProductInterestSheet({
           onPress={(e) => e.stopPropagation()}
         >
           <Text variant="titleLarge" style={{ padding: spacing.md }}>
-            {t('productInterest.dialogTitle', "I'm interested")}
+            {t('productInterest.dialogTitle', 'I’m interested')}
           </Text>
           <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.md }}>
             <Text variant="bodyMedium" style={{ marginBottom: spacing.sm }}>

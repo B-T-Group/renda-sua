@@ -127,6 +127,10 @@ export interface BusinessProductInterestNotificationPayload {
   clientPhone?: string | null;
   clientNote?: string | null;
   inventoryId: string;
+  /** 'public_export_catalog' marks a partner inquiry from the public /exports/{cc} page. */
+  source?: 'in_app' | 'public_export_catalog';
+  /** Browsing market of the sender (ISO-2). */
+  viewerCountryCode?: string | null;
 }
 
 export interface ClientRentalRequestAcceptedEmailPayload {

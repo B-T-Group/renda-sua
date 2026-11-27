@@ -302,6 +302,121 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     expect(json).toContain('"state":{"_eq":"Ontario"}');
   });
 
+  describe('origin_country (exports by origin)', () => {
+    it('lists export items from the origin country with any destination, ignoring the viewer market', async () => {
+      const { buildWhere, whereJson, hasura } = createService({ exportMarket: false });
+      const built = await buildWhere({
+        export_only: true,
+        origin_country: 'ca',
+        country_code: 'CM',
+        state: 'Littoral',
+      });
+
+      expect(built).toHaveProperty('where');
+      const json = whereJson(built as { where: Record<string, unknown> });
+      expect(json).toContain('"export_available":{"_eq":true}');
+      expect(json).toContain('"export_markets":{"country_code":{"_is_null":false}}');
+      expect(json).toContain(
+        '"business_location":{"address":{"country":{"_eq":"CA"}}}'
+      );
+      // The viewer market is not a filter in the From view.
+      expect(json).not.toContain('"export_markets":{"country_code":{"_eq":"CM"}}');
+      expect(hasCountryEq(json, 'CM')).toBe(false);
+      expect(json).not.toContain('"state":{"_eq":"Littoral"}');
+      expect(json).toContain('"moderation_status":{"_eq":"approved"}');
+      expect(json).toContain('"is_storefront_visible":{"_eq":true}');
+      const calls = hasura.executeQuery.mock.calls.map((c: unknown[]) => String(c[0]));
+      expect(calls.some((q: string) => q.includes('ValidateExportMarket'))).toBe(false);
+    });
+
+    it('works anonymously without a viewer country', async () => {
+      const { buildWhere, whereJson } = createService();
+      const built = await buildWhere({ export_only: true, origin_country: 'CA' });
+      expect(built).toHaveProperty('where');
+      expect(whereJson(built as { where: Record<string, unknown> })).toContain(
+        '"country":{"_eq":"CA"}'
+      );
+    });
+
+    it('returns unsupported for a malformed origin code', async () => {
+      const { buildWhere } = createService();
+      await expect(
+        buildWhere({ export_only: true, origin_country: 'CAN' })
+      ).resolves.toEqual({ unsupported: true });
+      await expect(
+        buildWhere({ export_only: true, origin_country: '1!' })
+      ).resolves.toEqual({ unsupported: true });
+    });
+
+    it('keeps the destination-market where byte-identical when origin_country is absent or blank', async () => {
+      const a = createService();
+      const b = createService();
+      const without = await a.buildWhere({ export_only: true, country_code: 'CA' });
+      const blank = await b.buildWhere({
+        export_only: true,
+        country_code: 'CA',
+        origin_country: '  ',
+      });
+      expect(JSON.stringify(blank)).toEqual(JSON.stringify(without));
+      expect(JSON.stringify(without)).toContain(
+        '"export_markets":{"country_code":{"_eq":"CA"}}'
+      );
+    });
+
+    it('ignores origin_country without export_only (local catalog unchanged)', async () => {
+      const a = createService();
+      const b = createService();
+      const local = await a.buildWhere({ country_code: 'CA' });
+      const withOrigin = await b.buildWhere({ country_code: 'CA', origin_country: 'CM' });
+      expect(JSON.stringify(withOrigin)).toEqual(JSON.stringify(local));
+    });
+
+    it('origin picker scope: every export item with a destination, no origin or viewer filter', async () => {
+      const { buildWhere, whereJson } = createService();
+      const built = await buildWhere({ export_only: true, exportAnyOrigin: true });
+      const json = whereJson(built as { where: Record<string, unknown> });
+      expect(json).toContain('"export_markets":{"country_code":{"_is_null":false}}');
+      expect(json).not.toContain('"address"');
+    });
+
+    it('getExportOrigins summarizes rows from the export scope', async () => {
+      const { service, hasura } = createService();
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('ExportOriginRows')) {
+          return {
+            business_inventory: [
+              {
+                item_id: 'i1',
+                business_location: { business_id: 'b1', address: { country: 'CA' } },
+                item: { export_markets: [{ country_code: 'CM' }, { country_code: 'GA' }] },
+              },
+              {
+                item_id: 'i2',
+                business_location: { business_id: 'b2', address: { country: 'CA' } },
+                item: { export_markets: [{ country_code: 'CD' }] },
+              },
+              {
+                item_id: 'i3',
+                business_location: { business_id: 'b3', address: { country: 'CM' } },
+                item: { export_markets: [{ country_code: 'CA' }] },
+              },
+            ],
+          };
+        }
+        return {};
+      });
+      await expect(service.getExportOrigins()).resolves.toEqual([
+        {
+          country_code: 'CA',
+          item_count: 2,
+          business_count: 2,
+          destination_codes: ['CD', 'CM', 'GA'],
+        },
+        { country_code: 'CM', item_count: 1, business_count: 1, destination_codes: ['CA'] },
+      ]);
+    });
+  });
+
   it('does not apply the default export exclude on store or wishlist rails', async () => {
     const { buildWhere, whereJson } = createService();
     const built = await buildWhere({

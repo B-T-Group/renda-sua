@@ -28,8 +28,11 @@ export interface ProductInterestPage {
   totalPages: number;
 }
 
+export type ProductInterestSource = 'in_app' | 'public_export_catalog';
+
 export interface ProductInterestResult {
   id: string;
+  source?: ProductInterestSource;
   created_at?: string;
   status?: string;
   export_order?: boolean;
@@ -43,12 +46,15 @@ export function useProductInterest() {
     async (
       businessInventoryId: string,
       note?: string,
-      countryCode?: string
+      countryCode?: string,
+      source?: ProductInterestSource
     ): Promise<ProductInterestResult> => {
       const res = await api.post('/product-interest', {
         businessInventoryId,
         note: note?.trim() || undefined,
-        countryCode: countryCode || undefined,
+        // Required by the API (no default market). Destination check for in-app interest.
+        countryCode: countryCode?.toUpperCase() || undefined,
+        ...(source && source !== 'in_app' ? { source } : {}),
       });
       return res.data?.data;
     },
