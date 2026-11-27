@@ -37,7 +37,7 @@ export default function RentalReservedScreen() {
   }, [navigation]);
 
   const viewRental = () => navigation.replace('RentalBookingDetail', { bookingId });
-  const goDashboard = () => navigation.navigate('ClientMyRentals', { segment: 'upcoming' });
+  const goDashboard = () => navigation.navigate('ClientMainTabs', { screen: 'ClientBrowse' });
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
