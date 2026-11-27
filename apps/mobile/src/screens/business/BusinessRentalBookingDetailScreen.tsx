@@ -37,6 +37,7 @@ import { StickyActionCard } from '../../components/common/StickyActionCard';
 import { RentalJourneyList } from '../../components/rentals/RentalJourneyList';
 import { BusinessPhotoRequest } from '../../components/rentals/inspection/BusinessPhotoRequest';
 import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
+import { useRentalMessagesHeader } from '../../hooks/useRentalMessagesHeader';
 import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import type { RentalBookingDetail } from '../../types/rentals';
@@ -110,7 +111,18 @@ export default function BusinessRentalBookingDetailScreen() {
     sendMessage,
     refetch: refetchMessages,
     mentionableParticipants,
+    markMessagesRead,
+    unreadCount,
   } = useRentalBookingMessages(bookingId);
+  const openMessages = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: messagesY.current, animated: true });
+    if (unreadCount > 0 && messages[0]?.id) void markMessagesRead(messages[0].id);
+  }, [unreadCount, messages, markMessagesRead]);
+  useRentalMessagesHeader({
+    showMessages: Boolean(booking) && booking?.status !== 'cancelled',
+    unreadCount,
+    onOpenMessages: openMessages,
+  });
   const snapshot = useInspectionSnapshot(bookingId, booking);
   const confirmationsOn = !flagsLoading && flags.rentals_inspection_confirmations_enabled;
 

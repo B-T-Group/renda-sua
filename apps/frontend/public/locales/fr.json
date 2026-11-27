@@ -7407,7 +7407,8 @@
       "adminReported": "Signalé le {{time}}"
     },
     "messages": {
-      "title": "Messages"
+      "title": "Messages",
+      "openWithUnread": "Messages, {{count}} non lus"
     },
     "messaging": {
       "startPin": {

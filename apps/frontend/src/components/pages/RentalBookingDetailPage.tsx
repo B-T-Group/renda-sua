@@ -15,7 +15,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
@@ -27,7 +27,9 @@ import {
   useRentalApi,
 } from '../../hooks/useRentalApi';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useRentalBookingUnreadCount } from '../../hooks/useRentalBookingUnreadCount';
 import { useRentalInspection } from '../../hooks/useRentalInspection';
+import { RentalMessagesButton } from '../rentals/RentalMessagesButton';
 import LoadingPage from '../common/LoadingPage';
 import { UserMessagesComponent } from '../common/UserMessagesComponent';
 import {
@@ -271,6 +273,15 @@ const RentalBookingDetailPage: React.FC = () => {
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [confirmView, setConfirmView] = useState<ConfirmView | null>(null);
   const inspection = useRentalInspection(bookingId, booking);
+  const { unreadCount: unreadMessages, refresh: refreshUnreadMessages } =
+    useRentalBookingUnreadCount(bookingId);
+  const messagesSectionRef = useRef<HTMLDivElement | null>(null);
+  const [messagesExpandSignal, setMessagesExpandSignal] = useState(0);
+
+  const openMessages = useCallback(() => {
+    setMessagesExpandSignal((n) => n + 1);
+    messagesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
   useEffect(() => {
     if (profileLoading) return;
@@ -698,12 +709,19 @@ const RentalBookingDetailPage: React.FC = () => {
       ) : null}
       <Box sx={{ minHeight: '100%', pb: hasStickyAction ? { xs: `${STICKY_ACTION_CLEARANCE + 72}px`, md: `${STICKY_ACTION_CLEARANCE}px` } : { xs: 10, md: 5 }, bgcolor: alpha(theme.palette.divider, 0.04) }}>
         <Container maxWidth="md" sx={{ py: { xs: 2, md: 3 } }}>
-          <Button
-            onClick={() => navigate(-1)}
-            sx={{ mb: 2, color: 'text.secondary' }}
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mb: 2 }}
           >
-            {t('common.back', 'Back')}
-          </Button>
+            <Button onClick={() => navigate(-1)} sx={{ color: 'text.secondary' }}>
+              {t('common.back', 'Back')}
+            </Button>
+            {bookingId && booking.status !== 'cancelled' ? (
+              <RentalMessagesButton unreadCount={unreadMessages} onClick={openMessages} />
+            ) : null}
+          </Stack>
 
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
@@ -1281,12 +1299,14 @@ const RentalBookingDetailPage: React.FC = () => {
             />
 
             {bookingId && booking.status !== 'cancelled' ? (
-              <Box id="rental-messages">
+              <Box id="rental-messages" ref={messagesSectionRef}>
               <UserMessagesComponent
                 entityType="rental_booking"
                 entityId={bookingId}
                 title={t('rentals.messages.title', 'Messages')}
                 defaultExpanded={messagesDefaultExpanded(booking.status)}
+                expandSignal={messagesExpandSignal}
+                onMessagesRead={() => void refreshUnreadMessages()}
                 maxVisibleMessages={5}
               />
               </Box>

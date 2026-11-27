@@ -6761,6 +6761,7 @@
     },
     "messages": {
       "title": "Messages",
+      "openWithUnread": "Messages, {{count}} unread",
       "emptyHint": "Message the other party about pickup, return, or the rental."
     },
     "messaging": {

@@ -111,6 +111,28 @@ export class RentalBookingMessagingService {
     return this.participants(booking).filter((p) => p.userId !== user.id);
   }
 
+  async getUnreadCount(bookingId: string): Promise<number> {
+    const user = await this.hasuraUserService.getUser();
+    const booking = await this.loadBooking(bookingId);
+    this.assertAccess(user, booking);
+    const r = await this.hasuraSystemService.executeQuery<{
+      user_messages_aggregate: { aggregate: { count: number } | null };
+    }>(
+      `query RentalUnread($bookingId: uuid!, $entityType: entity_types_enum!, $me: uuid!) {
+        user_messages_aggregate(
+          where: {
+            entity_id: { _eq: $bookingId }
+            entity_type: { _eq: $entityType }
+            user_id: { _neq: $me }
+            _not: { reads: { user_id: { _eq: $me } } }
+          }
+        ) { aggregate { count } }
+      }`,
+      { bookingId, entityType: ENTITY_TYPE, me: user.id }
+    );
+    return r.user_messages_aggregate?.aggregate?.count ?? 0;
+  }
+
   async markMessagesRead(
     bookingId: string,
     lastReadMessageId: string

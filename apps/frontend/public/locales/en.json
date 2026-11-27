@@ -7687,7 +7687,8 @@
       "adminReported": "Reported {{time}}"
     },
     "messages": {
-      "title": "Messages"
+      "title": "Messages",
+      "openWithUnread": "Messages, {{count}} unread"
     },
     "messaging": {
       "startPin": {

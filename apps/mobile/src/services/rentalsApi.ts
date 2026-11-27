@@ -693,6 +693,16 @@ export async function getBookingMentionableParticipants(bookingId: string): Prom
   );
 }
 
+export async function getBookingUnreadCount(bookingId: string): Promise<{
+  success: boolean;
+  unreadCount?: number;
+}> {
+  return apiRequest(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/messages/unread-count`,
+    { method: 'GET' }
+  );
+}
+
 export async function markBookingMessagesRead(
   bookingId: string,
   lastReadMessageId: string
@@ -745,5 +755,6 @@ export const rentalsApi = {
   getBookingMessages,
   sendBookingMessage,
   getBookingMentionableParticipants,
+  getBookingUnreadCount,
   markBookingMessagesRead,
 };
