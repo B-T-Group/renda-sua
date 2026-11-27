@@ -1,6 +1,7 @@
 /** Reserve now, pay at pickup: reserve sheet (fee on/off), booking payment card, card Pay & start. */
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { Linking } from 'react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { I18nextProvider } from 'react-i18next';
 import { PaperProvider } from 'react-native-paper';
 import { paperTheme } from '../../../theme/paperTheme';
@@ -149,5 +150,10 @@ describe('Reserve now, pay at pickup', () => {
     expect(screen.getByText('Pick up your item · 2:00 PM')).toBeTruthy();
     expect(screen.queryByText(/held on your card/)).toBeNull();
     expect(screen.getByTestId('sticky-summary-address').props.children).toBe('12 Rue Principale, Montreal, QC, Canada');
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    fireEvent.press(screen.getByLabelText('Get directions to 12 Rue Principale, Montreal, QC, Canada'));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(String(open.mock.calls[0][0])).toMatch(/(daddr|destination|q)=12%20Rue%20Principale/);
+    open.mockRestore();
   });
 });

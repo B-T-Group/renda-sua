@@ -7568,6 +7568,7 @@
       "startedBanner": "Rental started at {{time}}. The business has been notified to hand over the item.",
       "pickupOpens": "Pickup opens {{day}}",
       "stickyPickupAt": "Pickup at",
+      "directionsTo": "Get directions to {{address}}",
       "bookedDay": "Booked {{day}} · {{range}}"
     },
     "business": {

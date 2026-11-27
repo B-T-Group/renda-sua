@@ -21,6 +21,7 @@ import { waitingForRenterTitle } from '../../utils/rentals/frenchElision';
 import { payBreakdown } from '../../utils/rentals/payBreakdown';
 import { PayBreakdownView, PayFooter } from './PayBreakdownView';
 import { payLabelStyle } from '../../utils/rentals/payButtonLabel';
+import { pickupAddressLink } from '../../utils/rentals/openPickupDirections';
 
 export interface StartCardBooking {
   status: string;
@@ -179,7 +180,7 @@ export function RentalStartAction(props: RentalStartCardProps) {
       summaryLabel={t('rentals.start.stickyPickupAt', 'Pickup at')}
       summaryValue={props.place}
       summaryVariant="place"
-      summaryDetail={props.address}
+      {...pickupAddressLink(props.address, t)}
       actionTestID="rental-start-button"
       actionLabel={label}
       actionLabelStyle={payLabelStyle(label)}

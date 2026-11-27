@@ -12,6 +12,7 @@ import { payBreakdown } from '../../utils/rentals/payBreakdown';
 import { PayBreakdownBox, PayFooter } from './PayBreakdownBox';
 import { clockRange } from '../../utils/rentals/reserveSummary';
 import { StickyActionCard } from '../common/StickyActionCard';
+import { pickupAddressLink } from '../../utils/pickupAddressLink';
 
 export interface StartPanelBooking {
   status: string;
@@ -39,6 +40,7 @@ interface Props {
   role: 'client' | 'business';
   renterName?: string;
   place: string;
+  address?: string | null;
   money: string;
   returnLabel: string;
   starting?: boolean;
@@ -126,6 +128,8 @@ export function RentalStartPanel(props: Props) {
           actionColor={pays ? 'cta' : 'primary'}
           summaryLabel={t('rentals.start.stickyPickupAt', 'Pickup at')}
           summaryValue={props.place}
+          summaryVariant="place"
+          {...pickupAddressLink(props.address, t)}
           actionIcon={locked ? <Lock /> : card ? <CreditCard /> : momo ? <PhoneIphone /> : <PlayArrow />}
           disabled={locked || props.starting}
           loading={props.starting}
