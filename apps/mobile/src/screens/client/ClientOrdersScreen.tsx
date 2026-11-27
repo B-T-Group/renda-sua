@@ -90,6 +90,14 @@ export default function ClientOrdersScreen() {
     applySearch();
   }, [applySearch]);
 
+  const onBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('ClientBrowse' as never);
+  }, [navigation]);
+
   const renderItem = useCallback(
     ({ item }: { item: Order }) => (
       <ClientOrderListRow
@@ -115,6 +123,13 @@ export default function ClientOrdersScreen() {
     () => (
       <View style={{ paddingTop: spacing.md }}>
         <View style={styles.titleRow}>
+          <IconButton
+            icon="arrow-left"
+            iconColor={colors.text.primary}
+            onPress={onBack}
+            accessibilityLabel={t('common.back', 'Back')}
+            style={styles.backButton}
+          />
           <View style={{ flex: 1, paddingRight: spacing.sm }}>
             <Text variant="headlineSmall" style={[typography.h5, { color: colors.text.primary }]}>
               {t('client.orders.title', 'My orders')}
@@ -248,6 +263,7 @@ export default function ClientOrdersScreen() {
       hubSegment,
       typography.h5,
       refresh,
+      onBack,
     ]
   );
 
@@ -328,6 +344,7 @@ export default function ClientOrdersScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  backButton: { margin: 0, marginLeft: -8, marginTop: -4 },
   searchRow: { flexDirection: 'row', alignItems: 'center' },
   searchInput: { flex: 1 },
   summaryRow: { flexDirection: 'row', gap: 8, paddingRight: 16 },

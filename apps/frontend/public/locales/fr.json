@@ -10445,5 +10445,9 @@
     "partnerHelp": "Vous envoyez une demande partenaire pour {{name}} à l’entreprise. Elle vous contactera en dehors de l’application.",
     "notExportedError": "Cet article n’est pas exporté vers votre marché.",
     "checkoutBlocked": "{{name}} est réservé à l’export. Retirez-le pour payer."
+  },
+  "catalogShortcut": {
+    "myOrders": "Mes commandes",
+    "myExports": "Mes exportations"
   }
 }

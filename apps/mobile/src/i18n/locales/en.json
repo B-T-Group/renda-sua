@@ -9453,5 +9453,9 @@
     "checkoutBlocked": "{{name}} is export only. Remove it to check out.",
     "cartRemoved": "{{count}} item was removed: it’s export only.",
     "cartRemoved_plural": "{{count}} items were removed: they’re export only."
+  },
+  "catalogShortcut": {
+    "myOrders": "My orders",
+    "myExports": "My exports"
   }
 }

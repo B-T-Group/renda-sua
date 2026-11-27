@@ -1,3 +1,4 @@
+import { FlightTakeoff } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -30,6 +31,7 @@ import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemCardSkeleton from '../common/ItemCardSkeleton';
 import { RecentlyViewedRail } from '../catalog-experience/RecentlyViewedRail';
+import { CatalogShortcutButton } from '../catalog/CatalogShortcutButton';
 import ExportCatalogIllustration from '../illustrations/ExportCatalogIllustration';
 import SEOHead from '../seo/SEOHead';
 import ExportsDirectionBar from '../exports/ExportsDirectionBar';
@@ -182,7 +184,15 @@ const ExportsPage: React.FC = () => {
             </Typography>
           </Box>
         </Box>
-        <ExportsDirectionBar direction="into" origins={origins} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <CatalogShortcutButton
+            label={t('catalogShortcut.myExports', 'My exports')}
+            to="/export-orders"
+            icon={<FlightTakeoff sx={{ fontSize: 22, color: 'primary.main' }} />}
+            testId="catalog-my-exports"
+          />
+          <ExportsDirectionBar direction="into" origins={origins} />
+        </Box>
       </Box>
 
       <RecentlyViewedRail

@@ -9399,5 +9399,9 @@
     "checkoutBlocked": "{{name}} est réservé à l’export. Retirez-le pour payer.",
     "cartRemoved": "{{count}} article retiré : il est réservé à l’export.",
     "cartRemoved_plural": "{{count}} articles retirés : ils sont réservés à l’export."
+  },
+  "catalogShortcut": {
+    "myOrders": "Mes commandes",
+    "myExports": "Mes exportations"
   }
 }

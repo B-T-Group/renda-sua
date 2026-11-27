@@ -10437,5 +10437,9 @@
     "partnerHelp": "You’re sending a partner inquiry about {{name}} to the business. They’ll contact you outside the app.",
     "notExportedError": "This item isn’t exported to your market.",
     "checkoutBlocked": "{{name}} is export only. Remove it to check out."
+  },
+  "catalogShortcut": {
+    "myOrders": "My orders",
+    "myExports": "My exports"
   }
 }
