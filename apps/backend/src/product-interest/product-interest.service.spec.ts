@@ -51,6 +51,7 @@ describe('ProductInterestService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    exportOrders.isExportOrdersEnabled.mockResolvedValue(false);
     service = new ProductInterestService(
       hasuraSystem as any,
       hasuraUser as any,
@@ -199,9 +200,10 @@ describe('ProductInterestService', () => {
       note: '   ',
     });
     expect(result.id).toBe('req-1');
-    expect(hasuraSystem.executeMutation.mock.calls[0][1].object.client_note).toBe(
-      null
-    );
+    expect(exportOrders.createFromInterest).not.toHaveBeenCalled();
+    expect(
+      hasuraSystem.executeMutation.mock.calls[0][1].object.client_note
+    ).toBe(null);
     expect(
       notifications.sendBusinessProductInterestNotification
     ).toHaveBeenCalledWith(
@@ -282,7 +284,9 @@ describe('ProductInterestService', () => {
 
   it('rejects non-business users listing leads', async () => {
     hasuraUser.getUser.mockResolvedValue({ id: 'u1', business: null });
-    await expect(service.listForBusiness()).rejects.toBeInstanceOf(HttpException);
+    await expect(service.listForBusiness()).rejects.toBeInstanceOf(
+      HttpException
+    );
     expect(hasuraSystem.executeQuery).not.toHaveBeenCalled();
   });
 
@@ -330,5 +334,69 @@ describe('ProductInterestService', () => {
       limit: 20,
       offset: 0,
     });
+  });
+
+  it('opens an export order instead of a second interest row when the flag is on', async () => {
+    hasuraUser.getUser.mockResolvedValue(clientUser);
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_inventory_by_pk: eligibleInventory,
+    });
+    exportOrders.isExportOrdersEnabled.mockResolvedValue(true);
+    exportOrders.createFromInterest.mockResolvedValue({
+      id: 'exp-1',
+      created_at: '2026-11-27T15:00:00.000Z',
+      status: 'SUBMITTED',
+      bc_number: 'BC-9',
+    });
+
+    const actual = await service.createInterest({
+      businessInventoryId: 'inv-1',
+      note: '  Need quote  ',
+    });
+
+    expect(actual).toEqual({
+      id: 'exp-1',
+      created_at: '2026-11-27T15:00:00.000Z',
+      status: 'SUBMITTED',
+      export_order: true,
+      bc_number: 'BC-9',
+    });
+    expect(exportOrders.createFromInterest).toHaveBeenCalledWith({
+      businessInventoryId: 'inv-1',
+      note: '  Need quote  ',
+      quantity: 1,
+    });
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+    expect(hasuraSystem.executeQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fall through to a legacy interest when the export flag check throws', async () => {
+    hasuraUser.getUser.mockResolvedValue(clientUser);
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_inventory_by_pk: eligibleInventory,
+    });
+    exportOrders.isExportOrdersEnabled.mockRejectedValue(
+      new Error('config down')
+    );
+
+    await expect(
+      service.createInterest({ businessInventoryId: 'inv-1' })
+    ).rejects.toThrow('config down');
+    expect(exportOrders.createFromInterest).not.toHaveBeenCalled();
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('does not insert a legacy interest when export creation fails', async () => {
+    hasuraUser.getUser.mockResolvedValue(clientUser);
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_inventory_by_pk: eligibleInventory,
+    });
+    exportOrders.isExportOrdersEnabled.mockResolvedValue(true);
+    exportOrders.createFromInterest.mockRejectedValue(new Error('overdue'));
+
+    await expect(
+      service.createInterest({ businessInventoryId: 'inv-1' })
+    ).rejects.toThrow('overdue');
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
   });
 });
