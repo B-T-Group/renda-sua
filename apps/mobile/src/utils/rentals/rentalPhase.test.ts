@@ -49,7 +49,7 @@ describe('booking detail status labels', () => {
       const info = resolveRentalPhase({ bookingStatus: status, returnReportedAt: reportedAt }, 'client');
       expect(info.labelKey).toBe(key);
       expect(info.phase).toBe('in_progress');
-      expect(info.hubGroup).toBe('action_needed');
+      expect(info.hubGroup).toBe('active');
       expect(info.nextStepKey).toBe('rentals.returnReport.waitingTitle');
       expect(bookingDetailStatusLabelKey(status, { returnReportedAt: reportedAt })).toBe(key);
     }

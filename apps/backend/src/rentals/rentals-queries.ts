@@ -1328,6 +1328,14 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
           name
           currency
           business { name }
+          rental_category { name }
+          rental_item_images(order_by: { display_order: asc }, limit: 1) {
+            id
+            image_url
+            display_url
+            thumbnail
+            alt_text
+          }
         }
       }
       rental_booking {

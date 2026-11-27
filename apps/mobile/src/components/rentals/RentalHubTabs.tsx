@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { fontFamily } from '../../theme/fonts';
 import type { RentalHubGroup } from '../../utils/rentals';
@@ -20,36 +20,38 @@ export function RentalHubTabs({
 }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
-      {tabs.map((tab) => {
-        const selected = tab.value === value;
-        return (
-          <Pressable
-            key={tab.value}
-            accessibilityRole="tab"
-            accessibilityState={{ selected }}
-            onPress={() => onChange(tab.value)}
-            style={[styles.tab, selected && { backgroundColor: colors.primary.main + '22' }]}
-          >
-            <Text style={[styles.label, { color: selected ? colors.primary.main : colors.text.primary }]}>
-              {tab.label}
-            </Text>
-            {tab.count != null && tab.count > 0 ? (
-              <View style={[styles.badge, { backgroundColor: colors.primary.main }]}>
-                <Text style={styles.badgeText}>{tab.count}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-        );
-      })}
+    <View style={[styles.frame, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {tabs.map((tab) => {
+          const selected = tab.value === value;
+          return (
+            <Pressable
+              key={tab.value}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              onPress={() => onChange(tab.value)}
+              style={[styles.tab, selected && { backgroundColor: colors.primary.main + '22' }]}
+            >
+              <Text style={[styles.label, { color: selected ? colors.primary.main : colors.text.primary }]}>
+                {tab.label}
+              </Text>
+              {tab.count != null && tab.count > 0 ? (
+                <View style={[styles.badge, { backgroundColor: colors.primary.main }]}>
+                  <Text style={styles.badgeText}>{tab.count}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, padding: 4, gap: 4 },
+  frame: { borderRadius: 12, borderWidth: 1 },
+  row: { flexDirection: 'row', padding: 4, gap: 4 },
   tab: {
-    flex: 1,
     minHeight: 36,
     borderRadius: 8,
     alignItems: 'center',

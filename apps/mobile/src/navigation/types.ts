@@ -213,7 +213,7 @@ export type ClientMainTabParamList = {
     | undefined;
   ClientSearch: undefined;
   ClientReels: undefined;
-  ClientRentals: { segment?: 'action_needed' | 'upcoming' | 'past' } | undefined;
+  ClientRentals: { segment?: 'action_needed' | 'upcoming' | 'active' | 'past' } | undefined;
   ClientOrders: undefined;
   ClientMenu: undefined;
 };
@@ -293,7 +293,7 @@ export type ClientRootStackParamList = {
   RentalReserved: { bookingId: string };
   ModifyRentalRequest: { requestId: string };
   ClientMyRentals:
-    | { notice?: 'updated'; segment?: 'action_needed' | 'upcoming' | 'past' }
+    | { notice?: 'updated'; segment?: 'action_needed' | 'upcoming' | 'active' | 'past' }
     | undefined;
   RentalBookingDetail: { bookingId: string };
   ClientInspection: { bookingId: string; stage: 'pickup' | 'return' };

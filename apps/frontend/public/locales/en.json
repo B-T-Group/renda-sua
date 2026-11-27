@@ -7637,11 +7637,14 @@
       "toDo": "To do",
       "actionNeeded": "Action needed",
       "upcoming": "Upcoming",
+      "active": "Active",
       "past": "Past",
       "emptyActionNeeded": "Nothing needs your attention right now.",
       "emptyUpcoming": "No upcoming rentals",
+      "emptyActive": "No rentals in progress.",
       "emptyPast": "No past rentals yet.",
-      "emptyAll": "You have no rental requests or bookings yet."
+      "emptyAll": "You have no rental requests or bookings yet.",
+      "openCard": "Open {{name}}"
     },
     "actions": {
       "bookOffer": "Book offer",
