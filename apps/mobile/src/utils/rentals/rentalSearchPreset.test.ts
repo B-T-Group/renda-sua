@@ -93,4 +93,34 @@ describe('rental search preset', () => {
     ).toEqual({ status: 'blocked', nextAvailableDate: '2026-11-16' });
     expect(stayRequestState(null)).toEqual({ status: 'blocked', nextAvailableDate: null });
   });
+
+  it('starts the first day and ends the last day at the chosen times as hourly rows', () => {
+    const rows = allDaySelectionsForRange(
+      { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2, startTime: '13:00', endTime: '15:00' },
+      openAllDay,
+      25000,
+      4000
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ billing: 'hourly' });
+    expect(new Date(rows[0].startMs).getHours()).toBe(13);
+    expect(rows[1]).toMatchObject({ billing: 'hourly' });
+    expect(new Date(rows[1].endMs).getHours()).toBe(15);
+  });
+
+  it('keeps whole days and daily billing in between and when there is no hourly price', () => {
+    const hourless = allDaySelectionsForRange(
+      { startDate: '2026-11-14', endDate: '2026-11-17', dayCount: 3, startTime: '13:00', endTime: '15:00' },
+      openAllDay,
+      25000
+    );
+    expect(hourless.every((row) => row.billing === 'all_day')).toBe(true);
+    const timed = allDaySelectionsForRange(
+      { startDate: '2026-11-14', endDate: '2026-11-17', dayCount: 3, startTime: '13:00', endTime: '15:00' },
+      openAllDay,
+      25000,
+      4000
+    );
+    expect(timed.map((row) => row.billing)).toEqual(['hourly', 'all_day', 'hourly']);
+  });
 });

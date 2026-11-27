@@ -162,6 +162,8 @@ export type RentalRequestParams = {
   listingId: string;
   startDate?: string;
   endDate?: string;
+  startTime?: string;
+  endTime?: string;
 };
 
 export type GuestRootStackParamList = {
@@ -179,6 +181,8 @@ export type GuestRootStackParamList = {
     listingId: string;
     startDate?: string;
     endDate?: string;
+    startTime?: string;
+    endTime?: string;
     openRequest?: boolean;
   };
   RentalRequest: RentalRequestParams;
@@ -277,6 +281,8 @@ export type ClientRootStackParamList = {
     listingId: string;
     startDate?: string;
     endDate?: string;
+    startTime?: string;
+    endTime?: string;
     openRequest?: boolean;
   };
   RentalRequest: RentalRequestParams;

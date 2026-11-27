@@ -50,20 +50,9 @@ import { RentalDayHoursDialog } from './dayHours/RentalDayHoursDialog';
 import { dayHoursBlockError, dayHoursListingModel } from './dayHours/dayHoursListingModel';
 import { fromSelectionRanges, listingNowMs } from '../../utils/rentalDayHoursPicker';
 import { submitRuleText } from '../../utils/rentalDayHoursCopy';
+import { searchPrefillRanges } from './rentalSearchPrefill';
 
 export const RENTAL_REQUEST_SECTION_ID = 'rental-request-section';
-
-
-function exclusiveDays(start: string, end: string): string[] {
-  const days: string[] = [];
-  const cursor = new Date(`${start}T00:00:00Z`);
-  const last = new Date(`${end}T00:00:00Z`);
-  while (cursor < last && days.length < 30) {
-    days.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return days;
-}
 
 export interface RentalListingRequestSectionProps {
   listingId: string;
@@ -79,6 +68,9 @@ export interface RentalListingRequestSectionProps {
   currency?: string;
   initialStartDate?: string;
   initialEndDate?: string;
+  /** HH:mm on the first and last day, from the browse search. Omitted means whole days. */
+  initialStartTime?: string;
+  initialEndTime?: string;
   cardWindow?: CardWindowFields | null;
   inspectionPolicyVersion?: number | null;
   /** Listing switches; missing means both on. */
@@ -102,6 +94,8 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   currency = 'XAF',
   initialStartDate,
   initialEndDate,
+  initialStartTime,
+  initialEndTime,
   cardWindow = null,
   inspectionPolicyVersion = null,
   offersDaily,
@@ -134,17 +128,17 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   useEffect(() => {
     if (seededDates.current || !initialStartDate || !initialEndDate || initialEndDate <= initialStartDate) return;
     seededDates.current = true;
-    const ranges = exclusiveDays(initialStartDate, initialEndDate).map((day) => ({
-      id: `prefill-${day}`,
-      startMs: Date.parse(`${day}T08:00:00`),
-      endMs: Date.parse(`${day}T18:00:00`),
-      billing: 'all_day' as const,
-      calendarDate: day,
-    }));
+    const ranges = searchPrefillRanges({
+      startDate: initialStartDate,
+      endDate: initialEndDate,
+      startTime: initialStartTime,
+      endTime: initialEndTime,
+      hourly: basePricePerHour > 0,
+    });
     if (!ranges.length) return;
     setSelections(ranges);
     document.getElementById(RENTAL_REQUEST_SECTION_ID)?.scrollIntoView({ behavior: 'smooth' });
-  }, [initialEndDate, initialStartDate]);
+  }, [basePricePerHour, initialEndDate, initialEndTime, initialStartDate, initialStartTime]);
 
   const stock = Math.max(1, Math.floor(Number(unitsAvailable)) || 1);
   const dayHoursModel = useMemo(

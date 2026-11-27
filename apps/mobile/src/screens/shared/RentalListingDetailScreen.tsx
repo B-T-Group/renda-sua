@@ -48,7 +48,14 @@ function fromRateLabel(
 }
 
 type DetailParams = {
-  RentalListingDetail: { listingId: string; startDate?: string; endDate?: string; openRequest?: boolean };
+  RentalListingDetail: {
+    listingId: string;
+    startDate?: string;
+    endDate?: string;
+    startTime?: string;
+    endTime?: string;
+    openRequest?: boolean;
+  };
 };
 
 const WEEKDAY_KEYS = [
@@ -121,6 +128,8 @@ export default function RentalListingDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const startDate = route.params?.startDate;
   const endDate = route.params?.endDate;
+  const startTime = route.params?.startTime;
+  const endTime = route.params?.endTime;
   const openRequest = route.params?.openRequest === true;
 
   const onRefresh = useCallback(async () => {
@@ -157,8 +166,10 @@ export default function RentalListingDetailScreen() {
       listingId,
       startDate,
       endDate,
+      startTime,
+      endTime,
     });
-  }, [endDate, listingId, navigation, startDate]);
+  }, [endDate, endTime, listingId, navigation, startDate, startTime]);
   const openedRequest = useRef(false);
   useEffect(() => {
     if (!listing || !openRequest || openedRequest.current) return;

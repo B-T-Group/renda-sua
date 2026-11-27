@@ -78,6 +78,8 @@ function catalogFilterKey(args: CatalogArgs): string {
     args.categoryId,
     args.dates?.startDate,
     args.dates?.endDate,
+    args.dates?.startTime,
+    args.dates?.endTime,
     args.sort,
   ].join('|');
 }

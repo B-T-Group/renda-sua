@@ -47,6 +47,9 @@ export interface RentalSearchParams {
   operation_mode?: 'take_home' | 'business_operated';
   start_date?: string;
   end_date?: string;
+  /** HH:mm on start_date and on the last day. Omitted means whole days. */
+  start_time?: string;
+  end_time?: string;
   page?: number;
   limit?: number;
 }
@@ -61,6 +64,8 @@ function searchParams(params: RentalSearchParams): Record<string, string | numbe
     operation_mode: params.operation_mode,
     start_date: params.start_date,
     end_date: params.end_date,
+    start_time: params.start_time,
+    end_time: params.end_time,
     page: params.page,
     limit: params.limit,
   };

@@ -20,26 +20,39 @@ function closeBeforeMidnight(isoDate: string, close: Date): Date {
   return new Date(midnight.getTime() - 60_000);
 }
 
+function clockOn(isoDate: string, clock: string): Date {
+  const [hours, minutes] = clock.split(':').map(Number);
+  return atLocalTime(isoDate, hours, minutes);
+}
+
 /**
  * One window per calendar day in [start, end). Each window stays inside that
  * day's listing hours and ends before the next midnight, because availability
  * is checked per UTC day and the day closes at 23:59. A daily price uses
- * all-day billing; otherwise the window is hourly.
+ * all-day billing; otherwise the window is hourly. When the range has times, the
+ * first day starts at the start time and the last day ends at the end time; those
+ * partial days are hourly when the listing has an hourly price, else a day is billed.
  */
 export function allDaySelectionsForRange(
   range: RentalDateRange,
   weekly: WeeklyRow[] = [],
-  dailyPrice = 0
+  dailyPrice = 0,
+  hourlyPrice = 0
 ): SelectionRange[] {
   const rows: SelectionRange[] = [];
-  for (const key of eachDateKey(range)) {
+  const keys = eachDateKey(range);
+  keys.forEach((key, index) => {
     const [year, month, day] = key.split('-').map(Number);
     const noon = new Date(year, (month ?? 1) - 1, day ?? 1, 12, 0, 0, 0);
     const bounds = listingDayBoundsLocal(noon, weekly);
-    const open = bounds?.open ?? atLocalTime(key, 10, 0);
-    const close = closeBeforeMidnight(key, bounds?.close ?? atLocalTime(key, 18, 0));
-    if (!(close > open)) continue;
-    const allDay = dailyPrice > 0;
+    const startClock = index === 0 ? range.startTime : undefined;
+    const endClock = index === keys.length - 1 ? range.endTime : undefined;
+    const partial = Boolean(startClock || endClock) && hourlyPrice > 0;
+    const open = partial && startClock ? clockOn(key, startClock) : bounds?.open ?? atLocalTime(key, 10, 0);
+    const wanted = partial && endClock ? clockOn(key, endClock) : bounds?.close ?? atLocalTime(key, 18, 0);
+    const close = closeBeforeMidnight(key, wanted);
+    if (!(close > open)) return;
+    const allDay = dailyPrice > 0 && !partial;
     rows.push({
       id: `search-${key}`,
       startMs: open.getTime(),
@@ -47,7 +60,7 @@ export function allDaySelectionsForRange(
       billing: allDay ? 'all_day' : 'hourly',
       ...(allDay ? { calendarDate: key } : {}),
     });
-  }
+  });
   return rows;
 }
 

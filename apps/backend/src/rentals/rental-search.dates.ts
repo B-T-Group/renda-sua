@@ -7,6 +7,7 @@ import {
 } from './rental-capacity';
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const CLOCK = /^(\d{2}):(\d{2})$/;
 const DAY_MS = 86_400_000;
 
 export interface SearchDateRange {
@@ -15,28 +16,49 @@ export interface SearchDateRange {
   startMs: number;
   endMs: number;
   dayCount: number;
+  startTime?: string;
+  endTime?: string;
 }
 
+/**
+ * `endDate` is exclusive. Optional clock times narrow the first and last day, as listing
+ * wall-clock written as UTC (the same convention as booking windows). Without times the
+ * range is whole days.
+ */
 export function parseSearchDateRange(
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  startTime?: string,
+  endTime?: string
 ): SearchDateRange | null {
   if (!startDate && !endDate) return null;
   if (!startDate || !endDate) throw new Error('INVALID_DATE_RANGE');
-  const startMs = utcDayMs(startDate);
-  const endMs = utcDayMs(endDate);
-  if (startMs == null || endMs == null || endMs <= startMs) {
+  const startDay = utcDayMs(startDate);
+  const endDay = utcDayMs(endDate);
+  if (startDay == null || endDay == null || endDay <= startDay) {
     throw new Error('INVALID_DATE_RANGE');
   }
-  const dayCount = Math.round((endMs - startMs) / DAY_MS);
+  const dayCount = Math.round((endDay - startDay) / DAY_MS);
   if (dayCount < 1 || dayCount > 30) throw new Error('INVALID_DATE_RANGE');
+  const startMs = startDay + clockMs(startTime, 0);
+  const endMs = endDay - DAY_MS + clockMs(endTime, DAY_MS);
+  if (endMs <= startMs || clockMs(startTime, 0) >= DAY_MS) throw new Error('INVALID_DATE_RANGE');
   return {
     startDate,
     endDate,
     startMs,
     endMs,
     dayCount,
+    ...(startTime ? { startTime } : {}),
+    ...(endTime ? { endTime } : {}),
   };
+}
+
+function clockMs(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const match = CLOCK.exec(value);
+  if (!match) throw new Error('INVALID_DATE_RANGE');
+  return (Number(match[1]) * 60 + Number(match[2])) * 60_000;
 }
 
 export function totalForDates(pricePerDay: number, dayCount: number): number {

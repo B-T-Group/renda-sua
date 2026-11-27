@@ -935,6 +935,8 @@ const RentalListingDetailPage: React.FC = () => {
                   currency={row.rental_item.currency}
                   initialStartDate={searchParams.get('start_date') || undefined}
                   initialEndDate={searchParams.get('end_date') || undefined}
+                  initialStartTime={searchParams.get('start_time') || undefined}
+                  initialEndTime={searchParams.get('end_time') || undefined}
                   cardWindow={row}
                   offersDaily={row.offers_daily}
                   offersHourly={row.offers_hourly}
