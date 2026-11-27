@@ -6697,6 +6697,7 @@
     },
     "messages": {
       "title": "Messages",
+      "openWithUnread": "Messages, {{count}} non lus",
       "emptyHint": "Écrivez à l’autre partie pour le retrait, le retour ou la location."
     },
     "messaging": {

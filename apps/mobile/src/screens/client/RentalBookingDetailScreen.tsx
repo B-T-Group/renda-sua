@@ -32,6 +32,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalBookingDetail } from '../../hooks/useRentalBookingDetail';
 import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
 import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
+import { useRentalMessagesHeader } from '../../hooks/useRentalMessagesHeader';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { cardHoldLines, holdCopyFallback, holdCopyKey, showsCardDeposit } from '../../utils/rentals/cardDeposit';
 import {
@@ -141,7 +142,17 @@ export default function RentalBookingDetailScreen() {
     refetch: refetchMessages,
     mentionableParticipants,
     markMessagesRead,
+    unreadCount,
   } = useRentalBookingMessages(bookingId ?? '');
+  const openMessages = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: messagesY.current, animated: true });
+    if (unreadCount > 0 && messages[0]?.id) void markMessagesRead(messages[0].id);
+  }, [unreadCount, messages, markMessagesRead]);
+  useRentalMessagesHeader({
+    showMessages: Boolean(booking) && booking?.status !== 'cancelled',
+    unreadCount,
+    onOpenMessages: openMessages,
+  });
 
   const [reportedNow, setReportedNow] = useState(false);
   const [windowForcedClosed, setWindowForcedClosed] = useState(false);

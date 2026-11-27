@@ -1006,6 +1006,28 @@ export class RentalsController {
     }
   }
 
+  @Get('bookings/:id/messages/unread-count')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Count unread messages from the other party on a rental booking',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: '{ success: true, unreadCount: number }' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Booking not found' })
+  async getBookingUnreadCount(@Param('id') bookingId: string) {
+    try {
+      const unreadCount = await this.rentalBookingMessaging.getUnreadCount(bookingId);
+      return { success: true, unreadCount };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Post('bookings/:id/messages')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Post a message on a rental booking thread' })

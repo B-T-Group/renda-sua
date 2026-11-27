@@ -12,6 +12,7 @@ export function useRentalBookingMessages(bookingId: string) {
   const [mentionableParticipants, setMentionableParticipants] = useState<
     MentionableParticipant[]
   >([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchMessages = useCallback(async () => {
     if (!bookingId) return;
@@ -34,6 +35,16 @@ export function useRentalBookingMessages(bookingId: string) {
     }
   }, [bookingId]);
 
+  const fetchUnreadCount = useCallback(async () => {
+    if (!bookingId) return;
+    try {
+      const res = await rentalsApi.getBookingUnreadCount(bookingId);
+      setUnreadCount(res.success ? res.unreadCount ?? 0 : 0);
+    } catch {
+      setUnreadCount(0);
+    }
+  }, [bookingId]);
+
   const fetchMentionableParticipants = useCallback(async () => {
     if (!bookingId) return;
     try {
@@ -48,8 +59,13 @@ export function useRentalBookingMessages(bookingId: string) {
 
   useEffect(() => {
     void fetchMessages();
+    void fetchUnreadCount();
     void fetchMentionableParticipants();
-  }, [fetchMessages, fetchMentionableParticipants]);
+  }, [fetchMessages, fetchUnreadCount, fetchMentionableParticipants]);
+
+  const refetch = useCallback(async () => {
+    await Promise.all([fetchMessages(), fetchUnreadCount()]);
+  }, [fetchMessages, fetchUnreadCount]);
 
   const sendMessage = useCallback(
     async (message: string, mentionedUserId?: string): Promise<boolean> => {
@@ -89,6 +105,7 @@ export function useRentalBookingMessages(bookingId: string) {
       if (!bookingId || !lastReadMessageId) return;
       try {
         await rentalsApi.markBookingMessagesRead(bookingId, lastReadMessageId);
+        setUnreadCount(0);
       } catch {
         // Best-effort
       }
@@ -100,7 +117,8 @@ export function useRentalBookingMessages(bookingId: string) {
     messages,
     loading,
     error,
-    refetch: fetchMessages,
+    unreadCount,
+    refetch,
     sendMessage,
     markMessagesRead,
     mentionableParticipants,
