@@ -87,11 +87,14 @@ export class ExportOrdersController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get export order detail' })
+  @ApiOperation({ summary: 'Get export order detail for the current client' })
   @ApiParam({ name: 'id', type: String })
+  @ApiResponse({ status: 200, description: 'Export order detail' })
+  @ApiResponse({ status: 403, description: 'Caller does not own this order' })
+  @ApiResponse({ status: 404, description: 'Export order not found' })
   async getOne(@Param('id') id: string, @ReqContext() ctx: RequestContext) {
     this.requireUser(ctx);
-    const data = await this.exportOrders.getById(id);
+    const data = await this.exportOrders.getByIdForActor(id, 'client');
     return { success: true, data };
   }
 

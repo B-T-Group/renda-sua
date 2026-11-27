@@ -21,6 +21,13 @@ import {
 } from './export-orders.queries';
 import type { ExportOrderRow } from './export-orders.types';
 
+export type ExportOrderViewerRole = 'client' | 'agent' | 'business';
+
+type ExportOrderViewer = {
+  id: string;
+  business?: { id?: string } | null;
+};
+
 type InventoryRow = {
   id: string;
   is_active: boolean;
@@ -120,6 +127,13 @@ export class ExportOrdersService {
 
   async getById(id: string) {
     return this.transitions.getOrder(id);
+  }
+
+  async getByIdForActor(id: string, role: ExportOrderViewerRole) {
+    const user = await this.hasuraUser.getUser();
+    const order = await this.getById(id);
+    this.assertActorCanView(order, role, user);
+    return order;
   }
 
   async listForActor(params: {
@@ -342,6 +356,26 @@ export class ExportOrdersService {
     if (order.client_user_id !== userId) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
+  }
+
+  private assertActorCanView(
+    order: ExportOrderRow,
+    role: ExportOrderViewerRole,
+    user: ExportOrderViewer
+  ) {
+    if (!this.actorOwnsOrder(order, role, user)) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
+  }
+
+  private actorOwnsOrder(
+    order: ExportOrderRow,
+    role: ExportOrderViewerRole,
+    user: ExportOrderViewer
+  ) {
+    if (role === 'client') return order.client_user_id === user.id;
+    if (role === 'agent') return order.agent_user_id === user.id;
+    return !!user.business?.id && order.business_id === user.business.id;
   }
 
   private buildListWhere(
