@@ -27,6 +27,7 @@ import {
 } from '../../utils/rentals/earlyReturn';
 import { BusinessDeclineBanner } from '../../components/rentals/DeclinePickupScreens';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
+import { MerchantEarningsCard } from '../../components/rentals/MerchantEarningsCard';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
 import { PickupDayCallout } from '../../components/rentals/inspection/PickupPhotoChrome';
@@ -543,6 +544,8 @@ export default function BusinessRentalBookingDetailScreen() {
             <Text style={{ color: colors.text.secondary }}>{client.email}</Text>
           ) : null}
         </View>
+
+        {booking.merchant_earnings ? <MerchantEarningsCard earnings={booking.merchant_earnings} /> : null}
 
         {earlyPending && booking.renter_reported_returned_at ? (
           <View>

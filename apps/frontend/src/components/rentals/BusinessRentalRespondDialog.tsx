@@ -30,10 +30,16 @@ import {
 import { formatRequestAmount } from '../../utils/rentalRequestDisplay';
 import { formatRentalDay } from '../../utils/rentalRequestFormat';
 import { useClientFlags } from '../../hooks/useClientFlags';
+import { RentalCommissionBreakdown } from './RentalCommissionBreakdown';
 
 function isStaleVersion(error: unknown): boolean {
   const data = (error as { response?: { data?: { code?: string } } })?.response?.data;
   return data?.code === 'RENTAL_REQUEST_STALE_VERSION';
+}
+
+function isCommissionRateChanged(error: unknown): boolean {
+  const data = (error as { response?: { data?: { code?: string } } })?.response?.data;
+  return data?.code === 'COMMISSION_RATE_CHANGED';
 }
 
 const REASON_CODES: UnavailableRentalReasonCode[] = [
@@ -156,6 +162,8 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   const [rebate, setRebate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [commissionBps, setCommissionBps] = useState<number | null>(null);
+  const [commissionRefresh, setCommissionRefresh] = useState(0);
 
   const startIso = request ? requestStartIso(request) : null;
   const hourOffer = contractHoursOffer(startIso, new Date(), request?.listing_timezone);
@@ -196,6 +204,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
         contractExpiryHours: h,
         businessResponseNote: availableNote.trim() || undefined,
         expectedVersion: request.edit_version ?? 1,
+        acknowledgedCommissionRateBps: commissionBps ?? undefined,
       });
       onSuccess();
       onClose();
@@ -203,6 +212,11 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
       if (isStaleVersion(e)) {
         onStale?.();
         onClose();
+        return;
+      }
+      if (isCommissionRateChanged(e)) {
+        setCommissionRefresh((n) => n + 1);
+        setError(t('rentals.commission.rateChanged', 'The commission changed. Review the new numbers, then accept again.'));
         return;
       }
       const msg =
@@ -213,7 +227,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, canChangeTotal, contractHours, i18n.language, onClose, onStale, onSuccess, rebate, request, respondRequest, t]);
+  }, [availableNote, commissionBps, canChangeTotal, contractHours, i18n.language, onClose, onStale, onSuccess, rebate, request, respondRequest, t]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -367,6 +381,12 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 </Link>
               </>
             ) : null}
+            <RentalCommissionBreakdown
+              requestId={request.id}
+              totalOverride={canChangeTotal && newTotal != null ? newTotal : undefined}
+              refreshKey={commissionRefresh}
+              onRateChange={setCommissionBps}
+            />
             {hourOffer.hidden ? null : (
               <TextField
                 label={t('business.rentals.contractExpiryHoursLabel', 'Contract valid for (hours)')}

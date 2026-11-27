@@ -58,12 +58,7 @@ export interface CommissionBookingFields {
   commission_base_amount?: number | string | null;
   commission_amount?: number | string | null;
   merchant_payout_amount?: number | string | null;
+  commission_campaign_code?: string | null;
   total_amount?: number | string | null;
   business?: { user_id?: string | null } | null;
-}
-
-export interface SettlementSplit {
-  commissionAmount: number;
-  merchantAmount: number;
-  rateBps: number;
 }

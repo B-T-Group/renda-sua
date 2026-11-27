@@ -612,6 +612,7 @@ export const GET_RENTAL_BOOKING_FULL = `
       rental_start_overwrite_code_used_at
       period_ended_notified_at
       commission_status
+      commission_campaign_code
       commission_rate_bps
       commission_base_amount
       commission_amount

@@ -65,8 +65,3 @@ export function calculateRentalCommission(
     merchantPayoutAmount: fromMinorUnits(safeBase - commission, currency),
   };
 }
-
-export function ratePercentLabel(rateBps: number): string {
-  const percent = rateBps / 100;
-  return Number.isInteger(percent) ? String(percent) : percent.toFixed(2).replace(/0+$/, '');
-}

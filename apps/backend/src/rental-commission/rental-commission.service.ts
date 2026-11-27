@@ -184,7 +184,7 @@ export class RentalCommissionService {
       base_amount: booking.commission_base_amount != null ? Number(booking.commission_base_amount) : null,
       commission_amount: booking.commission_amount != null ? Number(booking.commission_amount) : null,
       merchant_payout_amount: booking.merchant_payout_amount != null ? Number(booking.merchant_payout_amount) : null,
-      commission_campaign_code: (booking as any).commission_campaign_code ?? null,
+      commission_campaign_code: booking.commission_campaign_code ?? null,
     };
   }
 

@@ -35,7 +35,7 @@ const FEE_CAS = `
  *
  * - hold: after the fee is paid.
  * - refund: release. A card fee also leaves the wallet and goes back to the card.
- * - forfeit: release, then pay the business (rentals carry no commission today).
+ * - forfeit: release, then pay the business (the rental commission is taken separately at return settlement).
  * - apply: release at settlement so the contract payment covers the full total.
  */
 export class ReservationFeeLedger {

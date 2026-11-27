@@ -174,6 +174,31 @@ export interface RespondRentalRequestBody {
   unavailableReasonCode?: UnavailableRentalReasonCode;
   businessResponseNote?: string;
   expectedVersion?: number;
+  /** Rate (basis points) the business saw in the commission preview; the server rejects a stale one. */
+  acknowledgedCommissionRateBps?: number;
+}
+
+export interface RentalCommissionPreview {
+  enabled: boolean;
+  currency: string;
+  base_amount: number;
+  rate_bps: number;
+  commission_amount: number;
+  merchant_payout_amount: number;
+  source?: string;
+  campaign_code?: string | null;
+  promo_ends_at?: string | null;
+}
+
+/** Business-only booking earnings. Never present for the renter. */
+export interface RentalMerchantEarnings {
+  status: 'quoted' | 'earned' | 'reversed' | 'waived';
+  currency: string;
+  rate_bps: number | null;
+  base_amount: number | null;
+  commission_amount: number | null;
+  merchant_payout_amount: number | null;
+  commission_campaign_code: string | null;
 }
 
 export interface RentalSelectionWindow {
@@ -409,6 +434,7 @@ export interface RentalBookingPaymentStatus {
 
 export interface RentalBookingDetail {
   id: string;
+  merchant_earnings?: RentalMerchantEarnings | null;
   booking_number?: string | null;
   status: string;
   start_at: string;
@@ -811,6 +837,16 @@ export function useRentalApi() {
     [api]
   );
 
+  const fetchCommissionPreview = useCallback(
+    async (requestId: string, totalOverride?: number) => {
+      const { data } = await api.get(`/rentals/business/requests/${requestId}/commission-preview`, {
+        params: totalOverride != null ? { totalOverride } : undefined,
+      });
+      return data.data as RentalCommissionPreview;
+    },
+    [api]
+  );
+
   const dismissExpiryNotice = useCallback(
     async (requestId: string) => {
       const { data } = await api.post(`/rentals/requests/${requestId}/dismiss-expiry-notice`, {});
@@ -1027,6 +1063,7 @@ export function useRentalApi() {
     createRequest,
     fetchRequestInspectionPolicy,
     respondRequest,
+    fetchCommissionPreview,
     dismissExpiryNotice,
     createBooking,
     getBookingPaymentStatus,

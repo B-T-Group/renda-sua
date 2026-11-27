@@ -19,6 +19,7 @@
     "jest.config.ts",
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
+    "src/**/*.test-util.ts",
     "eslint.config.js",
     "eslint.config.cjs",
     "eslint.config.mjs"
