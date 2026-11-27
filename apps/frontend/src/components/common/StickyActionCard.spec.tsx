@@ -21,6 +21,26 @@ describe('StickyActionCard', () => {
     expect(onAction).not.toHaveBeenCalled();
   });
 
+  it('shows the place name with its address as an external link', () => {
+    render(
+      <StickyActionCard
+        summaryVariant="place"
+        summaryLabel="Pickup at"
+        summaryValue="Stripe Rail"
+        summaryDetail="12 Rue Principale"
+        summaryDetailHref="https://www.google.com/maps/dir/?api=1&destination=12"
+        summaryDetailLinkLabel="Get directions to 12 Rue Principale"
+        actionLabel="Go"
+        onAction={() => undefined}
+      />
+    );
+    const link = screen.getByRole('link', { name: 'Get directions to 12 Rue Principale' });
+    expect(link.getAttribute('href')).toContain('google.com/maps/dir');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.textContent).toBe('12 Rue Principale');
+    expect(screen.getByText('Stripe Rail')).toBeTruthy();
+  });
+
   it('pins itself to the viewport bottom', () => {
     render(<StickyActionCard actionLabel="Go" onAction={() => undefined} testId="sticky" />);
     expect(getComputedStyle(screen.getByTestId('sticky')).position).toBe('fixed');

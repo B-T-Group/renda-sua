@@ -17,6 +17,9 @@ export interface StickyActionCardProps {
   /** `place` shows the label and value at one size with `summaryDetail` (an address) underneath. */
   summaryVariant?: 'amount' | 'place';
   summaryDetail?: string | null;
+  /** Makes `summaryDetail` a tappable link (for example opening directions). */
+  onSummaryDetailPress?: () => void;
+  summaryDetailAccessibilityLabel?: string;
   /** Struck-through previous amount shown before the value. */
   summaryPrevious?: string;
   /** One line of context under the summary (legal copy, blocked reason). */
@@ -70,12 +73,29 @@ function PlaceSummary(props: StickyActionCardProps) {
           {props.summaryValue}
         </Text>
       </Text>
-      {props.summaryDetail ? (
-        <Text testID="sticky-summary-address" style={[styles.placeText, styles.placeAddress, { color: colors.text.primary }]} numberOfLines={3}>
-          {props.summaryDetail}
-        </Text>
-      ) : null}
+      {props.summaryDetail ? <PlaceAddress {...props} /> : null}
     </View>
+  );
+}
+
+function PlaceAddress(props: StickyActionCardProps) {
+  const { colors } = useTheme();
+  const link = Boolean(props.onSummaryDetailPress);
+  return (
+    <Text
+      testID="sticky-summary-address"
+      accessibilityRole={link ? 'link' : undefined}
+      accessibilityLabel={link ? props.summaryDetailAccessibilityLabel : undefined}
+      onPress={props.onSummaryDetailPress}
+      style={[
+        styles.placeText,
+        styles.placeAddress,
+        { color: link ? colors.primary.main : colors.text.primary, textDecorationLine: link ? 'underline' : 'none', paddingVertical: link ? 4 : 0 },
+      ]}
+      numberOfLines={3}
+    >
+      {props.summaryDetail}
+    </Text>
   );
 }
 

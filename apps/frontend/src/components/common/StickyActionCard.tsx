@@ -1,4 +1,4 @@
-import { Box, Button, Container, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, Container, Link, Paper, Stack, Typography } from '@mui/material';
 import type { ButtonProps } from '@mui/material';
 import React from 'react';
 import { useAppChromeInsets } from '../../hooks/useAppChromeInsets';
@@ -16,6 +16,12 @@ export interface StickyActionCardProps {
   /** Small caption on the left of the summary row ("Due at pickup"). */
   summaryLabel?: string;
   summaryValue?: string;
+  /** `place` shows the label and value at one size with `summaryDetail` (an address) underneath. */
+  summaryVariant?: 'amount' | 'place';
+  summaryDetail?: string | null;
+  /** Makes `summaryDetail` a link (for example to directions). */
+  summaryDetailHref?: string;
+  summaryDetailLinkLabel?: string;
   /** One line of context under the summary. */
   note?: string;
   maxWidth?: 'sm' | 'md' | 'lg';
@@ -70,8 +76,38 @@ export function StickyActionCard(props: StickyActionCardProps) {
   );
 }
 
-function SummaryRow({ summaryLabel, summaryValue, note }: StickyActionCardProps) {
+function PlaceSummary(props: StickyActionCardProps) {
+  const address = props.summaryDetail;
+  return (
+    <Box>
+      <Typography variant="body2" component="div">
+        <Box component="span" color="text.secondary">{props.summaryLabel} </Box>
+        <Box component="span" fontWeight={700}>{props.summaryValue}</Box>
+      </Typography>
+      {address && props.summaryDetailHref ? (
+        <Link
+          href={props.summaryDetailHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          variant="body2"
+          fontWeight={600}
+          underline="always"
+          aria-label={props.summaryDetailLinkLabel}
+          data-testid="sticky-summary-address"
+        >
+          {address}
+        </Link>
+      ) : address ? (
+        <Typography variant="body2" fontWeight={600} data-testid="sticky-summary-address">{address}</Typography>
+      ) : null}
+    </Box>
+  );
+}
+
+function SummaryRow(props: StickyActionCardProps) {
+  const { summaryLabel, summaryValue, note } = props;
   if (!summaryLabel && !summaryValue && !note) return null;
+  if (props.summaryVariant === 'place') return <PlaceSummary {...props} />;
   return (
     <Box>
       {summaryLabel || summaryValue ? (

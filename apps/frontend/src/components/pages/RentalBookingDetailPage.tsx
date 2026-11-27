@@ -999,6 +999,7 @@ const RentalBookingDetailPage: React.FC = () => {
               role={isBusiness ? 'business' : 'client'}
               renterName={[booking.client?.user?.first_name, booking.client?.user?.last_name].filter(Boolean).join(' ')}
               place={booking.rental_location_listing?.business_location?.name ?? ''}
+              address={booking.return_place?.address}
               money={formatConfirmationMoney(Number(booking.accept_start_preview?.amount_due_at_pickup) || dueAtPickup(booking) || Number(booking.total_amount) || 0, booking.currency, i18n.language)}
               returnLabel={formatZonedWhen(returnDueAt, BOOKING_CLOCK, i18n.language, listingZone)}
               starting={sharingPin}

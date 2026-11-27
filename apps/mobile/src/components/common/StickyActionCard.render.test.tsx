@@ -32,6 +32,21 @@ describe('StickyActionCard', () => {
     expect(screen.getByTestId('sticky-summary-address').props.children).toBe('12 Rue Principale, Montreal, QC, Canada');
   });
 
+  it('turns the address into a link that fires its handler', async () => {
+    const onSummaryDetailPress = jest.fn();
+    await renderCard({
+      summaryVariant: 'place',
+      summaryLabel: 'Pickup at',
+      summaryValue: 'Stripe Rail',
+      summaryDetail: '12 Rue Principale',
+      onSummaryDetailPress,
+      summaryDetailAccessibilityLabel: 'Get directions to 12 Rue Principale',
+    });
+    expect(screen.getByLabelText('Get directions to 12 Rue Principale').props.accessibilityRole).toBe('link');
+    fireEvent.press(screen.getByTestId('sticky-summary-address'));
+    expect(onSummaryDetailPress).toHaveBeenCalledTimes(1);
+  });
+
   it('omits the address line when none is given', async () => {
     await renderCard({ summaryVariant: 'place', summaryLabel: 'Pickup at', summaryValue: 'Stripe Rail' });
     expect(screen.queryByTestId('sticky-summary-address')).toBeNull();
