@@ -9339,5 +9339,9 @@
     "pushBodyEn": "Marie declined the condition of JBL PartyBox 310 (RB-25496259). The booking is cancelled and the unit is free. No charge.",
     "pushTitleFr": "Le locataire a refusé l’état des lieux",
     "pushBodyFr": "Marie a refusé l’état des lieux de JBL PartyBox 310 (RB-25496259). La réservation est annulée et l’article est libre. Aucun frais."
+  },
+  "catalogShortcut": {
+    "myOrders": "Mes commandes",
+    "myExports": "Mes exportations"
   }
 }

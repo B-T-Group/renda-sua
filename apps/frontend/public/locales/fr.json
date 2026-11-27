@@ -10385,5 +10385,9 @@
     "businessCount": "Refus du commerce (90 jours)",
     "renterCount": "Refus du locataire (90 jours)",
     "booking": "Réservation"
+  },
+  "catalogShortcut": {
+    "myOrders": "Mes commandes",
+    "myExports": "Mes exportations"
   }
 }
