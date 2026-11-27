@@ -381,7 +381,7 @@ export default function RentalListingDetailScreen() {
                 )
               : t(
                   'rentals.businessOperatedNotice',
-                  'Business-operated rental: the business runs this with you at their location (not unattended take-home).'
+                  'Business-operated rental: you rent the item and an operator who runs it for you, like a car with a driver.'
                 )}
           </Text>
         </View>

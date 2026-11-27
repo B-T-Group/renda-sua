@@ -6134,7 +6134,7 @@
     "loading": "Chargement des locations",
     "loadingSubtitle": "Veuillez patienter",
     "metaDescription": "Parcourez les locations opérées par les entreprises sur Rendasua",
-    "businessOperatedNotice": "Location opérée par l’entreprise : la prestation se fait avec vous sur place (pas d’emprunt non accompagné).",
+    "businessOperatedNotice": "Location opérée par l’entreprise : vous louez l’article et un opérateur qui le fait fonctionner pour vous, comme une voiture avec chauffeur.",
     "takeHomeNotice": "Location à emporter : récupérez l’article, utilisez-le hors site et rendez-le avant l’heure de fin réservée.",
     "modes": {
       "operatedShort": "Opéré",

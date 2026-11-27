@@ -784,7 +784,7 @@ const RentalListingDetailPage: React.FC = () => {
                 >
                   {t(
                     'rentals.businessOperatedNotice',
-                    'All rentals are operated by the business (you do not take equipment home unattended).'
+                    'Business-operated rental: you rent the item and an operator who runs it for you, like a car with a driver.'
                   )}
                 </Alert>
               </Stack>
