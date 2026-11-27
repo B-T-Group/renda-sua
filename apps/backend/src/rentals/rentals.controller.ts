@@ -663,6 +663,17 @@ export class RentalsController {
     return this.rentalsService.markRentalPriceChangeSeen(requestId);
   }
 
+  @Post('requests/:id/dismiss-expiry-notice')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Dismiss the dashboard "Request expired" notice (business)' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Notice dismissed; it no longer appears on the dashboard' })
+  @ApiResponse({ status: 403, description: 'Business profile required' })
+  @ApiResponse({ status: 404, description: 'No expired request of this business with that id' })
+  async dismissExpiryNotice(@Param('id') requestId: string) {
+    return this.rentalsService.dismissRentalExpiryNotice(requestId);
+  }
+
   @Post('requests/:id/cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

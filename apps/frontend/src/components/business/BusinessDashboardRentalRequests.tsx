@@ -23,7 +23,7 @@ export function BusinessDashboardRentalRequests() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { flags, loaded } = useClientFlags();
-  const { fetchDashboardRentalRequests, respondRequest } = useRentalApi();
+  const { fetchDashboardRentalRequests, respondRequest, dismissExpiryNotice } = useRentalApi();
   const [requests, setRequests] = useState<BusinessRentalRequestRow[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [target, setTarget] = useState<{ req: BusinessRentalRequestRow; mode: 'available' | 'unavailable' } | null>(null);
@@ -49,6 +49,14 @@ export function BusinessDashboardRentalRequests() {
 
   const currentNotice = notices[0];
 
+  const onDismissNotice = useCallback(
+    (id: string) => {
+      setNotices((rows) => rows.filter((row) => row.id !== id));
+      void dismissExpiryNotice(id).catch(() => undefined);
+    },
+    [dismissExpiryNotice]
+  );
+
   if (!enabled || (requests.length === 0 && notices.length === 0)) return null;
 
   return (
@@ -65,7 +73,7 @@ export function BusinessDashboardRentalRequests() {
       {currentNotice ? (
         <ExpiryNotice
           notice={currentNotice}
-          onDismiss={() => setNotices((rows) => rows.slice(1))}
+          onDismiss={() => onDismissNotice(currentNotice.id)}
           onView={() => navigate(`/business/rentals/requests?request=${encodeURIComponent(currentNotice.id)}`)}
         />
       ) : null}

@@ -584,6 +584,13 @@ export async function respondToRequest(
   );
 }
 
+export async function dismissExpiryNotice(requestId: string): Promise<RentalApiSuccess> {
+  return apiRequest(
+    `/rentals/requests/${encodeURIComponent(requestId)}/dismiss-expiry-notice`,
+    { method: 'POST', body: JSON.stringify({}) }
+  );
+}
+
 export async function getBusinessSchedule(
   rentalItemId: string,
   init?: Init
@@ -732,6 +739,7 @@ export const rentalsApi = {
   getBusinessRequests,
   getDashboardRequests,
   respondToRequest,
+  dismissExpiryNotice,
   getBusinessSchedule,
   confirmReturn,
   getBookingMessages,

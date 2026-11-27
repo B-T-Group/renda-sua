@@ -2058,11 +2058,32 @@ export class RentalsService {
 
   private noResponseWhere(businessId: string, since: string): Record<string, unknown> {
     return {
+      ...this.noResponseScope(businessId),
+      responded_at: { _gte: since },
+      expiry_notice_dismissed_at: { _is_null: true },
+    };
+  }
+
+  private noResponseScope(businessId: string): Record<string, unknown> {
+    return {
       status: { _eq: 'unavailable' },
       unavailable_reason_code: { _eq: 'no_response' },
-      responded_at: { _gte: since },
       rental_location_listing: { rental_item: { business_id: { _eq: businessId } } },
     };
+  }
+
+  async dismissRentalExpiryNotice(requestId: string): Promise<{ success: boolean }> {
+    const businessId = await this.requireBusinessId();
+    const saved = await this.hasuraSystemService.executeQuery<{
+      update_rental_requests: { affected_rows: number } | null;
+    }>(Q.DISMISS_RENTAL_REQUEST_EXPIRY_NOTICE, {
+      where: { ...this.noResponseScope(businessId), id: { _eq: requestId } },
+      dismissedAt: new Date().toISOString(),
+    });
+    if ((saved.update_rental_requests?.affected_rows ?? 0) < 1) {
+      throw new HttpException('Expired request notice not found', HttpStatus.NOT_FOUND);
+    }
+    return { success: true };
   }
 
   private toExpiryNotice(row: any): RentalRequestExpiryNotice {

@@ -772,6 +772,14 @@ export function useRentalApi() {
     [api]
   );
 
+  const dismissExpiryNotice = useCallback(
+    async (requestId: string) => {
+      const { data } = await api.post(`/rentals/requests/${requestId}/dismiss-expiry-notice`, {});
+      return data as { success: boolean };
+    },
+    [api]
+  );
+
   const createBooking = useCallback(
     async (rentalRequestId: string) => {
       const { data } = await api.post('/rentals/bookings', { rentalRequestId });
@@ -979,6 +987,7 @@ export function useRentalApi() {
     createRequest,
     fetchRequestInspectionPolicy,
     respondRequest,
+    dismissExpiryNotice,
     createBooking,
     getBookingPaymentStatus,
     retryBookingPayment,

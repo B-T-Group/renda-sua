@@ -24,10 +24,13 @@ const mockFetchDashboard = jest.fn(async () => ({
   expiryNotices: mockDashboard.expiryNotices,
 }));
 
+const mockDismiss = jest.fn(async (_id: string) => ({ success: true }));
+
 jest.mock('../../hooks/useRentalApi', () => ({
   useRentalApi: () => ({
     fetchDashboardRentalRequests: mockFetchDashboard,
     respondRequest: jest.fn(),
+    dismissExpiryNotice: mockDismiss,
   }),
 }));
 
@@ -82,6 +85,8 @@ function renderDash() {
 describe('business expiry notice', () => {
   beforeEach(async () => {
     mockNavigate.mockReset();
+    mockDismiss.mockClear();
+    mockDismiss.mockResolvedValue({ success: true });
     mockDashboard.requests = [];
     mockDashboard.expiryNotices = [startNotice];
     await i18n.changeLanguage('en');
@@ -116,6 +121,23 @@ describe('business expiry notice', () => {
     expect(screen.queryByText(/Rien n’a été débité/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('rental-request-expiry-dismiss'));
     await waitFor(() => expect(screen.getByText('JBL PartyBox 310 · MM Test')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('rental-request-expiry-dismiss'));
+    await waitFor(() => expect(screen.queryByTestId('rental-request-expiry-notice')).not.toBeInTheDocument());
+    expect(mockDismiss.mock.calls.map(([id]) => id)).toEqual(['canon', 'partybox']);
+  });
+
+  it('tells the server a notice was dismissed so it stays gone after a refresh', async () => {
+    renderDash();
+    await waitFor(() => expect(screen.getByTestId('rental-request-expiry-notice')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('rental-request-expiry-dismiss'));
+    await waitFor(() => expect(screen.queryByTestId('rental-request-expiry-notice')).not.toBeInTheDocument());
+    expect(mockDismiss).toHaveBeenCalledWith('partybox');
+  });
+
+  it('still hides the notice when the dismiss request fails', async () => {
+    mockDismiss.mockRejectedValue(new Error('offline'));
+    renderDash();
+    await waitFor(() => expect(screen.getByTestId('rental-request-expiry-notice')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('rental-request-expiry-dismiss'));
     await waitFor(() => expect(screen.queryByTestId('rental-request-expiry-notice')).not.toBeInTheDocument());
   });

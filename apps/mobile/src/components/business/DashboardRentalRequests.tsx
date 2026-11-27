@@ -71,6 +71,11 @@ export function DashboardRentalRequests() {
 
   const currentNotice = notices[0];
 
+  const onDismissNotice = useCallback((id: string) => {
+    setNotices((rows) => rows.filter((row) => row.id !== id));
+    void rentalsApi.dismissExpiryNotice(id).catch(() => undefined);
+  }, []);
+
   if (!enabled || (requests.length === 0 && notices.length === 0)) return null;
 
   return (
@@ -94,7 +99,7 @@ export function DashboardRentalRequests() {
       {currentNotice ? (
         <ExpiryNotice
           notice={currentNotice}
-          onDismiss={() => setNotices((rows) => rows.slice(1))}
+          onDismiss={() => onDismissNotice(currentNotice.id)}
           onView={() => navigation.navigate('BusinessRentalRequestDetail', { requestId: currentNotice.id })}
         />
       ) : null}

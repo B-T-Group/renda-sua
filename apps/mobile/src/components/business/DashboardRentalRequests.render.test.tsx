@@ -12,12 +12,14 @@ const mockDashboard = {
   requests: [] as unknown[],
   expiryNotices: [] as Array<{ id: string; itemName: string; renterName: string; window: 'sla' | 'start' }>,
 };
+const mockDismiss = jest.fn(async (_id: string) => ({ success: true }));
 jest.mock('../../services/rentalsApi', () => ({
   rentalsApi: {
     getDashboardRequests: jest.fn(async () => ({
       requests: mockDashboard.requests,
       expiryNotices: mockDashboard.expiryNotices,
     })),
+    dismissExpiryNotice: (id: string) => mockDismiss(id),
   },
 }));
 
@@ -55,6 +57,7 @@ function renderNotice() {
 describe('business expiry notice', () => {
   beforeEach(async () => {
     mockNav.navigate.mockReset();
+    mockDismiss.mockClear();
     mockDashboard.requests = [];
     mockDashboard.expiryNotices = [startNotice];
     await i18n.changeLanguage('en');
@@ -96,5 +99,6 @@ describe('business expiry notice', () => {
     expect(view.getByText(/Vous n’avez pas répondu avant l’heure de début/)).toBeTruthy();
     fireEvent.press(view.getByTestId('rental-request-expiry-dismiss'));
     await waitFor(() => expect(view.queryByTestId('rental-request-expiry-notice')).toBeNull());
+    expect(mockDismiss.mock.calls.map(([id]) => id)).toEqual(['canon', 'partybox']);
   });
 });

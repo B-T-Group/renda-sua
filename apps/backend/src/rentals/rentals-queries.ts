@@ -1435,6 +1435,14 @@ export const EXPIRE_RENTAL_REQUEST_NO_RESPONSE = `
   }
 `;
 
+export const DISMISS_RENTAL_REQUEST_EXPIRY_NOTICE = `
+  mutation DismissRentalRequestExpiryNotice($where: rental_requests_bool_exp!, $dismissedAt: timestamptz!) {
+    update_rental_requests(where: $where, _set: { expiry_notice_dismissed_at: $dismissedAt }) {
+      affected_rows
+    }
+  }
+`;
+
 export const LIST_PENDING_RENTAL_REQUESTS_FOR_EXPIRY = `
   query ListPendingRentalRequestsForExpiry($where: rental_requests_bool_exp!, $limit: Int!, $offset: Int!) {
     rental_requests(
