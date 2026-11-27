@@ -190,10 +190,11 @@ describe('ClientRentalRequestRowCard period', () => {
     expect(screen.queryByText(/FCFA\s*3[,.]?000/)).toBeNull();
   });
 
-  it('still opens the booking from a booked request', () => {
+  it('opens the booking from the card and has no Open booking button', () => {
     const { onViewBooking } = renderCard(row([day('2026-11-12')], 'booked'));
-    fireEvent.click(screen.getByRole('button', { name: 'Open booking' }));
+    fireEvent.click(screen.getByText('Scaffold'));
     expect(onViewBooking).toHaveBeenCalledWith('book-1');
+    expect(screen.queryByRole('button', { name: 'Open booking' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Book now' })).toBeNull();
   });
 });

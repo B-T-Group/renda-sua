@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
-import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Dialog, Portal, Snackbar, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,13 +46,13 @@ import {
   formatRentalRequestLocalDateTime,
   isProposedContractOpen,
   rentalPhaseColors,
+  preferredClientHub,
   resolveRentalPhase,
   parseRentalSelectionWindows,
   type RentalHubGroup,
 } from '../../utils/rentals';
 import { listReturnChip } from '../../utils/rentals/renterReturnPhase';
 import { leaveMyRentals } from '../../utils/rentals/leaveMyRentals';
-import { myRentalsEntrySegment } from '../../utils/rentals/myRentalsEntry';
 import { trackRentalsClientTabBrowseTap } from '../../utils/rentals/clientRentalsTabAnalytics';
 import { rentalEditWindowOpen } from '../../utils/rentals/rentalRequestFormat';
 import { isReservedWithNothingDue } from '../../utils/rentals/reserveSuccess';
@@ -105,7 +105,6 @@ function UpcomingMark() {
 
 export default function ClientMyRentalsScreen({
   asTab = false,
-  todoCount = 0,
 }: {
   asTab?: boolean;
   todoCount?: number;
@@ -128,13 +127,14 @@ export default function ClientMyRentalsScreen({
     navigation.setParams({ notice: undefined });
   }, [navigation, route.params?.notice, t]);
 
-  const todoCountRef = useRef(todoCount);
-  todoCountRef.current = todoCount;
   const segmentTouched = useRef(false);
+  const routePinned = useRef(false);
+  const autoApplied = useRef(false);
 
   useEffect(() => {
     const segment = route.params?.segment;
-    if (segment !== 'action_needed' && segment !== 'upcoming' && segment !== 'past') return;
+    if (segment !== 'action_needed' && segment !== 'upcoming' && segment !== 'active' && segment !== 'past') return;
+    routePinned.current = true;
     setHubSegment(segment);
   }, [route.params?.segment]);
 
@@ -142,19 +142,6 @@ export default function ClientMyRentalsScreen({
     segmentTouched.current = true;
     setHubSegment(next);
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!asTab) return;
-      segmentTouched.current = false;
-      setHubSegment(myRentalsEntrySegment(todoCountRef.current));
-    }, [asTab])
-  );
-
-  useEffect(() => {
-    if (!asTab || segmentTouched.current) return;
-    setHubSegment(myRentalsEntrySegment(todoCount));
-  }, [asTab, todoCount]);
 
   const onBack = useCallback(() => {
     leaveMyRentals(navigation);
@@ -238,7 +225,25 @@ export default function ClientMyRentalsScreen({
     return items.sort((a, b) => b.sortAt - a.sortAt);
   }, [bookings, hubSegment, requests]);
 
-  const toDoCount = useMemo(() => countHub(requests, bookings, 'action_needed'), [bookings, requests]);
+  const segmentCounts = useMemo(
+    () => ({
+      action_needed: countHub(requests, bookings, 'action_needed'),
+      upcoming: countHub(requests, bookings, 'upcoming'),
+      active: countHub(requests, bookings, 'active'),
+      past: countHub(requests, bookings, 'past'),
+    }),
+    [bookings, requests]
+  );
+
+  useEffect(() => {
+    if (routePinned.current || segmentTouched.current || autoApplied.current) return;
+    if (requestsLoading || bookingsLoading) return;
+    autoApplied.current = true;
+    const filled = (['action_needed', 'active', 'upcoming', 'past'] as const).filter(
+      (group) => segmentCounts[group] > 0
+    );
+    setHubSegment(preferredClientHub(filled));
+  }, [bookingsLoading, requestsLoading, segmentCounts]);
 
   const onRefresh = useCallback(async () => {
     setPullRefreshing(true);
@@ -390,8 +395,8 @@ export default function ClientMyRentalsScreen({
       const name =
         item.rental_location_listing?.rental_item?.name ??
         t('rentals.clientRequests.unknownItem', 'Rental');
-      const imageUri =
-        item.rental_location_listing?.rental_item?.rental_item_images?.[0]?.image_url;
+      const photo = item.rental_location_listing?.rental_item?.rental_item_images?.[0];
+      const imageUri = photo?.display_url || photo?.thumbnail || photo?.image_url;
       return (
         <Pressable
           onPress={() => navigation.navigate('RentalBookingDetail', { bookingId: item.id })}
@@ -503,9 +508,10 @@ export default function ClientMyRentalsScreen({
           value={hubSegment}
           onChange={chooseSegment}
           tabs={[
-            { value: 'action_needed', label: t('rentals.hub.toDo', 'To do'), count: toDoCount },
-            { value: 'upcoming', label: t('rentals.hub.upcoming', 'Upcoming') },
-            { value: 'past', label: t('rentals.hub.past', 'Past') },
+            { value: 'action_needed', label: t('rentals.hub.toDo', 'To do'), count: segmentCounts.action_needed },
+            { value: 'upcoming', label: t('rentals.hub.upcoming', 'Upcoming'), count: segmentCounts.upcoming },
+            { value: 'active', label: t('rentals.hub.active', 'Active'), count: segmentCounts.active },
+            { value: 'past', label: t('rentals.hub.past', 'Past'), count: segmentCounts.past },
           ]}
         />
         <View style={{ height: spacing.sm }} />
@@ -569,7 +575,9 @@ export default function ClientMyRentalsScreen({
                     )
                   : hubSegment === 'upcoming'
                     ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals')
-                    : t('rentals.hub.emptyPast', 'No past rentals yet.')}
+                    : hubSegment === 'active'
+                      ? t('rentals.hub.emptyActive', 'No rentals in progress.')
+                      : t('rentals.hub.emptyPast', 'No past rentals yet.')}
               </Text>
               {asTab && hubSegment === 'upcoming' ? (
                 <Text

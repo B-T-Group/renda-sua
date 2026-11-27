@@ -6647,12 +6647,15 @@
       "toDo": "To do",
       "actionNeeded": "To do",
       "upcoming": "Upcoming",
+      "active": "Active",
       "past": "Past",
       "emptyActionNeeded": "Nothing needs your attention right now.",
       "emptyUpcoming": "No upcoming rentals",
       "emptyUpcomingHint": "Request a rental and it will show up here.",
+      "emptyActive": "No rentals in progress.",
       "emptyPast": "No past rentals yet.",
-      "emptyAll": "You have no rental requests or bookings yet."
+      "emptyAll": "You have no rental requests or bookings yet.",
+      "openCard": "Open {{name}}"
     },
     "modify": {
       "action": "Modify",

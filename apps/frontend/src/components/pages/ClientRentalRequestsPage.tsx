@@ -33,6 +33,7 @@ import {
 import SEOHead from '../seo/SEOHead';
 import { hubSegmentFromSearchParam } from '../../utils/myRentalsTodoCount';
 import {
+  preferredClientHub,
   resolveRentalPhase,
   type RentalHubGroup,
 } from '../../utils/rentalPhase';
@@ -62,6 +63,10 @@ const statusFilterFormSx = {
   width: '100%',
 } as const;
 
+function hubLabel(label: string, count: number): string {
+  return count > 0 ? `${label} ${count}` : label;
+}
+
 const hubSegmentSx = {
   whiteSpace: 'nowrap',
   textTransform: 'none',
@@ -90,9 +95,13 @@ const ClientRentalRequestsPage: React.FC = () => {
   const [hubSegment, setHubSegment] = useState<RentalHubGroup>(() =>
     hubSegmentFromSearchParam(segmentParam)
   );
+  const segmentPinned = React.useRef(Boolean(segmentParam));
+  const autoApplied = React.useRef(false);
 
   useEffect(() => {
-    if (segmentParam) setHubSegment(hubSegmentFromSearchParam(segmentParam));
+    if (!segmentParam) return;
+    segmentPinned.current = true;
+    setHubSegment(hubSegmentFromSearchParam(segmentParam));
   }, [segmentParam]);
 
   const filteredRows = useMemo(() => {
@@ -107,6 +116,32 @@ const ClientRentalRequestsPage: React.FC = () => {
       return info.hubGroup === hubSegment;
     });
   }, [rows, hubSegment]);
+
+  const segmentCounts = React.useMemo(() => {
+    const counts: Record<RentalHubGroup, number> = {
+      action_needed: 0,
+      upcoming: 0,
+      active: 0,
+      past: 0,
+    };
+    for (const row of rows) {
+      const info = resolveRentalPhase(
+        { requestStatus: row.status, bookingStatus: row.rental_booking?.status ?? null },
+        'client'
+      );
+      counts[info.hubGroup] += 1;
+    }
+    return counts;
+  }, [rows]);
+
+  React.useEffect(() => {
+    if (segmentPinned.current || autoApplied.current || loading) return;
+    autoApplied.current = true;
+    const filled = (['action_needed', 'active', 'upcoming', 'past'] as const).filter(
+      (group) => segmentCounts[group] > 0
+    );
+    setHubSegment(preferredClientHub(filled));
+  }, [loading, segmentCounts]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -335,18 +370,23 @@ const ClientRentalRequestsPage: React.FC = () => {
               size="small"
               value={hubSegment}
               onChange={(_e, value: RentalHubGroup | null) => {
-                if (value) setHubSegment(value);
+                if (!value) return;
+                segmentPinned.current = true;
+                setHubSegment(value);
               }}
-              sx={{ flexWrap: 'nowrap' }}
+              sx={{ flexWrap: 'wrap' }}
             >
               <ToggleButton value="action_needed" sx={hubSegmentSx}>
-                {t('rentals.hub.toDo', 'To do')}
+                {hubLabel(t('rentals.hub.toDo', 'To do'), segmentCounts.action_needed)}
               </ToggleButton>
               <ToggleButton value="upcoming" sx={hubSegmentSx}>
-                {t('rentals.hub.upcoming', 'Upcoming')}
+                {hubLabel(t('rentals.hub.upcoming', 'Upcoming'), segmentCounts.upcoming)}
+              </ToggleButton>
+              <ToggleButton value="active" sx={hubSegmentSx}>
+                {hubLabel(t('rentals.hub.active', 'Active'), segmentCounts.active)}
               </ToggleButton>
               <ToggleButton value="past" sx={hubSegmentSx}>
-                {t('rentals.hub.past', 'Past')}
+                {hubLabel(t('rentals.hub.past', 'Past'), segmentCounts.past)}
               </ToggleButton>
             </ToggleButtonGroup>
             {rows.length > 0 ? (
@@ -396,7 +436,9 @@ const ClientRentalRequestsPage: React.FC = () => {
                     )
                   : hubSegment === 'upcoming'
                     ? t('rentals.hub.emptyUpcoming', 'No upcoming rentals')
-                    : t('rentals.hub.emptyPast', 'No past rentals yet.')}
+                    : hubSegment === 'active'
+                      ? t('rentals.hub.emptyActive', 'No rentals in progress.')
+                      : t('rentals.hub.emptyPast', 'No past rentals yet.')}
               </Typography>
             </Box>
           ) : null}

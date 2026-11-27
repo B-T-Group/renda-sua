@@ -4,6 +4,7 @@ import {
   bookingDetailStatusLabelKey,
   bookingDetailTimeline,
   bookingDetailTimelineIndex,
+  preferredClientHub,
   resolveBookingPhase,
   resolveRentalPhase,
 } from './rentalPhase';
@@ -55,7 +56,7 @@ describe('booking detail status labels', () => {
       const info = resolveRentalPhase({ bookingStatus: status, returnReportedAt: reportedAt }, 'client');
       expect(info.labelKey).toBe(key);
       expect(info.phase).toBe('in_progress');
-      expect(info.hubGroup).toBe('action_needed');
+      expect(info.hubGroup).toBe('active');
       expect(info.nextStepKey).toBe('rentals.returnReport.waitingTitle');
       expect(bookingDetailStatusLabelKey(status, { returnReportedAt: reportedAt })).toBe(key);
     }
@@ -80,6 +81,18 @@ describe('booking detail status labels', () => {
     expect(bookingDetailStatusLabelKey('confirmed', { returnReportedAt: '2026-11-26T20:40:00.000Z' })).toBe(
       'rentals.phases.readyForPickup'
     );
+  });
+
+  it('files client rentals by state: offers, upcoming, active, past', () => {
+    expect(resolveRentalPhase({ requestStatus: 'available' }, 'client').hubGroup).toBe('action_needed');
+    expect(resolveRentalPhase({ requestStatus: 'pending' }, 'client').hubGroup).toBe('upcoming');
+    expect(resolveRentalPhase({ bookingStatus: 'reserved' }, 'client').hubGroup).toBe('upcoming');
+    expect(resolveRentalPhase({ bookingStatus: 'confirmed' }, 'client').hubGroup).toBe('upcoming');
+    expect(resolveRentalPhase({ bookingStatus: 'active' }, 'client').hubGroup).toBe('active');
+    expect(resolveRentalPhase({ bookingStatus: 'completed' }, 'client').hubGroup).toBe('past');
+    expect(resolveRentalPhase({ bookingStatus: 'reserved' }, 'business').hubGroup).toBe('action_needed');
+    expect(preferredClientHub(['past', 'upcoming', 'active'])).toBe('active');
+    expect(preferredClientHub([])).toBe('upcoming');
   });
 
   it('uses Awaiting confirmation / En attente de confirmation', () => {
