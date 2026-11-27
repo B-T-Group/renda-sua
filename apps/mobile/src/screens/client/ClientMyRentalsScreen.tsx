@@ -382,7 +382,10 @@ export default function ClientMyRentalsScreen({
 
   const renderBooking = useCallback(
     ({ item }: { item: ClientRentalBookingRow }) => {
-      const phase = resolveRentalPhase({ bookingStatus: item.status }, 'client');
+      const phase = resolveRentalPhase(
+        { bookingStatus: item.status, returnReportedAt: item.renter_reported_returned_at },
+        'client'
+      );
       const statusColors = rentalPhaseColors(phase.phase, colors);
       const name =
         item.rental_location_listing?.rental_item?.name ??

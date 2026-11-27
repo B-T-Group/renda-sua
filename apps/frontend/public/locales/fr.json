@@ -7253,6 +7253,7 @@
       "reservedShort": "Réservée",
       "readyForPickup": "Prêt pour le retrait",
       "inProgress": "En cours",
+      "awaitingConfirmation": "En attente de confirmation",
       "done": "Terminé"
     },
     "start": {

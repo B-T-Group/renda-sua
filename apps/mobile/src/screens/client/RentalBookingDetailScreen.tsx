@@ -98,6 +98,7 @@ const DETAIL_STATUS_DEFAULTS: Record<string, string> = {
   'rentals.phases.reserved': 'Reserved',
   'rentals.phases.readyForPickup': 'Ready for pickup',
   'rentals.phases.inProgress': 'In progress',
+  'rentals.phases.awaitingConfirmation': 'Awaiting confirmation',
   'rentals.phases.done': 'Done',
   'rentals.bookingStatus.awaiting_return': 'Return due',
   'rentalInspection.phase.reportReady': 'Report ready to review',
@@ -191,7 +192,9 @@ export default function RentalBookingDetailScreen() {
   }, []);
 
   const statusColorsBase = rentalBookingStatusColors(booking?.status ?? '', colors);
-  const statusLabelKeyBase = bookingDetailStatusLabelKey(booking?.status ?? '');
+  const statusLabelKeyBase = bookingDetailStatusLabelKey(booking?.status ?? '', {
+    returnReportedAt: booking?.renter_reported_returned_at,
+  });
   const statusLabelBase = t(
     statusLabelKeyBase,
     DETAIL_STATUS_DEFAULTS[statusLabelKeyBase] ?? booking?.status ?? ''

@@ -6584,6 +6584,7 @@
       "reservedShort": "Reserved",
       "readyForPickup": "Ready for pickup",
       "inProgress": "In progress",
+      "awaitingConfirmation": "Awaiting confirmation",
       "done": "Done"
     },
     "hub": {
