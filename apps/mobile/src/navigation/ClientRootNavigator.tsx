@@ -65,6 +65,7 @@ import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScre
 import RentalRequestScreen from '../screens/shared/RentalRequestScreen';
 import ModifyRentalRequestScreen from '../screens/client/ModifyRentalRequestScreen';
 import RentalRequestSubmittedScreen from '../screens/client/RentalRequestSubmittedScreen';
+import RentalReservedScreen from '../screens/client/RentalReservedScreen';
 import ClientMyRentalsScreen from '../screens/client/ClientMyRentalsScreen';
 import RentalBookingDetailScreen from '../screens/client/RentalBookingDetailScreen';
 import ClientInspectionScreen from '../screens/client/ClientInspectionScreen';
@@ -508,6 +509,15 @@ export function ClientRootNavigator() {
           component={RentalRequestSubmittedScreen}
           options={{
             title: t('rentals.requestSubmitted.pageTitle', 'Request sent'),
+            headerBackVisible: false,
+            gestureEnabled: false,
+          }}
+        />
+        <ClientRootStack.Screen
+          name="RentalReserved"
+          component={RentalReservedScreen}
+          options={{
+            title: t('rentals.reserved.pageTitle', 'Reserved'),
             headerBackVisible: false,
             gestureEnabled: false,
           }}

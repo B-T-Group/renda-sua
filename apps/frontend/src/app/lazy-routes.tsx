@@ -262,6 +262,9 @@ export const BusinessExportOrdersPage = lazy(() =>
 export const RentalRequestSubmittedPage = lazy(() =>
   import('../components/pages/RentalRequestSubmittedPage')
 );
+export const RentalReservedPage = lazy(() =>
+  import('../components/pages/RentalReservedPage')
+);
 export const CategoriesManagementPage = lazy(() =>
   import('../components/pages/CategoriesManagementPage')
 );

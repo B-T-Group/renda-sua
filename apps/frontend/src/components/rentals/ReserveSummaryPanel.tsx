@@ -23,6 +23,7 @@ const ROW_ICONS: Record<ReserveIcon, React.ReactElement> = {
   pin: <PlaceOutlined fontSize="small" color="action" />,
   camera: <CameraAltOutlined fontSize="small" color="action" />,
   timer: <HourglassEmpty fontSize="small" color="action" />,
+  refund: <Restore fontSize="small" color="action" />,
 };
 
 const LINE_ICONS = {
@@ -44,21 +45,23 @@ export function ReserveSummaryPanel({ summary, itemName, business, note }: { sum
       </Paper>
       <Paper variant="outlined" sx={{ borderRadius: 2 }}>
         {summary.rows.map((row, i) => (
-          <Stack
+          <Box
             key={row.key}
             data-testid={`reserve-row-${row.key}`}
-            direction="row"
-            spacing={1}
-            alignItems="center"
             sx={{ px: 1.5, py: 1.1, borderTop: i ? 1 : 0, borderColor: 'divider' }}
           >
-            {ROW_ICONS[row.icon]}
-            <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0, maxWidth: '45%' }}>{row.label}</Typography>
-            <Box sx={{ flex: 1, textAlign: 'right' }}>
-              <Typography variant="body2" fontWeight={700}>{row.value}</Typography>
-              {row.sub ? <Typography variant="caption" color="text.secondary" display="block">{row.sub}</Typography> : null}
-            </Box>
-          </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              {ROW_ICONS[row.icon]}
+              <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0, maxWidth: '45%' }}>{row.label}</Typography>
+              {row.stacked ? null : (
+                <Box sx={{ flex: 1, textAlign: 'right' }}>
+                  <Typography variant="body2" fontWeight={700}>{row.value}</Typography>
+                  {row.sub ? <Typography variant="caption" color="text.secondary" display="block">{row.sub}</Typography> : null}
+                </Box>
+              )}
+            </Stack>
+            {row.stacked ? <Typography variant="body2" fontWeight={700} sx={{ mt: 0.5, pl: 3.5 }}>{row.value}</Typography> : null}
+          </Box>
         ))}
       </Paper>
       <Box
@@ -94,12 +97,16 @@ export function ReserveSummaryPanel({ summary, itemName, business, note }: { sum
       {note ? (
         <Typography variant="body2" color="text.secondary">{note}</Typography>
       ) : null}
-      <Stack direction="row" alignItems="center" sx={{ pt: 1, borderTop: 1, borderColor: 'divider' }} data-testid="reserve-footer">
-        <Box sx={{ flex: 1 }}>
-          <Typography fontWeight={700}>{summary.footer.title}</Typography>
-          <Typography variant="caption" color="text.secondary">{summary.footer.sub}</Typography>
-        </Box>
-        <Typography variant="h6" fontWeight={800}>{summary.footer.amount}</Typography>
+      <Stack spacing={1} sx={{ pt: 1.5, borderTop: 1, borderColor: 'divider' }} data-testid="reserve-footer">
+        {[summary.footer.today, summary.footer.pickup].map((line, i) => (
+          <Stack key={i} direction="row" alignItems="center" spacing={1.5}>
+            <Box sx={{ flex: 1 }}>
+              <Typography fontWeight={700}>{line.title}</Typography>
+              <Typography variant="caption" color="text.secondary">{line.sub}</Typography>
+            </Box>
+            <Typography variant="h6" fontWeight={800}>{line.amount}</Typography>
+          </Stack>
+        ))}
       </Stack>
     </Stack>
   );

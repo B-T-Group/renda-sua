@@ -281,6 +281,7 @@ export type ClientRootStackParamList = {
   };
   RentalRequest: RentalRequestParams;
   RentalRequestSubmitted: { requestId?: string; inspectionPolicyVersion?: number | null };
+  RentalReserved: { bookingId: string };
   ModifyRentalRequest: { requestId: string };
   ClientMyRentals:
     | { notice?: 'updated'; segment?: 'action_needed' | 'upcoming' | 'past' }

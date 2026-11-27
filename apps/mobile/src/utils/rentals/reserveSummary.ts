@@ -35,7 +35,7 @@ export interface ReserveSummaryInput {
   t: Translate;
 }
 
-export type ReserveIcon = 'calendar' | 'clock' | 'shield' | 'pin' | 'camera' | 'timer';
+export type ReserveIcon = 'calendar' | 'clock' | 'shield' | 'pin' | 'camera' | 'timer' | 'refund';
 
 export interface ReserveRow {
   key: string;
@@ -43,6 +43,14 @@ export interface ReserveRow {
   label: string;
   value: string;
   sub?: string;
+  /** Long values (addresses): label on top, value on its own full-width line. */
+  stacked?: boolean;
+}
+
+export interface ReserveFooterLine {
+  title: string;
+  sub: string;
+  amount: string;
 }
 
 export interface ReserveSummary {
@@ -50,7 +58,7 @@ export interface ReserveSummary {
   /** "Reservation fee · 150 FCFA" box (fee mode) or "Nothing to pay today" box. */
   box: { kind: 'fee' | 'free'; title: string; lines: Array<{ icon: 'check' | 'refund' | 'warn' | 'card'; text: string; warn?: boolean }> };
   cancelLine: string;
-  footer: { title: string; sub: string; amount: string };
+  footer: { today: ReserveFooterLine; pickup: ReserveFooterLine };
   button: string;
 }
 
@@ -171,9 +179,12 @@ export function buildReserveSummary(input: ReserveSummaryInput): ReserveSummary 
     });
   }
   const place = [input.placeName?.trim(), input.city?.trim()].filter(Boolean).join(' · ');
-  if (place) rows.push({ key: 'pickup', icon: 'pin', label: t('rentals.reserve.pickup', 'Pickup'), value: place });
+  if (place) rows.push({ key: 'pickup', icon: 'pin', label: t('rentals.reserve.pickup', 'Pickup'), value: place, stacked: true });
   if (input.booking?.inspection_policy_version != null) {
     rows.push({ key: 'check', icon: 'camera', label: t('rentals.reserve.itemCheck', 'Item check'), value: t('rentals.reserve.photosAtPickup', 'Photos at pickup') });
+  }
+  if (input.mode === 'free') {
+    rows.push({ key: 'cancel', icon: 'refund', label: t('rentals.reserve.cancellation', 'Cancellation'), value: t('rentals.reserve.cancellationFree', 'Free') });
   }
   if (input.deadlineIso) {
     rows.push({
@@ -215,16 +226,35 @@ export function buildReserveSummary(input: ReserveSummaryInput): ReserveSummary 
   return {
     rows,
     box,
-    cancelLine: first ? t('rentals.reserve.freeCancelUntil', 'Free cancellation until {{day}} · {{deadline}}', { day: dayBefore(first.start_at, language), deadline: dayEndDeadline(language, zone) }) : '',
-    footer:
-      input.mode === 'fee'
-        ? { title: t('rentals.reserve.payToday', 'Pay today'), sub: t('rentals.reserve.payTodayFeeSub', 'Reservation fee · {{rail}}', { rail }), amount: money(fee) }
-        : { title: t('rentals.reserve.payTodayZero', 'Pay today: {{zero}}', { zero: money(0) }), sub: t('rentals.reserve.payAtPickupSub', 'Pay at pickup · after you check the item'), amount: money(total) },
+    cancelLine:
+      input.mode === 'fee' && first
+        ? t('rentals.reserve.freeCancelUntil', 'Free cancellation until {{day}} · {{deadline}}', { day: dayBefore(first.start_at, language), deadline: dayEndDeadline(language, zone) })
+        : '',
+    footer: {
+      today: {
+        title: t('rentals.reserve.payToday', 'Pay today'),
+        sub: input.mode === 'fee' ? t('rentals.reserve.payTodayFeeSub', 'Reservation fee · {{rail}}', { rail }) : t('rentals.reserve.payTodayNone', 'No payment now'),
+        amount: money(fee),
+      },
+      pickup: {
+        title: t('rentals.reserve.payAtPickup', 'Pay at pickup'),
+        sub: pickupSub({ deposit, fee: input.mode === 'fee', money, t }),
+        amount: money(due),
+      },
+    },
     button:
       input.mode === 'fee'
         ? t('rentals.payAtPickup.reserveFeeButton', 'Pay {{fee}} & reserve', { fee: money(fee) })
         : t('rentals.payAtPickup.reserveFreeButton', 'Reserve · pay at pickup'),
   };
+}
+
+function pickupSub(p: { deposit: number; fee: boolean; money: (n: number) => string; t: Translate }): string {
+  const base = p.fee
+    ? p.t('rentals.reserve.payAtPickupFeeSub', 'After you check the item · fee already deducted')
+    : p.t('rentals.reserve.payAtPickupSub', 'After you check the item');
+  if (p.deposit <= 0) return base;
+  return `${base} · ${p.t('rentals.reserve.plusDeposit', '+ {{deposit}} deposit hold', { deposit: p.money(p.deposit) })}`;
 }
 
 function rateSub(quote: ReserveQuote, money: (n: number) => string, t: Translate): string | undefined {

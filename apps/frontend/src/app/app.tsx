@@ -317,6 +317,14 @@ function App() {
               }
             />
             <Route
+              path="/rentals/bookings/:bookingId/reserved"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.RentalReservedPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/rentals/bookings/:bookingId"
               element={
                 <ProtectedRoute>

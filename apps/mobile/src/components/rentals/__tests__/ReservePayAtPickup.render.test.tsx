@@ -57,6 +57,11 @@ describe('Reserve now, pay at pickup', () => {
     await renderSheet(offer('XAF', 12000, { id: 'b1', status: 'proposed', reservation_fee_amount: 0 }), false);
     expect(screen.getByText('Reserve · pay at pickup')).toBeTruthy();
     expect(screen.getByText(/Nothing to pay today/)).toBeTruthy();
+    expect(screen.queryByText(/Free cancellation until/)).toBeNull();
+    expect(screen.getByTestId('reserve-row-cancel')).toBeTruthy();
+    expect(screen.getByTestId('reserve-footer-today')).toBeTruthy();
+    expect(screen.getByTestId('reserve-footer-pickup')).toBeTruthy();
+    expect(screen.getByText('Pay at pickup')).toBeTruthy();
     expect(screen.queryByTestId('book-confirm-fee-rules')).toBeNull();
   });
 
