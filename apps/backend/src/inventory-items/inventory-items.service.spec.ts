@@ -594,6 +594,24 @@ describe('InventoryItemsService.getInventoryItems export flags', () => {
     );
   });
 
+  it('countCatalogMatches keeps the export-only scope and ignores the search export union', async () => {
+    const { service, buildWhere } = createService();
+    await service.countCatalogMatches(
+      { search: 'phone', export_only: true, country_code: 'CD' },
+      { searchTextQuery: 'phone' }
+    );
+    await service.countCatalogMatches(
+      { search: 'phone', country_code: 'CA' },
+      { searchTextQuery: 'phone' }
+    );
+    expect(buildWhere.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ export_only: true, includeExportInSearch: false })
+    );
+    expect(buildWhere.mock.calls[1][0]).toEqual(
+      expect.objectContaining({ export_only: false, includeExportInSearch: true })
+    );
+  });
+
   it('pages export_only via Hasura limit/offset and skips fetch-all', async () => {
     const { service } = createService();
     jest

@@ -268,6 +268,7 @@ export class DiscoveryRecoveryService {
       const page = await this.items.getInventoryItems({
         country_code: query.country_code,
         state: query.state,
+        export_only: query.export_only,
         similar_item_ids: ids,
         include_unavailable: true,
         limit: 12,
@@ -280,12 +281,13 @@ export class DiscoveryRecoveryService {
     }
   }
 
-  /** R4: guaranteed floor. Popular in-stock items for the market plus 1-3 category guesses. */
+  /** R4: guaranteed floor. Popular in-stock items for the market (export items only on /exports) plus 1-3 category guesses. */
   private async r4(out: DiscoveryRecovery, query: GetInventoryItemsQuery) {
     try {
       const page = await this.items.getInventoryItems({
         country_code: query.country_code,
         state: query.state,
+        export_only: query.export_only,
         include_unavailable: false,
         limit: 12,
         discovery: { sort: 'popular' },

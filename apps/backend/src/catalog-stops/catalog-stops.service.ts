@@ -38,6 +38,8 @@ interface StopQueryOptions {
   origin_lat?: number;
   origin_lng?: number;
   limit?: number;
+  /** Only export_available items exported to `country_code` (the /exports scope). */
+  export_only?: boolean;
 }
 
 interface TopInCategoryOptions extends StopQueryOptions {
@@ -151,7 +153,14 @@ export class CatalogStopsService {
   ): Promise<TopInCategoryResponse> {
     const limit = Math.min(options.limit ?? 8, 20);
     const { category, subcategory } = options;
-    const itemWhere = this.buildItemWhere(category, subcategory);
+    const exportScope = this.exportItemScope(options);
+    if (!exportScope) {
+      return { category_name: category || subcategory || 'All', items: [] };
+    }
+    const itemWhere = {
+      ...this.buildItemWhere(category, subcategory),
+      ...exportScope.item,
+    };
     const locationWhere = this.buildLocationWhere(options);
 
     const query = `
@@ -202,11 +211,14 @@ export class CatalogStopsService {
   async getDeals(options: StopQueryOptions): Promise<DealsResponse> {
     const limit = Math.min(options.limit ?? 8, 20);
     const now = new Date().toISOString();
+    const exportScope = this.exportItemScope(options);
+    if (!exportScope) return { items: [] };
     const locationWhere = this.buildLocationWhere(options);
 
     const query = `
       query GetActiveDeals(
         $now: timestamptz!
+        $itemExportScope: items_bool_exp!
         $locationWhere: business_locations_bool_exp!
         $limit: Int!
       ) {
@@ -219,7 +231,12 @@ export class CatalogStopsService {
               is_active: { _eq: true }
               item_variant_id: { _is_null: true }
               ${SELLABLE_PARENT_STOCK_GQL}
-              item: { is_active: { _eq: true }, moderation_status: { _eq: "approved" } }
+              item: {
+                _and: [
+                  { is_active: { _eq: true }, moderation_status: { _eq: "approved" } }
+                  $itemExportScope
+                ]
+              }
               business_location: $locationWhere
             }
           }
@@ -241,6 +258,7 @@ export class CatalogStopsService {
     const result = await this.hasuraSystemService.executeQuery(query, {
       now,
       limit,
+      itemExportScope: exportScope.item,
       locationWhere,
     });
     const deals = (result.item_deals || []) as Array<{
@@ -427,10 +445,11 @@ export class CatalogStopsService {
   ): Record<string, unknown> {
     const country = options.country_code?.trim();
     const state = options.state?.trim();
-    const address: Record<string, unknown> = {
-      country: country ? { _eq: country } : { _is_null: false },
-    };
-    if (state) {
+    // Export listings sit in the seller's country; the viewer market is matched on export_markets.
+    const address: Record<string, unknown> = options.export_only
+      ? { country: { _is_null: false } }
+      : { country: country ? { _eq: country } : { _is_null: false } };
+    if (state && !options.export_only) {
       address.state = { _eq: state };
     }
     return {
@@ -438,6 +457,24 @@ export class CatalogStopsService {
       business: { is_storefront_visible: { _eq: true } },
       address,
       ...extras,
+    };
+  }
+
+  /**
+   * Item-level filter for the /exports scope. Returns `{ item: {} }` when export-only is off and
+   * null when it is on without a viewer market (nothing can be exported to an unknown market).
+   */
+  private exportItemScope(
+    options: StopQueryOptions
+  ): { item: Record<string, unknown> } | null {
+    if (!options.export_only) return { item: {} };
+    const code = options.country_code?.trim().toUpperCase();
+    if (!code) return null;
+    return {
+      item: {
+        export_available: { _eq: true },
+        export_markets: { country_code: { _eq: code } },
+      },
     };
   }
 

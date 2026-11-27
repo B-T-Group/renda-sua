@@ -102,6 +102,24 @@ describe('DiscoveryRecoveryService', () => {
     expect(popularCall.country_code).toBe('CM'); // market only, no country question
   });
 
+  it('export_only (/exports) limits R3 similar items and R4 popular near you to export items', async () => {
+    const { svc, items } = make({ similarIds: ['x'] });
+    await svc.recover({ search: 'zzqq', country_code: 'CD', export_only: true }, NOW);
+    const popular = items.getInventoryItems.mock.calls.find((c) => c[0].discovery?.sort === 'popular')![0];
+    const similar = items.getInventoryItems.mock.calls.find((c) => c[0].similar_item_ids)![0];
+    expect(popular.export_only).toBe(true);
+    expect(similar.export_only).toBe(true);
+    const counted = items.countCatalogMatches.mock.calls.map((c) => c[0]);
+    expect(counted.every((q: any) => q.export_only === true)).toBe(true);
+  });
+
+  it('without export_only the popular rail is not export scoped', async () => {
+    const { svc, items } = make();
+    await svc.recover({ search: 'zzqq', country_code: 'CM' }, NOW);
+    const popular = items.getInventoryItems.mock.calls.find((c) => c[0].discovery?.sort === 'popular')![0];
+    expect(popular.export_only).toBeUndefined();
+  });
+
   it('R4 still returns an (empty) shape when the listing read fails, never throwing', async () => {
     const { svc } = make({ listFails: true });
     const r = await svc.recover({ search: 'zzqq', country_code: 'CM' }, NOW);

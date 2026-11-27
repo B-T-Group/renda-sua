@@ -834,6 +834,13 @@ export class InventoryItemsController {
     summary:
       'Empty-result recovery ladder (#342): typo fix, relaxable filters with counts, similar items, categories and popular near you. Requires discovery_sort_v1.',
   })
+  @ApiQuery({
+    name: 'export_only',
+    required: false,
+    type: Boolean,
+    description:
+      'When true, every rung (counts, similar, popular near you) is limited to export_available items exported to the viewer country.',
+  })
   async getSearchRecovery(@Query() query: GetInventoryItemsQueryParams) {
     const country = query.country_code?.trim() || undefined;
     if (!this.discoveryRecovery || !(await this.discoveryRecovery.flagEnabled(country))) {
@@ -856,6 +863,7 @@ export class InventoryItemsController {
         state: text(query.state),
         collection: text(query.collection),
         food_only: query.food_only === 'true',
+        export_only: query.export_only === 'true',
       });
       return { success: true, data, message: 'Recovery suggestions retrieved' };
     } catch (error: any) {
