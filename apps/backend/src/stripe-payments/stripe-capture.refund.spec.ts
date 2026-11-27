@@ -5,7 +5,7 @@ describe('StripeCaptureService refundCapturedPayment', () => {
     const createRefund = jest.fn(async () => ({ status: 'succeeded' }));
     const service = new StripeCaptureService(
       { createRefund } as never,
-      { getTransactionByEntityId: jest.fn(async () => ({ stripe_payment_intent_id: 'pi_1' })) } as never,
+      { getTransactionByEntityId: jest.fn(async () => ({ id: 'stx-1', stripe_payment_intent_id: 'pi_1' })) } as never,
       {} as never,
       {} as never,
       {} as never
@@ -14,7 +14,7 @@ describe('StripeCaptureService refundCapturedPayment', () => {
       orderNumber: 'RB-1',
       idempotencyKey: 'rental:booking:decline:card-refund',
     });
-    expect(result.success).toBe(true);
+    expect(result).toMatchObject({ success: true, transactionId: 'stx-1' });
     expect(createRefund).toHaveBeenCalledWith(
       expect.objectContaining({ paymentIntentId: 'pi_1', idempotencyKey: 'rental:booking:decline:card-refund' })
     );
