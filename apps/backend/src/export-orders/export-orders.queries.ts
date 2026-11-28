@@ -217,11 +217,21 @@ export const LIST_EXPORT_ORDERS = `
 `;
 
 export const UPDATE_EXPORT_ORDER = `
-  mutation UpdateExportOrder($id: uuid!, $set: export_orders_set_input!) {
-    update_export_orders_by_pk(pk_columns: { id: $id }, _set: $set) {
-      id
-      status
-      updated_at
+  mutation UpdateExportOrderIfStatus(
+    $id: uuid!
+    $from: String!
+    $set: export_orders_set_input!
+  ) {
+    update_export_orders(
+      where: { id: { _eq: $id }, status: { _eq: $from } }
+      _set: $set
+    ) {
+      affected_rows
+      returning {
+        id
+        status
+        updated_at
+      }
     }
   }
 `;
@@ -392,6 +402,17 @@ export const INSERT_REVENUE = `
 export const INSERT_COMMISSION = `
   mutation InsertCommission($object: export_commissions_insert_input!) {
     insert_export_commissions_one(object: $object) { id amount status }
+  }
+`;
+
+export const EXISTING_CREDIT_NOTE = `
+  query ExistingExportCreditNote($orderId: uuid!) {
+    export_credit_notes(
+      where: { export_order_id: { _eq: $orderId } }
+      limit: 1
+    ) {
+      id
+    }
   }
 `;
 

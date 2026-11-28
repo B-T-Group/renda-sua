@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { ExportOrdersClientService } from './export-orders-client.service';
 import type { ExportOrderRow } from './export-orders.types';
 
@@ -218,5 +219,18 @@ describe('ExportOrdersClientService', () => {
     expect(transitions.transition.mock.calls.map((call) => call[0].to)).toEqual(
       ['DELIVERED', 'CLOSED']
     );
+  });
+
+  it('does not award credit when the delivery status claim loses', async () => {
+    transitions.getOrder.mockResolvedValue(order({ status: 'SHIPPED' }));
+    transitions.transition.mockRejectedValue(
+      new HttpException('Export order status changed', HttpStatus.CONFLICT)
+    );
+    await expect(service.confirmDelivery('order-1', {})).rejects.toMatchObject({
+      status: 409,
+      message: 'Export order status changed',
+    });
+    expect(commissions.awardPaymentCredit).not.toHaveBeenCalled();
+    expect(commissions.markPayableOnDelivery).not.toHaveBeenCalled();
   });
 });

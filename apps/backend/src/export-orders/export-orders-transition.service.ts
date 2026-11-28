@@ -8,6 +8,16 @@ import {
 import { GET_EXPORT_ORDER, INSERT_AUDIT, UPDATE_EXPORT_ORDER } from './export-orders.queries';
 import type { ExportOrderRow } from './export-orders.types';
 
+type TransitionParams = {
+  orderId: string;
+  to: ExportOrderStatus;
+  eventName: string;
+  actorUserId?: string | null;
+  actorRole?: string;
+  payload?: Record<string, unknown>;
+  extraSet?: Record<string, unknown>;
+};
+
 @Injectable()
 export class ExportOrdersTransitionService {
   constructor(
@@ -25,36 +35,61 @@ export class ExportOrdersTransitionService {
     return res.export_orders_by_pk;
   }
 
-  async transition(params: {
-    orderId: string;
-    to: ExportOrderStatus;
-    eventName: string;
-    actorUserId?: string | null;
-    actorRole?: string;
-    payload?: Record<string, unknown>;
-    extraSet?: Record<string, unknown>;
-  }): Promise<ExportOrderRow> {
+  async transition(params: TransitionParams): Promise<ExportOrderRow> {
     const order = await this.getOrder(params.orderId);
+    this.assertAllowed(order.status, params.to);
+    await this.claimStatus(order.status, params);
+    await this.insertAudit(order.status, params);
+    this.events.emit(params.eventName, {
+      orderId: params.orderId,
+      from: order.status,
+      to: params.to,
+    });
+    return this.getOrder(params.orderId);
+  }
+
+  private assertAllowed(from: string, to: ExportOrderStatus): void {
     try {
-      assertTransition(order.status, params.to);
+      assertTransition(from as ExportOrderStatus, to);
     } catch (error: any) {
       throw new HttpException(
         error?.message || 'Invalid transition',
         HttpStatus.BAD_REQUEST
       );
     }
-    await this.hasura.executeMutation(UPDATE_EXPORT_ORDER, {
+  }
+
+  private async claimStatus(
+    from: string,
+    params: TransitionParams
+  ): Promise<void> {
+    const res = await this.hasura.executeMutation<{
+      update_export_orders: { affected_rows: number } | null;
+    }>(UPDATE_EXPORT_ORDER, {
       id: params.orderId,
+      from,
       set: {
         status: params.to,
         updated_at: new Date().toISOString(),
         ...(params.extraSet ?? {}),
       },
     });
+    if ((res.update_export_orders?.affected_rows ?? 0) !== 1) {
+      throw new HttpException(
+        'Export order status changed',
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private async insertAudit(
+    from: string,
+    params: TransitionParams
+  ): Promise<void> {
     await this.hasura.executeMutation(INSERT_AUDIT, {
       object: {
         export_order_id: params.orderId,
-        from_status: order.status,
+        from_status: from,
         to_status: params.to,
         event_name: params.eventName,
         actor_user_id: params.actorUserId ?? null,
@@ -62,11 +97,5 @@ export class ExportOrdersTransitionService {
         payload: params.payload ?? {},
       },
     });
-    this.events.emit(params.eventName, {
-      orderId: params.orderId,
-      from: order.status,
-      to: params.to,
-    });
-    return this.getOrder(params.orderId);
   }
 }

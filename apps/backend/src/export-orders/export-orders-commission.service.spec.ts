@@ -170,6 +170,15 @@ describe('ExportOrdersCommissionService', () => {
     expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 
+  it('does not insert a second credit note for the same order', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      export_credit_notes: [{ id: 'note-existing' }],
+    });
+    await service.awardPaymentCredit(order());
+    expect(docNumbers.next).not.toHaveBeenCalled();
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
   it('sets financing due from the option length and a zero principal when the balance is missing', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-11-27T15:00:00.000Z'));
     await service.ensureFinancing(order({ balance_amount: null }), 30, 'fin-1');
