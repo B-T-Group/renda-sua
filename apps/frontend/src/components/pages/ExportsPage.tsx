@@ -30,7 +30,6 @@ import {
 import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemCardSkeleton from '../common/ItemCardSkeleton';
-import { RecentlyViewedRail } from '../catalog-experience/RecentlyViewedRail';
 import { CatalogShortcutButton } from '../catalog/CatalogShortcutButton';
 import ExportCatalogIllustration from '../illustrations/ExportCatalogIllustration';
 import ExportSellersCarousel from '../exports/ExportSellersCarousel';
@@ -46,6 +45,7 @@ import {
 import SEOHead from '../seo/SEOHead';
 import ExportsDirectionBar from '../exports/ExportsDirectionBar';
 import { useExportOrigins } from '../../hooks/useExportOrigins';
+import { exportCountryPlace } from '../../utils/exportCountries';
 
 const ITEMS_PER_PAGE = 24;
 const EXPORT_SKELETON_COUNT = 8;
@@ -88,7 +88,7 @@ export function buildExportAddToCartEvent(
 }
 
 const ExportsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isAuthenticated } = useSessionAuth();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
@@ -120,6 +120,12 @@ const ExportsPage: React.FC = () => {
   const sellerRows = useExportSellers({ ...sellerCtx, limit: EXPORT_SELLERS_CAROUSEL_MAX });
   const track = useExportSellerTracking(sellerCtx);
   const productTotal = pagination?.total ?? 0;
+  const intoPlace = selectedMarket?.countryCode
+    ? exportCountryPlace(selectedMarket.countryCode, i18n.language)
+    : '';
+  const intoTitle = intoPlace
+    ? t('exportsOrigin.intoPageTitle', 'Exports into {{place}}', { place: intoPlace })
+    : t('exportsOrigin.intoPageTitleFallback', 'Exports into my market');
 
   const renderableItems = useMemo(
     () => inventoryItems.filter(hasCatalogItem),
@@ -173,7 +179,7 @@ const ExportsPage: React.FC = () => {
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
       <SEOHead
-        title={t('exportCatalog.pageTitle', 'Available for export')}
+        title={intoTitle}
         description={t(
           'exportCatalog.pageSubtitle',
           'Browse goods available for export into this market. Submit interest and the seller will contact you.'
@@ -195,7 +201,7 @@ const ExportsPage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <FlightTakeoff sx={{ fontSize: 26 }} aria-hidden />
             <Typography variant="h5" component="h1" fontWeight={800} sx={{ fontSize: { xs: '1.3rem', md: '1.6rem' } }}>
-              {t('exportCatalog.pageTitle', 'Available for export')}
+              {intoTitle}
             </Typography>
           </Box>
           {!loading && productTotal > 0 ? (
@@ -232,21 +238,6 @@ const ExportsPage: React.FC = () => {
         onMoreClick={(source) => track('exports_sellers_more_tapped', { source, total: sellerRows.total })}
       />
 
-      <RecentlyViewedRail
-        surface="export"
-        actions={{
-          formatCurrency,
-          onOrderClick: handleOrderClick,
-          onAddToCart: handleAddToCart,
-          isPublicView: !isAuthenticated,
-          canOrder: !isAuthenticated || isClientUser,
-          showCartButtons: isAuthenticated && isClientUser,
-          loginButtonText: t('public.items.login', 'Sign In to Order'),
-          orderButtonText: t('common.orderNow', 'Order Now'),
-          addToCartButtonText: t('cart.addToCart', 'Add to Cart'),
-          buyNowButtonText: t('cart.buyNow', 'Buy Now'),
-        }}
-      />
 
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>

@@ -31,7 +31,7 @@ export interface ExportSellersCarouselProps {
 
 /**
  * "Sellers" / "Vendeurs" row: at most 10 cards (logo or monogram, name, place, count) and a
- * trailing More card only when total > 10. Real links so the public page is crawlable.
+ * Always shows a header See all link. Trailing More card only when total > 10. Real links so the public page is crawlable.
  * Renders nothing when the context has no seller.
  */
 export const ExportSellersCarousel: React.FC<ExportSellersCarouselProps> = ({
@@ -72,8 +72,7 @@ export const ExportSellersCarousel: React.FC<ExportSellersCarouselProps> = ({
         <Typography variant="h6" component="h2" fontWeight={800} sx={{ fontSize: '1.05rem' }}>
           {t('exportSellers.title', 'Sellers')}
         </Typography>
-        {hasMore ? (
-          <Button
+        <Button
             component={RouterLink}
             to={listHref}
             onClick={() => onMoreClick?.('header')}
@@ -84,7 +83,6 @@ export const ExportSellersCarousel: React.FC<ExportSellersCarouselProps> = ({
           >
             {t('exportSellers.seeAll', 'See all')}
           </Button>
-        ) : null}
       </Box>
       <Box
         sx={{

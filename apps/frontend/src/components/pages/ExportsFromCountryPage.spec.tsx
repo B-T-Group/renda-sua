@@ -144,6 +144,7 @@ describe('ExportsFromCountryPage (public /exports/:cc)', () => {
     );
     expect(screen.getByTestId('export-seller-card-0').getAttribute('href')).toBe('/exports/ca/sellers/loc-1');
     expect(screen.queryByTestId('export-sellers-more-card')).toBeNull();
+    expect(screen.getByTestId('export-sellers-see-all').getAttribute('href')).toBe('/exports/ca/sellers');
     expect(screen.queryByText(/Open to anyone, no account needed/)).toBeNull();
     const seo = mockSeo.mock.calls.at(-1)?.[0] as { canonical: string; noindex: boolean };
     expect(seo.canonical).toBe('https://rendasua.com/exports/ca');

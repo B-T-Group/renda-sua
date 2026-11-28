@@ -73,6 +73,7 @@ describe('ExportSellersCarousel', () => {
       2
     );
     expect(screen.queryByTestId('export-sellers-more-card')).toBeNull();
+    expect(screen.getByTestId('export-sellers-see-all')).toBeTruthy();
     expect(screen.getByText('1 item')).toBeTruthy();
     expect(screen.getByText('HB')).toBeTruthy();
     expect(screen.getAllByTestId('export-seller-logo')).toHaveLength(1);

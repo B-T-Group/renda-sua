@@ -24,7 +24,7 @@ export interface ExportSellersCarouselProps {
 
 /**
  * "Sellers" / "Vendeurs" row above the export grid: at most 10 cards (logo or monogram,
- * name, city + country, plural-safe count) and a More card only when total > 10.
+ * name, city + country, plural-safe count) Always shows a header See all link, and a More card only when total > 10.
  * Hidden entirely when the context has no seller.
  */
 export function ExportSellersCarousel({
@@ -58,8 +58,7 @@ export function ExportSellersCarousel({
         <Text style={[typography.subtitle1, { color: colors.text.primary, fontWeight: '700' }]}>
           {t('exportSellers.title', 'Sellers')}
         </Text>
-        {hasMore ? (
-          <Pressable
+        <Pressable
             testID="export-sellers-see-all"
             accessibilityRole="button"
             onPress={() => onSeeAll('header')}
@@ -71,7 +70,6 @@ export function ExportSellersCarousel({
               {t('exportSellers.seeAll', 'See all')}
             </Text>
           </Pressable>
-        ) : null}
       </View>
       <ScrollView
         horizontal

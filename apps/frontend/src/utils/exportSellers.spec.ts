@@ -65,5 +65,16 @@ describe('exportSellers utils', () => {
     // FR typography: curly apostrophe and NBSP before ":".
     expect(JSON.stringify(fr.exportSellers)).not.toContain("'");
     expect(fr.exportSellers.sellerSeoTitle).toContain('\u00a0:');
+    expect(tEn('exportsOrigin.intoPageTitle', { place: 'Cameroon' })).toBe('Exports into Cameroon');
+    expect(tFr('exportsOrigin.intoPageTitle', { place: 'le Cameroun' })).toBe('Exports vers le Cameroun');
+    expect(tEn('exportsOrigin.seoDescription', {
+      count: 2, place: 'Canada', businesses: 1,
+      markets: tEn('exportsOrigin.seoMarkets', { count: 1 }),
+    })).toBe('2 products exported from Canada by 1 businesses to 1 market. Browse and send interest, no account needed.');
+    expect(tFr('exportsOrigin.seoDescription', {
+      count: 2, place: 'le Canada', businesses: 1,
+      markets: tFr('exportsOrigin.seoMarkets', { count: 1 }),
+    })).toBe('2 produits exportés depuis le Canada par 1 entreprises vers 1 marché. Parcourez et manifestez votre intérêt, sans compte.');
+    expect(tEn('exportsOrigin.seoMarkets', { count: 7 })).toBe('7 markets');
   });
 });

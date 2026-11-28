@@ -12,10 +12,9 @@ import ExportsPage, {
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en' },
-    t: (key: string, defaultValue?: string | Record<string, unknown>) => {
-      if (typeof defaultValue === 'string') return defaultValue;
-      const opts = defaultValue ?? {};
-      const text = (opts.defaultValue as string) ?? key;
+    t: (key: string, defaultValue?: string | Record<string, unknown>, options?: Record<string, unknown>) => {
+      const opts = (typeof defaultValue === 'object' && defaultValue ? defaultValue : options) ?? {};
+      const text = typeof defaultValue === 'string' ? defaultValue : (opts.defaultValue as string) ?? key;
       return text.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(opts[k] ?? ''));
     },
   }),
@@ -82,8 +81,9 @@ jest.mock('../seo/SEOHead', () => () => null);
 jest.mock('../market/MarketSelector', () => ({
   MarketSelector: () => <div>Market selector</div>,
 }));
+const mockRail = jest.fn(() => null);
 jest.mock('../catalog-experience/RecentlyViewedRail', () => ({
-  RecentlyViewedRail: () => null,
+  RecentlyViewedRail: (props: unknown) => mockRail(props),
 }));
 
 /**
@@ -150,6 +150,7 @@ describe('ExportsPage', () => {
   beforeEach(() => {
     mockUseInventoryItems.mockReset();
     mockUseExportSellers.mockReset();
+    mockRail.mockClear();
     mockUseExportSellers.mockReturnValue({ sellers: [], total: 0, loading: false, error: false });
   });
 
@@ -190,6 +191,12 @@ describe('ExportsPage', () => {
     expect(screen.getByTestId('export-seller-card-0').getAttribute('href')).toBe('/exports/sellers/loc-1');
     expect(screen.getByTestId('export-sellers-more-card').getAttribute('href')).toBe('/exports/sellers');
     expect(screen.getByText('direction:into')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Exports into Cameroon');
+    expect(screen.queryByText('Available for export')).not.toBeInTheDocument();
+    expect(mockRail).not.toHaveBeenCalled();
+    expect(screen.queryByText('Order Now')).not.toBeInTheDocument();
+    expect(screen.queryByText('Add to Cart')).not.toBeInTheDocument();
+    expect(screen.queryByText('Buy Now')).not.toBeInTheDocument();
   });
 
   it('renders the empty state without crashing', () => {

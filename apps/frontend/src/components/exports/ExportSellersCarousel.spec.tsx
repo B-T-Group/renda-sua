@@ -70,7 +70,8 @@ describe('ExportSellersCarousel', () => {
     expect(screen.getByTestId('export-seller-monogram').textContent).toBe('NO');
     expect(screen.getByText('1 item')).toBeTruthy();
     expect(screen.queryByTestId('export-sellers-more-card')).toBeNull();
-    expect(screen.queryByTestId('export-sellers-see-all')).toBeNull();
+    expect(screen.getByTestId('export-sellers-see-all')).toBeTruthy();
+    expect(screen.getByTestId('export-sellers-see-all').getAttribute('href')).toBe('/exports/ca/sellers');
     const card = screen.getByTestId('export-seller-card-0');
     expect(card.getAttribute('href')).toBe('/exports/ca/sellers/loc-1');
     fireEvent.click(card);
