@@ -3,6 +3,7 @@ import { DEFAULT_MARKET_CODE, type MarketSelectionMode } from '../types/market';
 import { detectMarketLocation } from '../utils/detectMarketCountry';
 import { normalizeStateCode } from '../utils/stateNormalizer';
 import { fetchMarketStates } from '../services/marketStatesApi';
+import { shouldClearMissingSavedState } from '../utils/savedMarketState';
 import {
   clearPromptDismissed,
   readPromptDismissed,
@@ -40,9 +41,52 @@ export class MarketStore {
       // Detect in the background so detectedCountryCode / detectedStateCode are
       // populated for the dot indicator and switch-banner, without blocking startup.
       this.detectInBackground();
+      void this.reconcileSavedState();
       return;
     }
     await this.initialDetect();
+  }
+
+
+  /**
+   * If the saved state is no longer in the market-states list, quietly fall back
+   * to All of the country. Does nothing while the list is loading or if the
+   * request failed. Preserves country and mode; no toast or analytics event.
+   */
+  async reconcileSavedState(): Promise<void> {
+    const countryCode = this.selectedCountryCode;
+    const stateCode = this.selectedStateCode;
+    if (!stateCode) return;
+    try {
+      const { states } = await fetchMarketStates(countryCode, 'all');
+      const stillCurrent =
+        this.selectedCountryCode === countryCode &&
+        this.selectedStateCode === stateCode;
+      if (!stillCurrent) return;
+      if (
+        !shouldClearMissingSavedState({
+          countryCode,
+          stateCode,
+          knownStates: states.map((row) => row.state),
+          loaded: true,
+          loading: false,
+          loadFailed: false,
+        })
+      ) {
+        return;
+      }
+      runInAction(() => {
+        this.selectedStateCode = null;
+      });
+      await writeStoredMarket({
+        countryCode,
+        stateCode: null,
+        mode: this.mode,
+      });
+    } catch {
+      // Request failed — keep the saved state so we don't bounce the user
+      // to All of the country on a transient error.
+    }
   }
 
   private detectInBackground(): void {
