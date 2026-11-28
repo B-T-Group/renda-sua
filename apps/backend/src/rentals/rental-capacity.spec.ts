@@ -81,6 +81,42 @@ describe('rental capacity', () => {
     expect(unitsStillFree(1, [], start, start + day, 2)).toBe(false);
   });
 
+  it('keeps a past search on its clock instead of sliding to midnight', () => {
+    const hour = 3_600_000;
+    const saturday = Date.UTC(2026, 10, 28);
+    expect(new Date(saturday).getUTCDay()).toBe(6);
+    const askedStart = saturday - 2 * day + 9 * hour;
+    const closedSaturday = [{ weekday: 6, is_available: false }];
+    expect(
+      nextFreeStartMs({
+        unitsAvailable: 1,
+        windows: [],
+        weekly: closedSaturday,
+        startMs: askedStart,
+        endMs: askedStart + 9 * hour,
+        nowMs: saturday + 15 * hour,
+      })
+    ).toBe(saturday + day + 9 * hour);
+    expect(
+      nextFreeStartMs({
+        unitsAvailable: 1,
+        windows: [{ startMs: saturday, endMs: saturday + 9 * hour, units: 1 }],
+        startMs: askedStart,
+        endMs: askedStart + 9 * hour,
+        nowMs: saturday + 15 * hour,
+      })
+    ).toBe(saturday + 9 * hour);
+    expect(
+      nextFreeStartMs({
+        unitsAvailable: 1,
+        windows: [],
+        startMs: saturday + 9 * hour,
+        endMs: saturday + 18 * hour,
+        nowMs: saturday + 15 * hour,
+      })
+    ).toBe(saturday + 9 * hour);
+  });
+
   it('returns null when the stay has no length or nothing frees inside the horizon', () => {
     const origin = Date.UTC(2026, 0, 1);
     expect(

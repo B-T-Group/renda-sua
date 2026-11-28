@@ -97,6 +97,8 @@ describe('RentalSearchService', () => {
   });
 
   it('does not mark a card-only Stripe stay available past the cutoff when the guard is on', async () => {
+    // Pin the clock: the card cutoff is measured from now, so real time broke this once now + review hours passed 2026-12-01.
+    jest.useFakeTimers({ now: Date.UTC(2026, 10, 12), doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'setInterval', 'queueMicrotask'] });
     const routing = { resolveRailForCountry: jest.fn().mockResolvedValue('stripe') };
     const flags = {
       cardWindowGuardEnabled: jest.fn().mockResolvedValue(true),
@@ -122,6 +124,7 @@ describe('RentalSearchService', () => {
     const open = await guarded.search({ start_date: '2026-11-12', end_date: '2026-11-20', country_code: 'CA' });
     expect(open.listings[0].available).toBe(true);
     expect(open.listings[0].latest_card_end_at).toEqual(expect.any(String));
+    jest.useRealTimers();
   });
 
   it('uses the item opt-in for the card window when the flag is on', async () => {
