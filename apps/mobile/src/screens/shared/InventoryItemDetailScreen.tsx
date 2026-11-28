@@ -873,7 +873,7 @@ function InventoryItemDetailScreen() {
               </Button>
             </View>
           ) : null}
-          {outOfStock ? (
+          {outOfStock && !exportAvailable ? (
             <Text
               style={[
                 typography.body2,
@@ -1053,7 +1053,8 @@ function InventoryItemDetailScreen() {
             category={item.item.item_sub_category?.item_category?.name}
             subcategory={item.item.item_sub_category?.name}
             brand={item.item.brand?.name}
-            availableQuantity={qty}
+            // Export-only: price on request, not buyable, so no stock line.
+            availableQuantity={exportAvailable ? null : qty}
           />
 
           <EntityRatingsSection

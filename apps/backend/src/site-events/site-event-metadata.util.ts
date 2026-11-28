@@ -116,6 +116,7 @@ const ASSISTANT_UUID_ID_KEYS: ReadonlySet<string> = new Set([
 // Client reorder events (mobile sends metadata.orderId; web uses subject_id).
 const REORDER_UUID_ID_KEYS: ReadonlySet<string> = new Set(['orderId']);
 const RENTAL_RETURN_UUID_KEYS: ReadonlySet<string> = new Set(['booking_id']);
+const EXPORT_SELLER_UUID_KEYS: ReadonlySet<string> = new Set(['location_id']);
 const NO_UUID_ID_KEYS: ReadonlySet<string> = new Set();
 
 function validateAssistantValue(key: string, value: unknown): unknown | null {
@@ -223,6 +224,7 @@ export function uuidIdKeysForEventType(eventType: string): ReadonlySet<string> {
   if (isAssistantSiteEventType(eventType)) return ASSISTANT_UUID_ID_KEYS;
   if (isReorderSiteEventType(eventType)) return REORDER_UUID_ID_KEYS;
   if (eventType === 'rental_renter_reported_returned') return RENTAL_RETURN_UUID_KEYS;
+  if (eventType.startsWith('exports_seller')) return EXPORT_SELLER_UUID_KEYS;
   return NO_UUID_ID_KEYS;
 }
 

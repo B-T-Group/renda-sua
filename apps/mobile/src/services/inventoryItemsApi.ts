@@ -7,7 +7,12 @@ import type {
   InventoryItemsApiEnvelope,
   InventorySortMode,
 } from '../types/inventoryCatalog';
-import type { CatalogStoreEnvelope, CatalogStoresEnvelope } from '../types/stores';
+import type {
+  CatalogStoreEnvelope,
+  CatalogStoresEnvelope,
+  ExportSellersEnvelope,
+  ExportSellersPage,
+} from '../types/stores';
 import { FOOD_CATEGORY_NAME } from '../utils/foodAvailability';
 import { apiRequest } from './apiClient';
 import { publicApiGet } from './publicApiClient';
@@ -398,4 +403,49 @@ export async function fetchExportOrigins(init?: {
   );
   if (!envelope?.success) return [];
   return Array.isArray(envelope.data?.origins) ? envelope.data!.origins! : [];
+}
+
+/** Into / From context shared by the Exports seller carousel, list and seller page. */
+export interface ExportSellersQuery {
+  direction: 'into' | 'from';
+  /** Viewer (shopping) market; used for Into. */
+  marketCode?: string | null;
+  /** Origin country; used for From. */
+  originCode?: string | null;
+  search?: string;
+  limit?: number;
+  offset?: number;
+  /** One seller (seller page header). */
+  businessLocationId?: string;
+}
+
+/** GET /inventory-items/stores?export_only=true with the Into or From param. */
+export function exportSellersPath(q: ExportSellersQuery): string {
+  const search = new URLSearchParams();
+  search.set('export_only', 'true');
+  search.set('limit', String(q.limit ?? 10));
+  if (q.offset && q.offset > 0) search.set('offset', String(q.offset));
+  const origin = q.originCode?.trim().toUpperCase();
+  const market = q.marketCode?.trim().toUpperCase();
+  if (q.direction === 'from' && origin) search.set('origin_country', origin);
+  else if (market) search.set('country_code', market);
+  if (q.search?.trim()) search.set('search', q.search.trim());
+  if (q.businessLocationId?.trim()) {
+    search.set('business_location_id', q.businessLocationId.trim());
+  }
+  return `/inventory-items/stores?${search.toString()}`;
+}
+
+/** Public seller directory for the Exports lane (cached server-side). */
+export async function fetchExportSellers(
+  q: ExportSellersQuery,
+  init?: { signal?: AbortSignal }
+): Promise<ExportSellersPage> {
+  const envelope = await publicApiGet<ExportSellersEnvelope>(exportSellersPath(q), undefined, init);
+  const data = envelope?.success ? envelope.data : undefined;
+  return {
+    stores: Array.isArray(data?.stores) ? data!.stores : [],
+    total: typeof data?.total === 'number' ? data.total : 0,
+    country: data?.country ?? null,
+  };
 }

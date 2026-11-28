@@ -40,6 +40,14 @@ jest.mock('../common/DashboardItemCard', () => ({
 }));
 jest.mock('../illustrations/ExportCatalogIllustration', () => () => null);
 
+const mockSellers = jest.fn();
+jest.mock('../../hooks/useExportSellers', () => ({
+  useExportSellers: (...args: unknown[]) => mockSellers(...args),
+}));
+jest.mock('../../hooks/useExportSellerTracking', () => ({
+  useExportSellerTracking: () => jest.fn(),
+}));
+
 const mockOrigins = jest.fn();
 const mockFrom = jest.fn();
 jest.mock('../../hooks/useExportOrigins', () => ({
@@ -91,6 +99,23 @@ describe('groupExportsByCategory', () => {
 describe('ExportsFromCountryPage (public /exports/:cc)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSellers.mockReturnValue({
+      sellers: [
+        {
+          business_location_id: 'loc-1',
+          business_id: 'b-1',
+          name: 'Maple Ridge Foods',
+          city: 'Toronto',
+          country: 'CA',
+          logo_url: 'https://cdn.example/logo.png',
+          item_count: 1,
+          latest_export_at: null,
+        },
+      ],
+      total: 1,
+      loading: false,
+      error: false,
+    });
     mockOrigins.mockReturnValue({
       origins: [{ country_code: 'CA', item_count: 2, business_count: 2, destination_codes: ['CM', 'GA'] }],
       loading: false,
@@ -111,6 +136,16 @@ describe('ExportsFromCountryPage (public /exports/:cc)', () => {
     expect(screen.getAllByTestId('exports-category-section')).toHaveLength(2);
     expect(screen.getAllByTestId('card')[0].textContent).toContain('public_export_catalog');
     expect(screen.getByText('bar:from:CA')).toBeTruthy();
+    expect(screen.getByTestId('exports-origin-stats').textContent).toBe(
+      '2 products · 1 sellers · ships to 2 markets'
+    );
+    expect(mockSellers).toHaveBeenCalledWith(
+      expect.objectContaining({ direction: 'from', originCode: 'CA', limit: 10, enabled: true })
+    );
+    expect(screen.getByTestId('export-seller-card-0').getAttribute('href')).toBe('/exports/ca/sellers/loc-1');
+    expect(screen.queryByTestId('export-sellers-more-card')).toBeNull();
+    expect(screen.getByTestId('export-sellers-see-all').getAttribute('href')).toBe('/exports/ca/sellers');
+    expect(screen.queryByText(/Open to anyone, no account needed/)).toBeNull();
     const seo = mockSeo.mock.calls.at(-1)?.[0] as { canonical: string; noindex: boolean };
     expect(seo.canonical).toBe('https://rendasua.com/exports/ca');
     expect(seo.noindex).toBe(false);
@@ -128,7 +163,9 @@ describe('ExportsFromCountryPage (public /exports/:cc)', () => {
 
   it('shows the empty state for a valid code with no exports', () => {
     mockFrom.mockReturnValue({ items: [], total: 0, loading: false, error: false });
+    mockSellers.mockReturnValue({ sellers: [], total: 0, loading: false, error: false });
     renderAt('/exports/sn');
     expect(screen.getByText('No exports from Senegal yet')).toBeTruthy();
+    expect(screen.queryByTestId('export-sellers-carousel')).toBeNull();
   });
 });

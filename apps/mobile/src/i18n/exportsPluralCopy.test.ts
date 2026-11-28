@@ -39,6 +39,16 @@ describe('exports plural copy (mobile, v3 JSON)', () => {
     expect(tr('fr', 'exportsOrigin.itemsCount', { count: 71 })).toBe('71 articles');
     expect(tr('fr', 'exportsOrigin.itemsCount', { count: 1 })).toBe('1 article');
     expect(tr('en', 'exportsOrigin.itemsCount', { count: 1 })).toBe('1 item');
+    expect(tr('en', 'exportsOrigin.seoDescription', {
+      count: 2, place: 'Canada', businesses: 1,
+      markets: tr('en', 'exportsOrigin.seoMarkets', { count: 1 }),
+    })).toBe('2 products exported from Canada by 1 businesses to 1 market. Browse and send interest, no account needed.');
+    expect(tr('fr', 'exportsOrigin.seoDescription', {
+      count: 2, place: 'le Canada', businesses: 1,
+      markets: tr('fr', 'exportsOrigin.seoMarkets', { count: 1 }),
+    })).toBe('2 produits exportés depuis le Canada par 1 entreprises vers 1 marché. Parcourez et manifestez votre intérêt, sans compte.');
+    expect(tr('en', 'exportsOrigin.intoPageTitle', { place: 'Cameroon' })).toBe('Exports into Cameroon');
+    expect(tr('fr', 'exportsOrigin.intoPageTitle', { place: 'le Cameroun' })).toBe('Exports vers le Cameroun');
   });
 
   it('has no v4 (_one/_other) keys under the new export namespaces', () => {

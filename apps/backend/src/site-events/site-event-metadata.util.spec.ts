@@ -26,6 +26,19 @@ describe('site-event-metadata.util', () => {
     expect(out.phone).toBeUndefined();
   });
 
+  it('keeps a UUID location_id on exports seller events and drops anything else there', () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    const out = normalizeSiteEventMetadata('exports_seller_card_tapped', {
+      direction: 'from',
+      origin_code: 'CA',
+      location_id: id,
+      position: 3,
+    }, 'client');
+    expect(out).toEqual(expect.objectContaining({ direction: 'from', origin_code: 'CA', location_id: id, position: 3 }));
+    const bad = normalizeSiteEventMetadata('exports_seller_page_viewed', { location_id: '+237670000000' }, 'client');
+    expect(bad.location_id).toBeUndefined();
+  });
+
   it('strips otp-like values under sensitive keys', () => {
     expect(valueLooksLikePii('otp', '1234', false)).toBe(true);
     expect(valueLooksLikePii('code', '567890', false)).toBe(true);

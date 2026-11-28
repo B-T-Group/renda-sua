@@ -891,7 +891,8 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
               <FoodAvailabilityChip
                 availability={inventory.food_availability}
               />
-              {foodStatus == null ? (
+              {/* Export-only: price on request, not buyable, so no stock count. */}
+              {foodStatus == null && !exportAvailable ? (
                 <Chip
                   label={t(
                     'items.itemCard.availableCount',
@@ -1276,10 +1277,19 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
               startIcon={<PanToolOutlined />}
               data-testid="export-interest-cta"
               sx={{
-                width: '75%',
-                alignSelf: 'center',
+                width: '100%',
+                alignSelf: 'stretch',
                 bgcolor: '#0A4FB5',
                 '&:hover': { bgcolor: '#083F91' },
+                fontSize: '0.8125rem',
+                lineHeight: 1.2,
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                px: 1,
+                py: 0.75,
+                minHeight: 36,
+                '& .MuiButton-startIcon': { mr: 0.5, marginLeft: 0 },
+                '& .MuiButton-startIcon > :nth-of-type(1)': { fontSize: 16 },
               }}
               onClick={() => {
                 if (!isAuthenticated) {

@@ -11,10 +11,23 @@ import ExportsPage, {
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, defaultValue?: string) =>
-      typeof defaultValue === 'string' ? defaultValue : key,
+    i18n: { language: 'en' },
+    t: (key: string, defaultValue?: string | Record<string, unknown>, options?: Record<string, unknown>) => {
+      const opts = (typeof defaultValue === 'object' && defaultValue ? defaultValue : options) ?? {};
+      const text = typeof defaultValue === 'string' ? defaultValue : (opts.defaultValue as string) ?? key;
+      return text.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(opts[k] ?? ''));
+    },
   }),
 }));
+
+const mockUseExportSellers = jest.fn();
+jest.mock('../../hooks/useExportSellers', () => ({
+  useExportSellers: (...args: unknown[]) => mockUseExportSellers(...args),
+}));
+jest.mock('../../hooks/useExportSellerTracking', () => ({
+  useExportSellerTracking: () => jest.fn(),
+}));
+jest.mock('../illustrations/ExportCatalogIllustration', () => () => <div>illustration</div>);
 
 const mockUseInventoryItems = jest.fn();
 
@@ -68,8 +81,9 @@ jest.mock('../seo/SEOHead', () => () => null);
 jest.mock('../market/MarketSelector', () => ({
   MarketSelector: () => <div>Market selector</div>,
 }));
+const mockRail = jest.fn(() => null);
 jest.mock('../catalog-experience/RecentlyViewedRail', () => ({
-  RecentlyViewedRail: () => null,
+  RecentlyViewedRail: (props: unknown) => mockRail(props),
 }));
 
 /**
@@ -135,6 +149,54 @@ describe('buildExportAddToCartEvent', () => {
 describe('ExportsPage', () => {
   beforeEach(() => {
     mockUseInventoryItems.mockReset();
+    mockUseExportSellers.mockReset();
+    mockRail.mockClear();
+    mockUseExportSellers.mockReturnValue({ sellers: [], total: 0, loading: false, error: false });
+  });
+
+  it('shows a compact header (no hero illustration or subtitle), counts and the Into sellers carousel', () => {
+    mockUseInventoryItems.mockReturnValue({
+      inventoryItems: [listing()],
+      loading: false,
+      error: null,
+      pagination: { total: 71, totalPages: 3, page: 1, limit: 24 },
+    });
+    mockUseExportSellers.mockReturnValue({
+      sellers: [
+        {
+          business_location_id: 'loc-1',
+          business_id: 'b-1',
+          name: 'Maple Ridge Foods',
+          city: 'Toronto',
+          country: 'CA',
+          logo_url: null,
+          item_count: 5,
+          latest_export_at: null,
+        },
+      ],
+      total: 12,
+      loading: false,
+      error: false,
+    });
+    renderPage();
+    expect(mockUseExportSellers).toHaveBeenCalledWith(
+      expect.objectContaining({ direction: 'into', marketCode: 'CM', limit: 10 })
+    );
+    expect(screen.getByTestId('exports-into-summary').textContent).toBe('71 products · 12 sellers');
+    expect(screen.queryByText('illustration')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Submit interest and the seller will contact you/)
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('export-sellers-carousel')).toBeInTheDocument();
+    expect(screen.getByTestId('export-seller-card-0').getAttribute('href')).toBe('/exports/sellers/loc-1');
+    expect(screen.getByTestId('export-sellers-more-card').getAttribute('href')).toBe('/exports/sellers');
+    expect(screen.getByText('direction:into')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Exports into Cameroon');
+    expect(screen.queryByText('Available for export')).not.toBeInTheDocument();
+    expect(mockRail).not.toHaveBeenCalled();
+    expect(screen.queryByText('Order Now')).not.toBeInTheDocument();
+    expect(screen.queryByText('Add to Cart')).not.toBeInTheDocument();
+    expect(screen.queryByText('Buy Now')).not.toBeInTheDocument();
   });
 
   it('renders the empty state without crashing', () => {

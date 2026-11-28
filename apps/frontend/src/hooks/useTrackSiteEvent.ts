@@ -251,7 +251,15 @@ export type SiteEventTypeV1 =
   | 'rentals_client_tab_tap'
   | 'rentals_client_tab_browse_tap'
   | 'rental_accept_and_start_tap'
-  | 'rental_renter_reported_returned';
+  | 'rental_renter_reported_returned'
+  // Exports by seller (carousel, all-sellers list, seller page)
+  | 'exports_sellers_carousel_viewed'
+  | 'exports_seller_card_tapped'
+  | 'exports_sellers_more_tapped'
+  | 'exports_sellers_list_viewed'
+  | 'exports_sellers_search_submitted'
+  | 'exports_seller_page_viewed'
+  | 'exports_seller_page_search_submitted';
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

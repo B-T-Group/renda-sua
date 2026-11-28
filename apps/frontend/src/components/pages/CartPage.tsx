@@ -34,6 +34,7 @@ import {
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
 import CheckoutProgressStepper from '../common/CheckoutProgressStepper';
+import { EXPORT_BRAND_BLUE } from '../exports/ExportOnlyBadge';
 
 const CartPage: React.FC = () => {
   const { t } = useTranslation();
@@ -57,7 +58,14 @@ const CartPage: React.FC = () => {
         severity="info"
         icon={<FlightTakeoff fontSize="inherit" />}
         onClose={exportPurge.dismiss}
-        sx={{ mb: 2, textAlign: 'left' }}
+        sx={{
+          mb: 2,
+          textAlign: 'left',
+          // Export UI uses brand blue, not the teal info tone.
+          bgcolor: '#EAF1FB',
+          color: 'text.primary',
+          '& .MuiAlert-icon, & .MuiAlert-action .MuiIconButton-root': { color: EXPORT_BRAND_BLUE },
+        }}
         data-testid="cart-export-removed-note"
       >
         {t('exportItem.cartRemoved', {
