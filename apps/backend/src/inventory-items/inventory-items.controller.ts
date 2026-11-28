@@ -800,7 +800,7 @@ export class InventoryItemsController {
     required: false,
     type: Boolean,
     description:
-      'When true, return only export_available items exported to the viewer country (destination markets section / /exports).',
+      'When true, return only export_available items exported INTO the viewer country (destination markets section / /exports). Items whose home business location is in that same country are excluded — exports never come from local sellers.',
   })
   @ApiQuery({
     name: 'origin_country',
