@@ -7,7 +7,9 @@ import { HomeLaneSwitcher, type HomeLane } from './HomeLaneSwitcher';
 type Props = {
   value: HomeLane;
   onChange: (lane: HomeLane) => void;
-  /** Optional trailing control (e.g. assistant button) shown beside the market selector. */
+  /** Optional control grouped immediately after the market pill (e.g. notification bell). */
+  besideMarket?: ReactNode;
+  /** Optional trailing control (e.g. assistant button) shown at the right edge. */
   trailing?: ReactNode;
 };
 
@@ -15,7 +17,7 @@ type Props = {
  * Shared header for the four browse lanes: one market selector above the lane menu,
  * so individual lane screens never repeat it.
  */
-export function HomeLaneHeader({ value, onChange, trailing }: Props) {
+export function HomeLaneHeader({ value, onChange, besideMarket, trailing }: Props) {
   const { spacing } = useTheme();
   return (
     <View>
@@ -25,10 +27,20 @@ export function HomeLaneHeader({ value, onChange, trailing }: Props) {
           { marginHorizontal: spacing.md, marginBottom: spacing.sm },
         ]}
       >
-        <View style={styles.selectorWrap}>
-          <MarketSelector catalogContext={value === 'rentals' ? 'rentals' : 'inventory'} />
+        <View
+          style={[styles.selectorCluster, { gap: spacing.xs }]}
+          testID="home-lane-header-market-cluster"
+        >
+          <View style={styles.selectorWrap}>
+            <MarketSelector catalogContext={value === 'rentals' ? 'rentals' : 'inventory'} />
+          </View>
+          {besideMarket ? (
+            <View style={styles.besideMarket} testID="home-lane-header-bell-slot">
+              {besideMarket}
+            </View>
+          ) : null}
         </View>
-        {trailing}
+        {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
       </View>
       <HomeLaneSwitcher value={value} onChange={onChange} />
     </View>
@@ -42,5 +54,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 4,
   },
+  selectorCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    minWidth: 0,
+  },
   selectorWrap: { flexShrink: 1, minWidth: 0 },
+  besideMarket: { flexShrink: 0 },
+  trailing: { flexShrink: 0 },
 });

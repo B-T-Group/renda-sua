@@ -212,7 +212,7 @@ export interface BrowseCatalogScreenProps {
   nearbyAgentsCount?: number;
   /** When true, catalog list + facets use authenticated GET /inventory-items (Bearer + persona). */
   inventoryRequestsWithAuth?: boolean;
-  /** Optional control rendered beside the sticky search bar (e.g. notification bell). */
+  /** Optional control rendered beside the sticky search bar (e.g. My orders and cart). */
   headerTrailing?: React.ReactNode;
   /**
    * When false, skip top safe-area inset (parent already applied it — e.g. client home
@@ -1473,7 +1473,7 @@ function BrowseCatalogScreenInner({
           },
         ]}
       >
-        <View style={styles.searchRow}>
+        <View style={styles.searchRow} testID="catalog-search-row">
           <View style={styles.searchFlex}>
             <CatalogBrowseSearchBar
               theme={theme}
