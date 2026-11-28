@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApiClient } from './useApiClient';
 import {
   exportSellersQueryParams,
+  parseExportSellersPage,
   type ExportSeller,
   type ExportSellersContext,
 } from '../utils/exportSellers';
@@ -43,11 +44,10 @@ export function useExportSellers(opts: UseExportSellersOptions) {
       })
       .then((res) => {
         if (cancelled) return;
-        const data = res.data?.data ?? {};
-        const rows: ExportSeller[] = Array.isArray(data.stores) ? data.stores : [];
-        setSellers(rows);
-        setTotal(typeof data.total === 'number' ? data.total : rows.length);
-        offsetRef.current = rows.length;
+        const page = parseExportSellersPage<ExportSeller>(res.data, ctx);
+        setSellers(page.stores);
+        setTotal(page.total);
+        offsetRef.current = page.stores.length;
       })
       .catch(() => {
         if (!cancelled) setError(true);
@@ -68,9 +68,9 @@ export function useExportSellers(opts: UseExportSellersOptions) {
       const res = await api.get('/inventory-items/stores', {
         params: exportSellersQueryParams(ctx, { limit, search, businessLocationId, offset: offsetRef.current }),
       });
-      const rows: ExportSeller[] = res.data?.data?.stores ?? [];
-      offsetRef.current += rows.length;
-      setSellers((prev) => [...prev, ...rows]);
+      const page = parseExportSellersPage<ExportSeller>(res.data, ctx);
+      offsetRef.current += page.stores.length;
+      setSellers((prev) => [...prev, ...page.stores]);
     } catch {
       // keep the rows we have
     } finally {

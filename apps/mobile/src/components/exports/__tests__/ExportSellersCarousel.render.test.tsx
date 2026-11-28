@@ -80,6 +80,25 @@ describe('ExportSellersCarousel', () => {
     await fireEvent.press(screen.getByTestId('export-seller-card-0'));
     expect(onPressSeller).toHaveBeenCalledWith(expect.objectContaining({ business_location_id: 'loc-1' }), 0);
   });
+
+  it('does not paint leftover local stores when total is 0 (legacy directory)', async () => {
+    await renderCarousel(
+      [
+        seller(1, { name: 'Happy store - Yaoundé', country: null }),
+        seller(2, { name: 'Home cake - Douala', country: null }),
+      ],
+      0
+    );
+    expect(screen.queryByTestId('export-sellers-carousel')).toBeNull();
+    expect(screen.queryByText('Happy store - Yaoundé')).toBeNull();
+  });
+
+  it('places the See all chevron after the label', async () => {
+    await renderCarousel([seller(1)], 1);
+    const btn = screen.getByTestId('export-sellers-see-all');
+    // RN flattens the icon name into text; the chevron must follow the label.
+    expect(btn).toHaveTextContent(/^See allchevron-right$/);
+  });
 });
 
 describe('ExportsDirectionSwitch one-line counts with sellers', () => {

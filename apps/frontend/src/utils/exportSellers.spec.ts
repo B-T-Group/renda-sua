@@ -11,6 +11,7 @@ import {
   exportSellersQueryParams,
   exportSellerTint,
   exportsSummaryLine,
+  parseExportSellersPage,
 } from './exportSellers';
 
 describe('exportSellers utils', () => {
@@ -68,13 +69,70 @@ describe('exportSellers utils', () => {
     expect(tEn('exportsOrigin.intoPageTitle', { place: 'Cameroon' })).toBe('Exports into Cameroon');
     expect(tFr('exportsOrigin.intoPageTitle', { place: 'le Cameroun' })).toBe('Exports vers le Cameroun');
     expect(tEn('exportsOrigin.seoDescription', {
-      count: 2, place: 'Canada', businesses: 1,
+      count: 2, place: 'Canada',
+      businesses: tEn('exportsOrigin.seoBusinesses', { count: 1 }),
       markets: tEn('exportsOrigin.seoMarkets', { count: 1 }),
-    })).toBe('2 products exported from Canada by 1 businesses to 1 market. Browse and send interest, no account needed.');
+    })).toBe('2 products exported from Canada by 1 business to 1 market. Browse and send interest, no account needed.');
     expect(tFr('exportsOrigin.seoDescription', {
-      count: 2, place: 'le Canada', businesses: 1,
+      count: 2, place: 'le Canada',
+      businesses: tFr('exportsOrigin.seoBusinesses', { count: 1 }),
       markets: tFr('exportsOrigin.seoMarkets', { count: 1 }),
-    })).toBe('2 produits exportés depuis le Canada par 1 entreprises vers 1 marché. Parcourez et manifestez votre intérêt, sans compte.');
+    })).toBe('2 produits exportés depuis le Canada par 1 entreprise vers 1 marché. Parcourez et manifestez votre intérêt, sans compte.');
+    expect(tEn('exportsOrigin.seoBusinesses', { count: 2 })).toBe('2 businesses');
+    expect(tFr('exportsOrigin.seoBusinesses', { count: 2 })).toBe('2 entreprises');
     expect(tEn('exportsOrigin.seoMarkets', { count: 7 })).toBe('7 markets');
+  });
+});
+
+const intoCm = { direction: 'into' as const, marketCode: 'CM', originCode: null };
+const fromCa = { direction: 'from' as const, marketCode: 'CM', originCode: 'CA' };
+const caSeller = { business_location_id: 'ca-1', name: 'Rendasua Canada - 1TRACK', country: 'CA', city: 'London', item_count: 2 };
+const cmSeller = { business_location_id: 'cm-1', name: 'Happy store - Yaoundé', city: 'Yaoundé', item_count: 12 };
+
+describe('parseExportSellersPage (carousel, count, and See all share this)', () => {
+  it('rejects the legacy local directory (stores without total) used for market CM', () => {
+    const page = parseExportSellersPage(
+      { success: true, data: { stores: [cmSeller, { name: 'Home cake - Douala', city: 'Douala' }] } },
+      intoCm
+    );
+    expect(page).toEqual({ stores: [], total: 0, country: null });
+  });
+
+  it('does not fall back to stores.length when total is missing (avoids counting local stores as sellers)', () => {
+    const page = parseExportSellersPage(
+      { success: true, data: { stores: [cmSeller, cmSeller, cmSeller] } },
+      intoCm
+    );
+    expect(page.total).toBe(0);
+    expect(page.stores).toEqual([]);
+  });
+
+  it('accepts origin-country sellers for Into Cameroon', () => {
+    const page = parseExportSellersPage(
+      { success: true, data: { stores: [caSeller], total: 9, country: 'CM' } },
+      intoCm
+    );
+    expect(page.total).toBe(9);
+    expect(page.stores.map((s) => s.country)).toEqual(['CA']);
+  });
+
+  it('rejects an Into payload that includes any destination-country seller', () => {
+    const page = parseExportSellersPage(
+      { success: true, data: { stores: [caSeller, { ...cmSeller, country: 'CM' }], total: 2, country: 'CM' } },
+      intoCm
+    );
+    expect(page).toEqual({ stores: [], total: 0, country: null });
+  });
+
+  it('From keeps only sellers in the origin country', () => {
+    expect(
+      parseExportSellersPage({ success: true, data: { stores: [caSeller], total: 1, country: 'CA' } }, fromCa).stores
+    ).toEqual([caSeller]);
+    expect(
+      parseExportSellersPage(
+        { success: true, data: { stores: [caSeller, { ...cmSeller, country: 'CM' }], total: 2, country: 'CA' } },
+        fromCa
+      )
+    ).toEqual({ stores: [], total: 0, country: null });
   });
 });

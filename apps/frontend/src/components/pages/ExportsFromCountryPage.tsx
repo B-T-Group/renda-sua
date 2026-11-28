@@ -133,11 +133,14 @@ const ExportsFromCountryPage: React.FC = () => {
   const seoDescription = code
     ? t(
         'exportsOrigin.seoDescription',
-        '{{count}} products exported from {{place}} by {{businesses}} businesses to {{markets}}. Browse and send interest, no account needed.',
+        '{{count}} products exported from {{place}} by {{businesses}} to {{markets}}. Browse and send interest, no account needed.',
         {
           count: summary?.item_count ?? items.length,
           place,
-          businesses: businessCount,
+          businesses: t('exportsOrigin.seoBusinesses', {
+            count: businessCount,
+            defaultValue: '{{count}} businesses',
+          }),
           destinations: destinations.length,
           markets: t('exportsOrigin.seoMarkets', {
             count: destinations.length,

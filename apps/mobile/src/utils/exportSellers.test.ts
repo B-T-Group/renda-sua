@@ -3,8 +3,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import en from '../i18n/locales/en.json';
 import fr from '../i18n/locales/fr.json';
 import { exportSellersPath } from '../services/inventoryItemsApi';
-import { exportsSummaryLine } from './exportSellers';
-import { EXPORT_SELLER_TINTS, exportSellerMonogram, exportSellerTint } from './exportSellers';
+import {
+  EXPORT_SELLER_TINTS,
+  exportSellerMonogram,
+  exportSellerTint,
+  exportsSummaryLine,
+  parseExportSellersPage,
+} from './exportSellers';
 
 const i18n = i18next.createInstance();
 beforeAll(async () => {
@@ -74,5 +79,51 @@ describe('seller copy (mobile v3 plurals)', () => {
     const flat = JSON.stringify([(en as never)['exportSellers'], (fr as never)['exportSellers']]);
     expect(flat).not.toMatch(/brand|marque/i);
     expect(Object.keys((en as never)['exportSellers']).filter((k) => /_(one|other)$/.test(k))).toEqual([]);
+  });
+});
+
+const intoCm = { direction: 'into' as const, marketCode: 'CM', originCode: null };
+const fromCa = { direction: 'from' as const, marketCode: 'CM', originCode: 'CA' };
+const caSeller = { business_location_id: 'ca-1', name: 'Rendasua Canada - 1TRACK', country: 'CA', city: 'London', item_count: 2 };
+const cmSeller = { business_location_id: 'cm-1', name: 'Happy store - Yaoundé', city: 'Yaoundé', item_count: 12 };
+
+describe('parseExportSellersPage (carousel, count, and See all share this)', () => {
+  it('rejects the legacy local directory (stores without total) used for market CM', () => {
+    const page = parseExportSellersPage(
+      { success: true, data: { stores: [cmSeller, { name: 'Home cake - Douala', city: 'Douala' }, { name: 'MM Rail - Yaoundé', city: 'Yaoundé' }] } },
+      intoCm
+    );
+    expect(page).toEqual({ stores: [], total: 0, country: null });
+  });
+
+  it('accepts origin-country sellers for Into Cameroon and never includes destination stores', () => {
+    const page = parseExportSellersPage(
+      { success: true, data: { stores: [caSeller], total: 9, country: 'CM' } },
+      intoCm
+    );
+    expect(page.total).toBe(9);
+    expect(page.stores).toEqual([caSeller]);
+    expect(page.stores.every((s) => s.country !== 'CM')).toBe(true);
+  });
+
+  it('rejects an Into payload that includes any destination-country seller', () => {
+    const page = parseExportSellersPage(
+      { success: true, data: { stores: [caSeller, { ...cmSeller, country: 'CM' }], total: 2, country: 'CM' } },
+      intoCm
+    );
+    expect(page).toEqual({ stores: [], total: 0, country: null });
+  });
+
+  it('From keeps only sellers in the origin country', () => {
+    const ok = parseExportSellersPage(
+      { success: true, data: { stores: [caSeller], total: 1, country: 'CA' } },
+      fromCa
+    );
+    expect(ok.stores).toEqual([caSeller]);
+    const leak = parseExportSellersPage(
+      { success: true, data: { stores: [caSeller, { ...cmSeller, country: 'CM' }], total: 2, country: 'CA' } },
+      fromCa
+    );
+    expect(leak).toEqual({ stores: [], total: 0, country: null });
   });
 });
