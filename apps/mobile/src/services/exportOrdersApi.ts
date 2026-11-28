@@ -4,6 +4,7 @@ export interface ExportOrderLine {
   id: string;
   product_name: string;
   quantity: number;
+  business_inventory_id?: string | null;
 }
 
 export interface ExportOrderDocument {

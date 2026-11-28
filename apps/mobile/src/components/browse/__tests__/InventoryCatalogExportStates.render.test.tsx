@@ -17,8 +17,12 @@ jest.mock('../../../theme/motionHooks', () => ({
   usePressScale: () => ({ animatedStyle: {}, onPressIn: jest.fn(), onPressOut: jest.fn() }),
 }));
 let mockMarket = 'CM';
+let mockExistingOrderId: string | null = null;
+jest.mock('../../../hooks/useExportOrderForInventory', () => ({
+  useExportOrderForInventory: () => mockExistingOrderId,
+}));
 jest.mock('../../../stores/RootStore', () => ({
-  useStore: () => ({ market: { hydrated: true, selectedCountryCode: mockMarket } }),
+  useStore: () => ({ auth: { isAuthenticated: false }, market: { hydrated: true, selectedCountryCode: mockMarket } }),
 }));
 
 function exportItem(): CatalogInventoryItem {
@@ -72,6 +76,15 @@ describe('export item card / tile', () => {
     expect(screen.getByText('I’m interested')).toBeTruthy();
     expect(screen.queryByText('Buy')).toBeNull();
     expect(screen.queryByLabelText('Add to cart')).toBeNull();
+  });
+
+  it('destination viewer with an open export order sees View order details instead of I’m interested', async () => {
+    mockMarket = 'CM';
+    mockExistingOrderId = 'order-1';
+    await card();
+    mockExistingOrderId = null;
+    expect(screen.getByText('View order details')).toBeTruthy();
+    expect(screen.queryByText('I’m interested')).toBeNull();
   });
 
   it.each(['CA', 'SN'])('viewer in %s (origin / third market): no interest, no Buy, no cart', async (code) => {

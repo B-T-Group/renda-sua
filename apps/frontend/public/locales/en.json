@@ -9320,6 +9320,105 @@
     }
   },
   "exportOrders": {
+    "nextStep": "What happens next",
+    "progress": {
+      "title": "Progress",
+      "review": "Review",
+      "proforma": "Proforma",
+      "deposit": "Deposit",
+      "production": "Production",
+      "balance": "Balance",
+      "shipping": "Shipping",
+      "delivered": "Delivered"
+    },
+    "docTypes": {
+      "BC": "Purchase order",
+      "PRO": "Proforma invoice",
+      "FAC": "Invoice",
+      "REC": "Receipt"
+    },
+    "next": {
+      "SUBMITTED": {
+        "title": "We're reviewing your request",
+        "body": "Our export team checks the item, quantity and destination. You will hear from us if anything needs to change."
+      },
+      "IN_REVIEW": {
+        "title": "We're reviewing your request",
+        "body": "Our export team checks the item, quantity and destination. You will hear from us if anything needs to change."
+      },
+      "CHANGES_REQUESTED": {
+        "title": "We need a change to your request",
+        "body": "Our export team asked for a change and will be in touch with the details."
+      },
+      "MFR_QUOTE": {
+        "title": "Confirming your price",
+        "body": "We are confirming the quote with the manufacturer. Your proforma follows."
+      },
+      "PROFORMA_ISSUED": {
+        "title": "Your proforma is ready",
+        "body": "Review it and approve to continue, or ask for an adjustment."
+      },
+      "INVOICED": {
+        "title": "Your invoice is issued",
+        "body": "Once your deposit is received, production starts."
+      },
+      "DEPOSIT_REQUIRED": {
+        "title": "Pay your deposit",
+        "body": "Once your deposit is received, production starts."
+      },
+      "DEPOSIT_RECEIVED": {
+        "title": "Deposit received",
+        "body": "Thank you. Your order moves to production next."
+      },
+      "IN_PRODUCTION": {
+        "title": "Your order is being made",
+        "body": "The manufacturer is producing your goods. We will update you when they are ready."
+      },
+      "READY": {
+        "title": "Your goods are ready",
+        "body": "Next comes the balance payment, then shipping."
+      },
+      "BALANCE_REQUIRED": {
+        "title": "Choose how to pay the balance",
+        "body": "Pay in full or pick a financing option. Shipping follows."
+      },
+      "PAID_IN_FULL": {
+        "title": "Balance settled",
+        "body": "Your goods will ship soon."
+      },
+      "FINANCED_30": {
+        "title": "Financing in place",
+        "body": "Your goods will ship soon."
+      },
+      "FINANCED_60": {
+        "title": "Financing in place",
+        "body": "Your goods will ship soon."
+      },
+      "SHIPPED": {
+        "title": "Your goods are on the way",
+        "body": "Confirm delivery once they arrive."
+      },
+      "DELIVERED": {
+        "title": "Delivered",
+        "body": "Your export order is complete."
+      },
+      "CLOSED": {
+        "title": "Order closed",
+        "body": "Your export order is complete."
+      },
+      "REVIEWED": {
+        "title": "Order closed",
+        "body": "Your export order is complete."
+      },
+      "REJECTED": {
+        "title": "This request was declined",
+        "body": "Contact support if you have questions about this order."
+      },
+      "CANCELLED": {
+        "title": "This order was cancelled",
+        "body": "Contact support if you have questions about this order."
+      }
+    },
     "nav": {
       "client": "My export orders",
       "agent": "Export orders",
@@ -9396,6 +9495,7 @@
     }
   },
   "productInterest": {
+    "viewOrder": "View order details",
     "order": {
       "noteHelp": "Your request for {{name}} goes to our export team. We issue a purchase order and prepare a proforma for your approval.",
       "submit": "Send request",

@@ -8354,6 +8354,7 @@
     }
   },
   "productInterest": {
+    "viewOrder": "Voir les détails de la commande",
     "order": {
       "noteHelp": "Votre demande pour {{name}} est transmise à notre équipe export. Nous émettons un bon de commande et préparons une proforma pour votre approbation.",
       "submit": "Envoyer la demande",

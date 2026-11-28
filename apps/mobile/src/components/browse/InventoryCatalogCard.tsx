@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { NavigationContext } from '@react-navigation/native';
+import { memo, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Divider, IconButton, Text } from 'react-native-paper';
@@ -38,6 +39,7 @@ import { LOW_STOCK_THRESHOLD } from '../../constants/stock';
 import { isFoodOrderBlocked, isFoodCatalogItem } from '../../utils/foodAvailability';
 import { formatDistanceKm } from '../../utils/formatDistanceKm';
 import { useExportViewer } from '../../hooks/useExportViewer';
+import { useExportOrderForInventory } from '../../hooks/useExportOrderForInventory';
 import { ExportOnlyBadge } from '../exports/ExportOnlyBadge';
 import { ExportDestinationsLine } from '../exports/ExportViewerNote';
 
@@ -88,6 +90,8 @@ function InventoryCatalogCardInner({
   const exportAvailable = item.item.export_available === true;
   // I’m interested only for a destination-market viewer; origin / third markets get like + share.
   const exportViewer = useExportViewer(item);
+  const navigation = useContext(NavigationContext);
+  const existingExportOrderId = useExportOrderForInventory(item.id, exportViewer.canSendInterest);
   const distanceKm = exportAvailable ? null : formatDistanceKm(item.distance_value);
   const defaultLabel = t('orders.variant.defaultOption', 'Default');
   const variantOptionCount = useMemo(
@@ -634,7 +638,26 @@ function InventoryCatalogCardInner({
         <Divider style={{ marginTop: spacing.sm }} />
 
         <View style={[styles.ctaRow, { marginTop: spacing.xs }]}>
-          {exportAvailable ? (
+          {exportAvailable && existingExportOrderId ? (
+            <Button
+              testID="export-view-order-cta"
+              mode="contained"
+              icon="clipboard-text-outline"
+              onPress={() =>
+                (navigation as { navigate: (name: string, params?: object) => void } | undefined)?.navigate(
+                  'ClientExportOrderDetail',
+                  { orderId: existingExportOrderId }
+                )
+              }
+              buttonColor={colors.primary.main}
+              textColor={colors.primary.contrast}
+              style={{ flex: 1, minWidth: 0 }}
+              contentStyle={styles.ctaContent}
+              labelStyle={styles.ctaLabel}
+            >
+              {t('productInterest.viewOrder', 'View order details')}
+            </Button>
+          ) : exportAvailable ? (
             <Button
               testID="export-interest-cta"
               mode="contained"

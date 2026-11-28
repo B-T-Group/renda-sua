@@ -206,6 +206,12 @@ export const LIST_EXPORT_ORDERS = `
       updated_at
       client_user { id first_name last_name email }
       business { id name }
+      lines(order_by: { sort_order: asc }) {
+        id
+        product_name
+        quantity
+        business_inventory_id
+      }
     }
   }
 `;

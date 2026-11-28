@@ -8418,6 +8418,7 @@
     }
   },
   "productInterest": {
+    "viewOrder": "View order details",
     "order": {
       "noteHelp": "Your request for {{name}} goes to our export team. We issue a purchase order and prepare a proforma for your approval.",
       "submit": "Send request",
