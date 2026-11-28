@@ -170,12 +170,12 @@ export function ExportsDirectionSwitch({
           </View>
           {origin && activeOrigin ? (
             <Text testID="exports-summary-line" style={[typography.caption, { color: colors.text.secondary }]}>
-              {typeof sellerTotal === 'number'
-                ? exportsSummaryLine(t, count, sellerTotal, destinationCount)
-                : t('exportsOrigin.summary', '{{count}} products · ships to {{markets}} markets', {
-                    count,
-                    markets: destinationCount,
-                  })}
+              {exportsSummaryLine(
+                t,
+                count,
+                typeof sellerTotal === 'number' ? sellerTotal : null,
+                destinationCount
+              )}
             </Text>
           ) : null}
         </View>

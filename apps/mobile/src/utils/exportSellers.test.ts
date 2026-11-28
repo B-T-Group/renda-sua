@@ -62,6 +62,14 @@ describe('seller copy (mobile v3 plurals)', () => {
     expect(exportsSummaryLine(tr('fr'), 1, 1)).toBe('1 produit · 1 vendeur');
   });
 
+  it('pluralizes markets: never "1 markets" (also while sellers load)', () => {
+    expect(exportsSummaryLine(tr('en'), 3, 2, 1)).toBe('3 products · 2 sellers · ships to 1 market');
+    expect(exportsSummaryLine(tr('fr'), 3, 2, 1)).toBe('3 produits · 2 vendeurs · expédiés vers 1 marché');
+    expect(exportsSummaryLine(tr('en'), 1, null, 1)).toBe('1 product · ships to 1 market');
+    expect(exportsSummaryLine(tr('fr'), 1, null, 1)).toBe('1 produit · expédié vers 1 marché');
+    expect(exportsSummaryLine(tr('en'), 71, null, 7)).toBe('71 products · ships to 7 markets');
+  });
+
   it('uses Sellers / Vendeurs, never Brands / Marques', () => {
     const flat = JSON.stringify([(en as never)['exportSellers'], (fr as never)['exportSellers']]);
     expect(flat).not.toMatch(/brand|marque/i);

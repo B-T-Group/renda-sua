@@ -30,13 +30,14 @@ type TFn = (key: string, fallback: string, opts?: Record<string, unknown>) => st
 export function exportsSummaryLine(
   t: TFn,
   products: number,
-  sellers: number,
+  sellers: number | null,
   markets?: number
 ): string {
-  const parts = [
-    t('exportSellers.productsCount', '{{count}} products', { count: products }),
-    t('exportSellers.sellersCount', '{{count}} sellers', { count: sellers }),
-  ];
+  const parts = [t('exportSellers.productsCount', '{{count}} products', { count: products })];
+  // Sellers still loading: products and markets only (never an unpluralized "1 markets").
+  if (typeof sellers === 'number') {
+    parts.push(t('exportSellers.sellersCount', '{{count}} sellers', { count: sellers }));
+  }
   if (typeof markets === 'number') {
     parts.push(
       products === 1

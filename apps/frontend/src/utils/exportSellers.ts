@@ -83,11 +83,11 @@ type TFn = (key: string, opts: Record<string, unknown>) => string;
  * One-line counts: "71 products · 12 sellers · ships to 7 markets" (From) or
  * "71 products · 12 sellers" (Into). Web i18next v4 plurals (_one / _other).
  */
-export function exportsSummaryLine(t: TFn, products: number, sellers: number, markets?: number): string {
-  const parts = [
-    t('exportSellers.productsCount', { count: products, defaultValue: '{{count}} products' }),
-    t('exportSellers.sellersCount', { count: sellers, defaultValue: '{{count}} sellers' }),
-  ];
+export function exportsSummaryLine(t: TFn, products: number, sellers: number | null, markets?: number): string {
+  const parts = [t('exportSellers.productsCount', { count: products, defaultValue: '{{count}} products' })];
+  if (typeof sellers === 'number') {
+    parts.push(t('exportSellers.sellersCount', { count: sellers, defaultValue: '{{count}} sellers' }));
+  }
   if (typeof markets === 'number') {
     parts.push(
       t(products === 1 ? 'exportSellers.shipsToOneProduct' : 'exportSellers.shipsTo', {
