@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { haptics } from '@/services/haptics';
 import { motion } from '@/theme/motion';
 import { AppText } from '../common/AppText';
+import { LANE_ICONS } from './homeLaneIcons';
 
 export type HomeLane = 'rentals' | 'exports' | 'shop' | 'food';
 
@@ -17,13 +18,6 @@ type Props = {
 
 /** Fixed order shown in every market: Rentals, Exports, Shop, Food. */
 export const HOME_LANES: HomeLane[] = ['rentals', 'exports', 'shop', 'food'];
-
-const LANE_ICONS: Record<HomeLane, keyof typeof MaterialCommunityIcons.glyphMap> = {
-  rentals: 'hand-coin',
-  exports: 'airplane',
-  shop: 'shopping',
-  food: 'food',
-};
 
 export function HomeLaneSwitcher({ value, onChange }: Props) {
   const { t } = useTranslation();

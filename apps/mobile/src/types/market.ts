@@ -10,8 +10,12 @@ export type MarketSelectionMode = 'AUTO' | 'MANUAL';
 export interface MarketState {
   /** Raw state value as stored in addresses.state on the backend. */
   state: string;
-  /** Number of active inventory items in this state. */
+  /** Number of active inventory items in this state (rentals for the rentals catalog). */
   itemCount: number;
+  /** Shop count for this state; only set when loaded with catalog=all. */
+  inventoryCount?: number;
+  /** Rentals count for this state; only set when loaded with catalog=all. */
+  rentalCount?: number;
 }
 
 /**

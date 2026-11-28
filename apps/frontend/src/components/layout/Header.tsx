@@ -62,9 +62,9 @@ import { MarketSelector } from '../market/MarketSelector';
 import { HeaderSearchPopover } from './HeaderSearchPopover';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
-import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
+import type { MarketStatesCatalog } from '../../types/market';
 import { brandTokens } from '../../theme/brandTokens';
-import { BROWSE_LANES } from '../../utils/browseMarketLanes';
+import { activeBrowseLane, BROWSE_LANES } from '../../utils/browseMarketLanes';
 import {
   SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION,
   SITE_EVENT_ASSISTANT_LAUNCHER_TAP,
@@ -178,6 +178,7 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
   const authMobileBreakpoint = theme.breakpoints.down('md');
   const isMobile = useMediaQuery(isAuthenticated ? authMobileBreakpoint : guestMobileBreakpoint);
   const marketCatalogContext = catalogContextFromPath(location.pathname);
+  const marketLane = activeBrowseLane(location.pathname, marketCatalogContext);
 
   const personaHeader = useMemo(() => {
     if (isAuthenticated && isDelegationContext) {
@@ -660,6 +661,7 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
         <ListItem>
           <MarketSelector
             catalogContext={marketCatalogContext}
+            lane={marketLane}
             onSelected={handleDrawerToggle}
           />
         </ListItem>
@@ -874,6 +876,7 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
 
               <MarketSelector
                 catalogContext={marketCatalogContext}
+                lane={marketLane}
                 inverted
                 compact={isMobile}
               />

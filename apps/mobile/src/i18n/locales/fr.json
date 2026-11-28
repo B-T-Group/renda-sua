@@ -6011,9 +6011,17 @@
     },
     "picker": {
       "title": "Choisir un marché",
-      "allStates": "Tout {{name}}",
+      "allStates": "Tout le pays",
       "rentalsCount": "{{count}} locations",
-      "itemsCount": "{{count}} articles"
+      "itemsCount": "{{count}} articles",
+      "a11y": {
+        "rentals": "{{formatted}} location",
+        "rentals_plural": "{{formatted}} locations",
+        "exports": "{{formatted}} export",
+        "exports_plural": "{{formatted}} exports",
+        "items": "{{formatted}} article",
+        "items_plural": "{{formatted}} articles"
+      }
     },
     "switchBanner": {
       "title": "Vous semblez être en {{flag}} {{name}}",

@@ -6,6 +6,7 @@ import {
   activePersonaHeaderForUser,
 } from '../utils/activePersonaStorage';
 import { decodeHasuraUserIdFromAccessToken } from '../utils/jwtHasura';
+import { MARKET_EXPORTS_COUNT_URL_PREFIX } from '../utils/marketCountsRequests';
 import { useLoading } from '../contexts/LoadingContext';
 import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useTokenRefresh } from '../contexts/TokenRefreshContext';
@@ -68,6 +69,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/auth/phone-availability',
     '/pdf/shipping-labels',
     '/locations/',
+    MARKET_EXPORTS_COUNT_URL_PREFIX,
     '/notifications/',
     '/assistant/chat',
     '/item-likes',

@@ -12,9 +12,16 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useMarketStates } from '../../hooks/useMarketStates';
+import { useMarketPickerCounts } from '../../hooks/useMarketPickerCounts';
 import type { MarketStatesCatalog } from '../../services/marketStatesApi';
 import type { Market } from '../../types/market';
+import { formatMarketCount } from '../../utils/formatMarketCount';
+import { LANE_ICONS } from '../client/homeLaneIcons';
+import { SkeletonBone } from '../common/SkeletonBone';
+import { MarketCountsStrip, type MarketCountLane } from './MarketCountsStrip';
+
+/** Lane the user is browsing; drives the highlighted strip cell and the state-row count. */
+export type MarketPickerLane = 'rentals' | 'exports' | 'shop' | 'food';
 
 export interface MarketPickerSheetProps {
   visible: boolean;
@@ -25,8 +32,10 @@ export interface MarketPickerSheetProps {
   detectedCountryCode?: string | null;
   /** State detected by GPS/locale, if known. */
   detectedStateCode?: string | null;
-  /** Which catalog counts to show in state rows. */
+  /** Which catalog counts to show in state rows. Used to derive `lane` when it is not passed. */
   catalogContext?: MarketStatesCatalog;
+  /** Browse lane the user is in. Defaults to rentals for the rentals catalog, else shop. */
+  lane?: MarketPickerLane;
   onSelect: (countryCode: string, stateCode: string | null) => void;
   onDismiss: () => void;
 }
@@ -45,10 +54,11 @@ export function MarketPickerSheet({
   detectedCountryCode,
   detectedStateCode,
   catalogContext = 'inventory',
+  lane,
   onSelect,
   onDismiss,
 }: MarketPickerSheetProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
@@ -58,11 +68,22 @@ export function MarketPickerSheet({
     () => selectedCode ?? null
   );
 
-  const { states, totalItemCount, loading: statesLoading } = useMarketStates(
+  // One load per opened country: shop + rentals from market-states (catalog=all) and the
+  // exports-into-market total. Switching lanes while open only changes the highlight.
+  const { counts, totals, states, loading: countsLoading, statesFailed } = useMarketPickerCounts(
     expandedCountry,
-    visible,
-    catalogContext
+    visible
   );
+
+  const activeLane: MarketPickerLane =
+    lane ?? (catalogContext === 'rentals' ? 'rentals' : 'shop');
+  // Food has no count of its own: no cell is highlighted.
+  const highlightedLane: MarketCountLane | null = activeLane === 'food' ? null : activeLane;
+  // State rows show one number: rentals in the Rentals lane, shop items everywhere else.
+  const rowCountKind: 'rentals' | 'shop' = activeLane === 'rentals' ? 'rentals' : 'shop';
+  const rowCountTone = activeLane === 'rentals' || activeLane === 'shop' ? 'lane' : 'neutral';
+  const rowCount = (inventoryCount?: number, rentalCount?: number): number =>
+    (rowCountKind === 'rentals' ? rentalCount : inventoryCount) ?? 0;
 
   // Whether the detected location differs from the current selection.
   const detectedDiffers =
@@ -312,58 +333,68 @@ export function MarketPickerSheet({
                           },
                         ]}
                       >
-                        {statesLoading ? (
-                          <ActivityIndicator
-                            size="small"
-                            color={colors.primary.main}
-                            style={{ marginVertical: spacing.sm }}
+                        {/* Counts strip: hidden when a count call failed (row looks like today). */}
+                        {(countsLoading || counts) && (
+                          <MarketCountsStrip
+                            counts={counts}
+                            loading={countsLoading}
+                            activeLane={highlightedLane}
                           />
-                        ) : (
-                          <>
-                            {/* "All of X" row */}
+                        )}
+                        {/* "All of X" is always tappable, even while counts load. */}
+                        <StateRow
+                          label={t('market.picker.allStates', 'All of {{name}}', {
+                            name: market.name,
+                          })}
+                          count={
+                            totals
+                              ? formatMarketCount(
+                                  rowCountKind === 'rentals' ? totals.rentals : totals.shop,
+                                  i18n.language
+                                )
+                              : null
+                          }
+                          loading={countsLoading}
+                          countIcon={LANE_ICONS[rowCountKind]}
+                          countTone={rowCountTone}
+                          isSelected={
+                            market.countryCode === selectedCode &&
+                            selectedStateCode === null
+                          }
+                          isDetected={
+                            isDetectedCountry &&
+                            (detectedStateCode == null || detectedStateCode === '')
+                          }
+                          onPress={() => handleSelect(market.countryCode, null)}
+                          colors={colors}
+                          spacing={spacing}
+                          borderRadius={borderRadius}
+                        />
+                        {!statesFailed &&
+                          states.map((s) => (
                             <StateRow
-                              label={t('market.picker.allStates', 'All of {{name}}', {
-                                name: market.name,
-                              })}
-                              itemCount={totalItemCount}
+                              key={s.state}
+                              label={s.state}
+                              count={formatMarketCount(
+                                rowCount(s.inventoryCount, s.rentalCount),
+                                i18n.language
+                              )}
+                              loading={false}
+                              countIcon={LANE_ICONS[rowCountKind]}
+                              countTone={rowCountTone}
                               isSelected={
                                 market.countryCode === selectedCode &&
-                                selectedStateCode === null
+                                selectedStateCode === s.state
                               }
                               isDetected={
-                                isDetectedCountry &&
-                                (detectedStateCode == null || detectedStateCode === '')
+                                isDetectedCountry && detectedStateCode === s.state
                               }
-                              onPress={() =>
-                                handleSelect(market.countryCode, null)
-                              }
+                              onPress={() => handleSelect(market.countryCode, s.state)}
                               colors={colors}
                               spacing={spacing}
                               borderRadius={borderRadius}
                             />
-                            {states.map((s) => (
-                              <StateRow
-                                key={s.state}
-                                label={s.state}
-                                itemCount={s.itemCount}
-                                isSelected={
-                                  market.countryCode === selectedCode &&
-                                  selectedStateCode === s.state
-                                }
-                                isDetected={
-                                  isDetectedCountry &&
-                                  detectedStateCode === s.state
-                                }
-                                onPress={() =>
-                                  handleSelect(market.countryCode, s.state)
-                                }
-                                colors={colors}
-                                spacing={spacing}
-                                borderRadius={borderRadius}
-                              />
-                            ))}
-                          </>
-                        )}
+                          ))}
                       </View>
                     )}
                   </View>
@@ -379,7 +410,10 @@ export function MarketPickerSheet({
 
 function StateRow({
   label,
-  itemCount,
+  count,
+  loading,
+  countIcon,
+  countTone,
   isSelected,
   isDetected,
   onPress,
@@ -388,7 +422,13 @@ function StateRow({
   borderRadius,
 }: {
   label: string;
-  itemCount: number;
+  /** Pre-formatted number; null renders no count (loading or failed). */
+  count: string | null;
+  loading: boolean;
+  /** Lane glyph shown before the number. */
+  countIcon: keyof typeof MaterialCommunityIcons.glyphMap;
+  /** `lane` = brand blue (Rentals/Shop lane), `neutral` = secondary text (Exports/Food lane). */
+  countTone: 'lane' | 'neutral';
   isSelected: boolean;
   isDetected: boolean;
   onPress: () => void;
@@ -432,9 +472,26 @@ function StateRow({
           />
         )}
       </View>
-      <Text variant="labelSmall" style={{ color: colors.text.secondary }}>
-        {itemCount}
-      </Text>
+      {loading ? (
+        <SkeletonBone height={12} width={28} borderRadius={4} />
+      ) : count !== null ? (
+        <View style={styles.countWrap}>
+          <MaterialCommunityIcons
+            name={countIcon}
+            size={13}
+            color={countTone === 'lane' ? colors.primary.main : colors.text.secondary}
+          />
+          <Text
+            variant="labelSmall"
+            style={{
+              color: countTone === 'lane' ? colors.primary.main : colors.text.secondary,
+              fontWeight: countTone === 'lane' ? '700' : '400',
+            }}
+          >
+            {count}
+          </Text>
+        </View>
+      ) : null}
       {isSelected ? (
         <MaterialCommunityIcons
           name="check"
@@ -466,5 +523,6 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   gpsBadge: { flexDirection: 'row', alignItems: 'center', borderWidth: 1 },
   rowRight: { flexDirection: 'row', alignItems: 'center' },
+  countWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   stateSection: { borderLeftWidth: 2, paddingLeft: 8 },
 });
