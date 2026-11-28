@@ -120,12 +120,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     alignSelf: 'flex-start',
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '100%',
   },
-  flag: { fontSize: 16 },
+  flag: { fontSize: 16, flexShrink: 0 },
   dot: {
     width: 7,
     height: 7,
     borderRadius: 4,
   },
-  chevronWrap: { alignItems: 'center', justifyContent: 'center', marginLeft: 2 },
+  chevronWrap: { alignItems: 'center', justifyContent: 'center', marginLeft: 2, flexShrink: 0 },
 });

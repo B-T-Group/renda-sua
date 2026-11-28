@@ -206,7 +206,7 @@ const ExportsPage: React.FC = () => {
           </Box>
           {!loading && productTotal > 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} data-testid="exports-into-summary">
-              {exportsSummaryLine(t, productTotal, sellerRows.loading ? 0 : sellerRows.total)}
+              {exportsSummaryLine(t, productTotal, sellerRows.loading ? null : sellerRows.total)}
             </Typography>
           ) : null}
         </Box>

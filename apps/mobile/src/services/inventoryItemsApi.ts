@@ -10,9 +10,11 @@ import type {
 import type {
   CatalogStoreEnvelope,
   CatalogStoresEnvelope,
+  ExportSeller,
   ExportSellersEnvelope,
   ExportSellersPage,
 } from '../types/stores';
+import { parseExportSellersPage } from '../utils/exportSellers';
 import { FOOD_CATEGORY_NAME } from '../utils/foodAvailability';
 import { apiRequest } from './apiClient';
 import { publicApiGet } from './publicApiClient';
@@ -442,10 +444,5 @@ export async function fetchExportSellers(
   init?: { signal?: AbortSignal }
 ): Promise<ExportSellersPage> {
   const envelope = await publicApiGet<ExportSellersEnvelope>(exportSellersPath(q), undefined, init);
-  const data = envelope?.success ? envelope.data : undefined;
-  return {
-    stores: Array.isArray(data?.stores) ? data!.stores : [],
-    total: typeof data?.total === 'number' ? data.total : 0,
-    country: data?.country ?? null,
-  };
+  return parseExportSellersPage<ExportSeller>(envelope, q);
 }

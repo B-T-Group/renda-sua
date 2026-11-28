@@ -181,6 +181,7 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
               buttonColor={activeFilterCount > 0 ? colors.primary.main : undefined}
               textColor={activeFilterCount > 0 ? colors.primary.contrast : undefined}
               contentStyle={styles.filterBtnContent}
+              labelStyle={styles.filterBtnLabel}
             >
               {activeFilterCount > 0
                 ? `${t('public.items.filters.heading', 'Filters')} (${activeFilterCount})`
@@ -275,6 +276,13 @@ const styles = StyleSheet.create({
   },
   filterBtnContent: {
     height: 36,
+    alignItems: 'center',
+  },
+  filterBtnLabel: {
+    marginVertical: 0,
+    lineHeight: 20,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   sortChip: {
     alignSelf: 'center',

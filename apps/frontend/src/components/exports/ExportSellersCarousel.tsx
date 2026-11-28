@@ -63,7 +63,7 @@ export const ExportSellersCarousel: React.FC<ExportSellersCarouselProps> = ({
       </Box>
     );
   }
-  if (shown.length === 0) return null;
+  if (shown.length === 0 || total === 0) return null;
   const hasMore = total > EXPORT_SELLERS_CAROUSEL_MAX;
 
   return (
@@ -77,7 +77,7 @@ export const ExportSellersCarousel: React.FC<ExportSellersCarouselProps> = ({
             to={listHref}
             onClick={() => onMoreClick?.('header')}
             data-testid="export-sellers-see-all"
-            startIcon={<ChevronRight />}
+            endIcon={<ChevronRight />}
             size="small"
             sx={{ fontWeight: 700, textTransform: 'none', color: EXPORT_BRAND_BLUE }}
           >

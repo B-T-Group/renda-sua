@@ -252,6 +252,7 @@ function ClientBrowseHomeScreenBase() {
     <HomeLaneHeader
       value={lane}
       onChange={onLaneChange}
+      besideMarket={notificationBell}
       trailing={
         hideAssistantHeaderButton ? undefined : (
           <AssistantIconButton
@@ -330,12 +331,11 @@ function ClientBrowseHomeScreenBase() {
         onOpenExportSellers={onOpenExportSellers}
         onOpenExportSeller={onOpenExportSeller}
         headerTrailing={
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }} testID="catalog-search-trailing">
             {isClientAuthenticated ? (
               <CatalogLaneShortcut lane={lane} onPress={onOpenLaneOrders} />
             ) : null}
             <HomeCartButton />
-            {notificationBell}
           </View>
         }
         discoveryExtra={({ foodOnly: foodSurface, exportOnly: exportSurface }) => (

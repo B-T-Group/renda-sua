@@ -179,9 +179,9 @@ export function ExportsDirectionSwitch({
             </Text>
           ) : null}
         </View>
-      ) : typeof total === 'number' && typeof sellerTotal === 'number' && total > 0 ? (
+      ) : typeof total === 'number' && total > 0 ? (
         <Text testID="exports-summary-line" style={[typography.caption, { color: colors.text.secondary }]}>
-          {exportsSummaryLine(t, total, sellerTotal)}
+          {exportsSummaryLine(t, total, typeof sellerTotal === 'number' ? sellerTotal : null)}
         </Text>
       ) : null}
 
