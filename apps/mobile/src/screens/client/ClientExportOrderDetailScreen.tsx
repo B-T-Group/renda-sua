@@ -1,11 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
 import { ActivityIndicator, Button, Text, TextInput } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useExportOrders } from '../../hooks/useExportOrders';
-import { ExportOrderStatusBadge } from '../../components/exportOrders/ExportOrderStatusBadge';
+import { ExportOrderProgress } from '../../components/exportOrders/ExportOrderProgress';
+import { ExportOrderNextStepCard } from '../../components/exportOrders/ExportOrderNextStepCard';
+import {
+  ExportOrderDocumentsCard,
+  ExportOrderHero,
+  ExportOrderItemsCard,
+} from '../../components/exportOrders/ExportOrderSummaryCards';
 import type { ExportOrderDetail } from '../../services/exportOrdersApi';
 import type { ClientRootStackParamList } from '../../navigation/types';
 
@@ -112,27 +118,18 @@ export default function ClientExportOrderDetailScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}>
-      <View style={{ gap: spacing.xs }}>
-        <Text variant="headlineSmall">{order.bc_number}</Text>
-        <ExportOrderStatusBadge status={order.status} />
-        <Text style={{ color: colors.text.secondary }}>
-          {t('exportOrders.detailHint', 'Documents and next actions for this export.')}
-        </Text>
-      </View>
-      {(order.lines ?? []).map((line) => (
-        <Text key={line.id}>{`${line.quantity} × ${line.product_name}`}</Text>
-      ))}
-      {(order.documents ?? []).length > 0 ? (
-        <View>
-          <Text variant="titleSmall">{t('exportOrders.documents', 'Documents')}</Text>
-          {(order.documents ?? []).map((d) => (
-            <Text key={d.id} variant="bodySmall">{`${d.doc_type} · ${d.document_number}`}</Text>
-          ))}
-        </View>
-      ) : null}
+    <ScrollView
+      contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}
+      refreshControl={<RefreshControl refreshing={busy} onRefresh={() => void load()} />}
+    >
+      <ExportOrderHero order={order} />
       {error ? <Text style={{ color: colors.error.main }}>{error}</Text> : null}
-      <OrderActions order={order} busy={busy} run={run} />
+      <ExportOrderNextStepCard status={order.status}>
+        <OrderActions order={order} busy={busy} run={run} />
+      </ExportOrderNextStepCard>
+      <ExportOrderItemsCard lines={order.lines ?? []} />
+      <ExportOrderProgress status={order.status} />
+      <ExportOrderDocumentsCard documents={order.documents ?? []} />
     </ScrollView>
   );
 }

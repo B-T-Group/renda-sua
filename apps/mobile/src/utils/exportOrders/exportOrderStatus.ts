@@ -44,6 +44,10 @@ const ACTION_NEEDED = new Set([
 const DONE = new Set(['DELIVERED', 'CLOSED', 'REVIEWED', 'PAID_IN_FULL']);
 const STOPPED = new Set(['REJECTED', 'CANCELLED']);
 
+export function exportOrderNeedsAction(status: string): boolean {
+  return ACTION_NEEDED.has(status);
+}
+
 export function exportOrderStatusLabel(t: Translate, status: string): string {
   return t(
     `exportOrders.status.${status}`,

@@ -8204,6 +8204,106 @@
     "actionError": "Cette action n’a pas abouti. Réessayez.",
     "orderNumber": "Commande {{bc}}",
     "open": "Ouvrir",
+    "purchaseOrder": "Bon de commande",
+    "moreItems": "+{{count}} autres",
+    "progress": {
+      "title": "Progression",
+      "review": "Examen",
+      "proforma": "Proforma",
+      "deposit": "Acompte",
+      "production": "Production",
+      "balance": "Solde",
+      "shipping": "Expédition",
+      "delivered": "Livré"
+    },
+    "docTypes": {
+      "BC": "Bon de commande",
+      "PRO": "Facture proforma",
+      "FAC": "Facture",
+      "REC": "Reçu"
+    },
+    "next": {
+      "SUBMITTED": {
+        "title": "Nous examinons votre demande",
+        "body": "Notre équipe export vérifie l’article, la quantité et la destination. Nous vous contacterons si un changement est nécessaire."
+      },
+      "CHANGES_REQUESTED": {
+        "title": "Nous avons besoin d’une modification",
+        "body": "Notre équipe export a demandé une modification et vous contactera avec les détails."
+      },
+      "MFR_QUOTE": {
+        "title": "Confirmation de votre prix",
+        "body": "Nous confirmons le devis avec le fabricant. Votre proforma suivra."
+      },
+      "PROFORMA_ISSUED": {
+        "title": "Votre proforma est prête",
+        "body": "Consultez-la et approuvez pour continuer, ou demandez un ajustement."
+      },
+      "INVOICED": {
+        "title": "Votre facture est émise",
+        "body": "Dès réception de votre acompte, la production démarre."
+      },
+      "DEPOSIT_REQUIRED": {
+        "title": "Payez votre acompte",
+        "body": "Dès réception de votre acompte, la production démarre."
+      },
+      "DEPOSIT_RECEIVED": {
+        "title": "Acompte reçu",
+        "body": "Merci. Votre commande passe ensuite en production."
+      },
+      "IN_PRODUCTION": {
+        "title": "Votre commande est en fabrication",
+        "body": "Le fabricant produit vos marchandises. Nous vous informerons dès qu’elles sont prêtes."
+      },
+      "READY": {
+        "title": "Vos marchandises sont prêtes",
+        "body": "Vient ensuite le paiement du solde, puis l’expédition."
+      },
+      "BALANCE_REQUIRED": {
+        "title": "Choisissez comment payer le solde",
+        "body": "Payez en totalité ou choisissez un financement. L’expédition suit."
+      },
+      "PAID_IN_FULL": {
+        "title": "Solde réglé",
+        "body": "Vos marchandises seront bientôt expédiées."
+      },
+      "FINANCED_30": {
+        "title": "Financement en place",
+        "body": "Vos marchandises seront bientôt expédiées."
+      },
+      "FINANCED_60": {
+        "title": "Financement en place",
+        "body": "Vos marchandises seront bientôt expédiées."
+      },
+      "SHIPPED": {
+        "title": "Vos marchandises sont en route",
+        "body": "Confirmez la livraison à leur arrivée."
+      },
+      "DELIVERED": {
+        "title": "Livré",
+        "body": "Votre commande d’exportation est terminée."
+      },
+      "CLOSED": {
+        "title": "Commande clôturée",
+        "body": "Votre commande d’exportation est terminée."
+      },
+      "REJECTED": {
+        "title": "Cette demande a été refusée",
+        "body": "Contactez le support si vous avez des questions sur cette commande."
+      },
+      "CANCELLED": {
+        "title": "Cette commande a été annulée",
+        "body": "Contactez le support si vous avez des questions sur cette commande."
+      },
+      "IN_REVIEW": {
+        "title": "Nous examinons votre demande",
+        "body": "Notre équipe export vérifie l’article, la quantité et la destination. Nous vous contacterons si un changement est nécessaire."
+      },
+      "REVIEWED": {
+        "title": "Commande clôturée",
+        "body": "Votre commande d’exportation est terminée."
+      }
+    },
     "status": {
       "SUBMITTED": "Envoyée",
       "IN_REVIEW": "En cours d’examen",

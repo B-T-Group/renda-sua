@@ -93,4 +93,20 @@ describe('ClientExportOrderDetailScreen', () => {
     expect(await screen.findByText('Under review')).toBeTruthy();
     expect(screen.queryByTestId('export-approve')).toBeNull();
   });
+
+  it('shows next step guidance, progress and documents', async () => {
+    mockParams = { orderId: 'o3' };
+    mockGetOne.mockResolvedValue({
+      id: 'o3',
+      bc_number: 'BC-0044',
+      status: 'PROFORMA_ISSUED',
+      lines: [],
+      documents: [{ id: 'd1', doc_type: 'PRO', document_number: 'PRO-0044' }],
+    });
+    await render(<ClientExportOrderDetailScreen />);
+    expect(await screen.findByText('Your proforma is ready')).toBeTruthy();
+    expect(screen.getByTestId('export-progress-proforma')).toBeTruthy();
+    expect(screen.getByText('Proforma invoice')).toBeTruthy();
+    expect(screen.getByText('PRO-0044')).toBeTruthy();
+  });
 });
