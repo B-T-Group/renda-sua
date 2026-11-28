@@ -24,6 +24,7 @@ import ConfirmationModal from '../common/ConfirmationModal';
 import LoadingPage from '../common/LoadingPage';
 import { RentalBookConfirmSummary } from '../rentals/RentalBookConfirmSummary';
 import { ReserveSummaryPanel } from '../rentals/ReserveSummaryPanel';
+import { ReserveStickyFooter } from '../rentals/ReserveStickyFooter';
 import { buildReserveSummary } from '../../utils/rentals/reserveSummary';
 import { isReservedWithNothingDue } from '../../utils/rentals/reserveSuccess';
 import {
@@ -490,6 +491,7 @@ const ClientRentalRequestsPage: React.FC = () => {
               )
             : t('rentals.clientRequests.bookConfirmButtonReserve', 'Reserve now')
         }
+        actionsSummary={bookSummary ? <ReserveStickyFooter summary={bookSummary} /> : undefined}
         cancelText={t('common.cancel', 'Cancel')}
         confirmColor="primary"
         loading={Boolean(bookingId && bookingId === bookConfirmRequestId)}

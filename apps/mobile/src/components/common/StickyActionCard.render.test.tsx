@@ -1,3 +1,4 @@
+import { Text } from 'react-native';
 import { fireEvent, screen } from '@testing-library/react-native';
 import { renderWithProviders } from '@/__tests__/test-utils';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -12,6 +13,14 @@ function renderCard(props: Partial<StickyActionCardProps> = {}) {
 }
 
 describe('StickyActionCard', () => {
+  it('shows custom summary rows and a secondary text action under the primary one', async () => {
+    const onSecondary = jest.fn();
+    await renderCard({ secondaryLabel: 'Cancel', onSecondary, secondaryTestID: 'sticky-secondary', children: <Text>Pay today</Text> });
+    expect(screen.getByText('Pay today')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('sticky-secondary'));
+    expect(onSecondary).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the summary, note and primary action', async () => {
     await renderCard({ summaryLabel: 'Total', summaryValue: '$59.00', note: 'Nothing is charged yet.' });
     expect(screen.getByText('Total')).toBeTruthy();

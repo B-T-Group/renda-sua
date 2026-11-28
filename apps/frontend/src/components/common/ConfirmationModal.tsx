@@ -31,6 +31,8 @@ interface ConfirmationModalProps {
   onConfirm: () => void;
   onCancel: () => void;
   additionalContent?: React.ReactNode;
+  /** Pinned between the scrolling content and the buttons (price summary, key rules). */
+  actionsSummary?: React.ReactNode;
   /** Wider dialog when showing structured details (e.g. booking summary). */
   maxWidth?: false | Breakpoint;
   /** Take over the whole screen on phones (long summaries). */
@@ -48,6 +50,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   onConfirm,
   onCancel,
   additionalContent,
+  actionsSummary,
   maxWidth = 'sm',
   fullScreenOnMobile = false,
 }) => {
@@ -76,6 +79,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           </DialogContentText>
         ) : null}
       </DialogContent>
+      {actionsSummary ? (
+        <Box sx={{ px: 3, pt: 1.5, pb: 0.5, borderTop: 1, borderColor: 'divider' }}>{actionsSummary}</Box>
+      ) : null}
       <DialogActions>
         <Button type="button" onClick={onCancel} disabled={loading} color="inherit">
           {cancelText || t('common.no')}
