@@ -35,7 +35,8 @@ export function exportsSummaryLine(
 ): string {
   const parts = [t('exportSellers.productsCount', '{{count}} products', { count: products })];
   // Sellers still loading: products and markets only (never an unpluralized "1 markets").
-  if (typeof sellers === 'number') {
+  // 0 (rejected or empty directory) must not read as "0 sellers".
+  if (typeof sellers === 'number' && sellers > 0) {
     parts.push(t('exportSellers.sellersCount', '{{count}} sellers', { count: sellers }));
   }
   if (typeof markets === 'number') {

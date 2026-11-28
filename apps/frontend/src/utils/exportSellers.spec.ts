@@ -61,6 +61,9 @@ describe('exportSellers utils', () => {
     expect(exportsSummaryLine(tEn as never, 3, 2, 1)).toBe('3 products · 2 sellers · ships to 1 market');
     expect(exportsSummaryLine(tFr as never, 3, 2, 1)).toBe('3 produits · 2 vendeurs · expédiés vers 1 marché');
     expect(exportsSummaryLine(tEn as never, 1, null, 1)).toBe('1 product · ships to 1 market');
+    expect(exportsSummaryLine(tEn as never, 71, 0)).toBe('71 products');
+    expect(exportsSummaryLine(tFr as never, 71, 0)).toBe('71 produits');
+    expect(exportsSummaryLine(tEn as never, 71, 0)).not.toMatch(/0 sellers/);
     const blob = JSON.stringify([en.exportSellers, fr.exportSellers]).toLowerCase();
     expect(blob).not.toMatch(/brand|marque/);
     // FR typography: curly apostrophe and NBSP before ":".

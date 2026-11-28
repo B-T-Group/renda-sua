@@ -85,7 +85,8 @@ type TFn = (key: string, opts: Record<string, unknown>) => string;
  */
 export function exportsSummaryLine(t: TFn, products: number, sellers: number | null, markets?: number): string {
   const parts = [t('exportSellers.productsCount', { count: products, defaultValue: '{{count}} products' })];
-  if (typeof sellers === 'number') {
+  // 0 (rejected or empty directory) must not read as "0 sellers".
+  if (typeof sellers === 'number' && sellers > 0) {
     parts.push(t('exportSellers.sellersCount', { count: sellers, defaultValue: '{{count}} sellers' }));
   }
   if (typeof markets === 'number') {

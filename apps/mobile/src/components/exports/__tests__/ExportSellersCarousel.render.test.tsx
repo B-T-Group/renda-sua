@@ -138,4 +138,23 @@ describe('ExportsDirectionSwitch one-line counts with sellers', () => {
     );
     expect(screen.getByText('1 product · 1 seller')).toBeTruthy();
   });
+
+  it('Into with a rejected seller total omits "0 sellers"', async () => {
+    await renderWithProviders(
+      <ThemeProvider>
+        <ExportsDirectionSwitch
+          direction="into"
+          marketCode="CM"
+          originCode="CA"
+          origins={origins}
+          total={71}
+          sellerTotal={0}
+          onChangeDirection={jest.fn()}
+          onPickOrigin={jest.fn()}
+        />
+      </ThemeProvider>
+    );
+    expect(screen.getByText('71 products')).toBeTruthy();
+    expect(screen.queryByText(/0 sellers/)).toBeNull();
+  });
 });

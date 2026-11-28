@@ -73,6 +73,9 @@ describe('seller copy (mobile v3 plurals)', () => {
     expect(exportsSummaryLine(tr('en'), 1, null, 1)).toBe('1 product · ships to 1 market');
     expect(exportsSummaryLine(tr('fr'), 1, null, 1)).toBe('1 produit · expédié vers 1 marché');
     expect(exportsSummaryLine(tr('en'), 71, null, 7)).toBe('71 products · ships to 7 markets');
+    expect(exportsSummaryLine(tr('en'), 71, 0)).toBe('71 products');
+    expect(exportsSummaryLine(tr('fr'), 71, 0)).toBe('71 produits');
+    expect(exportsSummaryLine(tr('en'), 71, 0)).not.toMatch(/0 sellers/);
   });
 
   it('uses Sellers / Vendeurs, never Brands / Marques', () => {
