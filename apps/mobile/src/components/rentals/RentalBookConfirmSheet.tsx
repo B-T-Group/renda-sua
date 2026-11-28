@@ -2,7 +2,7 @@ import { useContext } from 'react';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
-import { Button, IconButton, Text } from 'react-native-paper';
+import { IconButton, Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ClientRentalRequestRow } from '../../types/rentals';
@@ -15,7 +15,8 @@ import {
 import { formatConfirmationMoney } from '../../utils/rentals/confirmationFormat';
 import { reservationFee, reserveMode, type ReserveMode } from '../../utils/rentals/reservationFee';
 import { buildReserveSummary, clockTime, reserveZone, weekdayDay, windowLabel } from '../../utils/rentals/reserveSummary';
-import { ReserveFooter, ReserveSummaryView } from './ReserveSummaryView';
+import { ReserveStickyBar } from './ReserveStickyBar';
+import { ReserveSummaryView } from './ReserveSummaryView';
 
 export interface RentalBookConfirmSheetProps {
   visible: boolean;
@@ -191,33 +192,14 @@ export function RentalBookConfirmSheet({
             </>
           )}
         </ScrollView>
-        <View
-          style={[
-            styles.bottomBar,
-            {
-              borderTopColor: colors.divider,
-              paddingHorizontal: spacing.md,
-              paddingTop: spacing.sm,
-              paddingBottom: Math.max(insets.bottom, spacing.sm),
-            },
-          ]}
-        >
-          {summary ? <ReserveFooter summary={summary} /> : null}
-          <Button
-            testID="book-confirm-button"
-            mode="contained"
-            buttonColor={colors.primary.main}
-            icon={mode === 'fee' ? 'lock-outline' : mode === 'free' ? 'calendar-blank-outline' : undefined}
-            loading={loading}
-            onPress={onConfirm}
-            contentStyle={styles.confirmContent}
-          >
-            {confirmLabel}
-          </Button>
-          <Button onPress={onDismiss} disabled={loading}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-        </View>
+        <ReserveStickyBar
+          summary={summary}
+          confirmLabel={confirmLabel}
+          confirmIcon={mode === 'fee' ? 'lock-outline' : mode === 'free' ? 'calendar-blank-outline' : undefined}
+          loading={loading}
+          onConfirm={onConfirm}
+          onDismiss={onDismiss}
+        />
       </View>
     </Modal>
   );
@@ -395,12 +377,5 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
-  },
-  bottomBar: {
-    gap: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  confirmContent: {
-    paddingVertical: 6,
   },
 });
