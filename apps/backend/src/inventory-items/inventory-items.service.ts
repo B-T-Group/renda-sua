@@ -3870,12 +3870,17 @@ export class InventoryItemsService {
     return summarizeExportOrigins(res?.business_inventory ?? []);
   }
 
-  /** Export destinations are active countries even when local delivery is off. */
+  /** Export destinations are active countries even when local delivery is off.
+   * Seller location must be outside the destination country (exports INTO a
+   * market never include local sellers). */
   private exportMarketItemFilter(code: string): Record<string, unknown> {
     return {
       item: {
         export_available: { _eq: true },
         export_markets: { country_code: { _eq: code } },
+      },
+      business_location: {
+        address: { country: { _neq: code } },
       },
     };
   }
