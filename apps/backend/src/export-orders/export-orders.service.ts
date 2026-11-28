@@ -20,7 +20,12 @@ import {
   LIST_EXPORT_ORDERS,
 } from './export-orders.queries';
 import type { ExportOrderRow } from './export-orders.types';
+import {
+  assertExportedToMarket,
+  requireExportCountry,
+} from './export-destination.util';
 
+/** Only for the read-only GET /export-orders/enabled probe. Creates require a market. */
 export const DEFAULT_EXPORT_COUNTRY = 'CM';
 
 export function resolveExportCountry(countryCode?: string | null): string {
@@ -52,6 +57,7 @@ type InventoryRow = {
     export_available: boolean;
     moderation_status: string;
     is_active: boolean;
+    export_markets?: Array<{ country_code: string }> | null;
   } | null;
 };
 
@@ -95,9 +101,10 @@ export class ExportOrdersService {
         HttpStatus.FORBIDDEN
       );
     }
+    const country = requireExportCountry(dto.countryCode);
     const inventory = await this.fetchInventory(dto.businessInventoryId);
     this.assertEligible(inventory);
-    const country = resolveExportCountry(dto.countryCode);
+    assertExportedToMarket(inventory.item?.export_markets, country);
     if (!(await this.isExportOrdersEnabled(country))) {
       throw new HttpException(
         {

@@ -218,3 +218,27 @@ describe('CartStore reorder merge', () => {
     expect(store.quantityForListing('inv-2')).toBe(3);
   });
 });
+
+describe('CartStore export-only items', () => {
+  it('never adds an export-only listing', async () => {
+    const store = await makeStore();
+    const result = store.addFromCatalog(
+      { id: 'inv-x', item: { export_available: true, item_variants: [] } } as never,
+      1
+    );
+    expect(result).toBe('export_only');
+    expect(store.items).toHaveLength(0);
+  });
+
+  it('removeListings drops every line of the given listings', async () => {
+    const store = await makeStore();
+    store.items = [
+      makeLine({ inventoryItemId: 'inv-1' }),
+      makeLine({ inventoryItemId: 'inv-1', variantId: 'v2' }),
+      makeLine({ inventoryItemId: 'inv-2' }),
+    ];
+    expect(store.removeListings(['inv-1'])).toBe(2);
+    expect(store.items.map((l) => l.inventoryItemId)).toEqual(['inv-2']);
+    expect(store.removeListings([])).toBe(0);
+  });
+});

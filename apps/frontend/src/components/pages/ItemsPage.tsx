@@ -35,6 +35,7 @@ import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
+import { CatalogShortcutButton } from '../catalog/CatalogShortcutButton';
 import { useClientFlags } from '../../hooks/useClientFlags';
 import {
   catalogGeoQueryParams,
@@ -994,6 +995,12 @@ const ItemsPage: React.FC = () => {
                 flexWrap: 'wrap',
               }}
             >
+              <CatalogShortcutButton
+                label={t('catalogShortcut.myOrders', 'My orders')}
+                to="/orders"
+                icon={<Assignment sx={{ fontSize: 22, color: 'primary.main' }} />}
+                testId="catalog-my-orders"
+              />
               <AssistantHomeEntry compact />
               {isClient && nearbyAgentsCount > 0 && (
                 <Chip

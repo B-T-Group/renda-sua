@@ -12,6 +12,9 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
 import { primaryCatalogImageUrl } from '../../utils/catalogInventoryDisplay';
+import { exportDestinationCodes } from '../../utils/exportItemRules';
+import { ExportOnlyBadge } from '../exports/ExportOnlyBadge';
+import { ExportDestinationsLine } from '../exports/ExportViewerNote';
 
 export interface CatalogFeedExportsStopProps {
   items: CatalogInventoryItem[];
@@ -132,22 +135,7 @@ export const CatalogFeedExportsStop = memo(function CatalogFeedExportsStop({
                     resizeMode="cover"
                   />
                 ) : null}
-                <View
-                  style={[
-                    styles.badge,
-                    { backgroundColor: colors.secondary.main },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: colors.secondary.contrastText,
-                      fontSize: 10,
-                      fontWeight: '700',
-                    }}
-                  >
-                    {t('exportCatalog.badge', 'Export')}
-                  </Text>
-                </View>
+                <ExportOnlyBadge variant="overlay" compact />
               </View>
               <View style={{ padding: spacing.sm }}>
                 <Text
@@ -171,6 +159,7 @@ export const CatalogFeedExportsStop = memo(function CatalogFeedExportsStop({
                 >
                   {t('productInterest.priceNotApplicable', 'Price on request')}
                 </Text>
+                <ExportDestinationsLine destinations={exportDestinationCodes(item)} />
               </View>
             </Pressable>
           );
@@ -208,13 +197,5 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     overflow: 'hidden',
-  },
-  badge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
   },
 });

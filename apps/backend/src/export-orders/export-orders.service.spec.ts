@@ -119,6 +119,7 @@ describe('ExportOrdersService create, list, and resubmit', () => {
       export_available: true,
       moderation_status: 'approved',
       is_active: true,
+      export_markets: [{ country_code: 'CM' }, { country_code: 'GA' }],
     },
   };
 
@@ -209,7 +210,7 @@ describe('ExportOrdersService create, list, and resubmit', () => {
   it('rejects a user who is not a client before reading the listing', async () => {
     hasuraUser.getUser.mockResolvedValue({ id: 'user-1' });
     await expect(
-      service.createFromInterest({ businessInventoryId: 'inv-1' })
+      service.createFromInterest({ businessInventoryId: 'inv-1' } as any)
     ).rejects.toMatchObject({
       status: 403,
       message: 'Only clients can submit export interest',
@@ -222,14 +223,14 @@ describe('ExportOrdersService create, list, and resubmit', () => {
       business_inventory_by_pk: null,
     });
     await expect(
-      service.createFromInterest({ businessInventoryId: 'missing' })
+      service.createFromInterest({ businessInventoryId: 'missing', countryCode: 'CM' })
     ).rejects.toMatchObject({ status: 404, message: 'Listing not found' });
 
     hasura.executeQuery.mockResolvedValueOnce({
       business_inventory_by_pk: { ...inventory, is_active: false },
     });
     await expect(
-      service.createFromInterest({ businessInventoryId: 'inv-1' })
+      service.createFromInterest({ businessInventoryId: 'inv-1', countryCode: 'CM' })
     ).rejects.toMatchObject({ status: 400, message: 'Listing is unavailable' });
 
     hasura.executeQuery.mockResolvedValueOnce({
@@ -239,7 +240,7 @@ describe('ExportOrdersService create, list, and resubmit', () => {
       },
     });
     await expect(
-      service.createFromInterest({ businessInventoryId: 'inv-1' })
+      service.createFromInterest({ businessInventoryId: 'inv-1', countryCode: 'CM' })
     ).rejects.toMatchObject({
       status: 400,
       message: 'Listing is not available for export orders',
@@ -280,7 +281,7 @@ describe('ExportOrdersService create, list, and resubmit', () => {
       throw new Error(query.slice(0, 48));
     });
     await expect(
-      service.createFromInterest({ businessInventoryId: 'inv-1' })
+      service.createFromInterest({ businessInventoryId: 'inv-1', countryCode: 'CM' })
     ).rejects.toMatchObject({
       status: 400,
       message: 'New export orders blocked: overdue financing',
@@ -332,6 +333,7 @@ describe('ExportOrdersService create, list, and resubmit', () => {
     await expect(
       service.createFromInterest({
         businessInventoryId: 'inv-1',
+        countryCode: 'CM',
         quantity: -2,
       })
     ).resolves.toEqual(storedOrder);
@@ -341,12 +343,39 @@ describe('ExportOrdersService create, list, and resubmit', () => {
     );
     pdf.issueBc.mockResolvedValue({ id: 'doc-1' });
     await expect(
-      service.createFromInterest({ businessInventoryId: 'inv-1', quantity: 3 })
+      service.createFromInterest({
+        businessInventoryId: 'inv-1',
+        countryCode: 'CM',
+        quantity: 3,
+      })
     ).resolves.toEqual(storedOrder);
     const quantities = hasura.executeMutation.mock.calls
       .filter((call) => String(call[0]).includes('InsertExportOrder'))
       .map((call) => call[1].object.lines.data[0].quantity);
     expect(quantities).toEqual([1, 3]);
+  });
+
+  it('returns 400 NOT_EXPORTED_TO_MARKET for a market outside the destinations', async () => {
+    enable([{ boolean_value: true, country_code: null }]);
+    await expect(
+      service.createFromInterest({ businessInventoryId: 'inv-1', countryCode: 'sn' })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'NOT_EXPORTED_TO_MARKET' },
+    });
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 COUNTRY_CODE_REQUIRED instead of defaulting to CM', async () => {
+    enable([{ boolean_value: true, country_code: null }]);
+    await expect(
+      service.createFromInterest({ businessInventoryId: 'inv-1' } as any)
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'COUNTRY_CODE_REQUIRED' },
+    });
+    expect(hasura.executeQuery).not.toHaveBeenCalled();
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 
   it('scopes the list to the actor and clamps page bounds', async () => {

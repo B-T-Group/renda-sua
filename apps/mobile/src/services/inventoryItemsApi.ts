@@ -66,6 +66,11 @@ export interface FetchInventoryItemsParams {
   food_only?: boolean;
   /** Only export_available items for the viewer market. */
   export_only?: boolean;
+  /**
+   * With export_only: list exports that ship FROM this country (business
+   * location country) instead of exports INTO the viewer market.
+   */
+  origin_country?: string;
 }
 
 export interface FetchCatalogStoresParams {
@@ -106,6 +111,9 @@ export function buildInventoryItemsQuery(
   if (params.collection) search.set('collection', params.collection);
   if (params.food_only === true) search.set('food_only', 'true');
   if (params.export_only === true) search.set('export_only', 'true');
+  if (params.export_only === true && params.origin_country?.trim()) {
+    search.set('origin_country', params.origin_country.trim().toUpperCase());
+  }
   if (params.sort) search.set('sort', params.sort);
   if (params.include_unavailable === true) search.set('include_unavailable', 'true');
   if (params.owner_preview === true) search.set('owner_preview', 'true');
@@ -364,4 +372,30 @@ export async function fetchSearchRecovery(
   init?: { signal?: AbortSignal }
 ): Promise<DiscoveryRecoveryEnvelope> {
   return publicApiGet<DiscoveryRecoveryEnvelope>(searchRecoveryPath(params), undefined, init);
+}
+
+export interface ExportOriginSummary {
+  country_code: string;
+  item_count: number;
+  business_count: number;
+  destination_codes: string[];
+}
+
+interface ExportOriginsEnvelope {
+  success: boolean;
+  data?: { origins?: ExportOriginSummary[] };
+  message?: string;
+}
+
+/** Countries with live export items (public, cached server-side). */
+export async function fetchExportOrigins(init?: {
+  signal?: AbortSignal;
+}): Promise<ExportOriginSummary[]> {
+  const envelope = await publicApiGet<ExportOriginsEnvelope>(
+    '/inventory-items/export-origins',
+    undefined,
+    init
+  );
+  if (!envelope?.success) return [];
+  return Array.isArray(envelope.data?.origins) ? envelope.data!.origins! : [];
 }

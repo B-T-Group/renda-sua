@@ -35,6 +35,16 @@ describe('buildInventoryItemsQuery', () => {
   });
 });
 
+describe('buildInventoryItemsQuery origin_country', () => {
+  it('sends origin_country only with export_only', () => {
+    expect(
+      buildInventoryItemsQuery({ export_only: true, origin_country: 'ca' }).get('origin_country')
+    ).toBe('CA');
+    expect(buildInventoryItemsQuery({ origin_country: 'CA' }).get('origin_country')).toBeNull();
+    expect(buildInventoryItemsQuery({ export_only: true }).get('origin_country')).toBeNull();
+  });
+});
+
 describe('catalogStoresPath', () => {
   it('asks for cooked-food locations when food_only is set', () => {
     const path = catalogStoresPath({ limit: 50, food_only: true, country_code: 'CM' });

@@ -1,6 +1,8 @@
+import { Assignment } from '@mui/icons-material';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
+import { CatalogShortcutButton } from '../catalog/CatalogShortcutButton';
 import { alpha } from '@mui/material/styles';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useTranslation } from 'react-i18next';
@@ -87,6 +89,12 @@ export default function FoodsMenuHero() {
             {message}
           </Typography>
         </Box>
+        <CatalogShortcutButton
+          label={t('catalogShortcut.myOrders', 'My orders')}
+          to="/orders"
+          icon={<Assignment sx={{ fontSize: 22, color: 'primary.main' }} />}
+          testId="catalog-my-orders"
+        />
       </Box>
     </Paper>
   );

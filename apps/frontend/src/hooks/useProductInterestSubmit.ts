@@ -3,21 +3,36 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useExportOrders } from './useExportOrders';
 import { useMarket } from './useMarket';
-import { useProductInterest, type ProductInterestResult } from './useProductInterest';
+import {
+  useProductInterest,
+  type ProductInterestResult,
+  type ProductInterestSource,
+} from './useProductInterest';
 
 interface Options {
   open: boolean;
   businessInventoryId: string;
   onLeadSent: () => void;
+  /** 'public_export_catalog' = partner inquiry from /exports/{cc}: always a lead. */
+  source?: ProductInterestSource;
+  /** Market to send when the selected market is not known yet. */
+  fallbackCountryCode?: string | null;
 }
 
-export function useProductInterestSubmit({ open, businessInventoryId, onLeadSent }: Options) {
+export function useProductInterestSubmit({
+  open,
+  businessInventoryId,
+  onLeadSent,
+  source = 'in_app',
+  fallbackCountryCode,
+}: Options) {
+  const partner = source === 'public_export_catalog';
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { selectedMarket } = useMarket();
   const { submitInterest } = useProductInterest();
   const { getEnabled } = useExportOrders();
-  const countryCode = selectedMarket?.countryCode;
+  const countryCode = selectedMarket?.countryCode ?? fallbackCountryCode ?? undefined;
   const [orderMode, setOrderMode] = useState(false);
   const [placed, setPlaced] = useState<ProductInterestResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -27,19 +42,21 @@ export function useProductInterestSubmit({ open, businessInventoryId, onLeadSent
     let stop = false;
     setPlaced(null);
     setOrderMode(false);
+    // Partner inquiries never open an export order.
+    if (partner) return undefined;
     getEnabled(countryCode)
       .then((enabled) => !stop && setOrderMode(enabled))
       .catch(() => undefined);
     return () => {
       stop = true;
     };
-  }, [open, countryCode, getEnabled]);
+  }, [open, countryCode, getEnabled, partner]);
 
   const submit = useCallback(
     async (note: string) => {
       setSubmitting(true);
       try {
-        const result = await submitInterest(businessInventoryId, note, countryCode);
+        const result = await submitInterest(businessInventoryId, note, countryCode, source);
         if (result?.export_order) {
           setPlaced(result);
           const bc = result.bc_number || '';
@@ -63,7 +80,7 @@ export function useProductInterestSubmit({ open, businessInventoryId, onLeadSent
         setSubmitting(false);
       }
     },
-    [businessInventoryId, countryCode, enqueueSnackbar, onLeadSent, submitInterest, t]
+    [businessInventoryId, countryCode, enqueueSnackbar, onLeadSent, source, submitInterest, t]
   );
 
   return { orderMode, placed, submitting, submit };

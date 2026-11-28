@@ -75,6 +75,13 @@ export function isProposedContractOpen(row: ClientRentalRequestRow): boolean {
   return new Date(exp) > new Date();
 }
 
+function stopCard(action: () => void) {
+  return (event: React.MouseEvent) => {
+    event.stopPropagation();
+    action();
+  };
+}
+
 export interface ClientRentalRequestRowCardProps {
   row: ClientRentalRequestRow;
   bookingLoading: boolean;
@@ -142,16 +149,25 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
       defaultValue: count === 1 ? '{{count}} day' : '{{count}} days',
     })
   );
+  const photo = listing?.rental_item.rental_item_images?.[0];
+  const imageUrl = photo?.display_url || photo?.thumbnail || photo?.image_url || null;
+  const openCard = () => {
+    if (bookingId) onViewBooking(bookingId);
+    else if (listing?.id) onViewListing(listing.id);
+  };
 
   return (
       <Paper
         elevation={0}
+        onClick={openCard}
+        aria-label={t('rentals.hub.openCard', 'Open {{name}}', { name: itemName })}
         sx={{
           p: { xs: 2, sm: 2.5 },
           borderRadius: 2,
           border: 1,
           borderColor: 'divider',
           bgcolor: 'background.paper',
+          cursor: 'pointer',
         }}
       >
         <Stack spacing={1.5}>
@@ -161,6 +177,26 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
           alignItems={{ xs: 'flex-start', sm: 'center' }}
           justifyContent="space-between"
         >
+          <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ minWidth: 0 }}>
+          <Box
+            sx={{
+              width: 56,
+              height: 56,
+              borderRadius: 1.5,
+              overflow: 'hidden',
+              flexShrink: 0,
+              bgcolor: alpha(theme.palette.primary.main, 0.08),
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {imageUrl ? (
+              <Box component="img" src={imageUrl} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <LocationOn sx={{ color: 'primary.main' }} />
+            )}
+          </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="h6" component="h2" fontWeight={700} sx={{ fontSize: '1.05rem' }}>
               {heading}
@@ -177,6 +213,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               </Stack>
             ) : null}
           </Box>
+          </Stack>
           <Stack direction="row" spacing={0.5}>
           <Chip
             label={statusLabel}
@@ -317,13 +354,13 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             <Button
               size="small"
               variant="outlined"
-              onClick={() => onViewListing(listing.id)}
+              onClick={stopCard(() => onViewListing(listing.id))}
             >
               {t('rentals.clientRequests.viewListing', 'View listing')}
             </Button>
           ) : null}
           {row.status === 'unavailable' && reasonCode === 'no_response' && onBrowseRentals ? (
-            <Button size="small" variant="text" onClick={onBrowseRentals}>
+            <Button size="small" variant="text" onClick={stopCard(onBrowseRentals)}>
               {t('rentals.clientRequests.browseRentals', 'Browse rentals')}
             </Button>
           ) : null}
@@ -333,7 +370,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
                 size="small"
                 variant="contained"
                 disabled={bookingLoading}
-                onClick={() => onBookRequest(row.id)}
+                onClick={stopCard(() => onBookRequest(row.id))}
               >
                 {t('rentals.bookNow', 'Book now')}
               </Button>
@@ -341,7 +378,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
                 size="small"
                 variant="outlined"
                 color="error"
-                onClick={() => onCancel(row.id)}
+                onClick={stopCard(() => onCancel(row.id))}
               >
                 {t('rentals.clientRequests.cancelOffer', 'Cancel reservation')}
               </Button>
@@ -352,19 +389,9 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               size="small"
               variant="outlined"
               color="error"
-              onClick={() => onCancel(row.id)}
+              onClick={stopCard(() => onCancel(row.id))}
             >
               {t('rentals.clientRequests.cancelRequest', 'Cancel request')}
-            </Button>
-          ) : null}
-          {row.status === 'booked' && bookingId ? (
-            <Button
-              size="small"
-              variant="contained"
-              color="info"
-              onClick={() => onViewBooking(bookingId)}
-            >
-              {t('rentals.actions.openBooking', 'Open booking')}
             </Button>
           ) : null}
         </Stack>

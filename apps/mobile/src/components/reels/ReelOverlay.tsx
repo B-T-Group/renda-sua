@@ -16,6 +16,7 @@ import { ReelCommentsSheet } from './ReelCommentsSheet';
 import { setReelLike } from '../../services/reelsApi';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { resolveReelPresetLabel } from '../../utils/reelPresetLabel';
+import { ExportOnlyBadge, EXPORT_BRAND_BLUE } from '../exports/ExportOnlyBadge';
 
 interface Props {
   reel: FeedReel;
@@ -142,17 +143,43 @@ export function ReelOverlay({
           </Pressable>
         </View>
         <View style={styles.bottom} pointerEvents="box-none">
+          {reel.export_only ? (
+            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+              <ExportOnlyBadge variant="inline" />
+            </View>
+          ) : null}
           {reel.caption ? (
             <Text style={[styles.railLabel, { marginBottom: 8 }]} numberOfLines={2}>
               {reel.caption}
             </Text>
           ) : null}
-          {reel.inventoryItemId ? (
+          {reel.inventoryItemId && reel.export_only ? (
+            <View style={styles.ctaRow}>
+              <Button
+                testID="reel-export-view-product"
+                mode="contained"
+                icon="airplane-takeoff"
+                buttonColor={EXPORT_BRAND_BLUE}
+                textColor="#ffffff"
+                onPress={() =>
+                  (navigation as { navigate: (name: string, params: object) => void }).navigate(
+                    'InventoryItemDetail',
+                    { inventoryItemId: reel.inventoryItemId }
+                  )
+                }
+                style={styles.buyBtn}
+                contentStyle={{ paddingHorizontal: 24 }}
+              >
+                {t('reels.viewProduct', 'View product')}
+              </Button>
+            </View>
+          ) : null}
+          {reel.inventoryItemId && !reel.export_only ? (
             <Pressable onPress={() => setShopOpen(true)} style={{ marginBottom: 8 }}>
               <Text style={styles.railLabel}>{t('reels.shop', 'Shop this')}</Text>
             </Pressable>
           ) : null}
-          {onBuy ? (
+          {onBuy && !reel.export_only ? (
             <View style={styles.ctaRow}>
               <IconButton
                 icon="storefront-outline"
@@ -198,7 +225,7 @@ export function ReelOverlay({
         title={reel.business.name}
         footer={
           <View style={{ gap: 8 }}>
-            {onAddToCart ? (
+            {onAddToCart && !reel.export_only ? (
               <Button mode="contained" onPress={() => { setShopOpen(false); onAddToCart(); }}>
                 {t('cart.addToCart', 'Add to cart')}
               </Button>

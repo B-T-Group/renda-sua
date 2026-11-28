@@ -6647,12 +6647,15 @@
       "toDo": "To do",
       "actionNeeded": "To do",
       "upcoming": "Upcoming",
+      "active": "Active",
       "past": "Past",
       "emptyActionNeeded": "Nothing needs your attention right now.",
       "emptyUpcoming": "No upcoming rentals",
       "emptyUpcomingHint": "Request a rental and it will show up here.",
+      "emptyActive": "No rentals in progress.",
       "emptyPast": "No past rentals yet.",
-      "emptyAll": "You have no rental requests or bookings yet."
+      "emptyAll": "You have no rental requests or bookings yet.",
+      "openCard": "Open {{name}}"
     },
     "modify": {
       "action": "Modify",
@@ -8320,8 +8323,8 @@
       "submit": "Send request",
       "snackbar": "Export request {{bc}} received."
     },
-    "cta": "I'm interested",
-    "dialogTitle": "I'm interested",
+    "cta": "I’m interested",
+    "dialogTitle": "I’m interested",
     "noteLabel": "Message (optional)",
     "noteHelp": "Tell the seller about {{name}}. They will contact you outside the app.",
     "submit": "Send interest",
@@ -8565,7 +8568,8 @@
       "details": "Additional details (optional)",
       "submit": "Submit report",
       "blockMerchant": "Block this store"
-    }
+    },
+    "viewProduct": "View product"
   },
   "restockAlerts": {
     "bellOn": "We'll tell you when it's back",
@@ -9390,5 +9394,68 @@
     "pushBodyEn": "Marie declined the condition of JBL PartyBox 310 (RB-25496259). The booking is cancelled and the unit is free. No charge.",
     "pushTitleFr": "Le locataire a refusé l’état des lieux",
     "pushBodyFr": "Marie a refusé l’état des lieux de JBL PartyBox 310 (RB-25496259). La réservation est annulée et l’article est libre. Aucun frais."
+  },
+  "exportsOrigin": {
+    "switchLabel": "Export direction",
+    "into": "Into {{place}}",
+    "intoMyMarket": "Into my market",
+    "from": "From {{place}}",
+    "fromCountry": "From a country",
+    "pickerTitle": "Exported from",
+    "pickerHelp": "See what each market exports. Your market stays {{place}}.",
+    "pickerHelpNoMarket": "See what each market exports.",
+    "noOrigins": "No exports yet",
+    "copyLink": "Copy link",
+    "copyPublicLink": "Copy public link",
+    "linkCopied": "Link copied",
+    "share": "Share",
+    "shareMessage": "Exports from {{place}} on Rendasua: {{url}}",
+    "pageTitle": "Exports from {{place}}",
+    "pageSubtitle": "Products exported from {{place}} on Rendasua, and where each one ships. Open to anyone, no account needed.",
+    "shipsTo": "Ships to",
+    "all": "All",
+    "seeAll": "See all {{count}} ›",
+    "showLess": "Show less",
+    "otherCategory": "Other",
+    "emptyTitle": "No exports from {{place}} yet",
+    "emptyUnknown": "We don’t know the country code “{{code}}”.",
+    "emptyBody": "Browse what is exported into your market instead.",
+    "emptyFromMarket": "No business in {{place}} exports on Rendasua yet. Pick another country.",
+    "emptyCta": "Go to Exports",
+    "breadcrumbExports": "Exports",
+    "seoTitle": "Exports from {{place}} | Rendasua",
+    "seoTitleUnknown": "Exports | Rendasua",
+    "seoDescription": "{{count}} products exported from {{place}} by {{businesses}} businesses to {{destinations}} markets. Browse and send interest, no account needed.",
+    "loading": "Loading exports…",
+    "loadError": "We couldn’t load these exports. Try again in a moment.",
+    "pickCountry": "Choose a country",
+    "itemsCount": "{{count}} item",
+    "itemsCount_plural": "{{count}} items",
+    "summary": "{{count}} product · ships to {{markets}} markets",
+    "summary_plural": "{{count}} products · ships to {{markets}} markets",
+    "statProducts": "product",
+    "statProducts_plural": "products",
+    "statBusinesses": "business",
+    "statBusinesses_plural": "businesses",
+    "statDestinations": "destination market",
+    "statDestinations_plural": "destination markets"
+  },
+  "exportItem": {
+    "badge": "Export only",
+    "exportedTo": "Exported to",
+    "exportedToLine": "Exported to: {{codes}}",
+    "soldForExportOnly": "This item is sold for export only. It can’t be bought in the app.",
+    "originLine": "Exported from your market. It isn’t sold here. You can still like or share it.",
+    "thirdLine": "Not exported to your market ({{code}}). You can still like or share it.",
+    "yourMarket": "Your market",
+    "partnerHelp": "You’re sending a partner inquiry about {{name}} to the business. They’ll contact you outside the app.",
+    "notExportedError": "This item isn’t exported to your market.",
+    "checkoutBlocked": "{{name}} is export only. Remove it to check out.",
+    "cartRemoved": "{{count}} item was removed: it’s export only.",
+    "cartRemoved_plural": "{{count}} items were removed: they’re export only."
+  },
+  "catalogShortcut": {
+    "myOrders": "My orders",
+    "myExports": "My exports"
   }
 }

@@ -18,6 +18,8 @@ export type FeedReel = {
   liked?: boolean;
   purchasable?: boolean;
   inventoryItemId?: string | null;
+  /** Export-only item: no Buy or cart in any market. */
+  export_only?: boolean;
 };
 
 type FeedResponse = {

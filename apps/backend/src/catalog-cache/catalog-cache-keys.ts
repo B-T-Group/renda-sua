@@ -97,6 +97,8 @@ export interface InventoryItemsCacheKeyInput {
   collection?: string;
   foodOnly?: boolean;
   exportOnly?: boolean;
+  /** "From {country}" export view; omitted from the key when absent so existing keys are unchanged. */
+  originCountry?: string;
 }
 
 function inventoryItemsFilterKeyParts(
@@ -120,8 +122,15 @@ function inventoryItemsFilterKeyParts(
     input.collection || '',
     input.foodOnly ? 'food' : 'all',
     input.exportOnly ? 'export' : 'local',
+    ...(input.originCountry ? [`from_${input.originCountry}`] : []),
   ];
 }
+
+export function buildExportOriginsCacheKey(generation: number): string {
+  return ['export-origins', `g${generation}`].join(':');
+}
+
+export const EXPORT_ORIGINS_TTL_SECONDS = 120;
 
 export const CATALOG_EXPERIENCE_TTL_SECONDS = 90;
 export const CATALOG_EXPERIENCE_RETURNING_TTL_SECONDS = 45;

@@ -45,11 +45,13 @@ describe('ProductInterestService', () => {
       export_available: true,
       moderation_status: 'approved',
       is_active: true,
+      export_markets: [{ country_code: 'CM' }, { country_code: 'CI' }],
     },
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    notifications.sendBusinessProductInterestNotification.mockResolvedValue(undefined);
     jest.useRealTimers();
     exportOrders.isExportOrdersEnabled.mockResolvedValue(false);
     service = new ProductInterestService(
@@ -77,7 +79,7 @@ describe('ProductInterestService', () => {
   it('rejects non-clients', async () => {
     hasuraUser.getUser.mockResolvedValue({ id: 'u1', client: null });
     await expect(
-      service.createInterest({ businessInventoryId: 'inv-1' })
+      service.createInterest({ businessInventoryId: 'inv-1', countryCode: 'CM' })
     ).rejects.toBeInstanceOf(HttpException);
   });
 
@@ -90,7 +92,7 @@ describe('ProductInterestService', () => {
       },
     });
     await expect(
-      service.createInterest({ businessInventoryId: 'inv-1' })
+      service.createInterest({ businessInventoryId: 'inv-1', countryCode: 'CM' })
     ).rejects.toMatchObject({ response: { error: 'NOT_EXPORT_AVAILABLE' } });
   });
 
@@ -100,7 +102,7 @@ describe('ProductInterestService', () => {
       business_inventory_by_pk: null,
     });
     await expect(
-      service.createInterest({ businessInventoryId: 'inv-missing' })
+      service.createInterest({ businessInventoryId: 'inv-missing', countryCode: 'CM' })
     ).rejects.toMatchObject({ status: 404 });
   });
 
@@ -121,7 +123,7 @@ describe('ProductInterestService', () => {
       business_inventory_by_pk: { ...eligibleInventory, ...patch },
     });
     await expect(
-      service.createInterest({ businessInventoryId: 'inv-1' })
+      service.createInterest({ businessInventoryId: 'inv-1', countryCode: 'CM' })
     ).rejects.toMatchObject({ status: 400, message: 'Listing is unavailable' });
     expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
   });
@@ -137,7 +139,7 @@ describe('ProductInterestService', () => {
       });
 
     await expect(
-      service.createInterest({ businessInventoryId: 'inv-1' })
+      service.createInterest({ businessInventoryId: 'inv-1', countryCode: 'CM' })
     ).rejects.toMatchObject({ response: { error: 'DUPLICATE_INTEREST' } });
 
     expect(hasuraSystem.executeQuery.mock.calls[1][1]).toEqual({
@@ -157,6 +159,7 @@ describe('ProductInterestService', () => {
 
     const result = await service.createInterest({
       businessInventoryId: 'inv-1',
+      countryCode: 'CM',
       note: 'Need quote',
     });
     expect(result.id).toBe('req-1');
@@ -168,6 +171,7 @@ describe('ProductInterestService', () => {
       business_location_id: 'loc-1',
       client_note: 'Need quote',
       status: 'submitted',
+      source: 'in_app',
     });
     expect(
       notifications.sendBusinessProductInterestNotification
@@ -197,6 +201,7 @@ describe('ProductInterestService', () => {
 
     const result = await service.createInterest({
       businessInventoryId: 'inv-1',
+      countryCode: 'CM',
       note: '   ',
     });
     expect(result.id).toBe('req-1');
@@ -351,6 +356,7 @@ describe('ProductInterestService', () => {
 
     const actual = await service.createInterest({
       businessInventoryId: 'inv-1',
+      countryCode: 'CM',
       note: '  Need quote  ',
     });
 
@@ -424,7 +430,7 @@ describe('ProductInterestService', () => {
     );
 
     await expect(
-      service.createInterest({ businessInventoryId: 'inv-1' })
+      service.createInterest({ businessInventoryId: 'inv-1', countryCode: 'CM' })
     ).rejects.toThrow('config down');
     expect(exportOrders.createFromInterest).not.toHaveBeenCalled();
     expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
@@ -439,8 +445,124 @@ describe('ProductInterestService', () => {
     exportOrders.createFromInterest.mockRejectedValue(new Error('overdue'));
 
     await expect(
-      service.createInterest({ businessInventoryId: 'inv-1' })
+      service.createInterest({ businessInventoryId: 'inv-1', countryCode: 'CM' })
     ).rejects.toThrow('overdue');
     expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
+
+  describe('destination market rule (exports by origin)', () => {
+    it('rejects in-app interest from a market the item is not exported to', async () => {
+      hasuraUser.getUser.mockResolvedValue(clientUser);
+      hasuraSystem.executeQuery.mockResolvedValueOnce({
+        business_inventory_by_pk: eligibleInventory,
+      });
+
+      await expect(
+        service.createInterest({ businessInventoryId: 'inv-1', countryCode: 'SN' })
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { error: 'NOT_EXPORTED_TO_MARKET' },
+      });
+      expect(exportOrders.isExportOrdersEnabled).not.toHaveBeenCalled();
+      expect(exportOrders.createFromInterest).not.toHaveBeenCalled();
+      expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects the origin market too when it is not a destination', async () => {
+      hasuraUser.getUser.mockResolvedValue(clientUser);
+      hasuraSystem.executeQuery.mockResolvedValueOnce({
+        business_inventory_by_pk: eligibleInventory,
+      });
+      await expect(
+        service.createInterest({ businessInventoryId: 'inv-1', countryCode: 'ca' })
+      ).rejects.toMatchObject({ response: { error: 'NOT_EXPORTED_TO_MARKET' } });
+    });
+
+    it('returns 400 and no longer defaults to CM when countryCode is missing', async () => {
+      hasuraUser.getUser.mockResolvedValue(clientUser);
+      await expect(
+        service.createInterest({ businessInventoryId: 'inv-1' } as any)
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { error: 'COUNTRY_CODE_REQUIRED' },
+      });
+      expect(hasuraSystem.executeQuery).not.toHaveBeenCalled();
+      expect(exportOrders.isExportOrdersEnabled).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown source', async () => {
+      await expect(
+        service.createInterest({
+          businessInventoryId: 'inv-1',
+          countryCode: 'CM',
+          source: 'web_scraper' as any,
+        })
+      ).rejects.toMatchObject({ response: { error: 'INVALID_INTEREST_SOURCE' } });
+    });
+
+    it('accepts a public-page partner inquiry from a non-destination market as a lead', async () => {
+      hasuraUser.getUser.mockResolvedValue(clientUser);
+      hasuraSystem.executeQuery
+        .mockResolvedValueOnce({ business_inventory_by_pk: eligibleInventory })
+        .mockResolvedValueOnce({ product_interest_requests: [] });
+      exportOrders.isExportOrdersEnabled.mockResolvedValue(true);
+      mockCreatedRow();
+
+      const result = await service.createInterest({
+        businessInventoryId: 'inv-1',
+        countryCode: 'SN',
+        source: 'public_export_catalog',
+        note: 'Distributor in Dakar',
+      });
+
+      expect(result).toMatchObject({ id: 'req-1', source: 'public_export_catalog' });
+      // Partner inquiries never open an export order, even with the flag on.
+      expect(exportOrders.isExportOrdersEnabled).not.toHaveBeenCalled();
+      expect(exportOrders.createFromInterest).not.toHaveBeenCalled();
+      expect(hasuraSystem.executeMutation.mock.calls[0][1].object).toMatchObject({
+        source: 'public_export_catalog',
+        client_note: 'Distributor in Dakar',
+        business_id: 'biz-1',
+      });
+      expect(notifications.sendBusinessProductInterestNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'public_export_catalog',
+          viewerCountryCode: 'SN',
+        })
+      );
+    });
+
+    it('keeps the 24-hour duplicate guard on partner inquiries', async () => {
+      hasuraUser.getUser.mockResolvedValue(clientUser);
+      hasuraSystem.executeQuery
+        .mockResolvedValueOnce({ business_inventory_by_pk: eligibleInventory })
+        .mockResolvedValueOnce({ product_interest_requests: [{ id: 'req-old' }] });
+
+      await expect(
+        service.createInterest({
+          businessInventoryId: 'inv-1',
+          countryCode: 'SN',
+          source: 'public_export_catalog',
+        })
+      ).rejects.toMatchObject({ response: { error: 'DUPLICATE_INTEREST' } });
+      expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('still requires an export item for partner inquiries', async () => {
+      hasuraUser.getUser.mockResolvedValue(clientUser);
+      hasuraSystem.executeQuery.mockResolvedValueOnce({
+        business_inventory_by_pk: {
+          ...eligibleInventory,
+          item: { ...eligibleInventory.item, export_available: false },
+        },
+      });
+      await expect(
+        service.createInterest({
+          businessInventoryId: 'inv-1',
+          countryCode: 'SN',
+          source: 'public_export_catalog',
+        })
+      ).rejects.toMatchObject({ response: { error: 'NOT_EXPORT_AVAILABLE' } });
+    });
   });
 });

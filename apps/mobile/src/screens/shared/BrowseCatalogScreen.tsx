@@ -72,6 +72,12 @@ import { trackDiscoveryEvent } from '../../utils/discoveryAnalytics';
 import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { CatalogEmptyIllustration } from '../../components/illustrations/CatalogEmptyIllustration';
+import { ExportsFromEmptyState } from '../../components/exports/ExportsFromEmptyState';
+import {
+  ExportsDirectionSwitch,
+  type ExportsDirection,
+} from '../../components/exports/ExportsDirectionSwitch';
+import { useExportOrigins } from '../../hooks/useExportOrigins';
 import { CatalogFeedStop } from '../../components/browse/CatalogFeedStop';
 import { CATALOG_SORT_OPTIONS } from '../../constants/catalogSortOptions';
 import { FOOD_CATEGORY_NAME } from '../../utils/foodAvailability';
@@ -377,6 +383,25 @@ function BrowseCatalogScreenInner({
 
   const { origin: catalogOrigin } = useCatalogOrigin(catalogReady);
 
+  // Exports lane: Into [my market] (default, unchanged) / From [country].
+  // The origin is browse-only state: it never touches the shopping market.
+  const [exportsDirection, setExportsDirection] = useState<ExportsDirection>('into');
+  const [pickedExportOrigin, setPickedExportOrigin] = useState<string | null>(null);
+  useEffect(() => {
+    if (!forcedExportOnly) {
+      setExportsDirection('into');
+      setPickedExportOrigin(null);
+    }
+  }, [forcedExportOnly]);
+  const exportsFrom = forcedExportOnly && exportsDirection === 'from';
+  const exportOriginCountry = exportsFrom
+    ? (pickedExportOrigin ?? catalogCountryCode ?? '').trim().toUpperCase() || undefined
+    : undefined;
+  const {
+    origins: exportOrigins,
+    loading: exportOriginsLoading,
+  } = useExportOrigins(forcedExportOnly && catalogReady);
+
   const { facetItems, facetLoading, refetchFacets } = useInventoryCatalogFacets({
     withAuth: inventoryRequestsWithAuth,
     countryCode: catalogCountryCode,
@@ -437,6 +462,7 @@ function BrowseCatalogScreenInner({
     collection: foodOnly ? undefined : catalogFilters.collection,
     food_only: foodOnly || undefined,
     export_only: exportOnly || undefined,
+    origin_country: exportOriginCountry,
     withAuth: inventoryRequestsWithAuth,
     enabled: catalogReady && !showAllRestaurants,
     includeUnavailable: discoveryOn,
@@ -492,7 +518,7 @@ function BrowseCatalogScreenInner({
 
   // Empty-result recovery (#342 §2): only when the list returned total = 0.
   useEffect(() => {
-    if (!discoveryOn || total !== 0 || loading || correction) {
+    if (!discoveryOn || total !== 0 || loading || correction || exportsFrom) {
       setRecovery(null);
       return;
     }
@@ -562,6 +588,7 @@ function BrowseCatalogScreenInner({
     catalogState,
     foodOnly,
     exportOnly,
+    exportsFrom,
   ]);
 
   // search.results_shown: once per settled result set for a search query.
@@ -1011,6 +1038,21 @@ function BrowseCatalogScreenInner({
             <MarketSwitchBanner />
           </View>
         ) : null}
+        {forcedExportOnly ? (
+          <ExportsDirectionSwitch
+            direction={exportsDirection}
+            marketCode={catalogCountryCode ?? null}
+            originCode={exportOriginCountry ?? pickedExportOrigin ?? catalogCountryCode ?? null}
+            origins={exportOrigins}
+            originsLoading={exportOriginsLoading}
+            total={exportsFrom && !loading ? total : undefined}
+            onChangeDirection={setExportsDirection}
+            onPickOrigin={(code) => {
+              setPickedExportOrigin(code);
+              setExportsDirection('from');
+            }}
+          />
+        ) : null}
         <BrowseCatalogListHeader
           scrollY={scrollY}
           theme={theme}
@@ -1161,6 +1203,15 @@ function BrowseCatalogScreenInner({
       onToggleExportOnly,
       onClearExportOnly,
       discoveryExtra,
+      forcedExportOnly,
+      exportsDirection,
+      catalogCountryCode,
+      exportOriginCountry,
+      pickedExportOrigin,
+      exportOrigins,
+      exportOriginsLoading,
+      exportsFrom,
+      loading,
     ]
   );
 
@@ -1267,6 +1318,10 @@ function BrowseCatalogScreenInner({
       );
     }
 
+    if (exportsFrom && debouncedSearch.length === 0) {
+      return <ExportsFromEmptyState originCode={exportOriginCountry} />;
+    }
+
     const hasFilters =
       activeFilterCount > 0 || debouncedSearch.length > 0;
     return (
@@ -1322,6 +1377,9 @@ function BrowseCatalogScreenInner({
     t,
     typography.body2,
     typography.caption,
+    exportsFrom,
+    exportOriginCountry,
+    i18n.language,
   ]);
 
   if (showComposing) {

@@ -99,10 +99,12 @@ export function myRentalsEntrySegment(count: number): 'action_needed' | 'upcomin
   return count > 0 ? 'action_needed' : 'upcoming';
 }
 
-export type MyRentalsHubSegment = 'action_needed' | 'upcoming' | 'past';
+export type MyRentalsHubSegment = 'action_needed' | 'upcoming' | 'active' | 'past';
 
 /** Landing tab from /rentals/requests?segment=. Unknown or missing values open To do. */
 export function hubSegmentFromSearchParam(param: string | null | undefined): MyRentalsHubSegment {
-  if (param === 'upcoming' || param === 'past' || param === 'action_needed') return param;
+  if (param === 'upcoming' || param === 'past' || param === 'action_needed' || param === 'active') {
+    return param;
+  }
   return 'action_needed';
 }

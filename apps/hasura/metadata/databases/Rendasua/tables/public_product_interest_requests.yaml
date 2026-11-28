@@ -29,6 +29,7 @@ select_permissions:
         - business_location_id
         - client_note
         - status
+        - source
         - created_at
         - updated_at
       filter:
@@ -48,6 +49,7 @@ select_permissions:
         - business_location_id
         - client_note
         - status
+        - source
         - created_at
         - updated_at
       filter:

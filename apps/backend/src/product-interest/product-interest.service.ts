@@ -4,10 +4,13 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { ExportOrdersService } from '../export-orders/export-orders.service';
 import {
-  ExportOrdersService,
-  resolveExportCountry,
-} from '../export-orders/export-orders.service';
+  assertExportedToMarket,
+  type ProductInterestSource,
+  requireExportCountry,
+  resolveProductInterestSource,
+} from '../export-orders/export-destination.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -38,6 +41,9 @@ const GET_INVENTORY_FOR_INTEREST = `
         export_available
         moderation_status
         is_active
+        export_markets {
+          country_code
+        }
       }
     }
   }
@@ -88,6 +94,7 @@ const LIST_CLIENT = `
       id
       client_note
       status
+      source
       created_at
       business_inventory_id
       business_location_id
@@ -116,6 +123,7 @@ const LIST_BUSINESS = `
       id
       client_note
       status
+      source
       created_at
       business_inventory_id
       business_location_id
@@ -153,6 +161,7 @@ type InventoryForInterest = {
     export_available: boolean;
     moderation_status: string;
     is_active: boolean;
+    export_markets?: Array<{ country_code: string }> | null;
   } | null;
 };
 
@@ -168,11 +177,18 @@ export class ProductInterestService {
   ) {}
 
   async createInterest(dto: CreateProductInterestDto) {
+    const source = resolveProductInterestSource(dto.source);
+    const country = requireExportCountry(dto.countryCode);
     const user = await this.hasuraUserService.getUser();
     this.assertClient(user);
     const inventory = await this.fetchInventory(dto.businessInventoryId);
     this.assertInterestEligible(inventory);
-    const country = resolveExportCountry(dto.countryCode);
+    if (source === 'public_export_catalog') {
+      // Partner inquiry from the public /exports/{cc} page: any market may ask, so no
+      // destination check, and it is always a lead to the business (never an export order).
+      return this.createLead(user, inventory, dto.note, source, country);
+    }
+    assertExportedToMarket(inventory.item?.export_markets, country);
     if (await this.exportOrdersService.isExportOrdersEnabled(country)) {
       const exportOrder = await this.exportOrdersService.createFromInterest({
         businessInventoryId: dto.businessInventoryId,
@@ -188,11 +204,30 @@ export class ProductInterestService {
         bc_number: exportOrder.bc_number,
       };
     }
+    return this.createLead(user, inventory, dto.note, source, country);
+  }
+
+  private async createLead(
+    user: {
+      id: string;
+      first_name?: string | null;
+      last_name?: string | null;
+      email?: string | null;
+      phone_number?: string | null;
+    },
+    inventory: InventoryForInterest,
+    rawNote: string | undefined,
+    source: ProductInterestSource,
+    country: string
+  ) {
     await this.assertNotDuplicate(user.id, inventory.id);
-    const note = dto.note?.trim() || null;
-    const created = await this.insertInterest(user.id, inventory, note);
-    await this.notifyBusiness(user, inventory, created.id, note);
-    return created;
+    const note = rawNote?.trim() || null;
+    const created = await this.insertInterest(user.id, inventory, note, source);
+    await this.notifyBusiness(user, inventory, created.id, note, {
+      source,
+      viewerCountryCode: country,
+    });
+    return { ...created, source };
   }
 
   async listForClient(page = 1, limit = 20) {
@@ -311,7 +346,8 @@ export class ProductInterestService {
   private async insertInterest(
     userId: string,
     inventory: InventoryForInterest,
-    note: string | null
+    note: string | null,
+    source: ProductInterestSource
   ) {
     const location = inventory.business_location!;
     const res = await this.hasuraSystemService.executeMutation<{
@@ -329,6 +365,7 @@ export class ProductInterestService {
         business_location_id: location.id,
         client_note: note,
         status: 'submitted',
+        source,
       },
     });
     return res.insert_product_interest_requests_one;
@@ -343,7 +380,8 @@ export class ProductInterestService {
     },
     inventory: InventoryForInterest,
     requestId: string,
-    note: string | null
+    note: string | null,
+    origin: { source: ProductInterestSource; viewerCountryCode: string }
   ) {
     const businessUserId = inventory.business_location?.business?.user_id;
     if (!businessUserId) return;
@@ -361,6 +399,8 @@ export class ProductInterestService {
         clientPhone: user.phone_number ?? null,
         clientNote: note,
         inventoryId: inventory.id,
+        source: origin.source,
+        viewerCountryCode: origin.viewerCountryCode,
       });
     } catch (error: any) {
       this.logger.error(

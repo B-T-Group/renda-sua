@@ -20,7 +20,9 @@ import {
 import type { Response } from 'express';
 import { Public } from '../auth/public.decorator';
 import {
+  buildExportOriginsCacheKey,
   buildInventoryItemsCacheKey,
+  EXPORT_ORIGINS_TTL_SECONDS,
   buildStoresCacheKey,
   inventoryItemsCacheTtlSeconds,
   isCatalogUserAuthenticated,
@@ -38,6 +40,7 @@ import type {
   TopInventoryStoreRow,
 } from './inventory-items.service';
 import { InventoryItemsService } from './inventory-items.service';
+import type { ExportOriginSummary } from './export-origins.util';
 import { DiscoveryRecoveryService } from './discovery/discovery-recovery.service';
 import { resolveDiscoverySort } from './discovery/discovery-sort.util';
 import {
@@ -71,6 +74,7 @@ interface GetInventoryItemsQueryParams {
   collection?: string;
   food_only?: string;
   export_only?: string;
+  origin_country?: string;
 }
 
 interface GetInventorySearchSuggestionsQueryParams
@@ -195,6 +199,35 @@ export class InventoryItemsController {
       data: { locations },
       message: 'Top locations retrieved successfully',
     };
+  }
+
+  @Public()
+  @Get('export-origins')
+  @ApiOperation({
+    summary:
+      'Countries with at least one live export item, with item, business and destination counts (Exports origin picker)',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'data.origins: [{ country_code, item_count, business_count, destination_codes }] sorted by item_count desc',
+  })
+  async getExportOrigins(): Promise<{
+    success: boolean;
+    data: { origins: ExportOriginSummary[] };
+    message: string;
+  }> {
+    const compute = async () => ({
+      success: true,
+      data: { origins: await this.inventoryItemsService.getExportOrigins() },
+      message: 'Export origins retrieved successfully',
+    });
+    const generation = await this.catalogCacheService.getGeneration('global');
+    return this.catalogCacheService.getOrCompute(
+      buildExportOriginsCacheKey(generation),
+      compute,
+      { ttlSeconds: EXPORT_ORIGINS_TTL_SECONDS }
+    );
   }
 
   @Public()
@@ -681,6 +714,14 @@ export class InventoryItemsController {
     description:
       'When true, return only export_available items exported to the viewer country (destination markets section / /exports).',
   })
+  @ApiQuery({
+    name: 'origin_country',
+    required: false,
+    type: String,
+    example: 'CA',
+    description:
+      'With export_only=true: return export items (with at least one export market) whose home business location is in this ISO-2 country, whatever the viewer market. Public; used by the Exports "From" view and /exports/{cc}. Ignored without export_only.',
+  })
   async getInventoryItems(
     @Query() query: GetInventoryItemsQueryParams
   ): Promise<{
@@ -742,6 +783,10 @@ export class InventoryItemsController {
         collection: query.collection?.trim() || undefined,
         food_only: query.food_only === 'true',
         export_only: query.export_only === 'true',
+        ...(query.export_only === 'true' &&
+          query.origin_country?.trim() && {
+            origin_country: query.origin_country.trim().toUpperCase(),
+          }),
         ...(discoverySort && { discovery: { sort: discoverySort } }),
       };
 
@@ -780,6 +825,7 @@ export class InventoryItemsController {
           collection: processedQuery.collection,
           foodOnly: processedQuery.food_only,
           exportOnly: processedQuery.export_only,
+          originCountry: processedQuery.origin_country,
         });
 
         return await this.catalogCacheService.getOrCompute(

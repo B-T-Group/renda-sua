@@ -207,7 +207,9 @@ export class CartStore {
     quantity = 1,
     variantId?: string | null,
     baseVariantLabel = 'Default'
-  ): 'added' | 'updated' | 'needs_variant' {
+  ): 'added' | 'updated' | 'needs_variant' | 'export_only' {
+    // Export-only items are never bought in the app (any market); checkout blocks them too.
+    if (catalogItem.item?.export_available === true) return 'export_only';
     const activeVariants = (catalogItem.item.item_variants ?? []).filter(
       (v) => v.is_active !== false
     );
@@ -269,6 +271,19 @@ export class CartStore {
       this.items = next;
     });
     this.schedulePersist();
+  }
+
+  /** Drop every line of these listings (export-only purge). Returns the number of lines removed. */
+  removeListings(inventoryItemIds: Iterable<string>): number {
+    const ids = new Set(inventoryItemIds);
+    if (ids.size === 0) return 0;
+    const before = this.items.length;
+    runInAction(() => {
+      this.items = this.items.filter((l) => !ids.has(l.inventoryItemId));
+    });
+    const removed = before - this.items.length;
+    if (removed > 0) this.schedulePersist();
+    return removed;
   }
 
   removeLine(inventoryItemId: string, variantId?: string | null): void {

@@ -188,6 +188,13 @@ export interface ClientRentalRequestRow {
       currency: string;
       business?: { name?: string | null } | null;
       rental_category?: { name?: string | null } | null;
+      rental_item_images?: Array<{
+        id: string;
+        image_url: string;
+        display_url?: string | null;
+        thumbnail?: string | null;
+        alt_text?: string | null;
+      }>;
     };
   } | null;
   rental_booking?: {
@@ -231,7 +238,12 @@ export interface ClientRentalBookingRow {
     rental_item?: {
       name: string;
       currency?: string;
-      rental_item_images?: Array<{ id: string; image_url: string; display_url?: string | null }>;
+      rental_item_images?: Array<{
+        id: string;
+        image_url: string;
+        display_url?: string | null;
+        thumbnail?: string | null;
+      }>;
     } | null;
   } | null;
 }

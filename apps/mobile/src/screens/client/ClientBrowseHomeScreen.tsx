@@ -47,6 +47,7 @@ import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
 import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import { useClientHomeOrderCta } from '../../hooks/useClientHomeOrderCta';
 import type { Order } from '../../types/agent';
+import { CatalogLaneShortcut } from '../../components/browse/CatalogLaneShortcut';
 
 /** Client browse tab: catalog + navigation to item detail on the root stack. */
 function ClientBrowseHomeScreenBase() {
@@ -172,6 +173,14 @@ function ClientBrowseHomeScreenBase() {
   const lane: HomeLane = laneFromSegment(route.params?.segment);
   const foodOnly = lane === 'food';
   const exportOnly = lane === 'exports';
+
+  const onOpenLaneOrders = useCallback(() => {
+    if (lane === 'exports') {
+      rootNav?.navigate('ClientExportOrders');
+      return;
+    }
+    tabNav.navigate('ClientOrders');
+  }, [lane, rootNav, tabNav]);
   const { items: actionsNeededItems, dismissAll } = useActionsNeeded(
     isClientAuthenticated ? 'client' : null
   );
@@ -305,6 +314,9 @@ function ClientBrowseHomeScreenBase() {
         onSeeAllStores={onSeeAllStores}
         headerTrailing={
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {isClientAuthenticated ? (
+              <CatalogLaneShortcut lane={lane} onPress={onOpenLaneOrders} />
+            ) : null}
             <HomeCartButton />
             {notificationBell}
           </View>

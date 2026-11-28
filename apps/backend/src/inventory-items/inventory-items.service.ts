@@ -51,6 +51,11 @@ import {
   type SortControlState,
 } from './discovery/discovery-sort.util';
 import { DiscoverySignalsService } from './discovery/discovery-signals.service';
+import {
+  type ExportOriginSummary,
+  normalizeExportOriginCountry,
+  summarizeExportOrigins,
+} from './export-origins.util';
 import { listingRankSignals } from '../catalog-experience/catalog-listing-rank';
 import { scoreCatalogCandidate } from '../catalog-experience/catalog-ranking.weights';
 
@@ -286,6 +291,12 @@ export interface GetInventoryItemsQuery {
    * (no home-location country filter).
    */
   export_only?: boolean;
+  /**
+   * With `export_only`: list export items whose home listing (business location address)
+   * is in this ISO-2 country, whatever the viewer market ("From {country}" view and the
+   * public /exports/{cc} page). Absent leaves the destination-market behaviour unchanged.
+   */
+  origin_country?: string;
   /**
    * #342: set by the controller only when `discovery_sort_v1` is on for the market. Absent means
    * the pre-existing code path runs untouched.
@@ -556,6 +567,27 @@ const CATALOG_INVENTORY_LIST_GQL = `
 `;
 
 /** One page of distinct export items — avoids fetch-all + in-memory slice. */
+const EXPORT_ORIGIN_ROWS_MAX = 5000;
+
+const EXPORT_ORIGIN_ROWS_GQL = `
+  query ExportOriginRows($where: business_inventory_bool_exp!, $limit: Int!) {
+    business_inventory(where: $where, limit: $limit) {
+      item_id
+      business_location {
+        business_id
+        address {
+          country
+        }
+      }
+      item {
+        export_markets {
+          country_code
+        }
+      }
+    }
+  }
+`;
+
 const CATALOG_EXPORT_PAGE_GQL = `
   query CatalogExportPage($where: business_inventory_bool_exp!, $limit: Int!, $offset: Int!) {
     items(
@@ -862,6 +894,10 @@ export class InventoryItemsService {
     ownerPreview?: boolean;
     /** Only export items for the viewer market (no location-country filter). */
     export_only?: boolean;
+    /** With export_only: export items whose home location is in this country (ISO-2). */
+    origin_country?: string;
+    /** With export_only: every live export item with at least one destination (origin picker). */
+    exportAnyOrigin?: boolean;
     /**
      * Include export_available listings without the default exclude filter
      * (store pages, wishlist).
@@ -893,6 +929,8 @@ export class InventoryItemsService {
       food_only,
       ownerPreview,
       export_only = false,
+      origin_country,
+      exportAnyOrigin = false,
       includeExportListings = false,
       includeExportInSearch = false,
     } = params;
@@ -1034,7 +1072,13 @@ export class InventoryItemsService {
       }
     }
 
-    if (export_only) {
+    if (export_only && (exportAnyOrigin || origin_country?.trim())) {
+      const origin = normalizeExportOriginCountry(origin_country);
+      if (!exportAnyOrigin && !origin) {
+        return { unsupported: true };
+      }
+      whereConditions.push(this.exportOriginItemFilter(exportAnyOrigin ? undefined : origin));
+    } else if (export_only) {
       const code = country_code?.trim().toUpperCase();
       if (!code || !(await this.validateExportMarket(code))) {
         return { unsupported: true };
@@ -1832,6 +1876,7 @@ export class InventoryItemsService {
       food_only = false,
       owner_preview: ownerPreviewRequested = false,
       export_only = false,
+      origin_country,
     } = query;
     const limit = this.clampInventoryListLimit(query.limit);
 
@@ -1893,6 +1938,7 @@ export class InventoryItemsService {
       requireCanAcceptOrders: sort === 'deals' || sort === 'top_rated',
       ownerPreview,
       export_only: export_only === true,
+      origin_country,
       includeExportListings: Boolean(business_location_id?.trim()),
       includeExportInSearch: hasSearch && export_only !== true,
     };
@@ -2412,6 +2458,7 @@ export class InventoryItemsService {
       collection: query.collection,
       food_only: query.food_only ?? false,
       export_only: query.export_only === true,
+      origin_country: query.origin_country,
       includeExportInSearch:
         Boolean(query.search?.trim()) && query.export_only !== true,
     });
@@ -3662,6 +3709,46 @@ export class InventoryItemsService {
       );
       return [];
     }
+  }
+
+  /**
+   * "From {country}": export items with at least one destination whose home listing is in
+   * `origin` (omit for every origin). Viewer market is deliberately not applied.
+   */
+  private exportOriginItemFilter(origin?: string): Record<string, unknown> {
+    const itemFilter = {
+      item: {
+        export_available: { _eq: true },
+        export_markets: { country_code: { _is_null: false } },
+      },
+    };
+    if (!origin) return itemFilter;
+    return {
+      _and: [
+        itemFilter,
+        { business_location: { address: { country: { _eq: origin } } } },
+      ],
+    };
+  }
+
+  /**
+   * Origin picker: countries with at least one live export item, with item, business and
+   * destination counts. Same visibility rules as the export list (approved, active, visible
+   * storefront, sellable stock).
+   */
+  async getExportOrigins(): Promise<ExportOriginSummary[]> {
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: true,
+      include_unavailable: false,
+      export_only: true,
+      exportAnyOrigin: true,
+    });
+    if ('unsupported' in built) return [];
+    const res = await this.hasuraSystemService.executeQuery(
+      EXPORT_ORIGIN_ROWS_GQL,
+      { where: built.where, limit: EXPORT_ORIGIN_ROWS_MAX }
+    );
+    return summarizeExportOrigins(res?.business_inventory ?? []);
   }
 
   /** Export destinations are active countries even when local delivery is off. */

@@ -18,6 +18,9 @@ export const GET_INVENTORY_FOR_EXPORT = `
         export_available
         moderation_status
         is_active
+        export_markets {
+          country_code
+        }
       }
     }
   }

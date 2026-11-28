@@ -33,6 +33,8 @@ export interface UseInventoryCatalogOptions {
   food_only?: boolean;
   /** Only export_available items for the viewer market. */
   export_only?: boolean;
+  /** With export_only: exports shipped FROM this country (not into the viewer market). */
+  origin_country?: string;
   /** When true, GET /inventory-items uses Bearer + active persona (client catalog). */
   withAuth?: boolean;
   /**
@@ -61,6 +63,7 @@ export function useInventoryCatalog({
   owner_preview,
   food_only,
   export_only,
+  origin_country,
   withAuth = false,
   enabled = true,
   includeUnavailable = false,
@@ -76,7 +79,8 @@ export function useInventoryCatalog({
   const [effectiveSort, setEffectiveSort] = useState<DiscoverySortMode | undefined>(undefined);
   const [sortControl, setSortControl] = useState<SortControlState | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
-  const exportOnlyKey = export_only === true;
+  const exportOnlyKey =
+    export_only === true ? `export:${origin_country?.trim().toUpperCase() ?? ''}` : '';
   const [activeExportOnly, setActiveExportOnly] = useState(exportOnlyKey);
   // Clear immediately when Exports is toggled so skeletons show (not stale local items).
   if (exportOnlyKey !== activeExportOnly) {
@@ -125,6 +129,8 @@ export function useInventoryCatalog({
             ...(collection?.trim() && { collection: collection.trim() }),
             ...(food_only === true && { food_only: true }),
             ...(export_only === true && { export_only: true }),
+            ...(export_only === true &&
+              origin_country?.trim() && { origin_country: origin_country.trim().toUpperCase() }),
             ...(includeUnavailable && { include_unavailable: true }),
           },
           { signal: controller.signal }
@@ -188,6 +194,7 @@ export function useInventoryCatalog({
       collection,
       food_only,
       export_only,
+      origin_country,
       withAuth,
       enabled,
       includeUnavailable,

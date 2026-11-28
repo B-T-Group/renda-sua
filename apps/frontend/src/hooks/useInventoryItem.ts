@@ -30,6 +30,7 @@ export interface InventoryItem {
     id: string;
     name: string;
     export_available?: boolean;
+    export_markets?: Array<{ country_code: string }> | null;
     description: string;
     pay_on_delivery_enabled?: boolean;
     pay_at_pickup_enabled?: boolean;

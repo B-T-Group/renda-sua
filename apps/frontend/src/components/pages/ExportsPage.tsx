@@ -1,3 +1,4 @@
+import { FlightTakeoff } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -30,8 +31,11 @@ import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemCardSkeleton from '../common/ItemCardSkeleton';
 import { RecentlyViewedRail } from '../catalog-experience/RecentlyViewedRail';
+import { CatalogShortcutButton } from '../catalog/CatalogShortcutButton';
 import ExportCatalogIllustration from '../illustrations/ExportCatalogIllustration';
 import SEOHead from '../seo/SEOHead';
+import ExportsDirectionBar from '../exports/ExportsDirectionBar';
+import { useExportOrigins } from '../../hooks/useExportOrigins';
 
 const ITEMS_PER_PAGE = 24;
 const EXPORT_SKELETON_COUNT = 8;
@@ -83,6 +87,7 @@ const ExportsPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const browserGeo = usePublicBrowserGeo(true);
   const isClientUser = profile?.user_type_id === 'client';
+  const { origins } = useExportOrigins();
 
   useEffect(() => {
     setCurrentPage(1);
@@ -178,6 +183,15 @@ const ExportsPage: React.FC = () => {
               )}
             </Typography>
           </Box>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <CatalogShortcutButton
+            label={t('catalogShortcut.myExports', 'My exports')}
+            to="/export-orders"
+            icon={<FlightTakeoff sx={{ fontSize: 22, color: 'primary.main' }} />}
+            testId="catalog-my-exports"
+          />
+          <ExportsDirectionBar direction="into" origins={origins} />
         </Box>
       </Box>
 
