@@ -330,6 +330,31 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     expect(json).toContain('"export_available":{"_eq":true}');
     expect(json).toContain('"export_markets":{"country_code":{"_eq":"CA"}}');
     expect(json).toContain('"state":{"_eq":"Ontario"}');
+    // Local stock still scopes _eq to the viewer country; the export branch
+    // of the same _or excludes sellers in that destination.
+    expect(json).toContain('"country":{"_eq":"CA"}');
+    expect(json).toContain(
+      '"business_location":{"address":{"country":{"_neq":"CA"}}}'
+    );
+  });
+
+  it('excludes destination-market sellers from the export branch of combined search', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({
+      includeExportInSearch: true,
+      country_code: 'CM',
+    });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"_or"');
+    expect(json).toContain('"export_available":{"_eq":false}');
+    expect(json).toContain('"country":{"_eq":"CM"}');
+    expect(json).toContain('"export_available":{"_eq":true}');
+    expect(json).toContain('"export_markets":{"country_code":{"_eq":"CM"}}');
+    expect(json).toContain(
+      '"business_location":{"address":{"country":{"_neq":"CM"}}}'
+    );
   });
 
   describe('origin_country (exports by origin)', () => {

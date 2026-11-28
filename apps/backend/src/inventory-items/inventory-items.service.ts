@@ -1120,12 +1120,7 @@ export class InventoryItemsService {
       whereConditions.push({
         _or: [
           { _and: localAnd },
-          {
-            item: {
-              export_available: { _eq: true },
-              export_markets: { country_code: { _eq: code } },
-            },
-          },
+          this.exportMarketItemFilter(code),
         ],
       });
     } else if (skipCallerGeo || includeExportListings) {
