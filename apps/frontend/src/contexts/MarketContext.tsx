@@ -28,6 +28,8 @@ import {
   buildSelectedMarket,
 } from '../utils/marketSelection';
 import { useSupportedCountries } from '../hooks/useSupportedCountries';
+import { useApiClient } from '../hooks/useApiClient';
+import { shouldClearMissingSavedState } from '../utils/savedMarketState';
 
 export interface UseMarketResult {
   selectedMarket: Market | null;
@@ -40,6 +42,7 @@ export interface UseMarketResult {
 const MarketContext = createContext<UseMarketResult | null>(null);
 
 export function MarketProvider({ children }: { children: ReactNode }) {
+  const apiClient = useApiClient();
   const { countries, supportedIsos, loading: countriesLoading } =
     useSupportedCountries();
   const [countryCode, setCountryCode] = useState<string>(DEFAULT_MARKET_CODE);
@@ -90,6 +93,49 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(DETECTED_COUNTRY_EVENT, onDetected);
     };
   }, [hydrated, mode, supportedIsos]);
+
+
+  // Once market-states has loaded for the saved country, drop a saved state
+  // that is no longer in the list (quietly, All of the country, same mode).
+  useEffect(() => {
+    if (!hydrated || !stateCode) return;
+    const country = countryCode;
+    const state = stateCode;
+    const savedMode = mode;
+    let active = true;
+    apiClient
+      .get<{ states?: Array<{ state: string }> }>('/locations/market-states', {
+        params: { countryCode: country, catalog: 'all' },
+      })
+      .then((res) => {
+        if (!active) return;
+        const names = (res.data?.states ?? []).map((row) => row.state);
+        if (
+          !shouldClearMissingSavedState({
+            countryCode: country,
+            stateCode: state,
+            knownStates: names,
+            loaded: true,
+            loading: false,
+            loadFailed: false,
+          })
+        ) {
+          return;
+        }
+        setStateCode(null);
+        writeStoredMarket({
+          countryCode: country,
+          stateCode: null,
+          mode: savedMode,
+        });
+      })
+      .catch(() => {
+        // Request failed — keep the saved state.
+      });
+    return () => {
+      active = false;
+    };
+  }, [hydrated, countryCode, stateCode, mode, apiClient]);
 
   const markets = useMemo(
     () =>
