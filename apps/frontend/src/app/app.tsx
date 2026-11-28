@@ -361,6 +361,16 @@ function App() {
             <Route path="/collections" element={<LazyPages.CollectionsIndexPage />} />
             <Route path="/collections/:slug" element={<LazyPages.CollectionLandingPage />} />
             <Route path="/exports" element={<LazyPages.ExportsPage />} />
+            <Route path="/exports/sellers" element={<LazyPages.ExportSellersPage />} />
+            <Route path="/exports/sellers/:locationId" element={<LazyPages.ExportSellerPage />} />
+            <Route
+              path="/exports/:countryCode/sellers"
+              element={<LazyPages.ExportSellersPage />}
+            />
+            <Route
+              path="/exports/:countryCode/sellers/:locationId"
+              element={<LazyPages.ExportSellerPage />}
+            />
             <Route
               path="/exports/:countryCode"
               element={<LazyPages.ExportsFromCountryPage />}

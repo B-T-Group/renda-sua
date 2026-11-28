@@ -1,5 +1,6 @@
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 import {
+  buildExportStoresCacheKey,
   buildInventoryItemsCacheKey,
   buildStoresCacheKey,
   inventoryItemsCacheTtlSeconds,
@@ -18,6 +19,7 @@ describe('InventoryItemsController catalog cache gates', () => {
   let inventoryItemsService: {
     getInventoryItems: jest.Mock;
     getTopInventoryStores: jest.Mock;
+    getExportStores: jest.Mock;
   };
   let hasuraUserService: { getUserId: jest.Mock };
 
@@ -31,6 +33,9 @@ describe('InventoryItemsController catalog cache gates', () => {
     inventoryItemsService = {
       getInventoryItems: jest.fn().mockResolvedValue({ items: [], total: 0 }),
       getTopInventoryStores: jest.fn().mockResolvedValue([]),
+      getExportStores: jest
+        .fn()
+        .mockResolvedValue({ stores: [], total: 0, country: 'CA' }),
     };
     hasuraUserService = {
       getUserId: jest.fn(() => {
@@ -175,5 +180,76 @@ describe('InventoryItemsController catalog cache gates', () => {
 
     expect(catalogCache.getOrCompute).not.toHaveBeenCalled();
     expect(inventoryItemsService.getTopInventoryStores).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the store directory path and response shape when export_only is absent', async () => {
+    const res = await controller.getTopInventoryStores('20', undefined, 'CM');
+
+    expect(inventoryItemsService.getExportStores).not.toHaveBeenCalled();
+    expect(inventoryItemsService.getTopInventoryStores).toHaveBeenCalledWith(
+      20,
+      expect.not.objectContaining({ export_only: expect.anything() })
+    );
+    expect(res.data).toEqual({ stores: [] });
+  });
+
+  it('routes export_only=true to the export seller directory with a distinct cache key', async () => {
+    const res = await controller.getTopInventoryStores(
+      '10',
+      ' maple ',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'true',
+      'ca',
+      '10'
+    );
+
+    expect(inventoryItemsService.getTopInventoryStores).not.toHaveBeenCalled();
+    expect(inventoryItemsService.getExportStores).toHaveBeenCalledWith({
+      limit: 10,
+      offset: 10,
+      search: 'maple',
+      country_code: undefined,
+      origin_country: 'CA',
+      business_location_id: undefined,
+    });
+    expect(catalogCache.getOrCompute).toHaveBeenCalledWith(
+      buildExportStoresCacheKey({
+        generation: 5,
+        limit: 10,
+        offset: 10,
+        search: 'maple',
+        originCountry: 'CA',
+      }),
+      expect.any(Function),
+      { ttlSeconds: STORES_TTL_SECONDS }
+    );
+    expect(res.data).toEqual({ stores: [], total: 0, country: 'CA' });
+  });
+
+  it('does not share a cache entry for export Into without an explicit market', async () => {
+    await controller.getTopInventoryStores(
+      '10',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'true'
+    );
+    expect(catalogCache.getOrCompute).not.toHaveBeenCalled();
+    expect(inventoryItemsService.getExportStores).toHaveBeenCalledTimes(1);
   });
 });

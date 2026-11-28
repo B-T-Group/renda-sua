@@ -1,6 +1,7 @@
 import {
   Business,
   Category,
+  AssignmentOutlined,
   PanToolOutlined,
   CheckCircle,
   ChevronLeft,
@@ -37,6 +38,7 @@ import { useAuthGate } from '../../contexts/AuthGateContext';
 import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { catalogStorePath, isFoodCatalogItem } from '../../constants/food';
+import { useExportOrderForInventory } from '../../hooks/useExportOrderForInventory';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
 import type { ProductInterestSource } from '../../hooks/useProductInterest';
 import { useExportViewer } from '../../hooks/useExportViewer';
@@ -148,6 +150,10 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
   const publicPartnerInterest = exportInterestSource === 'public_export_catalog';
   const canSendExportInterest =
     exportAvailable && (publicPartnerInterest || exportViewer.canSendInterest);
+  const existingExportOrderId = useExportOrderForInventory(
+    inventory.id,
+    isAuthenticated && !publicPartnerInterest && exportViewer.canSendInterest
+  );
   const distanceKm = formatDistanceKm(inventory.distance_value);
   const inCartQuantity = getListingQuantityInCart(inventory.id);
   const inCart = inCartQuantity > 0;
@@ -891,7 +897,8 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
               <FoodAvailabilityChip
                 availability={inventory.food_availability}
               />
-              {foodStatus == null ? (
+              {/* Export-only: price on request, not buyable, so no stock count. */}
+              {foodStatus == null && !exportAvailable ? (
                 <Chip
                   label={t(
                     'items.itemCard.availableCount',
@@ -1269,17 +1276,51 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
           >
             {viewDetailsLabel}
           </Button>
-          {exportAvailable && !canSendExportInterest ? null : exportAvailable ? (
+          {exportAvailable && !canSendExportInterest ? null : exportAvailable && existingExportOrderId ? (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<AssignmentOutlined />}
+              data-testid="export-view-order-cta"
+              sx={{
+                width: '100%',
+                alignSelf: 'stretch',
+                bgcolor: '#0A4FB5',
+                '&:hover': { bgcolor: '#083F91' },
+                fontSize: '0.8125rem',
+                lineHeight: 1.2,
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                px: 1,
+                py: 0.75,
+                minHeight: 36,
+                '& .MuiButton-startIcon': { mr: 0.5, marginLeft: 0 },
+                '& .MuiButton-startIcon > :nth-of-type(1)': { fontSize: 16 },
+              }}
+              onClick={() => navigate(`/export-orders/${existingExportOrderId}`)}
+            >
+              {t('productInterest.viewOrder', 'View order details')}
+            </Button>
+          ) : exportAvailable ? (
             <Button
               variant="contained"
               size="small"
               startIcon={<PanToolOutlined />}
               data-testid="export-interest-cta"
               sx={{
-                width: '75%',
-                alignSelf: 'center',
+                width: '100%',
+                alignSelf: 'stretch',
                 bgcolor: '#0A4FB5',
                 '&:hover': { bgcolor: '#083F91' },
+                fontSize: '0.8125rem',
+                lineHeight: 1.2,
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                px: 1,
+                py: 0.75,
+                minHeight: 36,
+                '& .MuiButton-startIcon': { mr: 0.5, marginLeft: 0 },
+                '& .MuiButton-startIcon > :nth-of-type(1)': { fontSize: 16 },
               }}
               onClick={() => {
                 if (!isAuthenticated) {

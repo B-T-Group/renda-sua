@@ -2,6 +2,17 @@
  * #594 dedicated agents UI events sent by the web and mobile clients
  * (business #644, agent #645, admin #646). Client-emitted, so public.
  */
+/** Exports by seller (web + mobile). Metadata: direction, market_code, origin_code, location_id. */
+export const EXPORT_SELLER_SITE_EVENT_TYPES = [
+  'exports_sellers_carousel_viewed',
+  'exports_seller_card_tapped',
+  'exports_sellers_more_tapped',
+  'exports_sellers_list_viewed',
+  'exports_sellers_search_submitted',
+  'exports_seller_page_viewed',
+  'exports_seller_page_search_submitted',
+] as const;
+
 export const DEDICATED_UI_SITE_EVENT_TYPES = [
   // Shared (business #644, admin #646)
   'dedicated_ui.section_viewed',
@@ -188,6 +199,8 @@ export const SITE_EVENT_TYPES_V1 = [
   'rentals_client_tab_browse_tap',
   'rental_accept_and_start_tap',
   'rental_renter_reported_returned',
+  // Exports by seller (mobile + web): carousel, all-sellers list, seller page
+  ...EXPORT_SELLER_SITE_EVENT_TYPES,
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event

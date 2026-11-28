@@ -153,6 +153,20 @@ export type StoreDetailParams = {
   foodOnly?: boolean;
 };
 
+/** Exports seller directory: the Into / From context the list was opened from. */
+export type ExportSellersParams = {
+  direction: 'into' | 'from';
+  marketCode?: string | null;
+  originCode?: string | null;
+};
+
+/** Export-only seller page (one business location, export items only). */
+export type ExportSellerParams = ExportSellersParams & {
+  businessLocationId: string;
+  /** Shown while the header loads. */
+  name?: string;
+};
+
 export type StoresListParams = {
   partnersOnly?: boolean;
   businessId?: string;
@@ -172,6 +186,8 @@ export type GuestRootStackParamList = {
   CollectionDetail: CollectionDetailParams;
   StoresList: StoresListParams | undefined;
   StoreDetail: StoreDetailParams;
+  ExportSellers: ExportSellersParams;
+  ExportSeller: ExportSellerParams;
   Cart:
     | {
         reorderBanner?: 'business_closed' | 'address_invalid';
@@ -229,6 +245,8 @@ export type ClientRootStackParamList = {
   CollectionDetail: CollectionDetailParams;
   StoresList: StoresListParams | undefined;
   StoreDetail: StoreDetailParams;
+  ExportSellers: ExportSellersParams;
+  ExportSeller: ExportSellerParams;
   PlaceOrder: PlaceOrderParams;
   Cart:
     | {

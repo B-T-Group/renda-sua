@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomOverlaySnackbar } from '../../components/feedback/BottomOverlaySnackbar';
 import { useTabBarGeometry } from '../../navigation/tabBarGeometry';
 import { BrowseCatalogScreen } from '../shared/BrowseCatalogScreen';
+import type { ExportSellersContext } from '../../utils/exportSellers';
 import ClientRentalsHomeScreen from './ClientRentalsHomeScreen';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
 import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
@@ -132,6 +133,20 @@ function ClientBrowseHomeScreenBase() {
         businessId: businessLocationId,
         ...(options?.foodOnly && { foodOnly: true }),
       });
+    },
+    [rootNav]
+  );
+
+  const onOpenExportSellers = useCallback(
+    (ctx: ExportSellersContext) => {
+      rootNav?.navigate('ExportSellers', ctx);
+    },
+    [rootNav]
+  );
+
+  const onOpenExportSeller = useCallback(
+    (ctx: ExportSellersContext & { businessLocationId: string; name: string }) => {
+      rootNav?.navigate('ExportSeller', ctx);
     },
     [rootNav]
   );
@@ -312,6 +327,8 @@ function ClientBrowseHomeScreenBase() {
         onCollectionPress={onCollectionPress}
         onStorePress={onStorePress}
         onSeeAllStores={onSeeAllStores}
+        onOpenExportSellers={onOpenExportSellers}
+        onOpenExportSeller={onOpenExportSeller}
         headerTrailing={
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {isClientAuthenticated ? (

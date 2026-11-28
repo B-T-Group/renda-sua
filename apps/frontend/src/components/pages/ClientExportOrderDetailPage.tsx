@@ -1,9 +1,7 @@
 import {
   Box,
-  Button,
   CircularProgress,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
@@ -11,6 +9,10 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { useExportOrders } from '../../hooks/useExportOrders';
 import { ExportOrderStatusChip } from '../common/ExportOrderStatusChip';
+import { ExportOrderActions } from '../export-orders/ExportOrderActions';
+import { ExportOrderNextStepCard } from '../export-orders/ExportOrderNextStepCard';
+import { ExportOrderProgress } from '../export-orders/ExportOrderProgress';
+import { exportOrderDocLabel } from '../../utils/exportOrders/exportOrderProgress';
 
 export default function ClientExportOrderDetailPage() {
   const { id = '' } = useParams();
@@ -19,7 +21,6 @@ export default function ClientExportOrderDetailPage() {
     useExportOrders();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -80,16 +81,29 @@ export default function ClientExportOrderDetailPage() {
         </Typography>
         <ExportOrderStatusChip status={order.status} />
       </Stack>
-      <Typography color="text.secondary" sx={{ mb: 2 }}>
-        {t('exportOrders.detailHint', 'Documents and next actions for this export.')}
-      </Typography>
+      <ExportOrderNextStepCard status={order.status}>
+        <ExportOrderActions
+          status={order.status}
+          busy={busy}
+          onApprove={() => run(() => proformaAction(id, 'approve'))}
+          onRequestAdjustment={(notes) =>
+            run(() => proformaAction(id, 'request_adjustment', notes))
+          }
+          onBalanceOption={(option) => run(() => selectBalanceOption(id, option))}
+          onConfirmDelivery={() => run(() => confirmDelivery(id))}
+        />
+      </ExportOrderNextStepCard>
       <Stack spacing={1} sx={{ mb: 3 }}>
+        <Typography fontWeight={600}>
+          {t('exportOrders.lines', 'Items')}
+        </Typography>
         {(order.lines || []).map((line: any) => (
           <Typography key={line.id}>
             {line.quantity} × {line.product_name}
           </Typography>
         ))}
       </Stack>
+      <ExportOrderProgress status={order.status} />
       {(order.documents || []).length > 0 && (
         <Box sx={{ mb: 3 }}>
           <Typography fontWeight={600} sx={{ mb: 1 }}>
@@ -97,70 +111,14 @@ export default function ClientExportOrderDetailPage() {
           </Typography>
           {(order.documents || []).map((d: any) => (
             <Typography key={d.id} variant="body2">
-              {d.doc_type} · {d.document_number}
+              {t(
+                `exportOrders.docTypes.${d.doc_type}`,
+                exportOrderDocLabel(d.doc_type)
+              )}{' '}
+              · {d.document_number}
             </Typography>
           ))}
         </Box>
-      )}
-      {order.status === 'PROFORMA_ISSUED' && (
-        <Stack spacing={2} sx={{ mb: 3 }}>
-          <TextField
-            label={t('exportOrders.notes', 'Notes')}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            multiline
-            minRows={2}
-          />
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              disabled={busy}
-              onClick={() => run(() => proformaAction(id, 'approve'))}
-            >
-              {t('exportOrders.approveProforma', 'Approve proforma')}
-            </Button>
-            <Button
-              disabled={busy}
-              onClick={() =>
-                run(() => proformaAction(id, 'request_adjustment', notes))
-              }
-            >
-              {t('exportOrders.requestAdjustment', 'Request adjustment')}
-            </Button>
-          </Stack>
-        </Stack>
-      )}
-      {order.status === 'BALANCE_REQUIRED' && (
-        <Stack direction="row" spacing={1} sx={{ mb: 3 }} flexWrap="wrap">
-          <Button
-            variant="contained"
-            disabled={busy}
-            onClick={() => run(() => selectBalanceOption(id, 'FULL'))}
-          >
-            {t('exportOrders.payFull', 'Pay in full')}
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={() => run(() => selectBalanceOption(id, 'FINANCED_30'))}
-          >
-            {t('exportOrders.finance30', 'Finance 30 days')}
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={() => run(() => selectBalanceOption(id, 'FINANCED_60'))}
-          >
-            {t('exportOrders.finance60', 'Finance 60 days')}
-          </Button>
-        </Stack>
-      )}
-      {order.status === 'SHIPPED' && (
-        <Button
-          variant="contained"
-          disabled={busy}
-          onClick={() => run(() => confirmDelivery(id))}
-        >
-          {t('exportOrders.confirmDelivery', 'Confirm delivery')}
-        </Button>
       )}
     </Box>
   );

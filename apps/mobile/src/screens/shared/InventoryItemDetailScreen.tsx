@@ -76,6 +76,10 @@ import { ExportedToBox } from '../../components/exports/ExportedToBox';
 import { ExportViewerNote } from '../../components/exports/ExportViewerNote';
 import { resolveExportViewer } from '../../utils/exportViewer';
 import { useProductInterest } from '../../hooks/useProductInterest';
+import {
+  invalidateExportOrderLookup,
+  useExportOrderForInventory,
+} from '../../hooks/useExportOrderForInventory';
 import { useExportOrderMode } from '../../hooks/useExportOrderMode';
 import { useMarket } from '../../hooks/useMarket';
 
@@ -124,6 +128,7 @@ function InventoryItemDetailScreen() {
     setInterestSubmitting(true);
     try {
       const result = await submitInterest(inventoryItemId, note, interestCountry);
+      invalidateExportOrderLookup();
       setInterestOpen(false);
       const nav = navigation as { navigate: (name: string, params?: object) => void };
       if (result?.export_order) {
@@ -442,6 +447,10 @@ function InventoryItemDetailScreen() {
   const exportViewer = useMemo(
     () => resolveExportViewer(item, selectedMarket?.countryCode ?? null),
     [item, selectedMarket?.countryCode]
+  );
+  const existingExportOrderId = useExportOrderForInventory(
+    inventoryItemId,
+    exportViewer.canSendInterest
   );
 
   const breadcrumb = useMemo(() => {
@@ -873,7 +882,7 @@ function InventoryItemDetailScreen() {
               </Button>
             </View>
           ) : null}
-          {outOfStock ? (
+          {outOfStock && !exportAvailable ? (
             <Text
               style={[
                 typography.body2,
@@ -1053,7 +1062,8 @@ function InventoryItemDetailScreen() {
             category={item.item.item_sub_category?.item_category?.name}
             subcategory={item.item.item_sub_category?.name}
             brand={item.item.brand?.name}
-            availableQuantity={qty}
+            // Export-only: price on request, not buyable, so no stock line.
+            availableQuantity={exportAvailable ? null : qty}
           />
 
           <EntityRatingsSection
@@ -1106,7 +1116,26 @@ function InventoryItemDetailScreen() {
               >
                 {t('productInterest.priceNotApplicable', 'Price on request')}
               </Text>
-              {exportViewer.canSendInterest ? (
+              {existingExportOrderId ? (
+                <Button
+                  testID="export-view-order-cta"
+                  mode="contained"
+                  icon="clipboard-text-outline"
+                  buttonColor={EXPORT_BRAND_BLUE}
+                  textColor="#ffffff"
+                  onPress={() =>
+                    (navigation as { navigate: (name: string, params?: object) => void }).navigate(
+                      'ClientExportOrderDetail',
+                      { orderId: existingExportOrderId }
+                    )
+                  }
+                  style={{ borderRadius: borderRadius.button }}
+                  contentStyle={styles.ctaBtnContent}
+                  labelStyle={styles.ctaBtnLabel}
+                >
+                  {t('productInterest.viewOrder', 'View order details')}
+                </Button>
+              ) : exportViewer.canSendInterest ? (
               <Button
                 testID="export-interest-cta"
                 mode="contained"

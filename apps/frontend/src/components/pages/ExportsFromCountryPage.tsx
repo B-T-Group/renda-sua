@@ -24,6 +24,16 @@ import {
 } from '../../utils/exportCountries';
 import { exportDestinationCodes } from '../../utils/exportItemRules';
 import { exportsCanonicalUrl } from '../../utils/exportsPublicLink';
+import {
+  EXPORT_SELLERS_CAROUSEL_MAX,
+  exportSellerPath,
+  exportSellersListPath,
+  exportsSummaryLine,
+  type ExportSellersContext,
+} from '../../utils/exportSellers';
+import { useExportSellers } from '../../hooks/useExportSellers';
+import { useExportSellerTracking } from '../../hooks/useExportSellerTracking';
+import ExportSellersCarousel from '../exports/ExportSellersCarousel';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemCardSkeleton from '../common/ItemCardSkeleton';
 import { EXPORT_BRAND_BLUE } from '../exports/ExportOnlyBadge';
@@ -103,6 +113,14 @@ const ExportsFromCountryPage: React.FC = () => {
       shipsTo ? items.filter((row) => exportDestinationCodes(row).includes(shipsTo)) : items,
     [items, shipsTo]
   );
+  const sellerCtx = useMemo<ExportSellersContext>(
+    () => ({ direction: 'from', marketCode: null, originCode: code }),
+    [code]
+  );
+  const sellerRows = useExportSellers({ ...sellerCtx, limit: EXPORT_SELLERS_CAROUSEL_MAX, enabled: Boolean(code) });
+  const track = useExportSellerTracking(sellerCtx);
+  const productCount = summary?.item_count ?? items.length;
+  const sellerCount = sellerRows.loading || sellerRows.error ? businessCount : sellerRows.total;
   const otherLabel = t('exportsOrigin.otherCategory', 'Other');
   const sections = useMemo(() => groupExportsByCategory(visible, otherLabel), [visible, otherLabel]);
 
@@ -115,12 +133,16 @@ const ExportsFromCountryPage: React.FC = () => {
   const seoDescription = code
     ? t(
         'exportsOrigin.seoDescription',
-        '{{count}} products exported from {{place}} by {{businesses}} businesses to {{destinations}} markets. Browse and send interest, no account needed.',
+        '{{count}} products exported from {{place}} by {{businesses}} businesses to {{markets}}. Browse and send interest, no account needed.',
         {
           count: summary?.item_count ?? items.length,
           place,
           businesses: businessCount,
           destinations: destinations.length,
+          markets: t('exportsOrigin.seoMarkets', {
+            count: destinations.length,
+            defaultValue: '{{count}} markets',
+          }),
         }
       )
     : t('exportCatalog.pageSubtitle', 'Browse goods available for export.');
@@ -166,55 +188,43 @@ const ExportsFromCountryPage: React.FC = () => {
         ) : null}
       </Breadcrumbs>
 
-      <Paper
-        variant="outlined"
-        sx={{ p: { xs: 2, md: 3 }, borderRadius: 3, mb: 2, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between' }}
+      <Box
+        component="header"
+        data-testid="exports-origin-header"
+        sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', justifyContent: 'space-between' }}
       >
-        <Box sx={{ minWidth: 0, flex: '1 1 380px' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-            <FlightTakeoff sx={{ fontSize: 34, color: 'text.primary' }} aria-hidden />
-            <Typography variant="h4" component="h1" fontWeight={800} sx={{ fontSize: { xs: '1.5rem', md: '2rem' } }}>
+        <Box sx={{ minWidth: 0, flex: '1 1 320px' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FlightTakeoff sx={{ fontSize: 26, color: 'text.primary' }} aria-hidden />
+            <Typography variant="h5" component="h1" fontWeight={800} sx={{ fontSize: { xs: '1.3rem', md: '1.6rem' } }}>
               {code
                 ? t('exportsOrigin.pageTitle', 'Exports from {{place}}', { place, ofPlace })
                 : t('exportsOrigin.breadcrumbExports', 'Exports')}
             </Typography>
           </Box>
-          {code ? (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-              {t(
-                'exportsOrigin.pageSubtitle',
-                'Products exported from {{place}} on Rendasua, and where each one ships. Open to anyone, no account needed.',
-                { place }
-              )}
+          {code && !isEmpty && !loading ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} data-testid="exports-origin-stats">
+              {exportsSummaryLine(t, productCount, sellerCount, destinations.length)}
             </Typography>
-          ) : null}
-          {code && !isEmpty ? (
-            <Box sx={{ display: 'flex', gap: 4, mt: 1.5 }} data-testid="exports-origin-stats">
-              {[
-                [
-                  summary?.item_count ?? items.length,
-                  t('exportsOrigin.statProducts', 'products', { count: summary?.item_count ?? items.length }),
-                ],
-                [businessCount, t('exportsOrigin.statBusinesses', 'businesses', { count: businessCount })],
-                [
-                  destinations.length,
-                  t('exportsOrigin.statDestinations', 'destination markets', { count: destinations.length }),
-                ],
-              ].map(([value, label]) => (
-                <Box key={String(label)}>
-                  <Typography variant="h6" fontWeight={800} lineHeight={1.1}>
-                    {value}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {label}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
           ) : null}
         </Box>
         <ExportsDirectionBar direction="from" originCode={code} origins={origins} />
-      </Paper>
+      </Box>
+
+      {code && !isEmpty ? (
+        <ExportSellersCarousel
+          sellers={sellerRows.sellers}
+          total={sellerRows.total}
+          loading={sellerRows.loading}
+          sellerHref={(s) => exportSellerPath(sellerCtx, s.business_location_id)}
+          listHref={exportSellersListPath(sellerCtx)}
+          onViewed={(shown, total) => track('exports_sellers_carousel_viewed', { shown, total })}
+          onSellerClick={(s, position) =>
+            track('exports_seller_card_tapped', { location_id: s.business_location_id, position, item_count: s.item_count })
+          }
+          onMoreClick={(source) => track('exports_sellers_more_tapped', { source, total: sellerRows.total })}
+        />
+      ) : null}
 
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>

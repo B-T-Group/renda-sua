@@ -6,6 +6,7 @@ import {
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
   Inventory2 as SpecsIcon,
+  AssignmentOutlined,
   PanToolOutlined,
   ShoppingCart,
   Verified,
@@ -56,6 +57,7 @@ import ExportedToBox from '../exports/ExportedToBox';
 import ExportViewerNote from '../exports/ExportViewerNote';
 import { catalogStorePath } from '../../constants/food';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
+import { useExportOrderForInventory } from '../../hooks/useExportOrderForInventory';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
 import { useListingVariantSelection } from '../../hooks/useListingVariantSelection';
 import { toCartVariantId } from '../../utils/shopperVariantSelection';
@@ -486,6 +488,10 @@ export default function ItemDetailPage() {
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const exportViewer = useExportViewer(inventoryItem);
+  const existingExportOrderId = useExportOrderForInventory(
+    inventoryItem?.id,
+    isAuthenticated && exportViewer.canSendInterest
+  );
   const { isStripeRail } = useIsStripeRail();
   const defaultVariantLabel = t('orders.variant.defaultOption', 'Default');
   const variantSel = useListingVariantSelection(
@@ -1641,6 +1647,18 @@ export default function ItemDetailPage() {
                     marketCode={exportViewer.marketCode}
                     destinations={exportViewer.destinations}
                   />
+                ) : exportAvailable && existingExportOrderId ? (
+                  <Button
+                    variant="contained"
+                    size="medium"
+                    fullWidth
+                    startIcon={<AssignmentOutlined />}
+                    data-testid="export-view-order-cta"
+                    sx={{ bgcolor: '#0A4FB5', '&:hover': { bgcolor: '#083F91' } }}
+                    onClick={() => navigate(`/export-orders/${existingExportOrderId}`)}
+                  >
+                    {t('productInterest.viewOrder', 'View order details')}
+                  </Button>
                 ) : exportAvailable ? (
                   <Button
                     variant="contained"

@@ -8268,6 +8268,106 @@
     "actionError": "That action did not go through. Try again.",
     "orderNumber": "Order {{bc}}",
     "open": "Open",
+    "purchaseOrder": "Purchase order",
+    "moreItems": "+{{count}} more",
+    "progress": {
+      "title": "Progress",
+      "review": "Review",
+      "proforma": "Proforma",
+      "deposit": "Deposit",
+      "production": "Production",
+      "balance": "Balance",
+      "shipping": "Shipping",
+      "delivered": "Delivered"
+    },
+    "docTypes": {
+      "BC": "Purchase order",
+      "PRO": "Proforma invoice",
+      "FAC": "Invoice",
+      "REC": "Receipt"
+    },
+    "next": {
+      "SUBMITTED": {
+        "title": "We're reviewing your request",
+        "body": "Our export team checks the item, quantity and destination. You will hear from us if anything needs to change."
+      },
+      "IN_REVIEW": {
+        "title": "We're reviewing your request",
+        "body": "Our export team checks the item, quantity and destination. You will hear from us if anything needs to change."
+      },
+      "CHANGES_REQUESTED": {
+        "title": "We need a change to your request",
+        "body": "Our export team asked for a change and will be in touch with the details."
+      },
+      "MFR_QUOTE": {
+        "title": "Confirming your price",
+        "body": "We are confirming the quote with the manufacturer. Your proforma follows."
+      },
+      "PROFORMA_ISSUED": {
+        "title": "Your proforma is ready",
+        "body": "Review it and approve to continue, or ask for an adjustment."
+      },
+      "INVOICED": {
+        "title": "Your invoice is issued",
+        "body": "Once your deposit is received, production starts."
+      },
+      "DEPOSIT_REQUIRED": {
+        "title": "Pay your deposit",
+        "body": "Once your deposit is received, production starts."
+      },
+      "DEPOSIT_RECEIVED": {
+        "title": "Deposit received",
+        "body": "Thank you. Your order moves to production next."
+      },
+      "IN_PRODUCTION": {
+        "title": "Your order is being made",
+        "body": "The manufacturer is producing your goods. We will update you when they are ready."
+      },
+      "READY": {
+        "title": "Your goods are ready",
+        "body": "Next comes the balance payment, then shipping."
+      },
+      "BALANCE_REQUIRED": {
+        "title": "Choose how to pay the balance",
+        "body": "Pay in full or pick a financing option. Shipping follows."
+      },
+      "PAID_IN_FULL": {
+        "title": "Balance settled",
+        "body": "Your goods will ship soon."
+      },
+      "FINANCED_30": {
+        "title": "Financing in place",
+        "body": "Your goods will ship soon."
+      },
+      "FINANCED_60": {
+        "title": "Financing in place",
+        "body": "Your goods will ship soon."
+      },
+      "SHIPPED": {
+        "title": "Your goods are on the way",
+        "body": "Confirm delivery once they arrive."
+      },
+      "DELIVERED": {
+        "title": "Delivered",
+        "body": "Your export order is complete."
+      },
+      "CLOSED": {
+        "title": "Order closed",
+        "body": "Your export order is complete."
+      },
+      "REVIEWED": {
+        "title": "Order closed",
+        "body": "Your export order is complete."
+      },
+      "REJECTED": {
+        "title": "This request was declined",
+        "body": "Contact support if you have questions about this order."
+      },
+      "CANCELLED": {
+        "title": "This order was cancelled",
+        "body": "Contact support if you have questions about this order."
+      }
+    },
     "status": {
       "SUBMITTED": "Submitted",
       "IN_REVIEW": "Under review",
@@ -8318,6 +8418,7 @@
     }
   },
   "productInterest": {
+    "viewOrder": "View order details",
     "order": {
       "noteHelp": "Your request for {{name}} goes to our export team. We issue a purchase order and prepare a proforma for your approval.",
       "submit": "Send request",
@@ -9399,6 +9500,8 @@
     "switchLabel": "Export direction",
     "into": "Into {{place}}",
     "intoMyMarket": "Into my market",
+    "intoPageTitle": "Exports into {{place}}",
+    "intoPageTitleFallback": "Exports into my market",
     "from": "From {{place}}",
     "fromCountry": "From a country",
     "pickerTitle": "Exported from",
@@ -9425,7 +9528,9 @@
     "breadcrumbExports": "Exports",
     "seoTitle": "Exports from {{place}} | Rendasua",
     "seoTitleUnknown": "Exports | Rendasua",
-    "seoDescription": "{{count}} products exported from {{place}} by {{businesses}} businesses to {{destinations}} markets. Browse and send interest, no account needed.",
+    "seoDescription": "{{count}} products exported from {{place}} by {{businesses}} businesses to {{markets}}. Browse and send interest, no account needed.",
+    "seoMarkets": "{{count}} market",
+    "seoMarkets_plural": "{{count}} markets",
     "loading": "Loading exports…",
     "loadError": "We couldn’t load these exports. Try again in a moment.",
     "pickCountry": "Choose a country",
@@ -9457,5 +9562,34 @@
   "catalogShortcut": {
     "myOrders": "My orders",
     "myExports": "My exports"
+  },
+  "exportSellers": {
+    "title": "Sellers",
+    "seeAll": "See all",
+    "more": "More",
+    "allTitle": "All sellers",
+    "searchPlaceholder": "Search sellers",
+    "sellerSearchPlaceholder": "Search this seller",
+    "itemsCount": "{{count}} item",
+    "itemsCount_plural": "{{count}} items",
+    "exportItemsCount": "{{count}} export item",
+    "exportItemsCount_plural": "{{count}} export items",
+    "sellersCount": "{{count}} seller",
+    "sellersCount_plural": "{{count}} sellers",
+    "productsCount": "{{count}} product",
+    "productsCount_plural": "{{count}} products",
+    "shipsTo": "ships to {{count}} market",
+    "shipsTo_plural": "ships to {{count}} markets",
+    "shipsToOneProduct": "ships to {{count}} market",
+    "shipsToOneProduct_plural": "ships to {{count}} markets",
+    "noMatchTitle": "No sellers match your search",
+    "noMatchHint": "Try another seller name.",
+    "noSellers": "No sellers in this view yet.",
+    "sellerEmpty": "No export items at this seller in this view.",
+    "itemsNoMatchTitle": "No items match your search",
+    "itemsNoMatchHint": "Try another word.",
+    "openSeller": "Open {{name}}",
+    "loadError": "We couldn’t load sellers. Try again.",
+    "backToExports": "Back to exports"
   }
 }

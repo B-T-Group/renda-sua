@@ -78,6 +78,24 @@ describe('TrackSiteEventDto', () => {
     }
   });
 
+  it('accepts the exports by seller events', async () => {
+    for (const eventType of [
+      'exports_sellers_carousel_viewed',
+      'exports_seller_card_tapped',
+      'exports_sellers_more_tapped',
+      'exports_sellers_list_viewed',
+      'exports_sellers_search_submitted',
+      'exports_seller_page_viewed',
+      'exports_seller_page_search_submitted',
+    ]) {
+      const dto = new TrackSiteEventDto();
+      dto.eventType = eventType as any;
+      dto.metadata = { direction: 'from', market_code: 'CM', origin_code: 'CA', position: 0 };
+      expect(await validate(dto)).toHaveLength(0);
+      expect(SITE_EVENT_TYPES_V1 as readonly string[]).toContain(eventType);
+    }
+  });
+
   it('accepts the rentals My rentals entry events', async () => {
     for (const eventType of ['rentals_my_rentals_entry_tap', 'next_rental_card_impression']) {
       const dto = new TrackSiteEventDto();

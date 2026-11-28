@@ -16,6 +16,7 @@ import { CartOrderSummary } from '../../components/cart/CartOrderSummary';
 import { CartSaveAccountNudge } from '../../components/cart/CartSaveAccountNudge';
 import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgressStepper';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
+import { EXPORT_BRAND_BLUE } from '../../components/exports/ExportOnlyBadge';
 import { useExportCartPurge } from '../../hooks/useExportCartPurge';
 
 type CartNav = NativeStackNavigationProp<ClientRootStackParamList | GuestRootStackParamList>;
@@ -69,6 +70,7 @@ export default observer(function CartScreen() {
         })}
         actionLabel={t('common.gotIt', 'Got it')}
         onAction={exportPurge.dismiss}
+        accentColor={EXPORT_BRAND_BLUE}
         style={{ marginBottom: spacing.sm }}
       />
     ) : null;

@@ -1,6 +1,7 @@
 import { useSnackbar } from 'notistack';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { invalidateExportOrderLookup } from './useExportOrderForInventory';
 import { useExportOrders } from './useExportOrders';
 import { useMarket } from './useMarket';
 import {
@@ -59,6 +60,7 @@ export function useProductInterestSubmit({
         const result = await submitInterest(businessInventoryId, note, countryCode, source);
         if (result?.export_order) {
           setPlaced(result);
+          invalidateExportOrderLookup();
           const bc = result.bc_number || '';
           enqueueSnackbar(
             t('productInterest.order.snackbar', 'Export request {{bc}} received.', { bc }),
