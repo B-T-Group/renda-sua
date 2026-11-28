@@ -891,7 +891,8 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
               <FoodAvailabilityChip
                 availability={inventory.food_availability}
               />
-              {foodStatus == null ? (
+              {/* Export-only: price on request, not buyable, so no stock count. */}
+              {foodStatus == null && !exportAvailable ? (
                 <Chip
                   label={t(
                     'items.itemCard.availableCount',
