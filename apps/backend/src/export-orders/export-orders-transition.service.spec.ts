@@ -15,7 +15,9 @@ describe('ExportOrdersTransitionService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     service = new ExportOrdersTransitionService(hasura as any, events);
-    hasura.executeMutation.mockResolvedValue({});
+    hasura.executeMutation.mockResolvedValue({
+      update_export_orders: { affected_rows: 1 },
+    });
   });
 
   it('returns 404 when the order is missing', async () => {
@@ -55,8 +57,12 @@ describe('ExportOrdersTransitionService', () => {
       extraSet: { bc_version: 2 },
     });
     expect(updated.status).toBe('IN_REVIEW');
-    expect(hasura.executeMutation.mock.calls[0][1].set).toEqual(
-      expect.objectContaining({ status: 'IN_REVIEW', bc_version: 2 })
+    expect(hasura.executeMutation.mock.calls[0][1]).toEqual(
+      expect.objectContaining({
+        id: 'order-1',
+        from: 'SUBMITTED',
+        set: expect.objectContaining({ status: 'IN_REVIEW', bc_version: 2 }),
+      })
     );
     expect(hasura.executeMutation.mock.calls[1][1].object).toEqual(
       expect.objectContaining({
@@ -73,5 +79,24 @@ describe('ExportOrdersTransitionService', () => {
       from: 'SUBMITTED',
       to: 'IN_REVIEW',
     });
+  });
+
+  it('returns 409 and writes nothing when another request already claimed the status', async () => {
+    hasura.executeQuery.mockResolvedValue({ export_orders_by_pk: row });
+    hasura.executeMutation.mockResolvedValue({
+      update_export_orders: { affected_rows: 0 },
+    });
+    await expect(
+      service.transition({
+        orderId: 'order-1',
+        to: 'IN_REVIEW',
+        eventName: 'order.review_started',
+      })
+    ).rejects.toMatchObject({
+      status: 409,
+      message: 'Export order status changed',
+    });
+    expect(hasura.executeMutation).toHaveBeenCalledTimes(1);
+    expect(events.emit).not.toHaveBeenCalled();
   });
 });

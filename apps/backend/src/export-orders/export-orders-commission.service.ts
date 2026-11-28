@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ExportDocNumberService } from './export-doc-number.service';
 import {
+  EXISTING_CREDIT_NOTE,
   INSERT_COMMISSION,
   INSERT_CREDIT_LEDGER,
   INSERT_CREDIT_NOTE,
@@ -66,40 +67,13 @@ export class ExportOrdersCommissionService {
   }
 
   async awardPaymentCredit(order: ExportOrderRow) {
-    const option = order.balance_option;
-    let rate = 0;
-    if (option === 'FULL') rate = Number(order.credit_rate_full || 0.05);
-    if (option === 'FINANCED_30') rate = Number(order.credit_rate_30 || 0.025);
-    if (rate <= 0) return;
-    const base = Number(order.balance_amount || 0);
-    const amount = round2(base * rate);
-    if (!Number.isFinite(amount) || amount <= 0) return;
-    const docNumber = await this.docNumbers.next('CR');
+    const amount = this.creditAmount(order);
+    if (amount <= 0) return;
+    if (await this.hasCreditNote(order.id)) return;
     const expiresAt = new Date(
       Date.now() + CREDIT_EXPIRY_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
-    const note = await this.hasura.executeMutation<{
-      insert_export_credit_notes_one: { id: string };
-    }>(INSERT_CREDIT_NOTE, {
-      object: {
-        export_order_id: order.id,
-        client_user_id: order.client_user_id,
-        document_number: docNumber,
-        amount,
-        reason: `Credit ${rate * 100}% for ${option}`,
-        expires_at: expiresAt,
-      },
-    });
-    await this.hasura.executeMutation(INSERT_CREDIT_LEDGER, {
-      object: {
-        client_user_id: order.client_user_id,
-        export_order_id: order.id,
-        credit_note_id: note.insert_export_credit_notes_one.id,
-        entry_type: 'accrued',
-        amount,
-        expires_at: expiresAt,
-      },
-    });
+    await this.insertCredit(order, amount, expiresAt);
   }
 
   async ensureFinancing(
@@ -184,6 +158,61 @@ export class ExportOrdersCommissionService {
         this.logger.warn(`financing reminder: ${error?.message}`);
       }
     }
+  }
+
+  private creditRate(order: ExportOrderRow): number {
+    if (order.balance_option === 'FULL') {
+      return Number(order.credit_rate_full || 0.05);
+    }
+    if (order.balance_option === 'FINANCED_30') {
+      return Number(order.credit_rate_30 || 0.025);
+    }
+    return 0;
+  }
+
+  private creditAmount(order: ExportOrderRow): number {
+    const rate = this.creditRate(order);
+    if (rate <= 0) return 0;
+    const amount = round2(Number(order.balance_amount || 0) * rate);
+    return Number.isFinite(amount) && amount > 0 ? amount : 0;
+  }
+
+  private async hasCreditNote(orderId: string): Promise<boolean> {
+    const res = await this.hasura.executeQuery<{
+      export_credit_notes: Array<{ id: string }>;
+    }>(EXISTING_CREDIT_NOTE, { orderId });
+    return (res.export_credit_notes ?? []).length > 0;
+  }
+
+  private async insertCredit(
+    order: ExportOrderRow,
+    amount: number,
+    expiresAt: string
+  ): Promise<void> {
+    const docNumber = await this.docNumbers.next('CR');
+    const rate = this.creditRate(order);
+    const note = await this.hasura.executeMutation<{
+      insert_export_credit_notes_one: { id: string };
+    }>(INSERT_CREDIT_NOTE, {
+      object: {
+        export_order_id: order.id,
+        client_user_id: order.client_user_id,
+        document_number: docNumber,
+        amount,
+        reason: `Credit ${rate * 100}% for ${order.balance_option}`,
+        expires_at: expiresAt,
+      },
+    });
+    await this.hasura.executeMutation(INSERT_CREDIT_LEDGER, {
+      object: {
+        client_user_id: order.client_user_id,
+        export_order_id: order.id,
+        credit_note_id: note.insert_export_credit_notes_one.id,
+        entry_type: 'accrued',
+        amount,
+        expires_at: expiresAt,
+      },
+    });
   }
 
   private async agentRate(_agentUserId: string) {
