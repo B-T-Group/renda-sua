@@ -402,6 +402,12 @@ export const ExportsPage = lazy(() =>
 export const ExportsFromCountryPage = lazy(() =>
   import('../components/pages/ExportsFromCountryPage')
 );
+export const ExportSellersPage = lazy(() =>
+  import('../components/pages/ExportSellersPage')
+);
+export const ExportSellerPage = lazy(() =>
+  import('../components/pages/ExportSellerPage')
+);
 export const ForBusinessPage = lazy(() =>
   import('../components/pages/ForBusinessPage')
 );

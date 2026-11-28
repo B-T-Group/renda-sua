@@ -33,6 +33,16 @@ import ItemCardSkeleton from '../common/ItemCardSkeleton';
 import { RecentlyViewedRail } from '../catalog-experience/RecentlyViewedRail';
 import { CatalogShortcutButton } from '../catalog/CatalogShortcutButton';
 import ExportCatalogIllustration from '../illustrations/ExportCatalogIllustration';
+import ExportSellersCarousel from '../exports/ExportSellersCarousel';
+import { useExportSellers } from '../../hooks/useExportSellers';
+import { useExportSellerTracking } from '../../hooks/useExportSellerTracking';
+import {
+  EXPORT_SELLERS_CAROUSEL_MAX,
+  exportSellerPath,
+  exportSellersListPath,
+  exportsSummaryLine,
+  type ExportSellersContext,
+} from '../../utils/exportSellers';
 import SEOHead from '../seo/SEOHead';
 import ExportsDirectionBar from '../exports/ExportsDirectionBar';
 import { useExportOrigins } from '../../hooks/useExportOrigins';
@@ -102,6 +112,15 @@ const ExportsPage: React.FC = () => {
     anonymousOrigin: browserGeo,
   });
 
+  const marketCode = selectedMarket?.countryCode ?? null;
+  const sellerCtx = useMemo<ExportSellersContext>(
+    () => ({ direction: 'into', marketCode, originCode: null }),
+    [marketCode]
+  );
+  const sellerRows = useExportSellers({ ...sellerCtx, limit: EXPORT_SELLERS_CAROUSEL_MAX });
+  const track = useExportSellerTracking(sellerCtx);
+  const productTotal = pagination?.total ?? 0;
+
   const renderableItems = useMemo(
     () => inventoryItems.filter(hasCatalogItem),
     [inventoryItems]
@@ -161,28 +180,29 @@ const ExportsPage: React.FC = () => {
         )}
       />
       <Box
+        component="header"
+        data-testid="exports-into-header"
         sx={{
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 2,
+          gap: 1.5,
           mb: 2,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <ExportCatalogIllustration size={72} />
-          <Box>
-            <Typography variant="h5" fontWeight={800}>
+        <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FlightTakeoff sx={{ fontSize: 26 }} aria-hidden />
+            <Typography variant="h5" component="h1" fontWeight={800} sx={{ fontSize: { xs: '1.3rem', md: '1.6rem' } }}>
               {t('exportCatalog.pageTitle', 'Available for export')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t(
-                'exportCatalog.pageSubtitle',
-                'Browse goods available for export into this market. Submit interest and the seller will contact you.'
-              )}
-            </Typography>
           </Box>
+          {!loading && productTotal > 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} data-testid="exports-into-summary">
+              {exportsSummaryLine(t, productTotal, sellerRows.loading ? 0 : sellerRows.total)}
+            </Typography>
+          ) : null}
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <CatalogShortcutButton
@@ -194,6 +214,23 @@ const ExportsPage: React.FC = () => {
           <ExportsDirectionBar direction="into" origins={origins} />
         </Box>
       </Box>
+
+      <ExportSellersCarousel
+        sellers={sellerRows.sellers}
+        total={sellerRows.total}
+        loading={sellerRows.loading}
+        sellerHref={(seller) => exportSellerPath(sellerCtx, seller.business_location_id)}
+        listHref={exportSellersListPath(sellerCtx)}
+        onViewed={(shown, total) => track('exports_sellers_carousel_viewed', { shown, total })}
+        onSellerClick={(seller, position) =>
+          track('exports_seller_card_tapped', {
+            location_id: seller.business_location_id,
+            position,
+            item_count: seller.item_count,
+          })
+        }
+        onMoreClick={(source) => track('exports_sellers_more_tapped', { source, total: sellerRows.total })}
+      />
 
       <RecentlyViewedRail
         surface="export"
