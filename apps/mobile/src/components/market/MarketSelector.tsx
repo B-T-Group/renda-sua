@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMarket } from '../../hooks/useMarket';
 import type { MarketStatesCatalog } from '../../services/marketStatesApi';
-import { MarketPickerSheet } from './MarketPickerSheet';
+import { MarketPickerSheet, type MarketPickerLane } from './MarketPickerSheet';
 
 /**
  * Compact tappable pill that shows the active market flag + name · state (or All).
@@ -16,8 +16,11 @@ import { MarketPickerSheet } from './MarketPickerSheet';
  */
 export const MarketSelector = observer(function MarketSelector({
   catalogContext = 'inventory',
+  lane,
 }: {
   catalogContext?: MarketStatesCatalog;
+  /** Browse lane the user is in (highlights its count in the picker). */
+  lane?: MarketPickerLane;
 }) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
@@ -107,6 +110,7 @@ export const MarketSelector = observer(function MarketSelector({
         detectedCountryCode={detectedCountryCode}
         detectedStateCode={detectedStateCode}
         catalogContext={catalogContext}
+        lane={lane}
         onSelect={handleSelect}
         onDismiss={() => setPickerVisible(false)}
       />

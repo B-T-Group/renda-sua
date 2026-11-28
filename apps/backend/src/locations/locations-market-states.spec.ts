@@ -57,6 +57,14 @@ describe('LocationsController.getMarketStates', () => {
     const query = String(hasuraService.executeQuery.mock.calls[0][0]);
     expect(query).toContain('is_active: { _eq: true }');
     expect(query).toContain('address: { country: { _eq: $countryCode } }');
+    // Shop count must match the Shop lane: approved, storefront-visible, in stock, not export-only.
+    expect(query).toContain('moderation_status: { _eq: "approved" }');
+    expect(query).toContain('export_available: { _eq: false }');
+    expect(query).toContain('is_storefront_visible: { _eq: true }');
+    expect(query).toContain('computed_available_quantity: { _gt: 0 }');
+    expect(query).toContain('sibling_inventory');
+    // Both the aggregate and the state rows carry the same filter.
+    expect(query.match(/export_available: \{ _eq: false \}/g)).toHaveLength(2);
     expect(result).toEqual({
       success: true,
       states: [

@@ -32,7 +32,10 @@ export function HomeLaneHeader({ value, onChange, besideMarket, trailing }: Prop
           testID="home-lane-header-market-cluster"
         >
           <View style={styles.selectorWrap}>
-            <MarketSelector catalogContext={value === 'rentals' ? 'rentals' : 'inventory'} />
+            <MarketSelector
+              catalogContext={value === 'rentals' ? 'rentals' : 'inventory'}
+              lane={value}
+            />
           </View>
           {besideMarket ? (
             <View style={styles.besideMarket} testID="home-lane-header-bell-slot">

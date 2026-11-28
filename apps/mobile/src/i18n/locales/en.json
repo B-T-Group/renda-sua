@@ -6106,7 +6106,15 @@
       "title": "Select Marketplace",
       "allStates": "All of {{name}}",
       "rentalsCount": "{{count}} rentals",
-      "itemsCount": "{{count}} items"
+      "itemsCount": "{{count}} items",
+      "a11y": {
+        "rentals": "{{formatted}} rental",
+        "rentals_plural": "{{formatted}} rentals",
+        "exports": "{{formatted}} export",
+        "exports_plural": "{{formatted}} exports",
+        "items": "{{formatted}} item",
+        "items_plural": "{{formatted}} items"
+      }
     },
     "switchBanner": {
       "title": "You appear to be in {{flag}} {{name}}",

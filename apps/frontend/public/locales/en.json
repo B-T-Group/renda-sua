@@ -7166,8 +7166,14 @@
     "picker": {
       "title": "Select marketplace",
       "allStates": "All of {{name}}",
-      "itemsShort": "items",
-      "rentalsShort": "rentals"
+      "a11y": {
+        "rentals_one": "{{formatted}} rental",
+        "rentals_other": "{{formatted}} rentals",
+        "exports_one": "{{formatted}} export",
+        "exports_other": "{{formatted}} exports",
+        "items_one": "{{formatted}} item",
+        "items_other": "{{formatted}} items"
+      }
     }
   },
   "rentals": {

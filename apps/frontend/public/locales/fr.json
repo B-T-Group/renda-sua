@@ -6885,9 +6885,18 @@
     },
     "picker": {
       "title": "Choisir un marché",
-      "allStates": "Tout {{name}}",
-      "itemsShort": "articles",
-      "rentalsShort": "locations"
+      "allStates": "Tout le pays",
+      "a11y": {
+        "rentals_one": "{{formatted}} location",
+        "rentals_many": "{{formatted}} locations",
+        "rentals_other": "{{formatted}} locations",
+        "exports_one": "{{formatted}} export",
+        "exports_many": "{{formatted}} exports",
+        "exports_other": "{{formatted}} exports",
+        "items_one": "{{formatted}} article",
+        "items_many": "{{formatted}} articles",
+        "items_other": "{{formatted}} articles"
+      }
     }
   },
   "rentals": {

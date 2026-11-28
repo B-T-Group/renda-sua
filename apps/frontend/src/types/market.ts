@@ -1,5 +1,8 @@
 export type MarketSelectionMode = 'AUTO' | 'MANUAL';
 
+/** Which catalog a page browses; picks the single count shown on state rows. */
+export type MarketStatesCatalog = 'inventory' | 'rentals' | 'all';
+
 export interface MarketState {
   state: string;
   itemCount: number;

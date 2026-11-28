@@ -31,6 +31,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UpdateMyAgentLocationDto } from './dto/update-my-agent-location.dto';
 import { CountryOnboardingService } from './country-onboarding.service';
+import { SELLABLE_PARENT_STOCK_GQL } from '../item-variants/variant-inventory.service';
 import { LocationsService } from './locations.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
@@ -529,7 +530,7 @@ export class LocationsController {
   @ApiOperation({
     summary: 'Get active states/regions for a country (Public)',
     description:
-      'Returns distinct states that have at least one active inventory item for the given country, with item counts. Used by the market picker to show only markets with available inventory.',
+      'Returns distinct states that have at least one active inventory item for the given country, with item counts. Inventory counts use the same visibility rules as the Shop lane (approved, storefront-visible, in stock, not export-only), so the number matches what the lane lists. Used by the market picker to show only markets with available inventory.',
   })
   @ApiQuery({ name: 'countryCode', required: true, description: 'ISO-2 country code (e.g. CM, CA)' })
   @ApiQuery({
@@ -612,8 +613,14 @@ export class LocationsController {
           where: {
             is_active: { _eq: true }
             item_variant_id: { _is_null: true }
+            item: {
+              moderation_status: { _eq: "approved" }
+              export_available: { _eq: false }
+            }
+            ${SELLABLE_PARENT_STOCK_GQL}
             business_location: {
               is_active: { _eq: true }
+              business: { is_storefront_visible: { _eq: true } }
               address: { country: { _eq: $countryCode } }
             }
           }
@@ -624,8 +631,14 @@ export class LocationsController {
           where: {
             is_active: { _eq: true }
             item_variant_id: { _is_null: true }
+            item: {
+              moderation_status: { _eq: "approved" }
+              export_available: { _eq: false }
+            }
+            ${SELLABLE_PARENT_STOCK_GQL}
             business_location: {
               is_active: { _eq: true }
+              business: { is_storefront_visible: { _eq: true } }
               address: { country: { _eq: $countryCode } }
             }
           }

@@ -3,12 +3,18 @@ import { Box, Button, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMarket } from '../../hooks/useMarket';
-import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
-import { formatMarketCaption, MARKET_CAPTION_SEPARATOR } from '../../types/market';
+import {
+  formatMarketCaption,
+  MARKET_CAPTION_SEPARATOR,
+  type MarketStatesCatalog,
+} from '../../types/market';
+import type { BrowseLaneId } from '../../utils/browseMarketLanes';
 import { MarketPickerDialog } from './MarketPickerDialog';
 
 export interface MarketSelectorProps {
   catalogContext?: MarketStatesCatalog;
+  /** Browse lane the user is in (highlights its count in the picker). */
+  lane?: BrowseLaneId | null;
   inverted?: boolean;
   compact?: boolean;
   onSelected?: () => void;
@@ -16,6 +22,7 @@ export interface MarketSelectorProps {
 
 export function MarketSelector({
   catalogContext = 'inventory',
+  lane,
   inverted = false,
   compact = false,
   onSelected,
@@ -88,6 +95,7 @@ export function MarketSelector({
         selectedCode={selectedMarket.countryCode}
         selectedStateCode={selectedMarket.stateCode}
         catalogContext={catalogContext}
+        lane={lane}
         onSelect={(countryCode, stateCode) => {
           setMarket(countryCode, stateCode);
           onSelected?.();

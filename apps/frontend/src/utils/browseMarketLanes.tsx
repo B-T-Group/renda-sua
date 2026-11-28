@@ -54,3 +54,21 @@ export function isBrowseLanePathActive(
 ): boolean {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
+
+/**
+ * Lane the market picker highlights. A lane path wins; otherwise the catalog the page
+ * browses decides (rentals, or shop for inventory pages). Pages with neither (home,
+ * account) highlight nothing.
+ */
+export function activeBrowseLane(
+  pathname: string,
+  catalogContext: 'inventory' | 'rentals' | 'all'
+): BrowseLaneId | null {
+  const byPath = BROWSE_LANES.find((lane) =>
+    isBrowseLanePathActive(pathname, lane.path)
+  );
+  if (byPath) return byPath.key;
+  if (catalogContext === 'rentals') return 'rentals';
+  if (catalogContext === 'inventory') return 'shop';
+  return null;
+}
