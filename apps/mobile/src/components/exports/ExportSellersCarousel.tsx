@@ -49,7 +49,7 @@ export function ExportSellersCarousel({
   if (loading && sellers.length === 0) {
     return <ActivityIndicator color={EXPORT_BRAND_BLUE} style={{ marginVertical: spacing.sm }} />;
   }
-  if (shown.length === 0) return null;
+  if (shown.length === 0 || total === 0) return null;
   const hasMore = total > EXPORT_SELLERS_CAROUSEL_MAX;
 
   return (
@@ -65,10 +65,10 @@ export function ExportSellersCarousel({
             hitSlop={8}
             style={styles.seeAll}
           >
-            <MaterialCommunityIcons name="chevron-right" size={18} color={EXPORT_BRAND_BLUE} />
             <Text style={{ color: EXPORT_BRAND_BLUE, fontWeight: '700', fontSize: 14 }}>
               {t('exportSellers.seeAll', 'See all')}
             </Text>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={EXPORT_BRAND_BLUE} />
           </Pressable>
       </View>
       <ScrollView

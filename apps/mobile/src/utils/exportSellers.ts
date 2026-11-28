@@ -35,7 +35,8 @@ export function exportsSummaryLine(
 ): string {
   const parts = [t('exportSellers.productsCount', '{{count}} products', { count: products })];
   // Sellers still loading: products and markets only (never an unpluralized "1 markets").
-  if (typeof sellers === 'number') {
+  // 0 (rejected or empty directory) must not read as "0 sellers".
+  if (typeof sellers === 'number' && sellers > 0) {
     parts.push(t('exportSellers.sellersCount', '{{count}} sellers', { count: sellers }));
   }
   if (typeof markets === 'number') {
@@ -46,4 +47,69 @@ export function exportsSummaryLine(
     );
   }
   return parts.join(' · ');
+}
+
+/** Shape returned by GET /stores?export_only=true. The legacy directory is `{ stores }` only. */
+export interface ExportSellersEnvelopeData {
+  stores?: unknown;
+  total?: unknown;
+  country?: unknown;
+}
+
+export interface ParsedExportSellersPage<T = { country?: string | null }> {
+  stores: T[];
+  total: number;
+  country: string | null;
+}
+
+function iso2(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const code = value.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : null;
+}
+
+/**
+ * True when this row belongs in the current Exports Into / From context.
+ * Into never includes sellers whose location is in the destination market.
+ * Rows without a country are treated as untrusted (legacy directory has none).
+ */
+export function isExportSellerInContext(
+  seller: { country?: string | null },
+  ctx: ExportSellersContext
+): boolean {
+  const country = iso2(seller.country);
+  if (!country) return false;
+  if (ctx.direction === 'into') {
+    const market = iso2(ctx.marketCode);
+    return !market || country !== market;
+  }
+  const origin = iso2(ctx.originCode);
+  return !origin || country === origin;
+}
+
+/**
+ * Accept only the export_only envelope ({ stores, total, country }). A legacy
+ * local-directory payload ({ stores } and no total) must never appear on the
+ * Exports carousel, count line, or See all list.
+ *
+ * If any row is in the destination country (Into) or outside the origin (From),
+ * the whole page is rejected so a mixed or mis-routed response cannot leak.
+ */
+export function parseExportSellersPage<T extends { country?: string | null }>(
+  envelope: { success?: boolean; data?: ExportSellersEnvelopeData } | null | undefined,
+  ctx: ExportSellersContext
+): ParsedExportSellersPage<T> {
+  const empty: ParsedExportSellersPage<T> = { stores: [], total: 0, country: null };
+  const data = envelope?.success ? envelope.data : undefined;
+  if (!data || typeof data.total !== 'number' || !Number.isFinite(data.total) || data.total < 0) {
+    return empty;
+  }
+  if (!Array.isArray(data.stores)) return empty;
+  const stores = data.stores as T[];
+  if (stores.some((row) => !isExportSellerInContext(row, ctx))) return empty;
+  return {
+    stores,
+    total: data.total,
+    country: iso2(data.country),
+  };
 }

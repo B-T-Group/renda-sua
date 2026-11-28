@@ -84,4 +84,24 @@ describe('ExportSellersCarousel', () => {
     fireEvent.error(img);
     expect(screen.getByTestId('export-seller-monogram').textContent).toBe('MR');
   });
+
+  it('does not paint leftover local stores when total is 0 (legacy directory)', () => {
+    renderCarousel(
+      [
+        seller(1, { name: 'Happy store - Yaoundé', country: null }),
+        seller(2, { name: 'Home cake - Douala', country: null }),
+      ],
+      0
+    );
+    expect(screen.queryByTestId('export-sellers-carousel')).toBeNull();
+    expect(screen.queryByText('Happy store - Yaoundé')).toBeNull();
+  });
+
+  it('places the See all chevron after the label', () => {
+    renderCarousel([seller(1)], 1);
+    const link = screen.getByTestId('export-sellers-see-all');
+    const html = link.innerHTML;
+    expect(html.indexOf('See all')).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf('<svg')).toBeGreaterThan(html.indexOf('See all'));
+  });
 });
