@@ -30,6 +30,13 @@ export interface StickyActionCardProps {
   testID?: string;
   actionTestID?: string;
   summaryValueTestID?: string;
+  /** Text button under the primary action ("Cancel"). */
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  secondaryDisabled?: boolean;
+  secondaryTestID?: string;
+  /** Custom summary rows (several lines, an info affordance) shown above the note and the action. */
+  children?: React.ReactNode;
 }
 
 /**
@@ -57,8 +64,10 @@ export function StickyActionCard(props: StickyActionCardProps) {
       ]}
     >
       {hasSummary ? <SummaryRow {...props} /> : null}
+      {props.children}
       {props.note ? <NoteLine note={props.note} tone={props.noteTone} /> : null}
       <ActionButton {...props} />
+      {props.secondaryLabel ? <SecondaryButton {...props} /> : null}
     </View>
   );
 }
@@ -158,6 +167,19 @@ function ActionButton(props: StickyActionCardProps) {
       maxFontSizeMultiplier={1.2}
     >
       {props.actionLabel}
+    </Button>
+  );
+}
+
+function SecondaryButton(props: StickyActionCardProps) {
+  return (
+    <Button
+      onPress={props.onSecondary}
+      disabled={props.secondaryDisabled}
+      testID={props.secondaryTestID}
+      maxFontSizeMultiplier={1.2}
+    >
+      {props.secondaryLabel}
     </Button>
   );
 }

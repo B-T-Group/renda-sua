@@ -1,18 +1,13 @@
 import {
   AccessTime,
-  AccountBalanceWalletOutlined,
   CalendarMonthOutlined,
   CameraAltOutlined,
-  Check,
-  CreditCard,
   HourglassEmpty,
   PlaceOutlined,
   Restore,
   ShieldOutlined,
-  WarningAmber,
 } from '@mui/icons-material';
 import { Box, Paper, Stack, Typography } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
 import React from 'react';
 import type { ReserveIcon, ReserveSummary } from '../../utils/rentals/reserveSummary';
 
@@ -26,17 +21,8 @@ const ROW_ICONS: Record<ReserveIcon, React.ReactElement> = {
   refund: <Restore fontSize="small" color="action" />,
 };
 
-const LINE_ICONS = {
-  check: <Check fontSize="small" />,
-  refund: <Restore fontSize="small" />,
-  warn: <WarningAmber fontSize="small" />,
-  card: <CreditCard fontSize="small" />,
-};
-
-/** Approved 01a/01b body on web: icon rows, the fee (or nothing-to-pay) box, free cancellation, pay-today footer. */
-export function ReserveSummaryPanel({ summary, itemName, business, note }: { summary: ReserveSummary; itemName: string; business?: string | null; note?: string | null }) {
-  const theme = useTheme();
-  const box = summary.box;
+/** Approved 01a/01b body on web: the item and its icon rows. Money rules live in `ReserveStickyFooter`. */
+export function ReserveSummaryPanel({ summary, itemName, business }: { summary: ReserveSummary; itemName: string; business?: string | null }) {
   return (
     <Stack spacing={1.5} data-testid="reserve-summary">
       <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
@@ -64,50 +50,6 @@ export function ReserveSummaryPanel({ summary, itemName, business, note }: { sum
           </Box>
         ))}
       </Paper>
-      <Box
-        data-testid={box.kind === 'fee' ? 'book-confirm-fee-rules' : 'book-confirm-nothing-today'}
-        sx={{
-          p: 1.5,
-          borderRadius: 2,
-          border: 1,
-          borderColor: box.kind === 'fee' ? alpha(theme.palette.primary.main, 0.25) : 'divider',
-          borderLeft: box.kind === 'free' ? `4px solid ${theme.palette.primary.main}` : undefined,
-          bgcolor: box.kind === 'fee' ? alpha(theme.palette.primary.main, 0.06) : 'background.paper',
-        }}
-      >
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
-          {box.kind === 'fee' ? <CreditCard color="primary" fontSize="small" /> : <AccountBalanceWalletOutlined color="primary" fontSize="small" />}
-          <Typography fontWeight={800} color={box.kind === 'fee' ? 'primary' : 'text.primary'}>{box.title}</Typography>
-        </Stack>
-        <Stack spacing={0.75}>
-          {box.lines.map((line, i) => (
-            <Stack key={i} direction="row" spacing={1} alignItems="flex-start" sx={{ color: line.warn ? 'warning.dark' : 'text.secondary' }}>
-              {LINE_ICONS[line.icon]}
-              <Typography variant="body2" color={line.warn ? 'warning.dark' : 'text.primary'}>{line.text}</Typography>
-            </Stack>
-          ))}
-        </Stack>
-      </Box>
-      {summary.cancelLine ? (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.5, py: 1, borderRadius: 1.5, bgcolor: alpha(theme.palette.primary.main, 0.06) }}>
-          <Check fontSize="small" color="primary" />
-          <Typography variant="body2" color="text.secondary">{summary.cancelLine}</Typography>
-        </Stack>
-      ) : null}
-      {note ? (
-        <Typography variant="body2" color="text.secondary">{note}</Typography>
-      ) : null}
-      <Stack spacing={1} sx={{ pt: 1.5, borderTop: 1, borderColor: 'divider' }} data-testid="reserve-footer">
-        {[summary.footer.today, summary.footer.pickup].map((line, i) => (
-          <Stack key={i} direction="row" alignItems="center" spacing={1.5}>
-            <Box sx={{ flex: 1 }}>
-              <Typography fontWeight={700}>{line.title}</Typography>
-              <Typography variant="caption" color="text.secondary">{line.sub}</Typography>
-            </Box>
-            <Typography variant="h6" fontWeight={800}>{line.amount}</Typography>
-          </Stack>
-        ))}
-      </Stack>
     </Stack>
   );
 }

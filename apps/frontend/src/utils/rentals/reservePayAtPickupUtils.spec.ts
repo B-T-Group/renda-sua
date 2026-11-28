@@ -35,6 +35,8 @@ describe('reserve summary (01a/01b)', () => {
     expect(s.box.kind).toBe('fee');
     expect(s.box.lines.map((l) => l.text).join(' | ')).toMatch(/Refunded if you cancel before Sat 28 Nov/);
     expect(s.cancelLine).toBe('Free cancellation until Fri 27 Nov · 23:59');
+    expect(s.detailsLine).toBe(s.cancelLine);
+    expect(s.footer.pickup.sub).toBe('After you check the item');
     expect(s.rows.some((r) => r.key === 'cancel')).toBe(false);
     expect(s.rows.find((r) => r.key === 'pickup')?.stacked).toBe(true);
     expect(s.footer.today.amount).toMatch(/^150.FCFA$/);
@@ -56,6 +58,8 @@ describe('reserve summary (01a/01b)', () => {
     expect(s.rows.find((r) => r.key === 'dates')?.value).toBe('Sat 28 Nov · 2:00–6:00 PM');
     expect(s.rows.find((r) => r.key === 'deposit')?.value).toBe('$180.00');
     expect(JSON.stringify(s)).toMatch(/Nothing is held on your card today/);
+    expect(s.cancelLine).toBe('');
+    expect(s.detailsLine).toBe('Nothing is charged until you’ve seen the item');
     expect(s.footer.today.amount).toBe('$0.00');
     expect(s.footer.pickup.amount).toBe('$60.00');
     expect(s.footer.pickup.sub).toBe('After you check the item · + $180.00 deposit hold');

@@ -57,29 +57,42 @@ describe('Reserve now, pay at pickup', () => {
   it('MoMo without a fee: nothing to pay today, Reserve · pay at pickup', async () => {
     await renderSheet(offer('XAF', 12000, { id: 'b1', status: 'proposed', reservation_fee_amount: 0 }), false);
     expect(screen.getByText('Reserve · pay at pickup')).toBeTruthy();
-    expect(screen.getByText(/Nothing to pay today/)).toBeTruthy();
+    expect(screen.getByText('No payment now')).toBeTruthy();
     expect(screen.queryByText(/Free cancellation until/)).toBeNull();
     expect(screen.getByTestId('reserve-row-cancel')).toBeTruthy();
     expect(screen.getByTestId('reserve-footer-today')).toBeTruthy();
     expect(screen.getByTestId('reserve-footer-pickup')).toBeTruthy();
     expect(screen.getByText('Pay at pickup')).toBeTruthy();
-    expect(screen.queryByTestId('book-confirm-fee-rules')).toBeNull();
+    expect(screen.getByText('Nothing is charged until you’ve seen the item')).toBeTruthy();
+    expect(screen.queryByTestId('book-confirm-nothing-today')).toBeNull();
+    expect(screen.queryByTestId('reserve-details-sheet')).toBeNull();
+    await fireEvent.press(screen.getByTestId('reserve-details-open'));
+    expect(screen.getByTestId('reserve-details-sheet')).toBeTruthy();
+    expect(screen.getByText('Nothing to pay today')).toBeTruthy();
   });
 
   it('MoMo with a fee: Pay 150 FCFA & reserve and the refund rules', async () => {
     await renderSheet(offer('XAF', 12000, { id: 'b1', status: 'proposed', reservation_fee_amount: 150 }), false);
     expect(screen.getByText('Pay 150\u00a0FCFA & reserve')).toBeTruthy();
-    expect(screen.getByTestId('book-confirm-fee-rules')).toBeTruthy();
+    expect(screen.getByText('After you check the item')).toBeTruthy();
+    expect(screen.getByText('Free cancellation until Fri 27 Nov · 23:59')).toBeTruthy();
+    expect(screen.queryByTestId('book-confirm-fee-rules')).toBeNull();
+    expect(screen.queryByText(/Refunded if you cancel before/)).toBeNull();
+    expect(screen.queryByText(/Window 1/i)).toBeNull();
+    await fireEvent.press(screen.getByTestId('reserve-details-open'));
     expect(screen.getByText(/Pay at pickup 11.850.FCFA, after you check the item/)).toBeTruthy();
     expect(screen.getByText(/Refunded if you cancel before Sat 28 Nov/)).toBeTruthy();
-    expect(screen.getByText('Free cancellation until Fri 27 Nov · 23:59')).toBeTruthy();
-    expect(screen.queryByText(/Window 1/i)).toBeNull();
+    expect(screen.getByText(/Kept by the business if you don’t come to pick up/)).toBeTruthy();
   });
 
   it('card market on the new path: no up-front hold, deposit at pickup', async () => {
     await renderSheet(offer('CAD', 60, { id: 'b1', status: 'proposed', card_pay_at_pickup: true, reservation_fee_amount: 1 }), true);
     expect(screen.getByText('Pay $1.00 & reserve')).toBeTruthy();
     expect(screen.getByText('Held on your card at pickup')).toBeTruthy();
+    expect(screen.getByText('After you check the item · + $180.00 deposit hold')).toBeTruthy();
+    expect(screen.queryByText(/Nothing is held on your card today/)).toBeNull();
+    await fireEvent.press(screen.getByTestId('reserve-details-open'));
+    expect(screen.getAllByText(/Nothing is held on your card today/)).toHaveLength(1);
     expect(screen.getByText(/2:00–6:00 PM/)).toBeTruthy();
     expect(screen.queryByText('Held on card')).toBeNull();
   });

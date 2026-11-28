@@ -7890,8 +7890,10 @@
       "cancellationFree": "Free",
       "payTodayNone": "No payment now",
       "payAtPickup": "Pay at pickup",
-      "payAtPickupFeeSub": "After you check the item · fee already deducted",
       "plusDeposit": "+ {{deposit}} deposit hold",
+      "detailsLineFree": "Nothing is charged until you’ve seen the item",
+      "detailsButton": "Details",
+      "detailsTitle": "How this reservation works",
       "payAtPickupSub": "After you check the item",
       "fullDay": "Full day",
       "offerFrom": "Offer accepted by {{business}}"

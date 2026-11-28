@@ -7610,8 +7610,10 @@
       "cancellationFree": "Gratuite",
       "payTodayNone": "Aucun paiement maintenant",
       "payAtPickup": "À payer au retrait",
-      "payAtPickupFeeSub": "Après le contrôle de l’article · frais déjà déduits",
       "plusDeposit": "+ {{deposit}} de dépôt bloqué",
+      "detailsLineFree": "Rien n’est débité avant que vous ayez vu l’article",
+      "detailsButton": "Détails",
+      "detailsTitle": "Comment fonctionne cette réservation",
       "payAtPickupSub": "Après le contrôle de l’article",
       "fullDay": "Journée complète",
       "offerFrom": "Offre acceptée par {{business}}"
